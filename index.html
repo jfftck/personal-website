@@ -7,14 +7,17 @@
     <title>Jeffrey M. Tackett's Personal Page</title>
     <link href="index.css" rel="stylesheet" type="text/css" />
     <script src="index.js" type="module"></script>
+    <link href="favicon.png" rel="icon" type="image/png" />
 </head>
 
 <body class="curtian">
     <form id="color-scheme">
-        <label title="Color Scheme Selector"><input type="checkbox" id="toggle-color-scheme" checked></label>
-        <label title="Dark Scheme"><input type="radio" id="color" value="dark" name="color">🌛</label>
-        <label title="System Scheme"><input type="radio" id="color" value="auto" name="color" checked>🔅</label>
-        <label title="Light Scheme"><input type="radio" id="color" value="light" name="color">🌞</label>
+        <label title="System Theme" tabindex="1"><input type="radio" id="color" value="auto" name="color" checked
+                onfocus="document.body.classList.add('blur')">🎭</label>
+        <label title="Dark Theme" tabindex="1"><input type="radio" id="color" value="dark" name="color"
+                onfocus="document.body.classList.add('blur')">🌛</label>
+        <label title="Light Theme" tabindex="1"><input type="radio" id="color" value="light" name="color"
+                onfocus="document.body.classList.add('blur')">🌞</label>
     </form>
     <div id="logo-container">
         <h1 id="logo">

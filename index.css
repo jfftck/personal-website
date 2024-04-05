@@ -134,50 +134,31 @@ form#color-scheme {
   background-color: #000;
   border-radius: 1rem;
   z-index: 1000;
-  transition: translate 250ms ease-in-out, background-color 250ms ease-in-out;
+  transition: translate 250ms 250ms ease-in-out, background-color 250ms 250ms ease-in-out;
+
+  &:has(label input#color:checked:hover)::before {
+    background-color: #000;
+    box-shadow: 0 0 0.75rem 0.5rem #069;
+  }
 }
 
-form#color-scheme:has(input#toggle-color-scheme:checked) {
-  translate: calc(100% - 1.5rem) 0;
+form#color-scheme:not(:has(*:focus)) {
+  translate: calc(100% - 2.25rem) 0;
   background-color: #0000;
   pointer-events: none;
 
-  label:has(input#color) {
+  label:has(input#color:not(:checked)) {
     opacity: 0;
   }
-}
-
-label:has(input#toggle-color-scheme) {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 0.25rem;
-  border-radius: 1rem;
-  cursor: pointer;
-  pointer-events: all;
-  margin-right: 0.5rem;
-
-  input#toggle-color-scheme {
-    appearance: none;
-    width: 0;
-    height: 0;
+  
+  label:has(input#color:checked) {
+    border-radius: 1rem 0 0 1rem;
   }
 }
+
 
 form#color-scheme label {
   background-color: #000;
-}
-
-label:has(input#toggle-color-scheme)::before {
-  display: block;
-  content: "▸";
-  font-size: 1.5rem;
-  vertical-align: middle;
-  transition: transform 250ms ease-out;
-}
-
-label:has(input#toggle-color-scheme:checked)::before {
-  transform: scaleX(-1);
 }
 
 @supports selector(label:has(input)) {
@@ -197,16 +178,22 @@ label:has(input#color) {
   padding: 0.5rem 1rem;
   border-radius: 1rem;
   cursor: pointer;
+  pointer-events: all;
   margin: 0.5rem;
   display: inline-block;
+  order: 2;
   color: #fff;
-  transition: bacground-color 250ms ease-out, box-shadow 250ms ease-out, opactiy 250ms ease-in-out;
+  transition: bacground-color 250ms ease-out, box-shadow 250ms ease-out, opacity 250ms 250ms ease-in-out, border-radius 250ms 200ms ease-out;
+}
+
+label:has(input#color:checked:not(:focus-visible)) {
+  order: 1;
 }
 
 label:has(input#color:checked),
 form#color-scheme label:hover {
   background-color: #069;
-  box-shadow: 0 0 0 0.125rem #0698;
+  box-shadow: 0 0 1px 0.125rem #000;
 }
 
 label:has(input#color:checked:focus-visible),
@@ -324,8 +311,8 @@ section {
 
 @supports (writing-mode: vertical-lr) {
   article {
-    -webkit-backdrop-filter: blur(5px);
-    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(4rem);
+    backdrop-filter: blur(4rem);
     padding: 0;
     border-radius: 2.5rem;
     background-color: #0008;
@@ -334,7 +321,8 @@ section {
   }
 
   article .article-title {
-    font-family: ui-rounded, 'Hiragino Maru Gothic ProN', Quicksand, Comfortaa, Manjari, 'Arial Rounded MT', 'Arial Rounded MT Bold', Calibri, source-sans-pro, sans-serif; 
+    font-family: ui-rounded, 'Hiragino Maru Gothic ProN', Quicksand, Comfortaa, Manjari, 'Arial Rounded MT', 'Arial Rounded MT Bold', Calibri, source-sans-pro, sans-serif;
+    font-optical-sizing: auto;
     padding: 1rem 0.5rem;
     /* mask-image: linear-gradient(-45deg, #fff 1rem, #000 1rem, #000),
                 linear-gradient(-135deg, #000 1rem, #fff 1rem, #fff);
@@ -402,6 +390,7 @@ section {
 
 #logo {
   font-family: ui-rounded, 'Hiragino Maru Gothic ProN', Quicksand, Comfortaa, Manjari, 'Arial Rounded MT', 'Arial Rounded MT Bold', Calibri, source-sans-pro, sans-serif;
+  font-optical-sizing: auto;
   font-weight: 600;
   background-color: #fff;
   color: #069;
