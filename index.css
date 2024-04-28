@@ -41,13 +41,15 @@
   --dark-text-color: #fff;
   --dark-article-bg-color: #069d;
   --dark-article-font-weight: 200;
-  --dark-logo-bg-color: #0698;
-  --dark-blured-bg-color: #0694;
+  --dark-logo-text-color: #6bf;
+  --dark-logo-bg-color: #0008;
+  --dark-blured-bg-color: #0004;
   --dark-backdrop-filter: blur(10px) saturate(0.5) contrast(0.75) brightness(0.75);
 
-  --light-text-color: #069;
+  --light-text-color: #000;
   --light-article-bg-color: #fffd;
   --light-article-font-weight: initial;
+  --light-logo-text-color: #048;
   --light-logo-bg-color: #fff8;
   --light-blured-bg-color: #fff4;
   --light-backdrop-filter: blur(10px) sepia(0.5) contrast(0.75) brightness(1.25);
@@ -55,9 +57,12 @@
   --text-color: var(--light-text-color);
   --article-bg-color: var(--light-article-bg-color);
   --article-font-weight: var(--light-article-font-weight);
+  --logo-text-color: var(--light-logo-text-color);
   --logo-bg-color: var(--light-logo-bg-color);
   --blured-bg-color: var(--light-blured-bg-color);
   --backdrop-filter: var(--light-backdrop-filter);
+
+  accent-color: #069;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -65,20 +70,10 @@
     --text-color: var(--dark-text-color);
     --article-bg-color: var(--dark-article-bg-color);
     --article-font-weight: var(--dark-article-font-weight);
+    --logo-text-color: var(--dark-logo-text-color);
     --logo-bg-color: var(--dark-logo-bg-color);
     --blured-bg-color: var(--dark-blured-bg-color);
     --backdrop-filter: var(--dark-backdrop-filter);
-  }
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --text-color: var(--light-text-color);
-    --article-bg-color: var(--light-article-bg-color);
-    --article-font-weight: var(--light-article-font-weight);
-    --logo-bg-color: var(--light-logo-bg-color);
-    --blured-bg-color: var(--light-blured-bg-color);
-    --backdrop-filter: var(--light-backdrop-filter);
   }
 }
 
@@ -123,45 +118,51 @@ body.loaded::after {
 }
 
 form#color-scheme {
-  display: grid;
-  grid-auto-columns: auto;
-  grid-auto-flow: column;
-  align-content: center;
-  position: fixed;
-  top: 0;
-  right: 0;
-  margin: 1em;
-  background-color: #000;
-  border-radius: 1rem;
-  z-index: 1000;
-  transition: translate 250ms 250ms ease-in-out, background-color 250ms 250ms ease-in-out;
-
-  &:has(label input#color:checked:hover)::before {
-    background-color: #000;
-    box-shadow: 0 0 0.75rem 0.5rem #069;
-  }
+  display: none;
+  opacity: 0;
 }
 
-form#color-scheme:not(:has(*:focus)) {
-  translate: calc(100% - 2.25rem) 0;
-  background-color: #0000;
-  pointer-events: none;
-
-  label:has(input#color:not(:checked)) {
-    opacity: 0;
+@supports selector(form#color-scheme:has(label)) {
+  form#color-scheme {
+    display: grid;
+    grid-auto-columns: auto;
+    grid-auto-flow: column;
+    align-content: center;
+    position: fixed;
+    top: 0;
+    right: 0;
+    margin: 1em;
+    background-color: #000;
+    border-radius: 1rem;
+    z-index: 1000;
+    opacity: 1;
+    transition: translate 250ms 250ms ease-in-out, background-color 250ms 250ms ease-in-out, opacity 250ms ease-in-out;
+    
+    &:has(label input#color:checked:hover)::before {
+      background-color: #000;
+      box-shadow: 0 0 0.75rem 0.5rem #069;
+    }
   }
   
-  label:has(input#color:checked) {
-    border-radius: 1rem 0 0 1rem;
+  form#color-scheme:not(:has(*:focus)) {
+    translate: calc(100% - 2.25rem) 0;
+    background-color: #0000;
+    pointer-events: none;
+  
+    label:has(input#color:not(:checked)) {
+      opacity: 0;
+    }
+    
+    label:has(input#color:checked) {
+      border-radius: 1rem 0 0 1rem;
+    }
   }
-}
-
-
-form#color-scheme label {
-  background-color: #000;
-}
-
-@supports selector(label:has(input)) {
+  
+  
+  form#color-scheme label {
+    background-color: #000;
+  }
+  
   input#color {
     appearance: none;
     width: 0;
@@ -172,51 +173,87 @@ form#color-scheme label {
   input#color:focus-visible {
     outline: none;
   }
+  
+  label:has(input#color) {
+    padding: 0.5rem 1rem;
+    border-radius: 1rem;
+    cursor: pointer;
+    pointer-events: all;
+    margin: 0.5rem;
+    display: inline-block;
+    order: 2;
+    color: #fff;
+    transition: bacground-color 250ms ease-out, box-shadow 250ms ease-out, opacity 250ms 250ms ease-in-out, border-radius 250ms 200ms ease-out;
+  }
+  
+  label:has(input#color:checked:not(:focus-visible)) {
+    order: 1;
+  }
+  
+  label:has(input#color:checked),
+  form#color-scheme label:hover {
+    background-color: #069;
+    box-shadow: 0 0 1px 0.125rem #000;
+  }
+  
+  label:has(input#color:checked:focus-visible),
+  form#color-scheme:hover label:has(input#color:checked) {
+    box-shadow: 0 0 0 0.25rem #fff;
+  }
+  
+  :root:has(input#color[value=dark]:checked) {
+    color-scheme: dark;
+    
+    --text-color: var(--dark-text-color);
+    --article-bg-color: var(--dark-article-bg-color);
+    --article-font-weight: var(--dark-article-font-weight);
+    --logo-text-color: var(--dark-logo-text-color);
+    --logo-bg-color: var(--dark-logo-bg-color);
+    --blured-bg-color: var(--dark-blured-bg-color);
+    --backdrop-filter: var(--dark-backdrop-filter);
+  }
+  
+  :root:has(input#color[value=light]:checked) {
+    color-scheme: light;
+    
+    --text-color: var(--light-text-color);
+    --article-bg-color: var(--light-article-bg-color);
+    --article-font-weight: var(--light-article-font-weight);
+    --logo-text-color: var(--light-logo-text-color);
+    --logo-bg-color: var(--light-logo-bg-color);
+    --blured-bg-color: var(--light-blured-bg-color);
+    --backdrop-filter: var(--light-backdrop-filter);
+  }
 }
 
-label:has(input#color) {
-  padding: 0.5rem 1rem;
-  border-radius: 1rem;
-  cursor: pointer;
-  pointer-events: all;
-  margin: 0.5rem;
-  display: inline-block;
-  order: 2;
-  color: #fff;
-  transition: bacground-color 250ms ease-out, box-shadow 250ms ease-out, opacity 250ms 250ms ease-in-out, border-radius 250ms 200ms ease-out;
+a:link {
+  color: var(--text-color);
+  transition: text-underline-offset 250ms ease-out, text-decoration-thickness 250ms ease-out, text-decoration-color 250ms ease-out, color 250ms ease-out;
+  text-underline-offset: 0.25rem;
+  text-decoration-thickness: 0.125rem;
+  text-decoration-color: var(--logo-text-color);
+  text-decoration-skip-ink: none;
 }
 
-label:has(input#color:checked:not(:focus-visible)) {
-  order: 1;
+a:visited {
+  color: var(--logo-text-color);
 }
 
-label:has(input#color:checked),
-form#color-scheme label:hover {
-  background-color: #069;
-  box-shadow: 0 0 1px 0.125rem #000;
+a:hover {
+  color: var(--text-color);
+  text-underline-offset: -1.075rem;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--text-color);
+  text-decoration-color: color-mix(in oklab, var(--text-color) 25%, transparent);
 }
 
-label:has(input#color:checked:focus-visible),
-form#color-scheme:hover label:has(input#color:checked) {
-  box-shadow: 0 0 0 0.25rem #fff;
+li {
+  padding: 0.25rem 0;
+  min-height: 0;
 }
 
-:root:has(input#color[value=dark]:checked) {
-  --text-color: var(--dark-text-color);
-  --article-bg-color: var(--dark-article-bg-color);
-  --article-font-weight: var(--dark-article-font-weight);
-  --logo-bg-color: var(--dark-logo-bg-color);
-  --blured-bg-color: var(--dark-blured-bg-color);
-  --backdrop-filter: var(--dark-backdrop-filter);
-}
-
-:root:has(input#color[value=light]:checked) {
-  --text-color: var(--light-text-color);
-  --article-bg-color: var(--light-article-bg-color);
-  --article-font-weight: var(--light-article-font-weight);
-  --logo-bg-color: var(--light-logo-bg-color);
-  --blured-bg-color: var(--light-blured-bg-color);
-  --backdrop-filter: var(--light-backdrop-filter);
+ul li::marker {
+  color: color-mix(in oklab, var(--text-color) 25%, var(--article-bg-color) 25%);
 }
 
 article {
@@ -269,8 +306,8 @@ article .article-content {
   border-radius: 2rem;
   /* box-shadow: 0 0 0 0.1rem #0002, 0 0.1rem 0.8rem #0004; */
   columns: 40ch auto;
-  column-gap: 2rem;
-  /* column-fill: balance-all; */
+  column-gap: 0.75rem;
+  column-fill: balance;
 }
 
 article .article-content:empty {
@@ -285,8 +322,10 @@ article .article-content:empty::before {
 }
 
 article .article-content h2 {
+  font-family: ui-rounded, 'Hiragino Maru Gothic ProN', Quicksand, Comfortaa, Manjari, 'Arial Rounded MT', 'Arial Rounded MT Bold', Calibri, source-sans-pro, sans-serif;
   margin: 1.5rem 0.5rem 0.5rem;
   color: #690;
+  color: color-mix(in oklab, #690, var(--text-color));
   column-span: all;
 }
 
@@ -294,15 +333,22 @@ article .article-content h2:first-child {
   margin: 0 0.5rem 0.5rem;
 }
 
-article .article-content p {
-  display: block;
+article .article-content p,
+article .article-content ul {
   font-weight: lighter;
   margin: 0 1rem;
-
+  padding-bottom: 0.75rem;
+  line-height: 1.5rem;
+  text-align: justify;
 }
 
-article .article-content p + p {
-  margin-top: 1.2rem;
+/* This is needed because of the new IE, named Safari, as it can't render columns correctly and Apple would rather fuck over it's sheeple and not allow other rendering engines on the majority of their devices! */
+article .article-content ul {
+  column-span: all;
+}
+
+article .article-content p:last-of-type {
+  padding-bottom: 0;
 }
 
 section {
@@ -421,7 +467,7 @@ section {
     text-align: center;
     background-color: var(--logo-bg-color);
     font-size: clamp(2rem, 10vh, 4rem);
-    color: var(--text-color);
+    color: var(--logo-text-color);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -476,23 +522,6 @@ footer {
   border-top: 1px #327fa6 solid;
 }
 
-/* @supports (pointer-events: none) {
-  footer::after {
-    content: '';
-    display: block;
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    pointer-events: none;
-    background-image: linear-gradient(to top, rgba(0, 0, 0, 0.75) 1px, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.0625), rgba(0, 0, 0, 0) 3em);
-    background-attachment: fixed;
-    box-shadow: inset 0 1px #000, inset 0 1px 8px #000;
-    z-index: 1;
-  }
-} */
-
 footer ul {
   display: inline-block;
   display: inline-flex;
@@ -512,11 +541,12 @@ footer:hover ul li {
   transform: scale(1.3);
 }
 
-footer ul li a {
+footer ul li a:is(:link, :visited) {
   color: #fff;
-  text-decoration: none;
+  text-decoration-color: #6bf;
 }
 
-footer ul li a:hover {
+footer ul li a:link:hover {
   text-decoration: underline;
+  color: #fff;
 }
