@@ -122,7 +122,7 @@ form#color-scheme {
   opacity: 0;
 }
 
-@supports selector(form#color-scheme:has(label)) {
+@supports selector(form#color-scheme:has(label)) and selector(&) {
   form#color-scheme {
     display: grid;
     grid-auto-columns: auto;
@@ -133,28 +133,24 @@ form#color-scheme {
     right: 0;
     margin: 1em;
     background-color: #000;
-    border-radius: 1rem;
+    border-radius: 1.5rem;
     z-index: 1000;
     opacity: 1;
     transition: translate 250ms 250ms ease-in-out, background-color 250ms 250ms ease-in-out, opacity 250ms ease-in-out;
-    
-    &:has(label input#color:checked:hover)::before {
-      background-color: #000;
-      box-shadow: 0 0 0.75rem 0.5rem #069;
-    }
+  }
+
+  form#color-scheme:has(label input#color:checked:hover)::before {
+    background-color: #000;
+    box-shadow: 0 0 0.75rem 0.5rem #069;
   }
   
   form#color-scheme:not(:has(*:focus)) {
-    translate: calc(100% - 2.25rem) 0;
+    translate: calc(100% - 2.75rem) 0;
     background-color: #0000;
     pointer-events: none;
   
     label:has(input#color:not(:checked)) {
       opacity: 0;
-    }
-    
-    label:has(input#color:checked) {
-      border-radius: 1rem 0 0 1rem;
     }
   }
   
@@ -182,8 +178,14 @@ form#color-scheme {
     margin: 0.5rem;
     display: inline-block;
     order: 2;
+    line-height: 1.5rem;
     color: #fff;
     transition: bacground-color 250ms ease-out, box-shadow 250ms ease-out, opacity 250ms 250ms ease-in-out, border-radius 250ms 200ms ease-out;
+  }
+
+  label:has(input#color) svg {
+    vertical-align: middle;
+    margin-right: 1rem;
   }
   
   label:has(input#color:checked:not(:focus-visible)) {
@@ -308,6 +310,8 @@ article .article-content {
   columns: 40ch auto;
   column-gap: 0.75rem;
   column-fill: balance;
+  text-justify: inter-character;
+  text-wrap: pretty;
 }
 
 article .article-content:empty {
@@ -340,6 +344,7 @@ article .article-content ul {
   padding-bottom: 0.75rem;
   line-height: 1.5rem;
   text-align: justify;
+  min-height: 1rem;
 }
 
 /* This is needed because of the new IE, named Safari, as it can't render columns correctly and Apple would rather fuck over it's sheeple and not allow other rendering engines on the majority of their devices! */

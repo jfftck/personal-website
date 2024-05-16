@@ -16,9 +16,9 @@ export const GalleryDetails = (thumbnailPhotoDetails, photoDetails, name) => Obj
 })
 
 const PhotoStates = Object.freeze({
-    placeholder,
-    loaded,
-    failed,
+    placeholder: 0,
+    loaded: 1,
+    failed: 2,
 });
 
 const img = (photoDetails) => t`
