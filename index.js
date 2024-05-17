@@ -8,10 +8,17 @@ const aniEnd = (e) => {
     }
 };
 
+const themeSelectorButton = (e) => {
+    e.stopPropagation();
+}
+
 document.body.addEventListener("click", () => {
-    if (document.body.classList.contains("blur")) {
+    const shouldBlur = document.activeElement.getAttribute(
+        "data-blur") === "true";
+
+    if (shouldBlur) {
         document.body.focus();
-        document.body.classList.remove("blur");
+        console.log(`blurring: ${document.activeElement.nodeName}`)
     }
 });
 
@@ -20,4 +27,6 @@ document.body.onload = () => {
         document.body.classList.add('loaded');
         document.body.addEventListener("animationend", aniEnd);
     })
+
+    document.querySelectorAll("input[name='color']").forEach(e => e.addEventListener("click", themeSelectorButton))
 };
