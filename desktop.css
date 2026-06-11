@@ -1066,43 +1066,6 @@ kbd {
   scrollbar-width: thin;
 }
 
-/* ── /home folder sections ── */
-.fm-folder-section {
-  margin-bottom: 0.25rem;
-}
-
-.fm-folder-section-hdr {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.25rem;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-  border-radius: 0.5rem;
-}
-
-.fm-folder-section-hdr::-webkit-details-marker { display: none; }
-.fm-folder-section-hdr:focus-visible { outline: 2px solid var(--focus-color); border-radius: 0.375rem; }
-.fm-folder-section-hdr:hover { background: var(--btn-hover); }
-
-.fm-folder-section-name {
-  font-size: 0.8125rem;
-  font-weight: 700;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.fm-folder-section-body {
-  padding-left: 1.5rem;
-  padding-bottom: 0.5rem;
-}
-
-.fm-folder-section[open] .fm-group-arrow  { rotate: 0deg; }
-.fm-folder-section:not([open]) .fm-group-arrow { rotate: -90deg; }
 
 /* ── Timeline groups ── */
 .fm-group { margin-bottom: 0.5rem; }

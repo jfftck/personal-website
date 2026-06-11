@@ -702,15 +702,8 @@ function toast(anchorEl, msg) {
 function requestOpenFile(file) {
   const typeToApp = { document: 'doc-viewer', image: 'img-viewer', video: 'media-player' };
   const appType   = typeToApp[file.type] || 'doc-viewer';
-
-  const existing = apps.find(a => a.type === appType);
-  if (existing) {
-    focusApp(existing.id);
-    appApis[existing.id]?.openFile(file.url, file.displayName, file.poster);
-  } else {
-    const newId = openApp(appType);
-    if (newId) appApis[newId]?.openFile(file.url, file.displayName, file.poster);
-  }
+  const newId = openApp(appType);
+  if (newId) appApis[newId]?.openFile(file.url, file.displayName, file.poster);
 }
 
 // ── Icon helpers (toolbar) ────────────────────────────────────
@@ -1070,10 +1063,9 @@ function buildFileManager(id) {
 
   let currentPath = '/';
   let viewMode    = 'tile';
-  const fileCache       = {};
-  const _fetching       = {};
-  const collapsedFolders = new Set();
-  const collapsedGroups  = new Set();
+  const fileCache      = {};
+  const _fetching      = {};
+  const collapsedGroups = new Set();
 
   function parseEntry(folder, entry) {
     const { filename, url: mUrl, poster, size } = entry;
@@ -1264,56 +1256,63 @@ function buildFileManager(id) {
     }
   }
 
-  function buildFolderSection(fd, files) {
-    const det = document.createElement('details');
-    det.className = 'fm-folder-section';
-    if (!collapsedFolders.has(fd.id)) det.open = true;
-    det.addEventListener('toggle', () => {
-      if (det.open) collapsedFolders.delete(fd.id); else collapsedFolders.add(fd.id);
-    });
+  function buildFolderItem(fd) {
+    const cached = fileCache[fd.id];
+    const countStr = cached !== undefined
+      ? `${cached.length} item${cached.length !== 1 ? 's' : ''}`
+      : '\u2014';
 
-    const sum = document.createElement('summary');
-    sum.className = 'fm-folder-section-hdr';
-    sum.innerHTML = `
-      <svg class="fm-group-arrow" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4l4 4 4-4"/></svg>
-      <span style="color:${fd.color}">${FOLDER_ICONS[fd.id]}</span>
-      <span class="fm-folder-section-name">${fd.label}</span>
-      <span class="fm-group-count">${files.length}</span>
-    `;
-    det.appendChild(sum);
-
-    const body = document.createElement('div');
-    body.className = 'fm-folder-section-body';
-
-    if (!files.length) {
-      const msg = document.createElement('p');
-      msg.className = 'fm-empty-msg fm-empty-small';
-      msg.textContent = 'Empty';
-      body.appendChild(msg);
+    if (viewMode === 'tile') {
+      const tile = document.createElement('div');
+      tile.className = 'fm-tile';
+      tile.setAttribute('role', 'button');
+      tile.setAttribute('tabindex', '0');
+      tile.setAttribute('title', fd.label);
+      tile.innerHTML = `
+        <span class="fm-tile-icon" style="color:${fd.color}">${FOLDER_ICONS[fd.id]}</span>
+        <span class="fm-tile-name">${fd.label}</span>
+        <span class="fm-tile-date">${countStr}</span>
+      `;
+      tile.addEventListener('click', () => navigateTo(fd.id));
+      tile.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateTo(fd.id); } });
+      return tile;
     } else {
-      buildTimeline(body, files);
+      const row = document.createElement('div');
+      row.className = 'fm-list-row';
+      row.setAttribute('role', 'button');
+      row.setAttribute('tabindex', '0');
+      row.setAttribute('title', fd.label);
+      row.innerHTML = `
+        <span class="fm-list-icon" style="color:${fd.color}">${FOLDER_ICONS[fd.id]}</span>
+        <span class="fm-list-name">${fd.label}</span>
+        <span class="fm-list-meta">${countStr}</span>
+        <span class="fm-list-size">\u2014</span>
+      `;
+      row.addEventListener('click', () => navigateTo(fd.id));
+      row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateTo(fd.id); } });
+      return row;
     }
-
-    det.appendChild(body);
-    return det;
   }
 
   // ── Render ────────────────────────────────────────────────────
   function renderContent() {
     scroll.innerHTML = '';
     if (currentPath === '/') {
-      FOLDERS_DEF.forEach(fd => {
-        scroll.appendChild(buildFolderSection(fd, fileCache[fd.id] || []));
-      });
+      const grid = document.createElement('div');
+      grid.className = viewMode === 'tile' ? 'fm-tile-grid' : 'fm-list-rows';
+      FOLDERS_DEF.forEach(fd => grid.appendChild(buildFolderItem(fd)));
+      scroll.appendChild(grid);
     } else {
       buildTimeline(scroll, fileCache[currentPath] || []);
     }
   }
 
   function render() {
-    const needed  = currentPath === '/' ? FOLDERS_DEF.map(f => f.id) : [currentPath];
-    const pending = needed.filter(f => fileCache[f] === undefined);
-
+    if (currentPath === '/') {
+      renderContent();
+      return;
+    }
+    const pending = fileCache[currentPath] === undefined ? [currentPath] : [];
     if (pending.length > 0) {
       scroll.innerHTML = '<p class="fm-empty-msg">Loading\u2026</p>';
       Promise.all(pending.map(ensureFolder)).then(renderContent);
@@ -1328,7 +1327,14 @@ function buildFileManager(id) {
       btn.classList.toggle('active', active);
       btn.setAttribute('aria-current', active ? 'true' : 'false');
     });
-    setAppTitle(id, currentPath === '/' ? '/home' : `/${currentPath}`);
+    const fd = FOLDERS_DEF.find(f => f.id === currentPath);
+    setAppTitle(id, currentPath === '/' ? '/home' : `/home/${fd ? fd.label : currentPath}`);
+  }
+
+  function navigateTo(path) {
+    currentPath = path;
+    updateSidebar();
+    render();
   }
 
   // ── Events ────────────────────────────────────────────────────
@@ -1345,9 +1351,7 @@ function buildFileManager(id) {
   sidebar.addEventListener('click', e => {
     const btn = e.target.closest('.fm-sidebar-btn');
     if (!btn) return;
-    currentPath = btn.dataset.path;
-    updateSidebar();
-    render();
+    navigateTo(btn.dataset.path);
   });
 
   // Register API
