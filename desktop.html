@@ -85,15 +85,23 @@
         </div>
         <div class="shortcut-row">
           <dt><kbd>⌘</kbd><kbd>&lt;</kbd> / <kbd>⌘</kbd><kbd>&gt;</kbd></dt>
-          <dd>Resize focused window narrower / wider</dd>
+          <dd>Resize window narrower / wider</dd>
         </div>
         <div class="shortcut-row">
           <dt><kbd>[</kbd></dt>
-          <dd>Consume window into column (stack left)</dd>
+          <dd>Consume window from left column</dd>
         </div>
         <div class="shortcut-row">
           <dt><kbd>]</kbd></dt>
-          <dd>Expel window out of column (unstack right)</dd>
+          <dd>Expel window to new column</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt>Drag ← →</dt>
+          <dd>Swap column position</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt>Drag ↑ ↓</dt>
+          <dd>Stack into adjacent column</dd>
         </div>
         <div class="shortcut-row">
           <dt><kbd>⌘</kbd><kbd>D</kbd></dt>
@@ -108,7 +116,7 @@
           <dd>Close overlay / menu</dd>
         </div>
       </dl>
-      <p class="help-note">On Windows / Linux, use <kbd>⊞</kbd> instead of <kbd>⌘</kbd>.</p>
+      <p class="help-note">On Windows / Linux, use <kbd>Ctrl</kbd> instead of <kbd>⌘</kbd>.</p>
       <div class="help-actions">
         <button id="help-open-launcher" class="help-launch-btn">
           <svg width="16" height="16" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
@@ -150,6 +158,14 @@
             </svg>
           </span>
           <span class="app-launcher-name">File Manager</span>
+        </button>
+        <button class="app-launcher" data-type="media-player">
+          <span class="app-launcher-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M21 3H3c-1.11 0-2 .89-2 2v14c0 1.11.89 2 2 2h18c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 16H3V5h18v14zM8 15l7-4-7-4v8z"/>
+            </svg>
+          </span>
+          <span class="app-launcher-name">Media Player</span>
         </button>
       </div>
     </div>

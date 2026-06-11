@@ -27,14 +27,20 @@ const APP_DEFS = {
     </svg>`,
     build: buildFileManager,
   },
+  'media-player': {
+    title: 'Media Player',
+    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M21 3H3c-1.11 0-2 .89-2 2v14c0 1.11.89 2 2 2h18c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 16H3V5h18v14zM8 15l7-4-7-4v8z"/>
+    </svg>`,
+    build: buildMediaPlayer,
+  },
 };
 
+// ── Inter-app communication ───────────────────────────────────
+const appApis   = {}; // { appId: { openFile(url, name, poster?) } }
+const appTitles = {}; // { appId: string }
+
 // ── State ─────────────────────────────────────────────────────
-/**
- * apps:    [{ id, type, el }]
- * columns: [{ id, appIds, widthPreset, el }]
- * Each column contains one or more stacked app windows.
- */
 let apps      = [];
 let columns   = [];
 let focusedId = null;
@@ -42,7 +48,7 @@ let nextAppId = 1;
 let nextColId = 1;
 let _skipSave = false;
 let metaHeld  = false;
-let dragState = null; // { colId, colEl, pointerId }
+let dragState = null;
 
 // ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -58,10 +64,7 @@ const appStrip         = $('app-strip');
 const emptyState       = $('empty-state');
 
 // ── Width helpers ─────────────────────────────────────────────
-function rem() {
-  return parseFloat(getComputedStyle(document.documentElement).fontSize);
-}
-
+function rem() { return parseFloat(getComputedStyle(document.documentElement).fontSize); }
 const EDGE = () => 2 * rem();
 const GAP  = () => 1 * rem();
 
@@ -75,6 +78,105 @@ function computeWidth(preset) {
   }
 }
 
+// ── Markdown renderer ─────────────────────────────────────────
+function esc(text) {
+  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function inline(text) {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/_(.+?)_/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%">')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+function renderMarkdown(src) {
+  const lines = src.split('\n');
+  let out = '';
+  let inPre = false, preLang = '', preBuf = [];
+  let inUL = false, inOL = false;
+  let inTbl = false, tblBuf = [];
+  let paraBuf = [];
+
+  function flushPara() {
+    if (!paraBuf.length) return;
+    out += `<p>${inline(paraBuf.join(' ').trim())}</p>\n`;
+    paraBuf = [];
+  }
+  function flushList() {
+    if (inUL) { out += '</ul>\n'; inUL = false; }
+    if (inOL) { out += '</ol>\n'; inOL = false; }
+  }
+  function flushTable() {
+    if (!inTbl) return;
+    inTbl = false;
+    if (!tblBuf.length) { tblBuf = []; return; }
+    const rows = tblBuf.map(r => r.replace(/^\||\|$/g, '').split('|').map(c => c.trim()));
+    const isSep = r => r.every(c => /^:?-+:?$/.test(c));
+    let html = '<table class="md-table">', tbody = false;
+    rows.forEach((row, i) => {
+      if (isSep(row)) { if (!tbody) { html += '</thead><tbody>'; tbody = true; } return; }
+      if (!tbody && i === 0) { html += '<thead><tr>' + row.map(c => `<th>${inline(c)}</th>`).join('') + '</tr>'; return; }
+      if (!tbody) { html += '</thead><tbody>'; tbody = true; }
+      html += '<tr>' + row.map(c => `<td>${inline(c)}</td>`).join('') + '</tr>';
+    });
+    if (!tbody) html += '</thead><tbody>';
+    out += html + '</tbody></table>\n';
+    tblBuf = [];
+  }
+
+  for (const line of lines) {
+    if (line.startsWith('```')) {
+      if (inPre) {
+        out += `<pre><code class="lang-${esc(preLang)}">${esc(preBuf.join('\n'))}</code></pre>\n`;
+        preBuf = []; inPre = false; preLang = '';
+      } else { flushPara(); flushList(); flushTable(); inPre = true; preLang = line.slice(3).trim(); }
+      continue;
+    }
+    if (inPre) { preBuf.push(line); continue; }
+
+    const hm = line.match(/^(#{1,6})\s+(.*)/);
+    if (hm) { flushPara(); flushList(); flushTable(); out += `<h${hm[1].length}>${inline(hm[2])}</h${hm[1].length}>\n`; continue; }
+
+    if (/^(\*\*\*|---|___)\s*$/.test(line.trim()) && line.trim().length >= 3) {
+      flushPara(); flushList(); flushTable(); out += '<hr>\n'; continue;
+    }
+
+    const tl = line.trim();
+    if (tl.startsWith('|') && tl.lastIndexOf('|') > 0) {
+      flushPara(); flushList(); inTbl = true; tblBuf.push(tl); continue;
+    }
+    if (inTbl) flushTable();
+
+    const ulm = line.match(/^[ \t]*[*+-]\s+(.*)/);
+    if (ulm) {
+      flushPara(); flushTable();
+      if (inOL) { out += '</ol>\n'; inOL = false; }
+      if (!inUL) { out += '<ul>\n'; inUL = true; }
+      out += `<li>${inline(ulm[1])}</li>\n`; continue;
+    }
+    const olm = line.match(/^[ \t]*\d+\.\s+(.*)/);
+    if (olm) {
+      flushPara(); flushTable();
+      if (inUL) { out += '</ul>\n'; inUL = false; }
+      if (!inOL) { out += '<ol>\n'; inOL = true; }
+      out += `<li>${inline(olm[1])}</li>\n`; continue;
+    }
+    if (inUL || inOL) flushList();
+    if (!line.trim()) { flushPara(); continue; }
+    paraBuf.push(line.trim());
+  }
+  flushPara(); flushList(); flushTable();
+  if (inPre) out += `<pre><code>${esc(preBuf.join('\n'))}</code></pre>\n`;
+  return out;
+}
+
 // ── Session persistence ────────────────────────────────────────
 const SESSION_KEY    = 'desktop-session-v2';
 const SESSION_KEY_V1 = 'desktop-session-v1';
@@ -82,7 +184,7 @@ const SESSION_KEY_V1 = 'desktop-session-v1';
 function saveSession() {
   if (_skipSave) return;
   try {
-    const data = {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({
       v: 2,
       columns: columns.map(col => ({
         widthPreset: col.widthPreset,
@@ -91,8 +193,7 @@ function saveSession() {
           return { type: app.type };
         }),
       })),
-    };
-    localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+    }));
   } catch { /* storage unavailable */ }
 }
 
@@ -105,10 +206,7 @@ function restoreSession() {
   try {
     let raw = localStorage.getItem(SESSION_KEY);
     let isV1 = false;
-    if (!raw) {
-      raw = localStorage.getItem(SESSION_KEY_V1);
-      isV1 = true;
-    }
+    if (!raw) { raw = localStorage.getItem(SESSION_KEY_V1); isV1 = true; }
     if (!raw) return;
 
     const data = JSON.parse(raw);
@@ -117,11 +215,9 @@ function restoreSession() {
     _skipSave = true;
 
     if (!isV1 && data.v === 2 && Array.isArray(data.columns)) {
-      // v2 format
       for (const colData of data.columns) {
         const preset = WIDTH_PRESETS.includes(colData.widthPreset) ? colData.widthPreset : 'full';
         let colId = null;
-
         for (let i = 0; i < colData.apps.length; i++) {
           const appData = colData.apps[i];
           if (typeof appData.type !== 'string' || !APP_DEFS[appData.type]) continue;
@@ -131,7 +227,6 @@ function restoreSession() {
             colId = col ? col.id : null;
           }
         }
-
         if (colId && preset !== 'full') {
           const col = columns.find(c => c.id === colId);
           if (col) {
@@ -141,7 +236,6 @@ function restoreSession() {
         }
       }
     } else if (isV1 && Array.isArray(data)) {
-      // v1 format (flat array, single-app columns)
       for (const entry of data) {
         if (typeof entry.type !== 'string' || !APP_DEFS[entry.type]) continue;
         const appId = openApp(entry.type);
@@ -158,12 +252,17 @@ function restoreSession() {
 
     _skipSave = false;
     saveSession();
-    // Scroll to focused after restore
     if (focusedId) requestAnimationFrame(() => scrollToApp(focusedId));
   } catch {
     _skipSave = false;
     safeRemoveSession();
   }
+}
+
+// ── Context-aware title ────────────────────────────────────────
+function setAppTitle(id, title) {
+  appTitles[id] = title;
+  if (id === focusedId) activeTitle.textContent = title;
 }
 
 // ── Column helpers ─────────────────────────────────────────────
@@ -182,7 +281,7 @@ function createColEl(colId) {
 
   const handle = document.createElement('div');
   handle.className = 'col-drag-handle';
-  handle.setAttribute('title', 'Drag to reorder  ·  Hold ⌘/Ctrl then drag anywhere');
+  handle.setAttribute('title', 'Drag left/right to swap · Drag up/down to stack · Hold ⌘/Ctrl + drag anywhere');
   handle.setAttribute('aria-hidden', 'true');
   handle.innerHTML = `<svg width="22" height="6" viewBox="0 0 22 6" fill="currentColor" aria-hidden="true">
     <circle cx="3"  cy="3" r="1.75"/>
@@ -195,11 +294,6 @@ function createColEl(colId) {
 }
 
 // ── App lifecycle ─────────────────────────────────────────────
-/**
- * Open an app of the given type.
- * If insertIntoColId is provided, add to that column instead of creating a new one.
- * Returns the new app ID.
- */
 function openApp(type, insertIntoColId = null) {
   const def = APP_DEFS[type];
   if (!def) return null;
@@ -207,24 +301,20 @@ function openApp(type, insertIntoColId = null) {
   const id = `app-${nextAppId++}`;
   const el = def.build(id);
   el.classList.add('app-window');
-  el.dataset.id = id;
+  el.dataset.id   = id;
   el.dataset.type = type;
 
   apps.push({ id, type, el });
 
   const existingCol = insertIntoColId ? columns.find(c => c.id === insertIntoColId) : null;
-
   if (existingCol) {
     existingCol.appIds.push(id);
     existingCol.el.appendChild(el);
   } else {
-    const colId    = `col-${nextColId++}`;
-    const colEl    = createColEl(colId);
+    const colId = `col-${nextColId++}`;
+    const colEl = createColEl(colId);
     colEl.appendChild(el);
-
-    const px = computeWidth('full');
-    colEl.style.setProperty('--app-width', `${px}px`);
-
+    colEl.style.setProperty('--app-width', `${computeWidth('full')}px`);
     const col = { id: colId, appIds: [id], widthPreset: 'full', el: colEl };
     columns.push(col);
     appStrip.appendChild(colEl);
@@ -234,11 +324,7 @@ function openApp(type, insertIntoColId = null) {
   focusApp(id);
   updateEmptyState();
   updateStripLayout();
-  if (!_skipSave) {
-    saveSession();
-    requestAnimationFrame(() => scrollToApp(id));
-  }
-
+  if (!_skipSave) { saveSession(); requestAnimationFrame(() => scrollToApp(id)); }
   return id;
 }
 
@@ -247,15 +333,16 @@ function closeApp(id) {
   if (appIdx === -1) return;
 
   const { el } = apps[appIdx];
-  const col    = getAppColumn(id);
+  const col = getAppColumn(id);
 
   apps.splice(appIdx, 1);
   el.remove();
+  delete appApis[id];
+  delete appTitles[id];
 
   if (col) {
     const cIdx = col.appIds.indexOf(id);
     col.appIds.splice(cIdx, 1);
-
     if (col.appIds.length === 0) {
       const colIdx = columns.indexOf(col);
       col.el.remove();
@@ -268,7 +355,6 @@ function closeApp(id) {
     const order = getAppOrder();
     if (order.length > 0) {
       let nextId = null;
-      // Prefer an app in the same column
       if (col && col.appIds.length > 0) {
         nextId = col.appIds[0];
       } else {
@@ -309,27 +395,24 @@ function scrollToApp(id) {
   col.el.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
 }
 
+// ── Width presets ──────────────────────────────────────────────
 const WIDTH_PRESETS = ['third', 'half', 'full'];
 
 function setFocusedWidth(preset) {
   if (!focusedId) return;
   const col = getAppColumn(focusedId);
   if (!col) return;
-
   const px = Math.max(computeWidth(preset), 160);
 
   col.el.classList.remove('width-shrink', 'width-grow');
   void col.el.offsetWidth;
   col.el.classList.add('width-shrink');
-
   col.el.addEventListener('animationend', () => {
     col.el.classList.remove('width-shrink');
     col.el.style.setProperty('--app-width', `${px}px`);
     void col.el.offsetWidth;
     col.el.classList.add('width-grow');
-    col.el.addEventListener('animationend', () => {
-      col.el.classList.remove('width-grow');
-    }, { once: true });
+    col.el.addEventListener('animationend', () => col.el.classList.remove('width-grow'), { once: true });
   }, { once: true });
 
   col.widthPreset = preset;
@@ -354,16 +437,15 @@ function cycleFocusedWidthNarrower() {
 }
 
 // ── Consume / Expel ───────────────────────────────────────────
-/** Take the last app from the column to the left and append it to the focused column. */
 function consumeLeft() {
   if (!focusedId) return;
-  const col    = getAppColumn(focusedId);
+  const col = getAppColumn(focusedId);
   if (!col) return;
   const colIdx = columns.indexOf(col);
   if (colIdx === 0) return;
 
   const leftCol = columns[colIdx - 1];
-  if (leftCol.appIds.length === 0) return;
+  if (!leftCol.appIds.length) return;
 
   const takenId  = leftCol.appIds[leftCol.appIds.length - 1];
   const takenApp = apps.find(a => a.id === takenId);
@@ -379,13 +461,11 @@ function consumeLeft() {
 
   col.appIds.push(takenId);
   col.el.appendChild(takenApp.el);
-
   saveSession();
   updateTopBar();
   updateStripLayout();
 }
 
-/** Move the focused app out of its column into a new column to the right. */
 function expelRight() {
   if (!focusedId) return;
   const col = getAppColumn(focusedId);
@@ -400,9 +480,7 @@ function expelRight() {
   const newColId = `col-${nextColId++}`;
   const newColEl = createColEl(newColId);
   newColEl.appendChild(app.el);
-
-  const px = Math.max(computeWidth(col.widthPreset), 160);
-  newColEl.style.setProperty('--app-width', `${px}px`);
+  newColEl.style.setProperty('--app-width', `${Math.max(computeWidth(col.widthPreset), 160)}px`);
 
   const newCol = { id: newColId, appIds: [focusedId], widthPreset: col.widthPreset, el: newColEl };
   columns.splice(colIdx + 1, 0, newCol);
@@ -415,64 +493,113 @@ function expelRight() {
   requestAnimationFrame(() => scrollToApp(focusedId));
 }
 
-// ── Column event wiring (focus + drag) ───────────────────────
+// ── Column event wiring ────────────────────────────────────────
 function wireColEvents(colEl, colId) {
   colEl.addEventListener('pointerdown', e => {
-    const onHandle = !!e.target.closest('.col-drag-handle');
-    if (onHandle || metaHeld) {
+    if (e.target.closest('.col-drag-handle') || metaHeld) {
       e.preventDefault();
       e.stopImmediatePropagation();
       startColDrag(colId, e, colEl);
       return;
     }
-    // Focus whichever app window was clicked
     const appEl = e.target.closest('.app-window');
     if (appEl && appEl.dataset.id) focusApp(appEl.dataset.id);
   }, { capture: true });
 }
 
-// ── Drag to reorder columns ───────────────────────────────────
+// ── Directional drag to swap / stack ─────────────────────────
 function startColDrag(colId, e, colEl) {
-  dragState = { colId, colEl, pointerId: e.pointerId };
+  const MIN_DIST  = 40;
+  const DEBOUNCE  = 500;
+
+  dragState = {
+    colId, colEl,
+    pointerId: e.pointerId,
+    originX: e.clientX,
+    originY: e.clientY,
+    lastActionAt: 0,
+  };
   colEl.classList.add('col-dragging');
   try { colEl.setPointerCapture(e.pointerId); } catch { /* */ }
 
+  function endDrag() {
+    const ds = dragState;
+    dragState = null;
+    if (ds) {
+      ds.colEl.classList.remove('col-dragging');
+      try { ds.colEl.releasePointerCapture(ds.pointerId); } catch { /* */ }
+    }
+    colEl.removeEventListener('pointermove', onMove);
+  }
+
   function onMove(ev) {
     if (!dragState || ev.pointerId !== dragState.pointerId) return;
+    const now = Date.now();
+    if (now - dragState.lastActionAt < DEBOUNCE) return;
+
+    const dx  = ev.clientX - dragState.originX;
+    const dy  = ev.clientY - dragState.originY;
+    const adx = Math.abs(dx);
+    const ady = Math.abs(dy);
+    if (adx < MIN_DIST && ady < MIN_DIST) return;
 
     const dragIdx = columns.findIndex(c => c.id === dragState.colId);
-    if (dragIdx === -1) return;
+    if (dragIdx === -1) { endDrag(); return; }
 
-    let targetIdx = -1;
-    for (let i = 0; i < columns.length; i++) {
-      if (i === dragIdx) continue;
-      const rect = columns[i].el.getBoundingClientRect();
-      if (ev.clientX >= rect.left && ev.clientX <= rect.right) {
-        targetIdx = i;
-        break;
+    if (ady > adx * 1.3) {
+      // ── Vertical: stack into adjacent column (top or bottom) ──
+      let targetIdx = -1;
+      for (let i = 0; i < columns.length; i++) {
+        if (i === dragIdx) continue;
+        const r = columns[i].el.getBoundingClientRect();
+        if (ev.clientX >= r.left && ev.clientX <= r.right) { targetIdx = i; break; }
       }
-    }
-    if (targetIdx === -1) return;
+      if (targetIdx === -1) return;
 
-    // Swap in state array
-    const temp = columns[dragIdx];
-    columns[dragIdx] = columns[targetIdx];
-    columns[targetIdx] = temp;
+      const fromCol = columns[dragIdx];
+      const toCol   = columns[targetIdx];
+      const atTop   = dy < 0;
 
-    // Swap in DOM
-    if (dragIdx < targetIdx) {
-      columns[targetIdx].el.after(dragState.colEl);
+      for (const appId of [...fromCol.appIds]) {
+        const app = apps.find(a => a.id === appId);
+        if (!app) continue;
+        fromCol.appIds.splice(fromCol.appIds.indexOf(appId), 1);
+        app.el.remove();
+        if (atTop) {
+          toCol.appIds.unshift(appId);
+          const firstWin = toCol.el.querySelector('.app-window');
+          if (firstWin) toCol.el.insertBefore(app.el, firstWin);
+          else toCol.el.appendChild(app.el);
+        } else {
+          toCol.appIds.push(appId);
+          toCol.el.appendChild(app.el);
+        }
+      }
+      fromCol.el.remove();
+      columns.splice(dragIdx, 1);
+      saveSession();
+      updateStripLayout();
+      endDrag();
+
     } else {
-      columns[targetIdx].el.before(dragState.colEl);
+      // ── Horizontal: swap with adjacent column ──
+      const targetIdx = dx < 0 ? dragIdx - 1 : dragIdx + 1;
+      if (targetIdx < 0 || targetIdx >= columns.length) return;
+
+      [columns[dragIdx], columns[targetIdx]] = [columns[targetIdx], columns[dragIdx]];
+      if (dragIdx < targetIdx) columns[targetIdx].el.after(dragState.colEl);
+      else                     columns[targetIdx].el.before(dragState.colEl);
+
+      dragState.originX    = ev.clientX;
+      dragState.originY    = ev.clientY;
+      dragState.lastActionAt = now;
+      saveSession();
     }
   }
 
   function onEnd(ev) {
     if (!dragState || ev.pointerId !== dragState.pointerId) return;
-    dragState.colEl.classList.remove('col-dragging');
-    dragState = null;
-    colEl.removeEventListener('pointermove', onMove);
-    saveSession();
+    endDrag();
   }
 
   colEl.addEventListener('pointermove', onMove);
@@ -496,15 +623,15 @@ function updateTopBar() {
   }
 
   const focused = apps.find(a => a.id === focusedId);
-  activeTitle.textContent = focused ? APP_DEFS[focused.type].title : '';
+  const def     = focused ? APP_DEFS[focused.type] : null;
+  activeTitle.textContent = (focusedId && appTitles[focusedId]) || (def ? def.title : '');
 
   closeBtn.disabled = focusedId === null;
-
   updateWidthButtons();
 }
 
 function updateWidthButtons() {
-  const col         = focusedId ? getAppColumn(focusedId) : null;
+  const col = focusedId ? getAppColumn(focusedId) : null;
   const activePreset = col ? col.widthPreset : null;
   document.querySelectorAll('.width-btn').forEach(btn => {
     btn.setAttribute('aria-pressed', btn.dataset.width === activePreset ? 'true' : 'false');
@@ -512,11 +639,7 @@ function updateWidthButtons() {
 }
 
 function updateEmptyState() {
-  if (apps.length === 0) {
-    emptyState.removeAttribute('hidden');
-  } else {
-    emptyState.setAttribute('hidden', '');
-  }
+  apps.length === 0 ? emptyState.removeAttribute('hidden') : emptyState.setAttribute('hidden', '');
 }
 
 function updateStripLayout() {
@@ -526,16 +649,14 @@ function updateStripLayout() {
 // ── App navigation ────────────────────────────────────────────
 function focusNextApp() {
   const order = getAppOrder();
-  if (order.length === 0) return;
-  const idx = order.indexOf(focusedId);
-  focusApp(order[(idx + 1) % order.length]);
+  if (!order.length) return;
+  focusApp(order[(order.indexOf(focusedId) + 1) % order.length]);
 }
 
 function focusPrevApp() {
   const order = getAppOrder();
-  if (order.length === 0) return;
-  const idx = order.indexOf(focusedId);
-  focusApp(order[(idx - 1 + order.length) % order.length]);
+  if (!order.length) return;
+  focusApp(order[(order.indexOf(focusedId) - 1 + order.length) % order.length]);
 }
 
 function focusAppByIndex(n) {
@@ -549,17 +670,12 @@ function openAppMenu() {
   appMenu.removeAttribute('hidden');
   appMenuBtn.setAttribute('aria-expanded', 'true');
   closeHelp();
-  requestAnimationFrame(() => {
-    const first = appMenu.querySelector('.app-launcher');
-    if (first) first.focus();
-  });
+  requestAnimationFrame(() => { const f = appMenu.querySelector('.app-launcher'); if (f) f.focus(); });
 }
-
 function closeAppMenu() {
   appMenu.setAttribute('hidden', '');
   appMenuBtn.setAttribute('aria-expanded', 'false');
 }
-
 function toggleAppMenu() {
   appMenu.hasAttribute('hidden') ? openAppMenu() : closeAppMenu();
 }
@@ -570,14 +686,8 @@ function openHelp() {
   closeAppMenu();
   requestAnimationFrame(() => helpCloseBtn.focus());
 }
-
-function closeHelp() {
-  helpOverlay.setAttribute('hidden', '');
-}
-
-function toggleHelp() {
-  helpOverlay.hasAttribute('hidden') ? openHelp() : closeHelp();
-}
+function closeHelp() { helpOverlay.setAttribute('hidden', ''); }
+function toggleHelp() { helpOverlay.hasAttribute('hidden') ? openHelp() : closeHelp(); }
 
 // ── Toast ──────────────────────────────────────────────────────
 function toast(anchorEl, msg) {
@@ -585,90 +695,45 @@ function toast(anchorEl, msg) {
   t.className = 'toast';
   t.textContent = msg;
   anchorEl.appendChild(t);
-  t.addEventListener('animationend', e => {
-    if (e.animationName === 'toastOut') t.remove();
-  });
+  t.addEventListener('animationend', e => { if (e.animationName === 'toastOut') t.remove(); });
 }
 
-// ── SVG icon helpers (toolbar) ────────────────────────────────
+// ── File opener ───────────────────────────────────────────────
+function requestOpenFile(file) {
+  const typeToApp = { document: 'doc-viewer', image: 'img-viewer', video: 'media-player' };
+  const appType   = typeToApp[file.type] || 'doc-viewer';
+
+  const existing = apps.find(a => a.type === appType);
+  if (existing) {
+    focusApp(existing.id);
+    appApis[existing.id]?.openFile(file.url, file.displayName, file.poster);
+  } else {
+    const newId = openApp(appType);
+    if (newId) appApis[newId]?.openFile(file.url, file.displayName, file.poster);
+  }
+}
+
+// ── Icon helpers (toolbar) ────────────────────────────────────
 const ICONS = {
-  zoomIn:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><line x1="10" y1="6.5" x2="10" y2="13.5"/><line x1="6.5" y1="10" x2="13.5" y2="10"/><line x1="15.5" y1="15.5" x2="20.5" y2="20.5"/></svg>`,
-  zoomOut: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><line x1="6.5" y1="10" x2="13.5" y2="10"/><line x1="15.5" y1="15.5" x2="20.5" y2="20.5"/></svg>`,
-  share:   `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>`,
-  download:`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>`,
-  print:   `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>`,
-  rotate:  `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.11 8.53L5.7 7.11C4.8 8.27 4.24 9.61 4.07 11h2.02c.14-.87.49-1.72 1.02-2.47zm-.02 4.47H5.07c.17 1.39.72 2.73 1.62 3.89l1.41-1.42c-.52-.75-.87-1.59-1.01-2.47zm1.01 5.32c1.16.9 2.51 1.44 3.9 1.61V17.9c-.87-.15-1.71-.49-2.46-1.03L8.1 18.32zM13 4.07V1L8.45 5.55 13 10V6.09c2.84.48 5 2.94 5 5.91s-2.16 5.43-5 5.91v2.02c3.95-.49 7-3.85 7-7.93s-3.05-7.44-7-7.93z"/></svg>`,
+  zoomIn:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><line x1="10" y1="6.5" x2="10" y2="13.5"/><line x1="6.5" y1="10" x2="13.5" y2="10"/><line x1="15.5" y1="15.5" x2="20.5" y2="20.5"/></svg>`,
+  zoomOut:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><line x1="6.5" y1="10" x2="13.5" y2="10"/><line x1="15.5" y1="15.5" x2="20.5" y2="20.5"/></svg>`,
+  share:    `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>`,
+  download: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>`,
+  print:    `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>`,
+  rotate:   `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.11 8.53L5.7 7.11C4.8 8.27 4.24 9.61 4.07 11h2.02c.14-.87.49-1.72 1.02-2.47zm-.02 4.47H5.07c.17 1.39.72 2.73 1.62 3.89l1.41-1.42c-.52-.75-.87-1.59-1.01-2.47zm1.01 5.32c1.16.9 2.51 1.44 3.9 1.61V17.9c-.87-.15-1.71-.49-2.46-1.03L8.1 18.32zM13 4.07V1L8.45 5.55 13 10V6.09c2.84.48 5 2.94 5 5.91s-2.16 5.43-5 5.91v2.02c3.95-.49 7-3.85 7-7.93s-3.05-7.44-7-7.93z"/></svg>`,
+  external: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>`,
 };
 
 function toolBtn(action, icon, label) {
   return `<button class="tool-btn" data-action="${action}" title="${label}" aria-label="${label}">
-    ${ICONS[icon]}
-    <span class="lbl">${label}</span>
+    ${ICONS[icon]}<span class="lbl">${label}</span>
   </button>`;
 }
 
 // ── Document Viewer ────────────────────────────────────────────
-const DOC_HTML = `
-<h1>Sample Document</h1>
-<p class="doc-meta">Jeffrey M. Tackett &nbsp;·&nbsp; June 2026 &nbsp;·&nbsp; Personal Site</p>
-
-<h2>Introduction</h2>
-<p>This is a sample document displayed in the Document Viewer. In a real deployment this viewer would load PDF files, markdown documents, or other formatted content from the server. For now it demonstrates the zoom, share, download, and print capabilities of the application shell.</p>
-
-<h2>Features</h2>
-<p>The Document Viewer supports the following operations:</p>
-<ul>
-  <li><strong>Zoom In / Out</strong> — Adjust text size for comfortable reading at any distance.</li>
-  <li><strong>Share</strong> — Use the Web Share API (with clipboard fallback) to share the document URL.</li>
-  <li><strong>Download</strong> — Save the document content as an HTML file to your device.</li>
-  <li><strong>Print</strong> — Open the browser's print dialog with just the document content.</li>
-</ul>
-
-<h2>Design Philosophy</h2>
-<p>This desktop environment takes inspiration from the Niri tiling window manager for Wayland. Niri uses a scrollable, horizontal strip layout where windows are arranged side by side and the user scrolls to navigate between them.</p>
-<p>Unlike traditional tiling window managers, Niri does not try to fill every pixel of the screen — it allows windows to breathe and centre naturally. Apps "want" to be centred on screen, much like the windows in this very interface you're using right now.</p>
-
-<h2>Column Stacking</h2>
-<p>Press <strong>[</strong> to consume the last window from the column to the left into the current column (stacking it vertically). Press <strong>]</strong> to expel the focused window out into its own new column to the right. This mirrors the column-stacking behaviour of the Niri window manager.</p>
-
-<h2>Responsive Layout</h2>
-<p>The interface adapts to three size tiers:</p>
-<ul>
-  <li><strong>Small (portrait mobile)</strong> — Apps fill the full viewport width with no edge gap, providing a native app-like feel.</li>
-  <li><strong>Medium</strong> — Apps have a 2 rem inset from screen edges; 1 rem of the adjacent app peeks in from the side to hint at horizontal scrolling.</li>
-  <li><strong>Large (≥ 1024 px)</strong> — Two apps can be shown side by side, each occupying half the usable area with 1 rem gaps and 2 rem edge insets. A single open app stays centred at its column width without stretching.</li>
-</ul>
-
-<h2>Technical Details</h2>
-<p>This page is built with vanilla HTML, CSS, and JavaScript — no frameworks or build tools. It uses modern CSS including <code>scroll-snap</code>, <code>backdrop-filter</code>, CSS custom properties, container queries, and logical properties for left-to-right/right-to-left support.</p>
-<p>The layout engine computes window widths precisely in JavaScript from the current viewport width, root font size, and the defined gap constants — so all three width presets always respect the spacing rules exactly.</p>
-
-<h2>Lorem Ipsum</h2>
-<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-<p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
-`;
-
-function docHtmlPage() {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Sample Document — Jeffrey M. Tackett</title>
-  <style>
-    body { font-family: Arial, Helvetica, sans-serif; max-width: 68ch; margin: 2.5rem auto; line-height: 1.75; padding: 0 1.5rem; color: #111; }
-    h1 { font-size: 1.75rem; margin-bottom: 0.2em; }
-    .doc-meta { font-size: 0.8125rem; color: #777; margin-bottom: 2em; padding-bottom: 1em; border-bottom: 1px solid #ddd; }
-    h2 { font-size: 1.125rem; color: #069; margin-top: 2em; }
-    code { background: #eef5ff; padding: 0.1em 0.3em; border-radius: 0.25em; }
-    @media print { body { max-width: 100%; } }
-  </style>
-</head>
-<body>${DOC_HTML}</body>
-</html>`;
-}
-
-function buildDocViewer() {
-  let zoom = 1.0;
+function buildDocViewer(id) {
+  let docFontPct  = 100;
+  let currentFile = null;
 
   const el = document.createElement('div');
 
@@ -678,87 +743,117 @@ function buildDocViewer() {
     ${toolBtn('zoom-out', 'zoomOut', 'Zoom Out')}
     <span class="zoom-readout" aria-live="polite">100%</span>
     ${toolBtn('zoom-in',  'zoomIn',  'Zoom In')}
-    <span class="toolbar-sep" role="separator"></span>
+    <span class="toolbar-sep"></span>
     ${toolBtn('share',    'share',    'Share')}
     ${toolBtn('download', 'download', 'Download')}
     ${toolBtn('print',    'print',    'Print')}
   `;
 
-  const content = document.createElement('div');
+  const content  = document.createElement('div');
   content.className = 'app-content';
 
-  const scroll = document.createElement('div');
-  scroll.className = 'doc-scroll';
+  const docScroll = document.createElement('div');
+  docScroll.className = 'doc-scroll';
 
-  const body = document.createElement('article');
-  body.className = 'doc-body';
-  body.innerHTML = DOC_HTML;
+  const docBody = document.createElement('div');
+  docBody.className = 'doc-body';
 
-  scroll.appendChild(body);
-  content.appendChild(scroll);
-  el.appendChild(toolbar);
-  el.appendChild(content);
+  const zoomReadout = toolbar.querySelector('.zoom-readout');
 
-  const readout = toolbar.querySelector('.zoom-readout');
+  // Default state
+  docBody.innerHTML = `
+    <div class="doc-welcome">
+      <svg viewBox="0 0 24 24" fill="currentColor" class="doc-welcome-icon" aria-hidden="true">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
+      </svg>
+      <p>Open a document from the <strong>File Manager</strong> to get started.</p>
+    </div>
+  `;
 
   function applyZoom() {
-    body.style.setProperty('--doc-size', `${zoom}rem`);
-    readout.textContent = `${Math.round(zoom * 100)}%`;
+    docBody.style.setProperty('--doc-size', `${docFontPct / 100}rem`);
+    zoomReadout.textContent = `${docFontPct}%`;
   }
 
-  toolbar.addEventListener('click', async e => {
+  function loadFile(url) {
+    docBody.innerHTML = '<p class="doc-status">Loading\u2026</p>';
+    fetch(url)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
+      .then(text => {
+        docBody.innerHTML = renderMarkdown(text);
+        docScroll.scrollTop = 0;
+      })
+      .catch(err => {
+        docBody.innerHTML = `<p class="doc-status doc-error">\u26a0\ufe0f Could not load: ${esc(err.message)}</p>`;
+      });
+  }
+
+  // Register API
+  appApis[id] = {
+    openFile: (url, name) => {
+      currentFile = { url, name };
+      setAppTitle(id, name);
+      loadFile(url);
+    },
+  };
+
+  toolbar.addEventListener('click', e => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
-
     switch (btn.dataset.action) {
       case 'zoom-in':
-        zoom = Math.min(+(zoom + 0.125).toFixed(3), 3);
+        docFontPct = Math.min(docFontPct + 10, 160);
         applyZoom();
         break;
-
       case 'zoom-out':
-        zoom = Math.max(+(zoom - 0.125).toFixed(3), 0.5);
+        docFontPct = Math.max(docFontPct - 10, 60);
         applyZoom();
         break;
-
-      case 'share':
-        try {
-          if (navigator.share) {
-            await navigator.share({ title: 'Sample Document', url: location.href });
-          } else {
-            await navigator.clipboard.writeText(location.href);
-            toast(el, 'URL copied to clipboard');
-          }
-        } catch { /* user cancelled */ }
-        break;
-
-      case 'download': {
-        const blob = new Blob([docHtmlPage()], { type: 'text/html' });
-        const url  = URL.createObjectURL(blob);
-        const a    = Object.assign(document.createElement('a'), { href: url, download: 'document.html' });
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      case 'share': {
+        const url = currentFile ? new URL(currentFile.url, location.href).href : location.href;
+        if (navigator.share) {
+          navigator.share({ title: currentFile?.name ?? 'Document', url }).catch(() => {});
+        } else {
+          navigator.clipboard.writeText(url).then(() => toast(el, 'Link copied!')).catch(() => {});
+        }
         break;
       }
-
+      case 'download': {
+        if (!currentFile) return;
+        const a = document.createElement('a');
+        a.href = currentFile.url;
+        a.download = currentFile.name;
+        a.click();
+        break;
+      }
       case 'print': {
-        const win = window.open('', '_blank', 'width=900,height=700');
-        if (!win) { toast(el, 'Allow pop-ups to print'); break; }
-        win.document.write(docHtmlPage());
+        const win = window.open('', '_blank', 'width=800,height=600');
+        if (!win) return;
+        win.document.write(`<!doctype html><html><head><title>${esc(currentFile?.name ?? 'Document')}</title>
+          <style>body{font-family:Georgia,serif;max-width:70ch;margin:2rem auto;line-height:1.7}
+          table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:.4em .7em;text-align:left}
+          pre{background:#f4f4f4;padding:1em;overflow:auto}code{background:#f4f4f4;padding:.1em .3em}hr{border:none;border-top:1px solid #ccc}</style>
+          </head><body>${docBody.innerHTML}</body></html>`);
         win.document.close();
-        win.addEventListener('load', () => { win.focus(); win.print(); });
+        win.print();
         break;
       }
     }
   });
 
+  docScroll.appendChild(docBody);
+  content.appendChild(docScroll);
+  el.appendChild(toolbar);
+  el.appendChild(content);
   return el;
 }
 
 // ── Image Viewer ───────────────────────────────────────────────
-function buildImgViewer() {
-  let zoom     = 1.0;
-  let rotation = 0;
+function buildImgViewer(id) {
+  let scale = 1, rot = 0, panX = 0, panY = 0;
+  let isPanning = false, panStartX = 0, panStartY = 0, panOriginX = 0, panOriginY = 0;
+  let pinching = false, pinchDist0 = 0, scale0 = 1;
+  let currentFile = null;
 
   const el = document.createElement('div');
 
@@ -766,185 +861,309 @@ function buildImgViewer() {
   toolbar.className = 'app-toolbar';
   toolbar.innerHTML = `
     ${toolBtn('zoom-out', 'zoomOut', 'Zoom Out')}
-    <span class="zoom-readout" aria-live="polite">100%</span>
     ${toolBtn('zoom-in',  'zoomIn',  'Zoom In')}
-    ${toolBtn('rotate',   'rotate',  'Rotate 90°')}
-    <span class="toolbar-sep" role="separator"></span>
-    ${toolBtn('share',    'share',   'Share')}
+    ${toolBtn('rotate',   'rotate',  'Rotate')}
+    <span class="toolbar-sep"></span>
+    ${toolBtn('share',    'share',    'Share')}
+    ${toolBtn('download', 'download', 'Download')}
+  `;
+
+  const content   = document.createElement('div');
+  content.className = 'app-content';
+
+  const viewport  = document.createElement('div');
+  viewport.className = 'img-viewport';
+
+  const transform = document.createElement('div');
+  transform.className = 'img-transform';
+
+  const img = document.createElement('img');
+  img.alt = 'Image';
+  const seed = Math.random().toString(36).slice(2, 8);
+  img.src = `https://picsum.photos/seed/${seed}/1200/800`;
+
+  function applyTransform() {
+    transform.style.transform = `translate(${panX}px, ${panY}px) scale(${scale}) rotate(${rot}deg)`;
+  }
+
+  function resetTransform() { scale = 1; rot = 0; panX = 0; panY = 0; applyTransform(); }
+
+  // Register API
+  appApis[id] = {
+    openFile: (url, name) => {
+      currentFile = { url, name };
+      setAppTitle(id, name);
+      img.src = url;
+      img.alt = name;
+      resetTransform();
+    },
+  };
+
+  toolbar.addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    switch (btn.dataset.action) {
+      case 'zoom-in':  scale = Math.min(scale * 1.25, 8); applyTransform(); break;
+      case 'zoom-out': scale = Math.max(scale / 1.25, 0.1); applyTransform(); break;
+      case 'rotate':   rot   = (rot + 90) % 360; applyTransform(); break;
+      case 'share': {
+        const url = currentFile ? new URL(currentFile.url, location.href).href : img.src;
+        if (navigator.share) navigator.share({ title: currentFile?.name ?? 'Image', url }).catch(() => {});
+        else navigator.clipboard.writeText(url).then(() => toast(el, 'Link copied!')).catch(() => {});
+        break;
+      }
+      case 'download': {
+        const a = document.createElement('a');
+        a.href = currentFile?.url ?? img.src;
+        a.download = currentFile?.name ?? 'image';
+        a.click();
+        break;
+      }
+    }
+  });
+
+  // Wheel zoom
+  viewport.addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.1 : 0.9;
+    scale = Math.min(Math.max(scale * factor, 0.1), 8);
+    applyTransform();
+  }, { passive: false });
+
+  // Pan
+  viewport.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'touch') return;
+    isPanning = true;
+    panStartX = e.clientX; panStartY = e.clientY;
+    panOriginX = panX; panOriginY = panY;
+    viewport.setPointerCapture(e.pointerId);
+  });
+  viewport.addEventListener('pointermove', e => {
+    if (!isPanning) return;
+    panX = panOriginX + e.clientX - panStartX;
+    panY = panOriginY + e.clientY - panStartY;
+    applyTransform();
+  });
+  viewport.addEventListener('pointerup',     () => { isPanning = false; });
+  viewport.addEventListener('pointercancel', () => { isPanning = false; });
+
+  // Pinch-to-zoom (touch)
+  function touchDist(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  }
+  viewport.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) { pinching = true; pinchDist0 = touchDist(e.touches); scale0 = scale; }
+  }, { passive: true });
+  viewport.addEventListener('touchmove', e => {
+    if (!pinching || e.touches.length < 2) return;
+    const d = touchDist(e.touches);
+    scale = Math.min(Math.max(scale0 * (d / pinchDist0), 0.1), 8);
+    applyTransform();
+  }, { passive: true });
+  viewport.addEventListener('touchend', () => { pinching = false; });
+
+  // Double-click reset
+  viewport.addEventListener('dblclick', () => resetTransform());
+
+  transform.appendChild(img);
+  viewport.appendChild(transform);
+  content.appendChild(viewport);
+  el.appendChild(toolbar);
+  el.appendChild(content);
+  return el;
+}
+
+// ── Media Player ───────────────────────────────────────────────
+function buildMediaPlayer(id) {
+  let currentFile = null;
+
+  const el = document.createElement('div');
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'app-toolbar';
+  toolbar.innerHTML = `
+    <span class="media-title-lbl" id="media-title-${id}">No file loaded</span>
+    <span class="toolbar-sep"></span>
+    ${toolBtn('external', 'external', 'Open in new tab')}
+  `;
+
+  const titleLbl = toolbar.querySelector(`#media-title-${id}`);
+
+  const content = document.createElement('div');
+  content.className = 'app-content';
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'media-player-wrapper';
+
+  const emptyDiv = document.createElement('div');
+  emptyDiv.className = 'media-player-empty';
+  emptyDiv.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="currentColor" class="media-empty-icon" aria-hidden="true">
+      <path d="M21 3H3c-1.11 0-2 .89-2 2v14c0 1.11.89 2 2 2h18c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 16H3V5h18v14zM8 15l7-4-7-4v8z"/>
+    </svg>
+    <p>Open a video from the <strong>File Manager</strong> to get started.</p>
+  `;
+
+  const video = document.createElement('video');
+  video.className = 'media-video';
+  video.controls  = true;
+  video.preload   = 'metadata';
+  video.setAttribute('playsinline', '');
+  video.hidden = true;
+
+  // Register API
+  appApis[id] = {
+    openFile: (url, name, poster) => {
+      currentFile = { url, name, poster };
+      setAppTitle(id, name);
+      titleLbl.textContent = name;
+      video.poster = poster || '';
+      video.src    = url;
+      video.load();
+      emptyDiv.hidden = true;
+      video.hidden    = false;
+    },
+  };
+
+  toolbar.addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    if (btn.dataset.action === 'external' && currentFile) {
+      window.open(currentFile.url, '_blank', 'noopener');
+    }
+  });
+
+  wrapper.appendChild(emptyDiv);
+  wrapper.appendChild(video);
+  content.appendChild(wrapper);
+  el.appendChild(toolbar);
+  el.appendChild(content);
+  return el;
+}
+
+// ── File Manager ───────────────────────────────────────────────
+function buildFileManager(id) {
+  const FOLDERS_DEF = [
+    { id: 'posts',     label: 'Posts',     color: '#10b981' },
+    { id: 'documents', label: 'Documents', color: 'var(--accent)' },
+    { id: 'pictures',  label: 'Pictures',  color: '#8b5cf6' },
+    { id: 'videos',    label: 'Videos',    color: '#f59e0b' },
+  ];
+
+  const FOLDER_ICONS = {
+    posts:     `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>`,
+    documents: `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`,
+    pictures:  `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`,
+    videos:    `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>`,
+  };
+
+  const TYPE_ICONS = {
+    document: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`,
+    image:    `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`,
+    video:    `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>`,
+  };
+
+  const TYPE_COLOR = { document: 'var(--accent)', image: '#8b5cf6', video: '#f59e0b' };
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  let currentPath = '/';
+  let viewMode    = 'tile';
+  const fileCache       = {};
+  const _fetching       = {};
+  const collapsedFolders = new Set();
+  const collapsedGroups  = new Set();
+
+  function parseEntry(folder, entry) {
+    const { filename, url: mUrl, poster, size } = entry;
+    const m = filename.match(/^(\d{4})(\d{2})(\d{2})_(.+)$/);
+    if (!m) return null;
+    const [, yyyy, mm, dd, rest] = m;
+    const date     = new Date(+yyyy, +mm - 1, +dd);
+    const dotIdx   = rest.lastIndexOf('.');
+    const ext      = dotIdx >= 0 ? rest.slice(dotIdx).toLowerCase() : '';
+    const rawName  = dotIdx >= 0 ? rest.slice(0, dotIdx) : rest;
+    const displayName = rawName.replace(/_/g, ' ');
+    const typeMap  = {
+      md:'document', txt:'document', pdf:'document', xlsx:'document', doc:'document', docx:'document',
+      jpg:'image', jpeg:'image', png:'image', gif:'image', webp:'image', svg:'image',
+      mp4:'video', webm:'video', mov:'video', avi:'video',
+    };
+    const type = typeMap[ext.slice(1)] || 'document';
+    const url  = mUrl || `${folder}/${encodeURIComponent(filename)}`;
+    return { filename, displayName, date, type, url, poster: poster || null, size: size || '\u2014', folder };
+  }
+
+  async function ensureFolder(folder) {
+    if (fileCache[folder] !== undefined) return;
+    if (_fetching[folder])               return _fetching[folder];
+    _fetching[folder] = (async () => {
+      try {
+        const r = await fetch(`${folder}/manifest.json`);
+        if (!r.ok) throw new Error(r.status);
+        fileCache[folder] = (await r.json()).map(e => parseEntry(folder, e)).filter(Boolean);
+      } catch {
+        fileCache[folder] = [];
+      }
+      delete _fetching[folder];
+    })();
+    return _fetching[folder];
+  }
+
+  // ── Build DOM ─────────────────────────────────────────────────
+  const el = document.createElement('div');
+
+  // Toolbar (view toggle only)
+  const toolbar = document.createElement('div');
+  toolbar.className = 'app-toolbar fm-toolbar';
+  toolbar.innerHTML = `
+    <div class="fm-view-toggle" role="group" aria-label="View mode">
+      <button class="tool-btn fm-view-btn" data-view="tile" aria-pressed="true"  title="Tile view"  aria-label="Tile view">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></svg>
+        <span class="lbl">Tile</span>
+      </button>
+      <button class="tool-btn fm-view-btn" data-view="list" aria-pressed="false" title="List view"  aria-label="List view">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+        <span class="lbl">List</span>
+      </button>
+    </div>
   `;
 
   const content = document.createElement('div');
   content.className = 'app-content';
 
-  const viewport = document.createElement('div');
-  viewport.className = 'img-viewport';
+  const layout = document.createElement('div');
+  layout.className = 'fm-layout';
 
-  const wrap = document.createElement('div');
-  wrap.className = 'img-transform';
-
-  const img = document.createElement('img');
-  img.src = 'https://picsum.photos/seed/niri42/1200/800';
-  img.alt = 'Sample landscape photograph';
-  img.draggable = false;
-
-  wrap.appendChild(img);
-  viewport.appendChild(wrap);
-  content.appendChild(viewport);
-  el.appendChild(toolbar);
-  el.appendChild(content);
-
-  const readout = toolbar.querySelector('.zoom-readout');
-
-  function applyTransform() {
-    wrap.style.transform = `rotate(${rotation}deg) scale(${zoom})`;
-    readout.textContent = `${Math.round(zoom * 100)}%`;
-  }
-
-  toolbar.addEventListener('click', async e => {
-    const btn = e.target.closest('[data-action]');
-    if (!btn) return;
-
-    switch (btn.dataset.action) {
-      case 'zoom-in':
-        zoom = Math.min(+(zoom + 0.25).toFixed(2), 6);
-        applyTransform();
-        break;
-
-      case 'zoom-out':
-        zoom = Math.max(+(zoom - 0.25).toFixed(2), 0.25);
-        applyTransform();
-        break;
-
-      case 'rotate':
-        rotation = (rotation + 90) % 360;
-        applyTransform();
-        break;
-
-      case 'share':
-        try {
-          if (navigator.share) {
-            await navigator.share({ title: 'Sample Image', url: img.src });
-          } else {
-            await navigator.clipboard.writeText(img.src);
-            toast(el, 'Image URL copied to clipboard');
-          }
-        } catch { /* user cancelled */ }
-        break;
-    }
-  });
-
-  viewport.addEventListener('wheel', e => {
-    e.preventDefault();
-    const delta = e.deltaY < 0 ? 0.1 : -0.1;
-    zoom = Math.min(Math.max(+(zoom + delta).toFixed(2), 0.25), 6);
-    applyTransform();
-  }, { passive: false });
-
-  return el;
-}
-
-// ── File Manager ───────────────────────────────────────────────
-function buildFileManager() {
-  const FOLDERS   = ['All Files', 'Documents', 'Pictures', 'Videos', 'Posts'];
-  const TYPE_KEYS = ['document', 'image', 'video', 'post'];
-  const TYPE_LABEL  = { document: 'Docs', image: 'Images', video: 'Videos', post: 'Posts' };
-  const FOLDER_TYPE = { Documents: 'document', Pictures: 'image', Videos: 'video', Posts: 'post' };
-  const MONTH_NAMES = ['January','February','March','April','May','June',
-                       'July','August','September','October','November','December'];
-
-  const FM_FILES = [
-    { name: 'Pacific Crest Trail Day 1', type: 'post',     folder: 'Posts',     date: new Date(2026, 5, 8),  size: '3.8 KB'  },
-    { name: 'trail-sunrise.jpg',          type: 'image',    folder: 'Pictures',  date: new Date(2026, 5, 7),  size: '4.2 MB'  },
-    { name: 'annual-review.pdf',          type: 'document', folder: 'Documents', date: new Date(2026, 5, 3),  size: '182 KB'  },
-    { name: 'Spring Garden Update',       type: 'post',     folder: 'Posts',     date: new Date(2026, 4, 22), size: '2.1 KB'  },
-    { name: 'garden-may.jpg',             type: 'image',    folder: 'Pictures',  date: new Date(2026, 4, 20), size: '2.8 MB'  },
-    { name: 'seattle-walk.mp4',           type: 'video',    folder: 'Videos',    date: new Date(2026, 4, 14), size: '124 MB'  },
-    { name: 'recipe-notes.txt',           type: 'document', folder: 'Documents', date: new Date(2026, 4, 5),  size: '8 KB'    },
-    { name: 'Family Visit Notes',         type: 'post',     folder: 'Posts',     date: new Date(2026, 3, 18), size: '1.6 KB'  },
-    { name: 'family-dinner.jpg',          type: 'image',    folder: 'Pictures',  date: new Date(2026, 3, 17), size: '3.1 MB'  },
-    { name: 'family-reunion.mp4',         type: 'video',    folder: 'Videos',    date: new Date(2026, 3, 17), size: '890 MB'  },
-    { name: 'tax-return-2025.pdf',        type: 'document', folder: 'Documents', date: new Date(2026, 3, 2),  size: '412 KB'  },
-    { name: 'Spring Arrives in Seattle',  type: 'post',     folder: 'Posts',     date: new Date(2026, 2, 20), size: '2.4 KB'  },
-    { name: 'cherry-blossoms.jpg',        type: 'image',    folder: 'Pictures',  date: new Date(2026, 2, 19), size: '5.7 MB'  },
-    { name: 'budget-q1.xlsx',             type: 'document', folder: 'Documents', date: new Date(2026, 2, 2),  size: '68 KB'   },
-    { name: 'snowfall-2026.jpg',          type: 'image',    folder: 'Pictures',  date: new Date(2026, 1, 11), size: '2.2 MB'  },
-    { name: 'meeting-notes.txt',          type: 'document', folder: 'Documents', date: new Date(2026, 1, 5),  size: '14 KB'   },
-    { name: 'winter-walk.mp4',            type: 'video',    folder: 'Videos',    date: new Date(2026, 1, 3),  size: '58 MB'   },
-    { name: 'New Year Reflections',       type: 'post',     folder: 'Posts',     date: new Date(2026, 0, 2),  size: '3.2 KB'  },
-    { name: 'new-year-fireworks.jpg',     type: 'image',    folder: 'Pictures',  date: new Date(2026, 0, 1),  size: '3.9 MB'  },
-    { name: 'goals-2026.txt',             type: 'document', folder: 'Documents', date: new Date(2026, 0, 1),  size: '6 KB'    },
-    { name: 'Christmas Morning',          type: 'post',     folder: 'Posts',     date: new Date(2025, 11, 25), size: '2.8 KB' },
-    { name: 'christmas-tree.jpg',         type: 'image',    folder: 'Pictures',  date: new Date(2025, 11, 25), size: '4.4 MB' },
-    { name: 'xmas-party.mp4',             type: 'video',    folder: 'Videos',    date: new Date(2025, 11, 24), size: '210 MB' },
-    { name: 'holiday-budget.xlsx',        type: 'document', folder: 'Documents', date: new Date(2025, 11, 1),  size: '34 KB'  },
-    { name: 'Thanksgiving in Ohio',       type: 'post',     folder: 'Posts',     date: new Date(2025, 10, 28), size: '1.9 KB' },
-    { name: 'thanksgiving.jpg',           type: 'image',    folder: 'Pictures',  date: new Date(2025, 10, 27), size: '2.6 MB' },
-    { name: 'q3-report.pdf',              type: 'document', folder: 'Documents', date: new Date(2025, 10, 10), size: '1.1 MB' },
-  ];
-
-  let currentFolder   = 'All Files';
-  let viewMode        = 'tile';
-  let activeTypes     = new Set(TYPE_KEYS);
-  let collapsedGroups = new Set();
-
-  const FM_ICON = {
-    folder:   `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`,
-    document: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 14h8v1.5H8zm0 3h8v1.5H8zm0-6h4v1.5H8z"/></svg>`,
-    image:    `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`,
-    video:    `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>`,
-    post:     `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`,
-  };
-
-  const TYPE_COLOR = {
-    document: 'var(--accent)',
-    image:    '#8b5cf6',
-    video:    '#f59e0b',
-    post:     '#10b981',
-    folder:   '#e07b39',
-  };
-
-  const el = document.createElement('div');
-
-  const toolbar = document.createElement('div');
-  toolbar.className = 'app-toolbar fm-toolbar';
-  toolbar.innerHTML = `
-    <div class="fm-view-toggle" role="group" aria-label="View mode">
-      <button class="tool-btn fm-view-btn" data-view="tile" aria-pressed="true" title="Tile view" aria-label="Tile view">
-        <svg viewBox="0 0 20 20" fill="currentColor"><rect x="1" y="1" width="7" height="7" rx="1.5"/><rect x="12" y="1" width="7" height="7" rx="1.5"/><rect x="1" y="12" width="7" height="7" rx="1.5"/><rect x="12" y="12" width="7" height="7" rx="1.5"/></svg>
-        <span class="lbl">Tile</span>
-      </button>
-      <button class="tool-btn fm-view-btn" data-view="list" aria-pressed="false" title="List view" aria-label="List view">
-        <svg viewBox="0 0 20 20" fill="currentColor"><rect x="1" y="2" width="18" height="3" rx="1.5"/><rect x="1" y="8.5" width="18" height="3" rx="1.5"/><rect x="1" y="15" width="18" height="3" rx="1.5"/></svg>
-        <span class="lbl">List</span>
-      </button>
-    </div>
-    <span class="toolbar-sep fm-filter-sep" role="separator"></span>
-    <div class="fm-type-filters" role="group" aria-label="File type filters">
-      <button class="fm-filter-chip fm-chip-all active" data-filter="all">All</button>
-      ${TYPE_KEYS.map(t => `<button class="fm-filter-chip fm-chip-type active" data-filter="${t}" style="--chip-color:${TYPE_COLOR[t]}">${TYPE_LABEL[t]}</button>`).join('')}
-    </div>
-  `;
-
-  const body = document.createElement('div');
-  body.className = 'app-content fm-body';
-
+  // Sidebar
   const sidebar = document.createElement('nav');
   sidebar.className = 'fm-sidebar';
   sidebar.setAttribute('aria-label', 'Folders');
 
-  for (const folder of FOLDERS) {
-    const btn = document.createElement('button');
-    btn.className = 'fm-sidebar-btn' + (folder === 'All Files' ? ' active' : '');
-    btn.dataset.folder = folder;
-    btn.setAttribute('aria-current', folder === 'All Files' ? 'true' : 'false');
+  const homeBtn = document.createElement('button');
+  homeBtn.className = 'fm-sidebar-btn active';
+  homeBtn.dataset.path = '/';
+  homeBtn.setAttribute('aria-current', 'true');
+  homeBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true">
+      <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+    </svg>
+    <span class="fm-sidebar-label">/home</span>
+  `;
+  sidebar.appendChild(homeBtn);
 
-    const iconKey = folder === 'All Files' ? 'folder' : FOLDER_TYPE[folder];
+  FOLDERS_DEF.forEach(fd => {
+    const btn = document.createElement('button');
+    btn.className = 'fm-sidebar-btn';
+    btn.dataset.path = fd.id;
+    btn.setAttribute('aria-current', 'false');
     btn.innerHTML = `
-      <span class="fm-sidebar-icon" style="color:${folder === 'All Files' ? TYPE_COLOR.folder : TYPE_COLOR[iconKey]}">${FM_ICON[folder === 'All Files' ? 'folder' : iconKey]}</span>
-      <span class="fm-sidebar-label">${folder}</span>
+      <span style="color:${fd.color}">${FOLDER_ICONS[fd.id]}</span>
+      <span class="fm-sidebar-label">${fd.label}</span>
     `;
     sidebar.appendChild(btn);
-  }
+  });
 
   const main = document.createElement('div');
   main.className = 'fm-main';
@@ -952,124 +1171,71 @@ function buildFileManager() {
   const scroll = document.createElement('div');
   scroll.className = 'fm-scroll';
 
-  main.appendChild(scroll);
-  body.appendChild(sidebar);
-  body.appendChild(main);
-  el.appendChild(toolbar);
-  el.appendChild(body);
-
-  function fmDate(d) {
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  }
-
-  function buildFolderCard(folder, mode) {
-    const typeKey = FOLDER_TYPE[folder];
-    const card = document.createElement('button');
-    card.className = `fm-folder-card fm-folder-card--${mode}`;
-    card.dataset.folder = folder;
-    const count = FM_FILES.filter(f => f.folder === folder).length;
-    if (mode === 'tile') {
-      card.innerHTML = `
-        <span class="fm-folder-card-icon" style="color:${TYPE_COLOR[typeKey]}">${FM_ICON[typeKey]}</span>
-        <span class="fm-folder-card-name">${folder}</span>
-        <span class="fm-folder-card-count">${count}</span>
-      `;
-    } else {
-      card.innerHTML = `
-        <span class="fm-list-icon" style="color:${TYPE_COLOR.folder}">${FM_ICON.folder}</span>
-        <span class="fm-list-name">${folder}</span>
-        <span class="fm-list-meta">${count} items</span>
-        <span class="fm-list-size"></span>
-      `;
-    }
-    card.addEventListener('click', () => {
-      currentFolder = folder;
-      updateSidebar();
-      render();
-    });
-    return card;
+  // ── Timeline render helpers ───────────────────────────────────
+  function fmDate(date) {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   function buildFileTile(file) {
     const tile = document.createElement('div');
     tile.className = 'fm-tile';
+    tile.setAttribute('role', 'button');
+    tile.setAttribute('tabindex', '0');
+    tile.setAttribute('title', file.displayName);
     tile.innerHTML = `
-      <span class="fm-tile-icon" style="color:${TYPE_COLOR[file.type]}">${FM_ICON[file.type]}</span>
-      <span class="fm-tile-name">${file.name}</span>
+      <span class="fm-tile-icon" style="color:${TYPE_COLOR[file.type] || TYPE_COLOR.document}">${TYPE_ICONS[file.type] || TYPE_ICONS.document}</span>
+      <span class="fm-tile-name">${file.displayName}</span>
       <span class="fm-tile-date">${fmDate(file.date)}</span>
     `;
+    tile.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); requestOpenFile(file); } });
     return tile;
   }
 
   function buildFileRow(file) {
     const row = document.createElement('div');
     row.className = 'fm-list-row';
+    row.setAttribute('role', 'button');
+    row.setAttribute('tabindex', '0');
+    row.setAttribute('title', file.displayName);
     row.innerHTML = `
-      <span class="fm-list-icon" style="color:${TYPE_COLOR[file.type]}">${FM_ICON[file.type]}</span>
-      <span class="fm-list-name">${file.name}</span>
+      <span class="fm-list-icon" style="color:${TYPE_COLOR[file.type] || TYPE_COLOR.document}">${TYPE_ICONS[file.type] || TYPE_ICONS.document}</span>
+      <span class="fm-list-name">${file.displayName}</span>
       <span class="fm-list-meta">${fmDate(file.date)}</span>
       <span class="fm-list-size">${file.size}</span>
     `;
+    row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); requestOpenFile(file); } });
     return row;
   }
 
-  function updateSidebar() {
-    sidebar.querySelectorAll('.fm-sidebar-btn').forEach(btn => {
-      const active = btn.dataset.folder === currentFolder;
-      btn.classList.toggle('active', active);
-      btn.setAttribute('aria-current', active ? 'true' : 'false');
-    });
-  }
-
-  function render() {
-    const filtered = FM_FILES.filter(f => {
-      if (currentFolder !== 'All Files' && f.folder !== currentFolder) return false;
-      return activeTypes.has(f.type);
-    });
-
-    const groupMap = new Map();
-    for (const file of filtered) {
-      const yr  = file.date.getFullYear();
-      const mo  = file.date.getMonth();
-      const key = `${yr}-${String(mo).padStart(2, '0')}`;
-      if (!groupMap.has(key)) groupMap.set(key, { year: yr, month: mo, files: [] });
-      groupMap.get(key).files.push(file);
+  function buildTimeline(container, files) {
+    const grouped  = new Map();
+    const nowYear  = new Date().getFullYear();
+    for (const f of files) {
+      const yr = f.date.getFullYear(), mo = f.date.getMonth();
+      const k  = `${yr}-${String(mo).padStart(2, '0')}`;
+      if (!grouped.has(k)) grouped.set(k, { year: yr, month: mo, files: [] });
+      grouped.get(k).files.push(f);
     }
 
-    scroll.innerHTML = '';
-
-    if (currentFolder === 'All Files') {
-      const foldersRow = document.createElement('div');
-      foldersRow.className = viewMode === 'tile' ? 'fm-folder-section fm-folder-tile-row' : 'fm-folder-section fm-folder-list-rows';
-      for (const folder of ['Documents', 'Pictures', 'Videos', 'Posts']) {
-        foldersRow.appendChild(buildFolderCard(folder, viewMode));
-      }
-      scroll.appendChild(foldersRow);
-    }
-
-    if (groupMap.size === 0) {
+    if (!grouped.size) {
       const msg = document.createElement('p');
-      msg.className = 'fm-empty-msg';
-      msg.textContent = 'No files match the current filters.';
-      scroll.appendChild(msg);
+      msg.className = 'fm-empty-msg fm-empty-small';
+      msg.textContent = 'No files';
+      container.appendChild(msg);
       return;
     }
 
-    const nowYear = new Date().getFullYear();
-
-    for (const [key, { year, month, files: gf }] of groupMap) {
+    for (const [k, { year, month, files: gf }] of grouped) {
       const section = document.createElement('details');
       section.className = 'fm-group';
-      if (!collapsedGroups.has(key)) section.open = true;
-
+      if (!collapsedGroups.has(k)) section.open = true;
       section.addEventListener('toggle', () => {
-        if (section.open) collapsedGroups.delete(key);
-        else collapsedGroups.add(key);
+        if (section.open) collapsedGroups.delete(k); else collapsedGroups.add(k);
       });
 
       const summary = document.createElement('summary');
       summary.className = 'fm-group-header';
-      const label = year === nowYear ? MONTH_NAMES[month] : `${MONTH_NAMES[month]} ${year}`;
+      const label = year === nowYear ? MONTHS[month] : `${MONTHS[month]} ${year}`;
       summary.innerHTML = `
         <svg class="fm-group-arrow" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4l4 4 4-4"/></svg>
         <span class="fm-group-label">${label}</span>
@@ -1077,64 +1243,123 @@ function buildFileManager() {
       `;
       section.appendChild(summary);
 
-      const content = document.createElement('div');
-      content.className = viewMode === 'tile' ? 'fm-tile-grid' : 'fm-list-rows';
+      const grid = document.createElement('div');
+      grid.className = viewMode === 'tile' ? 'fm-tile-grid' : 'fm-list-rows';
 
       if (viewMode === 'list') {
-        const header = document.createElement('div');
-        header.className = 'fm-list-header';
-        header.innerHTML = `<span></span><span>Name</span><span>Date</span><span>Size</span>`;
-        content.appendChild(header);
+        const hdr = document.createElement('div');
+        hdr.className = 'fm-list-header';
+        hdr.innerHTML = '<span></span><span>Name</span><span>Date</span><span>Size</span>';
+        grid.appendChild(hdr);
       }
 
       for (const file of gf) {
-        content.appendChild(viewMode === 'tile' ? buildFileTile(file) : buildFileRow(file));
+        const item = viewMode === 'tile' ? buildFileTile(file) : buildFileRow(file);
+        item.addEventListener('click', () => requestOpenFile(file));
+        grid.appendChild(item);
       }
 
-      section.appendChild(content);
-      scroll.appendChild(section);
+      section.appendChild(grid);
+      container.appendChild(section);
     }
   }
 
-  toolbar.addEventListener('click', e => {
-    const viewBtn = e.target.closest('.fm-view-btn');
-    if (viewBtn) {
-      viewMode = viewBtn.dataset.view;
-      toolbar.querySelectorAll('.fm-view-btn').forEach(b => {
-        b.setAttribute('aria-pressed', b.dataset.view === viewMode ? 'true' : 'false');
-      });
-      render();
-      return;
-    }
-
-    const chip = e.target.closest('.fm-filter-chip');
-    if (!chip) return;
-
-    if (chip.dataset.filter === 'all') {
-      const allActive = activeTypes.size === TYPE_KEYS.length;
-      if (allActive) activeTypes.clear();
-      else TYPE_KEYS.forEach(t => activeTypes.add(t));
-    } else {
-      const t = chip.dataset.filter;
-      if (activeTypes.has(t)) activeTypes.delete(t);
-      else activeTypes.add(t);
-    }
-
-    toolbar.querySelectorAll('.fm-chip-type').forEach(c => {
-      c.classList.toggle('active', activeTypes.has(c.dataset.filter));
+  function buildFolderSection(fd, files) {
+    const det = document.createElement('details');
+    det.className = 'fm-folder-section';
+    if (!collapsedFolders.has(fd.id)) det.open = true;
+    det.addEventListener('toggle', () => {
+      if (det.open) collapsedFolders.delete(fd.id); else collapsedFolders.add(fd.id);
     });
-    toolbar.querySelector('.fm-chip-all').classList.toggle('active', activeTypes.size === TYPE_KEYS.length);
 
+    const sum = document.createElement('summary');
+    sum.className = 'fm-folder-section-hdr';
+    sum.innerHTML = `
+      <svg class="fm-group-arrow" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4l4 4 4-4"/></svg>
+      <span style="color:${fd.color}">${FOLDER_ICONS[fd.id]}</span>
+      <span class="fm-folder-section-name">${fd.label}</span>
+      <span class="fm-group-count">${files.length}</span>
+    `;
+    det.appendChild(sum);
+
+    const body = document.createElement('div');
+    body.className = 'fm-folder-section-body';
+
+    if (!files.length) {
+      const msg = document.createElement('p');
+      msg.className = 'fm-empty-msg fm-empty-small';
+      msg.textContent = 'Empty';
+      body.appendChild(msg);
+    } else {
+      buildTimeline(body, files);
+    }
+
+    det.appendChild(body);
+    return det;
+  }
+
+  // ── Render ────────────────────────────────────────────────────
+  function renderContent() {
+    scroll.innerHTML = '';
+    if (currentPath === '/') {
+      FOLDERS_DEF.forEach(fd => {
+        scroll.appendChild(buildFolderSection(fd, fileCache[fd.id] || []));
+      });
+    } else {
+      buildTimeline(scroll, fileCache[currentPath] || []);
+    }
+  }
+
+  function render() {
+    const needed  = currentPath === '/' ? FOLDERS_DEF.map(f => f.id) : [currentPath];
+    const pending = needed.filter(f => fileCache[f] === undefined);
+
+    if (pending.length > 0) {
+      scroll.innerHTML = '<p class="fm-empty-msg">Loading\u2026</p>';
+      Promise.all(pending.map(ensureFolder)).then(renderContent);
+    } else {
+      renderContent();
+    }
+  }
+
+  function updateSidebar() {
+    sidebar.querySelectorAll('.fm-sidebar-btn').forEach(btn => {
+      const active = btn.dataset.path === currentPath;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-current', active ? 'true' : 'false');
+    });
+    setAppTitle(id, currentPath === '/' ? '/home' : `/${currentPath}`);
+  }
+
+  // ── Events ────────────────────────────────────────────────────
+  toolbar.addEventListener('click', e => {
+    const btn = e.target.closest('.fm-view-btn');
+    if (!btn) return;
+    viewMode = btn.dataset.view;
+    toolbar.querySelectorAll('.fm-view-btn').forEach(b => {
+      b.setAttribute('aria-pressed', b.dataset.view === viewMode ? 'true' : 'false');
+    });
     render();
   });
 
   sidebar.addEventListener('click', e => {
     const btn = e.target.closest('.fm-sidebar-btn');
     if (!btn) return;
-    currentFolder = btn.dataset.folder;
+    currentPath = btn.dataset.path;
     updateSidebar();
     render();
   });
+
+  // Register API
+  appApis[id] = { openFile: null };
+  setAppTitle(id, '/home');
+
+  main.appendChild(scroll);
+  layout.appendChild(sidebar);
+  layout.appendChild(main);
+  content.appendChild(layout);
+  el.appendChild(toolbar);
+  el.appendChild(content);
 
   render();
   return el;
@@ -1152,40 +1377,27 @@ document.querySelectorAll('.width-btn').forEach(btn => {
 });
 
 closeBtn.addEventListener('click', () => { if (focusedId) closeApp(focusedId); });
-
 helpOpenLauncher.addEventListener('click', () => { closeHelp(); openAppMenu(); });
 
-// Close app menu when clicking outside
 document.addEventListener('click', e => {
   if (!appMenu.hasAttribute('hidden') &&
       !appMenu.contains(e.target) &&
       e.target !== appMenuBtn &&
-      !appMenuBtn.contains(e.target)) {
-    closeAppMenu();
-  }
+      !appMenuBtn.contains(e.target)) closeAppMenu();
 });
 
-// Track meta/ctrl key for drag activation
 document.addEventListener('keydown', e => {
-  if (e.key === 'Meta' || e.key === 'Control') {
-    metaHeld = true;
-    appStrip.classList.add('mod-held');
-  }
+  if (e.key === 'Meta' || e.key === 'Control') { metaHeld = true;  appStrip.classList.add('mod-held'); }
 });
 document.addEventListener('keyup', e => {
-  if (e.key === 'Meta' || e.key === 'Control') {
-    metaHeld = false;
-    appStrip.classList.remove('mod-held');
-  }
+  if (e.key === 'Meta' || e.key === 'Control') { metaHeld = false; appStrip.classList.remove('mod-held'); }
 });
 
-// Keyboard shortcuts
 document.addEventListener('keydown', e => {
   const menuOpen  = !appMenu.hasAttribute('hidden');
   const helpOpen  = !helpOverlay.hasAttribute('hidden');
   const inContent = e.target.closest('.app-content');
-  const isTyping  = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) ||
-                    e.target.isContentEditable;
+  const isTyping  = ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName) || e.target.isContentEditable;
 
   if (e.key === 'Escape') {
     if (helpOpen) { closeHelp(); appMenuBtn.focus(); return; }
@@ -1193,44 +1405,22 @@ document.addEventListener('keydown', e => {
     return;
   }
 
-  if (e.key === '?' && !isTyping && !menuOpen) {
-    e.preventDefault();
-    toggleHelp();
-    return;
-  }
+  if (e.key === '?' && !isTyping && !menuOpen) { e.preventDefault(); toggleHelp(); return; }
 
-  // Consume / Expel (bare [ ] — not typing, no overlay)
   if ((e.key === '[' || e.key === ']') && !isTyping && !helpOpen && !menuOpen) {
     e.preventDefault();
-    if (e.key === '[') consumeLeft();
-    else expelRight();
+    e.key === '[' ? consumeLeft() : expelRight();
     return;
   }
 
   if (helpOpen || menuOpen || isTyping) return;
 
-  if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
-    e.preventDefault();
-    openAppMenu();
-    return;
-  }
-
+  if ((e.metaKey || e.ctrlKey) && e.key === 'd') { e.preventDefault(); openAppMenu(); return; }
   if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '9') {
-    e.preventDefault();
-    focusAppByIndex(parseInt(e.key, 10));
-    return;
+    e.preventDefault(); focusAppByIndex(parseInt(e.key, 10)); return;
   }
-
-  if ((e.metaKey || e.ctrlKey) && e.key === '<') {
-    e.preventDefault();
-    cycleFocusedWidthNarrower();
-    return;
-  }
-  if ((e.metaKey || e.ctrlKey) && e.key === '>') {
-    e.preventDefault();
-    cycleFocusedWidthWider();
-    return;
-  }
+  if ((e.metaKey || e.ctrlKey) && e.key === '<') { e.preventDefault(); cycleFocusedWidthNarrower(); return; }
+  if ((e.metaKey || e.ctrlKey) && e.key === '>') { e.preventDefault(); cycleFocusedWidthWider();    return; }
 
   if (!inContent) {
     if (e.key === 'ArrowLeft')  { e.preventDefault(); focusPrevApp(); return; }
@@ -1240,15 +1430,11 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Tab' && !inContent) {
     e.preventDefault();
     e.shiftKey ? focusPrevApp() : focusNextApp();
-    return;
   }
 });
 
 helpCloseBtn.addEventListener('click', () => closeHelp());
-
-helpOverlay.addEventListener('click', e => {
-  if (e.target === helpOverlay) closeHelp();
-});
+helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) closeHelp(); });
 
 // ── Init ──────────────────────────────────────────────────────
 restoreSession();
