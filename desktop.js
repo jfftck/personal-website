@@ -30,24 +30,32 @@ const APP_DEFS = {
 };
 
 // ── State ─────────────────────────────────────────────────────
-/** @type {{ id: string; type: string; widthPreset: string; el: HTMLElement }[]} */
-let apps = [];
+/**
+ * apps:    [{ id, type, el }]
+ * columns: [{ id, appIds, widthPreset, el }]
+ * Each column contains one or more stacked app windows.
+ */
+let apps      = [];
+let columns   = [];
 let focusedId = null;
-let nextId = 1;
+let nextAppId = 1;
+let nextColId = 1;
 let _skipSave = false;
+let metaHeld  = false;
+let dragState = null; // { colId, colEl, pointerId }
 
 // ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const appMenuBtn      = $('app-menu-btn');
-const appMenu         = $('app-menu');
-const helpOverlay     = $('help-overlay');
-const helpCloseBtn    = $('help-close-btn');
-const helpOpenLauncher= $('help-open-launcher');
-const openAppsBar     = $('open-apps-bar');
-const activeTitle     = $('active-title');
-const closeBtn        = $('close-btn');
-const appStrip        = $('app-strip');
-const emptyState      = $('empty-state');
+const appMenuBtn       = $('app-menu-btn');
+const appMenu          = $('app-menu');
+const helpOverlay      = $('help-overlay');
+const helpCloseBtn     = $('help-close-btn');
+const helpOpenLauncher = $('help-open-launcher');
+const openAppsBar      = $('open-apps-bar');
+const activeTitle      = $('active-title');
+const closeBtn         = $('close-btn');
+const appStrip         = $('app-strip');
+const emptyState       = $('empty-state');
 
 // ── Width helpers ─────────────────────────────────────────────
 function rem() {
@@ -57,11 +65,6 @@ function rem() {
 const EDGE = () => 2 * rem();
 const GAP  = () => 1 * rem();
 
-/**
- * Compute px width for width-preset button.
- * Accounts for 2rem edge insets and 1rem inter-window gaps.
- * @param {'full'|'half'|'third'} preset
- */
 function computeWidth(preset) {
   const usable = window.innerWidth - 2 * EDGE();
   switch (preset) {
@@ -73,83 +76,205 @@ function computeWidth(preset) {
 }
 
 // ── Session persistence ────────────────────────────────────────
-const SESSION_KEY = 'desktop-session-v1';
+const SESSION_KEY    = 'desktop-session-v2';
+const SESSION_KEY_V1 = 'desktop-session-v1';
 
 function saveSession() {
   if (_skipSave) return;
   try {
-    const data = apps.map(({ type, widthPreset }) => ({ type, widthPreset }));
+    const data = {
+      v: 2,
+      columns: columns.map(col => ({
+        widthPreset: col.widthPreset,
+        apps: col.appIds.map(appId => {
+          const app = apps.find(a => a.id === appId);
+          return { type: app.type };
+        }),
+      })),
+    };
     localStorage.setItem(SESSION_KEY, JSON.stringify(data));
   } catch { /* storage unavailable */ }
 }
 
 function safeRemoveSession() {
-  try { localStorage.removeItem(SESSION_KEY); } catch { /* storage unavailable */ }
+  try { localStorage.removeItem(SESSION_KEY); } catch { /* */ }
+  try { localStorage.removeItem(SESSION_KEY_V1); } catch { /* */ }
 }
 
 function restoreSession() {
   try {
-    const raw = localStorage.getItem(SESSION_KEY);
+    let raw = localStorage.getItem(SESSION_KEY);
+    let isV1 = false;
+    if (!raw) {
+      raw = localStorage.getItem(SESSION_KEY_V1);
+      isV1 = true;
+    }
     if (!raw) return;
+
     const data = JSON.parse(raw);
-    if (!Array.isArray(data)) { safeRemoveSession(); return; }
+    if (!data) { safeRemoveSession(); return; }
+
     _skipSave = true;
-    for (const entry of data) {
-      if (typeof entry.type !== 'string' || !APP_DEFS[entry.type]) continue;
-      openApp(entry.type);
-      const app = apps[apps.length - 1];
-      const preset = WIDTH_PRESETS.includes(entry.widthPreset) ? entry.widthPreset : 'full';
-      if (app && preset !== 'full') {
-        const px = computeWidth(preset);
-        app.el.style.setProperty('--app-width', `${Math.max(px, 160)}px`);
-        app.widthPreset = preset;
+
+    if (!isV1 && data.v === 2 && Array.isArray(data.columns)) {
+      // v2 format
+      for (const colData of data.columns) {
+        const preset = WIDTH_PRESETS.includes(colData.widthPreset) ? colData.widthPreset : 'full';
+        let colId = null;
+
+        for (let i = 0; i < colData.apps.length; i++) {
+          const appData = colData.apps[i];
+          if (typeof appData.type !== 'string' || !APP_DEFS[appData.type]) continue;
+          const appId = openApp(appData.type, colId);
+          if (i === 0 && appId) {
+            const col = getAppColumn(appId);
+            colId = col ? col.id : null;
+          }
+        }
+
+        if (colId && preset !== 'full') {
+          const col = columns.find(c => c.id === colId);
+          if (col) {
+            col.widthPreset = preset;
+            col.el.style.setProperty('--app-width', `${Math.max(computeWidth(preset), 160)}px`);
+          }
+        }
+      }
+    } else if (isV1 && Array.isArray(data)) {
+      // v1 format (flat array, single-app columns)
+      for (const entry of data) {
+        if (typeof entry.type !== 'string' || !APP_DEFS[entry.type]) continue;
+        const appId = openApp(entry.type);
+        const preset = WIDTH_PRESETS.includes(entry.widthPreset) ? entry.widthPreset : 'full';
+        if (appId && preset !== 'full') {
+          const col = getAppColumn(appId);
+          if (col) {
+            col.widthPreset = preset;
+            col.el.style.setProperty('--app-width', `${Math.max(computeWidth(preset), 160)}px`);
+          }
+        }
       }
     }
+
     _skipSave = false;
     saveSession();
+    // Scroll to focused after restore
+    if (focusedId) requestAnimationFrame(() => scrollToApp(focusedId));
   } catch {
     _skipSave = false;
     safeRemoveSession();
   }
 }
 
-// ── App lifecycle ─────────────────────────────────────────────
-function openApp(type) {
-  const def = APP_DEFS[type];
-  if (!def) return;
+// ── Column helpers ─────────────────────────────────────────────
+function getAppColumn(appId) {
+  return columns.find(col => col.appIds.includes(appId));
+}
 
-  const id = `app-${nextId++}`;
+function getAppOrder() {
+  return columns.flatMap(col => col.appIds);
+}
+
+function createColEl(colId) {
+  const el = document.createElement('div');
+  el.className = 'app-col';
+  el.dataset.colId = colId;
+
+  const handle = document.createElement('div');
+  handle.className = 'col-drag-handle';
+  handle.setAttribute('title', 'Drag to reorder  ·  Hold ⌘/Ctrl then drag anywhere');
+  handle.setAttribute('aria-hidden', 'true');
+  handle.innerHTML = `<svg width="22" height="6" viewBox="0 0 22 6" fill="currentColor" aria-hidden="true">
+    <circle cx="3"  cy="3" r="1.75"/>
+    <circle cx="11" cy="3" r="1.75"/>
+    <circle cx="19" cy="3" r="1.75"/>
+  </svg>`;
+  el.appendChild(handle);
+
+  return el;
+}
+
+// ── App lifecycle ─────────────────────────────────────────────
+/**
+ * Open an app of the given type.
+ * If insertIntoColId is provided, add to that column instead of creating a new one.
+ * Returns the new app ID.
+ */
+function openApp(type, insertIntoColId = null) {
+  const def = APP_DEFS[type];
+  if (!def) return null;
+
+  const id = `app-${nextAppId++}`;
   const el = def.build(id);
   el.classList.add('app-window');
   el.dataset.id = id;
   el.dataset.type = type;
 
-  el.addEventListener('pointerdown', () => focusApp(id), { capture: true });
+  apps.push({ id, type, el });
 
-  appStrip.appendChild(el);
-  apps.push({ id, type, widthPreset: 'full', el });
+  const existingCol = insertIntoColId ? columns.find(c => c.id === insertIntoColId) : null;
+
+  if (existingCol) {
+    existingCol.appIds.push(id);
+    existingCol.el.appendChild(el);
+  } else {
+    const colId    = `col-${nextColId++}`;
+    const colEl    = createColEl(colId);
+    colEl.appendChild(el);
+
+    const px = computeWidth('full');
+    colEl.style.setProperty('--app-width', `${px}px`);
+
+    const col = { id: colId, appIds: [id], widthPreset: 'full', el: colEl };
+    columns.push(col);
+    appStrip.appendChild(colEl);
+    wireColEvents(colEl, colId);
+  }
 
   focusApp(id);
   updateEmptyState();
   updateStripLayout();
-  saveSession();
+  if (!_skipSave) {
+    saveSession();
+    requestAnimationFrame(() => scrollToApp(id));
+  }
 
-  requestAnimationFrame(() => scrollToApp(id));
+  return id;
 }
 
 function closeApp(id) {
-  const idx = apps.findIndex(a => a.id === id);
-  if (idx === -1) return;
+  const appIdx = apps.findIndex(a => a.id === id);
+  if (appIdx === -1) return;
 
-  const { el } = apps[idx];
-  apps.splice(idx, 1);
+  const { el } = apps[appIdx];
+  const col    = getAppColumn(id);
+
+  apps.splice(appIdx, 1);
   el.remove();
+
+  if (col) {
+    const cIdx = col.appIds.indexOf(id);
+    col.appIds.splice(cIdx, 1);
+
+    if (col.appIds.length === 0) {
+      const colIdx = columns.indexOf(col);
+      col.el.remove();
+      columns.splice(colIdx, 1);
+    }
+  }
 
   if (focusedId === id) {
     focusedId = null;
-    if (apps.length > 0) {
-      const next = apps[Math.max(0, idx - 1)];
-      focusApp(next.id);
+    const order = getAppOrder();
+    if (order.length > 0) {
+      let nextId = null;
+      // Prefer an app in the same column
+      if (col && col.appIds.length > 0) {
+        nextId = col.appIds[0];
+      } else {
+        nextId = order[Math.max(0, order.indexOf(id) - 1)] || order[0];
+      }
+      if (nextId) focusApp(nextId);
     }
   }
 
@@ -162,72 +287,197 @@ function closeApp(id) {
 function focusApp(id) {
   if (focusedId === id) return;
 
-  const prev = apps.find(a => a.id === focusedId);
-  if (prev) prev.el.classList.remove('focused');
+  if (focusedId) {
+    const prev = apps.find(a => a.id === focusedId);
+    if (prev) prev.el.classList.remove('focused');
+  }
 
   focusedId = id;
 
   const next = apps.find(a => a.id === id);
   if (next) {
     next.el.classList.add('focused');
-    requestAnimationFrame(() => scrollToApp(id));
+    if (!_skipSave) requestAnimationFrame(() => scrollToApp(id));
   }
 
   updateTopBar();
 }
 
 function scrollToApp(id) {
-  const app = apps.find(a => a.id === id);
-  if (!app) return;
-  app.el.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+  const col = getAppColumn(id);
+  if (!col) return;
+  col.el.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
 }
 
 const WIDTH_PRESETS = ['third', 'half', 'full'];
 
 function setFocusedWidth(preset) {
   if (!focusedId) return;
-  const app = apps.find(a => a.id === focusedId);
-  if (!app) return;
+  const col = getAppColumn(focusedId);
+  if (!col) return;
 
   const px = Math.max(computeWidth(preset), 160);
 
-  // Phase 1: squish in
-  app.el.classList.remove('width-shrink', 'width-grow');
-  void app.el.offsetWidth; // force reflow to restart animation
-  app.el.classList.add('width-shrink');
+  col.el.classList.remove('width-shrink', 'width-grow');
+  void col.el.offsetWidth;
+  col.el.classList.add('width-shrink');
 
-  app.el.addEventListener('animationend', () => {
-    app.el.classList.remove('width-shrink');
-    // Snap to new width, then spring back out
-    app.el.style.setProperty('--app-width', `${px}px`);
-    void app.el.offsetWidth;
-    app.el.classList.add('width-grow');
-    app.el.addEventListener('animationend', () => {
-      app.el.classList.remove('width-grow');
+  col.el.addEventListener('animationend', () => {
+    col.el.classList.remove('width-shrink');
+    col.el.style.setProperty('--app-width', `${px}px`);
+    void col.el.offsetWidth;
+    col.el.classList.add('width-grow');
+    col.el.addEventListener('animationend', () => {
+      col.el.classList.remove('width-grow');
     }, { once: true });
   }, { once: true });
 
-  app.widthPreset = preset;
+  col.widthPreset = preset;
   saveSession();
   updateWidthButtons();
 }
 
 function cycleFocusedWidthWider() {
   if (!focusedId) return;
-  const app = apps.find(a => a.id === focusedId);
-  if (!app) return;
-  const idx = WIDTH_PRESETS.indexOf(app.widthPreset);
-  const next = WIDTH_PRESETS[Math.min(idx + 1, WIDTH_PRESETS.length - 1)];
-  setFocusedWidth(next);
+  const col = getAppColumn(focusedId);
+  if (!col) return;
+  const idx = WIDTH_PRESETS.indexOf(col.widthPreset);
+  setFocusedWidth(WIDTH_PRESETS[Math.min(idx + 1, WIDTH_PRESETS.length - 1)]);
 }
 
 function cycleFocusedWidthNarrower() {
   if (!focusedId) return;
+  const col = getAppColumn(focusedId);
+  if (!col) return;
+  const idx = WIDTH_PRESETS.indexOf(col.widthPreset);
+  setFocusedWidth(WIDTH_PRESETS[Math.max(idx - 1, 0)]);
+}
+
+// ── Consume / Expel ───────────────────────────────────────────
+/** Take the last app from the column to the left and append it to the focused column. */
+function consumeLeft() {
+  if (!focusedId) return;
+  const col    = getAppColumn(focusedId);
+  if (!col) return;
+  const colIdx = columns.indexOf(col);
+  if (colIdx === 0) return;
+
+  const leftCol = columns[colIdx - 1];
+  if (leftCol.appIds.length === 0) return;
+
+  const takenId  = leftCol.appIds[leftCol.appIds.length - 1];
+  const takenApp = apps.find(a => a.id === takenId);
+  if (!takenApp) return;
+
+  leftCol.appIds.pop();
+  takenApp.el.remove();
+
+  if (leftCol.appIds.length === 0) {
+    leftCol.el.remove();
+    columns.splice(colIdx - 1, 1);
+  }
+
+  col.appIds.push(takenId);
+  col.el.appendChild(takenApp.el);
+
+  saveSession();
+  updateTopBar();
+  updateStripLayout();
+}
+
+/** Move the focused app out of its column into a new column to the right. */
+function expelRight() {
+  if (!focusedId) return;
+  const col = getAppColumn(focusedId);
+  if (!col || col.appIds.length <= 1) return;
+
+  const colIdx = columns.indexOf(col);
+  const appIdx = col.appIds.indexOf(focusedId);
+  col.appIds.splice(appIdx, 1);
   const app = apps.find(a => a.id === focusedId);
-  if (!app) return;
-  const idx = WIDTH_PRESETS.indexOf(app.widthPreset);
-  const next = WIDTH_PRESETS[Math.max(idx - 1, 0)];
-  setFocusedWidth(next);
+  app.el.remove();
+
+  const newColId = `col-${nextColId++}`;
+  const newColEl = createColEl(newColId);
+  newColEl.appendChild(app.el);
+
+  const px = Math.max(computeWidth(col.widthPreset), 160);
+  newColEl.style.setProperty('--app-width', `${px}px`);
+
+  const newCol = { id: newColId, appIds: [focusedId], widthPreset: col.widthPreset, el: newColEl };
+  columns.splice(colIdx + 1, 0, newCol);
+  col.el.after(newColEl);
+  wireColEvents(newColEl, newColId);
+
+  saveSession();
+  updateTopBar();
+  updateStripLayout();
+  requestAnimationFrame(() => scrollToApp(focusedId));
+}
+
+// ── Column event wiring (focus + drag) ───────────────────────
+function wireColEvents(colEl, colId) {
+  colEl.addEventListener('pointerdown', e => {
+    const onHandle = !!e.target.closest('.col-drag-handle');
+    if (onHandle || metaHeld) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      startColDrag(colId, e, colEl);
+      return;
+    }
+    // Focus whichever app window was clicked
+    const appEl = e.target.closest('.app-window');
+    if (appEl && appEl.dataset.id) focusApp(appEl.dataset.id);
+  }, { capture: true });
+}
+
+// ── Drag to reorder columns ───────────────────────────────────
+function startColDrag(colId, e, colEl) {
+  dragState = { colId, colEl, pointerId: e.pointerId };
+  colEl.classList.add('col-dragging');
+  try { colEl.setPointerCapture(e.pointerId); } catch { /* */ }
+
+  function onMove(ev) {
+    if (!dragState || ev.pointerId !== dragState.pointerId) return;
+
+    const dragIdx = columns.findIndex(c => c.id === dragState.colId);
+    if (dragIdx === -1) return;
+
+    let targetIdx = -1;
+    for (let i = 0; i < columns.length; i++) {
+      if (i === dragIdx) continue;
+      const rect = columns[i].el.getBoundingClientRect();
+      if (ev.clientX >= rect.left && ev.clientX <= rect.right) {
+        targetIdx = i;
+        break;
+      }
+    }
+    if (targetIdx === -1) return;
+
+    // Swap in state array
+    const temp = columns[dragIdx];
+    columns[dragIdx] = columns[targetIdx];
+    columns[targetIdx] = temp;
+
+    // Swap in DOM
+    if (dragIdx < targetIdx) {
+      columns[targetIdx].el.after(dragState.colEl);
+    } else {
+      columns[targetIdx].el.before(dragState.colEl);
+    }
+  }
+
+  function onEnd(ev) {
+    if (!dragState || ev.pointerId !== dragState.pointerId) return;
+    dragState.colEl.classList.remove('col-dragging');
+    dragState = null;
+    colEl.removeEventListener('pointermove', onMove);
+    saveSession();
+  }
+
+  colEl.addEventListener('pointermove', onMove);
+  colEl.addEventListener('pointerup',     onEnd, { once: true });
+  colEl.addEventListener('pointercancel', onEnd, { once: true });
 }
 
 // ── Top-bar rendering ─────────────────────────────────────────
@@ -254,8 +504,8 @@ function updateTopBar() {
 }
 
 function updateWidthButtons() {
-  const focused = apps.find(a => a.id === focusedId);
-  const activePreset = focused ? focused.widthPreset : null;
+  const col         = focusedId ? getAppColumn(focusedId) : null;
+  const activePreset = col ? col.widthPreset : null;
   document.querySelectorAll('.width-btn').forEach(btn => {
     btn.setAttribute('aria-pressed', btn.dataset.width === activePreset ? 'true' : 'false');
   });
@@ -270,27 +520,28 @@ function updateEmptyState() {
 }
 
 function updateStripLayout() {
-  appStrip.classList.toggle('center-apps', apps.length === 1);
+  appStrip.classList.toggle('center-apps', columns.length === 1);
 }
 
-// ── App focus navigation ───────────────────────────────────────
+// ── App navigation ────────────────────────────────────────────
 function focusNextApp() {
-  if (apps.length === 0) return;
-  const idx = apps.findIndex(a => a.id === focusedId);
-  const next = apps[(idx + 1) % apps.length];
-  focusApp(next.id);
+  const order = getAppOrder();
+  if (order.length === 0) return;
+  const idx = order.indexOf(focusedId);
+  focusApp(order[(idx + 1) % order.length]);
 }
 
 function focusPrevApp() {
-  if (apps.length === 0) return;
-  const idx = apps.findIndex(a => a.id === focusedId);
-  const prev = apps[(idx - 1 + apps.length) % apps.length];
-  focusApp(prev.id);
+  const order = getAppOrder();
+  if (order.length === 0) return;
+  const idx = order.indexOf(focusedId);
+  focusApp(order[(idx - 1 + order.length) % order.length]);
 }
 
 function focusAppByIndex(n) {
-  if (n < 1 || n > apps.length) return;
-  focusApp(apps[n - 1].id);
+  const order = getAppOrder();
+  if (n < 1 || n > order.length) return;
+  focusApp(order[n - 1]);
 }
 
 // ── App menu ──────────────────────────────────────────────────
@@ -377,6 +628,9 @@ const DOC_HTML = `
 <p>This desktop environment takes inspiration from the Niri tiling window manager for Wayland. Niri uses a scrollable, horizontal strip layout where windows are arranged side by side and the user scrolls to navigate between them.</p>
 <p>Unlike traditional tiling window managers, Niri does not try to fill every pixel of the screen — it allows windows to breathe and centre naturally. Apps "want" to be centred on screen, much like the windows in this very interface you're using right now.</p>
 
+<h2>Column Stacking</h2>
+<p>Press <strong>[</strong> to consume the last window from the column to the left into the current column (stacking it vertically). Press <strong>]</strong> to expel the focused window out into its own new column to the right. This mirrors the column-stacking behaviour of the Niri window manager.</p>
+
 <h2>Responsive Layout</h2>
 <p>The interface adapts to three size tiers:</p>
 <ul>
@@ -385,17 +639,13 @@ const DOC_HTML = `
   <li><strong>Large (≥ 1024 px)</strong> — Two apps can be shown side by side, each occupying half the usable area with 1 rem gaps and 2 rem edge insets. A single open app stays centred at its column width without stretching.</li>
 </ul>
 
-<h2>Window Management</h2>
-<p>The top bar provides core window management controls. On the left, the grid button opens the app launcher. The icons next to it represent open apps — click any to focus it. The centre of the bar shows the title of the focused app. On the right, three width-preset buttons resize the focused window to one-third, one-half, or full usable width (accounting for all gaps), and a close button dismisses the focused app.</p>
-
 <h2>Technical Details</h2>
-<p>This page is built with vanilla HTML, CSS, and JavaScript — no frameworks or build tools. It uses modern CSS including <code>scroll-snap</code>, <code>backdrop-filter</code>, CSS custom properties, and logical properties for left-to-right/right-to-left support.</p>
+<p>This page is built with vanilla HTML, CSS, and JavaScript — no frameworks or build tools. It uses modern CSS including <code>scroll-snap</code>, <code>backdrop-filter</code>, CSS custom properties, container queries, and logical properties for left-to-right/right-to-left support.</p>
 <p>The layout engine computes window widths precisely in JavaScript from the current viewport width, root font size, and the defined gap constants — so all three width presets always respect the spacing rules exactly.</p>
 
 <h2>Lorem Ipsum</h2>
 <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
 <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
-<p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
 `;
 
 function docHtmlPage() {
@@ -479,7 +729,7 @@ function buildDocViewer() {
             await navigator.clipboard.writeText(location.href);
             toast(el, 'URL copied to clipboard');
           }
-        } catch { /* user cancelled or not supported */ }
+        } catch { /* user cancelled */ }
         break;
 
       case 'download': {
@@ -578,7 +828,7 @@ function buildImgViewer() {
             await navigator.clipboard.writeText(img.src);
             toast(el, 'Image URL copied to clipboard');
           }
-        } catch { /* user cancelled or not supported */ }
+        } catch { /* user cancelled */ }
         break;
     }
   });
@@ -632,13 +882,11 @@ function buildFileManager() {
     { name: 'q3-report.pdf',              type: 'document', folder: 'Documents', date: new Date(2025, 10, 10), size: '1.1 MB' },
   ];
 
-  // ── State ────────────────────────────────────────────────────
-  let currentFolder  = 'All Files';
-  let viewMode       = 'tile';
-  let activeTypes    = new Set(TYPE_KEYS);
+  let currentFolder   = 'All Files';
+  let viewMode        = 'tile';
+  let activeTypes     = new Set(TYPE_KEYS);
   let collapsedGroups = new Set();
 
-  // ── SVG icons for file types ─────────────────────────────────
   const FM_ICON = {
     folder:   `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`,
     document: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 14h8v1.5H8zm0 3h8v1.5H8zm0-6h4v1.5H8z"/></svg>`,
@@ -655,10 +903,8 @@ function buildFileManager() {
     folder:   '#e07b39',
   };
 
-  // ── Root element ──────────────────────────────────────────────
   const el = document.createElement('div');
 
-  // ── Toolbar (view + type filters) ────────────────────────────
   const toolbar = document.createElement('div');
   toolbar.className = 'app-toolbar fm-toolbar';
   toolbar.innerHTML = `
@@ -679,11 +925,9 @@ function buildFileManager() {
     </div>
   `;
 
-  // ── Body: sidebar + main ──────────────────────────────────────
   const body = document.createElement('div');
   body.className = 'app-content fm-body';
 
-  // Sidebar
   const sidebar = document.createElement('nav');
   sidebar.className = 'fm-sidebar';
   sidebar.setAttribute('aria-label', 'Folders');
@@ -702,7 +946,6 @@ function buildFileManager() {
     sidebar.appendChild(btn);
   }
 
-  // Main (scroll area)
   const main = document.createElement('div');
   main.className = 'fm-main';
 
@@ -715,7 +958,6 @@ function buildFileManager() {
   el.appendChild(toolbar);
   el.appendChild(body);
 
-  // ── Helpers ──────────────────────────────────────────────────
   function fmDate(d) {
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
@@ -785,7 +1027,6 @@ function buildFileManager() {
       return activeTypes.has(f.type);
     });
 
-    // Group by year-month descending
     const groupMap = new Map();
     for (const file of filtered) {
       const yr  = file.date.getFullYear();
@@ -797,7 +1038,6 @@ function buildFileManager() {
 
     scroll.innerHTML = '';
 
-    // Folders row at top when showing All Files
     if (currentFolder === 'All Files') {
       const foldersRow = document.createElement('div');
       foldersRow.className = viewMode === 'tile' ? 'fm-folder-section fm-folder-tile-row' : 'fm-folder-section fm-folder-list-rows';
@@ -810,14 +1050,14 @@ function buildFileManager() {
     if (groupMap.size === 0) {
       const msg = document.createElement('p');
       msg.className = 'fm-empty-msg';
-      msg.textContent = filtered.length === 0 ? 'No files match the current filters.' : '';
+      msg.textContent = 'No files match the current filters.';
       scroll.appendChild(msg);
       return;
     }
 
     const nowYear = new Date().getFullYear();
 
-    for (const [key, { year, month, files: groupFiles }] of groupMap) {
+    for (const [key, { year, month, files: gf }] of groupMap) {
       const section = document.createElement('details');
       section.className = 'fm-group';
       if (!collapsedGroups.has(key)) section.open = true;
@@ -829,13 +1069,11 @@ function buildFileManager() {
 
       const summary = document.createElement('summary');
       summary.className = 'fm-group-header';
-      const label = year === nowYear
-        ? MONTH_NAMES[month]
-        : `${MONTH_NAMES[month]} ${year}`;
+      const label = year === nowYear ? MONTH_NAMES[month] : `${MONTH_NAMES[month]} ${year}`;
       summary.innerHTML = `
-        <svg class="fm-group-arrow" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2 4l4 4 4-4"/></svg>
+        <svg class="fm-group-arrow" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4l4 4 4-4"/></svg>
         <span class="fm-group-label">${label}</span>
-        <span class="fm-group-count">${groupFiles.length}</span>
+        <span class="fm-group-count">${gf.length}</span>
       `;
       section.appendChild(summary);
 
@@ -849,7 +1087,7 @@ function buildFileManager() {
         content.appendChild(header);
       }
 
-      for (const file of groupFiles) {
+      for (const file of gf) {
         content.appendChild(viewMode === 'tile' ? buildFileTile(file) : buildFileRow(file));
       }
 
@@ -858,9 +1096,7 @@ function buildFileManager() {
     }
   }
 
-  // ── Toolbar events ────────────────────────────────────────────
   toolbar.addEventListener('click', e => {
-    // View toggle
     const viewBtn = e.target.closest('.fm-view-btn');
     if (viewBtn) {
       viewMode = viewBtn.dataset.view;
@@ -871,35 +1107,27 @@ function buildFileManager() {
       return;
     }
 
-    // Type filter chips
     const chip = e.target.closest('.fm-filter-chip');
     if (!chip) return;
 
     if (chip.dataset.filter === 'all') {
-      // Toggle all on/off
       const allActive = activeTypes.size === TYPE_KEYS.length;
-      if (allActive) {
-        activeTypes.clear();
-      } else {
-        TYPE_KEYS.forEach(t => activeTypes.add(t));
-      }
+      if (allActive) activeTypes.clear();
+      else TYPE_KEYS.forEach(t => activeTypes.add(t));
     } else {
       const t = chip.dataset.filter;
       if (activeTypes.has(t)) activeTypes.delete(t);
       else activeTypes.add(t);
     }
 
-    // Sync chip states
     toolbar.querySelectorAll('.fm-chip-type').forEach(c => {
       c.classList.toggle('active', activeTypes.has(c.dataset.filter));
     });
-    const allChip = toolbar.querySelector('.fm-chip-all');
-    allChip.classList.toggle('active', activeTypes.size === TYPE_KEYS.length);
+    toolbar.querySelector('.fm-chip-all').classList.toggle('active', activeTypes.size === TYPE_KEYS.length);
 
     render();
   });
 
-  // Sidebar events
   sidebar.addEventListener('click', e => {
     const btn = e.target.closest('.fm-sidebar-btn');
     if (!btn) return;
@@ -908,12 +1136,11 @@ function buildFileManager() {
     render();
   });
 
-  // Initial render
   render();
   return el;
 }
 
-// ── Wire events ───────────────────────────────────────────────
+// ── Wire global events ───────────────────────────────────────
 appMenuBtn.addEventListener('click', e => { e.stopPropagation(); toggleAppMenu(); });
 
 document.querySelectorAll('.app-launcher').forEach(btn => {
@@ -938,6 +1165,20 @@ document.addEventListener('click', e => {
   }
 });
 
+// Track meta/ctrl key for drag activation
+document.addEventListener('keydown', e => {
+  if (e.key === 'Meta' || e.key === 'Control') {
+    metaHeld = true;
+    appStrip.classList.add('mod-held');
+  }
+});
+document.addEventListener('keyup', e => {
+  if (e.key === 'Meta' || e.key === 'Control') {
+    metaHeld = false;
+    appStrip.classList.remove('mod-held');
+  }
+});
+
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {
   const menuOpen  = !appMenu.hasAttribute('hidden');
@@ -946,38 +1187,40 @@ document.addEventListener('keydown', e => {
   const isTyping  = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) ||
                     e.target.isContentEditable;
 
-  // Escape: close overlays
   if (e.key === 'Escape') {
     if (helpOpen) { closeHelp(); appMenuBtn.focus(); return; }
     if (menuOpen) { closeAppMenu(); appMenuBtn.focus(); return; }
     return;
   }
 
-  // ? — toggle help (only when not typing)
   if (e.key === '?' && !isTyping && !menuOpen) {
     e.preventDefault();
     toggleHelp();
     return;
   }
 
-  // Don't capture navigation shortcuts while overlays are open or focus is in a form
+  // Consume / Expel (bare [ ] — not typing, no overlay)
+  if ((e.key === '[' || e.key === ']') && !isTyping && !helpOpen && !menuOpen) {
+    e.preventDefault();
+    if (e.key === '[') consumeLeft();
+    else expelRight();
+    return;
+  }
+
   if (helpOpen || menuOpen || isTyping) return;
 
-  // Meta/Ctrl + D — open app launcher
   if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
     e.preventDefault();
     openAppMenu();
     return;
   }
 
-  // Meta/Ctrl + 1–9 — focus app by number
   if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '9') {
     e.preventDefault();
     focusAppByIndex(parseInt(e.key, 10));
     return;
   }
 
-  // Meta/Ctrl + < / > — resize focused window narrower / wider
   if ((e.metaKey || e.ctrlKey) && e.key === '<') {
     e.preventDefault();
     cycleFocusedWidthNarrower();
@@ -989,13 +1232,11 @@ document.addEventListener('keydown', e => {
     return;
   }
 
-  // Arrow keys — cycle apps (skip when focus is inside scrollable app content)
   if (!inContent) {
     if (e.key === 'ArrowLeft')  { e.preventDefault(); focusPrevApp(); return; }
     if (e.key === 'ArrowRight') { e.preventDefault(); focusNextApp(); return; }
   }
 
-  // Tab / Shift+Tab — cycle apps (skip when focus is inside app content)
   if (e.key === 'Tab' && !inContent) {
     e.preventDefault();
     e.shiftKey ? focusPrevApp() : focusNextApp();
@@ -1005,7 +1246,6 @@ document.addEventListener('keydown', e => {
 
 helpCloseBtn.addEventListener('click', () => closeHelp());
 
-// Close help when clicking outside its inner panel
 helpOverlay.addEventListener('click', e => {
   if (e.target === helpOverlay) closeHelp();
 });

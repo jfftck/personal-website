@@ -31,8 +31,6 @@
   --backdrop:      blur(14px) saturate(0.55) brightness(0.75);
   --toolbar-backdrop: blur(8px) saturate(0.6) brightness(0.8);
 
-  --empty-color:   rgba(150, 210, 255, 0.30);
-
   --scrollbar-thumb: rgba(0, 102, 153, 0.55);
   --scrollbar-track: rgba(0, 0, 0, 0.20);
 
@@ -61,7 +59,6 @@
     --backdrop:      blur(14px) sepia(0.15) brightness(1.08);
     --toolbar-backdrop: blur(8px) brightness(1.05);
 
-    --empty-color:   rgba(0, 80, 130, 0.28);
     --scrollbar-thumb: rgba(0, 80, 130, 0.40);
     --scrollbar-track: rgba(0, 0, 0, 0.06);
   }
@@ -145,7 +142,6 @@ body {
   gap: 0.125rem;
 }
 
-/* Hide width controls on small portrait screens */
 @media (max-width: 640px) and (orientation: portrait) {
   #width-controls { display: none; }
 }
@@ -232,14 +228,9 @@ body {
 }
 
 .app-tab-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
-
 .app-tab-btn:hover  { background-color: var(--btn-hover); }
 .app-tab-btn:active { background-color: var(--btn-active); }
-
-.app-tab-btn.focused {
-  background-color: var(--accent);
-  color: #fff;
-}
+.app-tab-btn.focused { background-color: var(--accent); color: #fff; }
 
 .app-tab-btn:focus-visible {
   outline: 2px solid var(--focus-color);
@@ -347,7 +338,6 @@ body {
   overflow: hidden;
 }
 
-/* Empty state */
 #empty-state {
   position: absolute;
   inset: 0;
@@ -356,7 +346,6 @@ body {
 
 #empty-state[hidden] { display: none; }
 
-/* Scroll wrapper */
 #app-strip-wrapper {
   height: 100%;
   overflow-x: auto;
@@ -370,7 +359,6 @@ body {
 
 #app-strip-wrapper::-webkit-scrollbar { display: none; }
 
-/* The flex strip itself */
 #app-strip {
   display: flex;
   align-items: flex-start;
@@ -378,19 +366,147 @@ body {
   gap: var(--gap);
   min-height: 100%;
   padding-block: 1rem;
+  padding-inline: var(--edge);
 }
 
-/* Single-app centering */
 #app-strip.center-apps { justify-content: center; }
 
+#app-strip-wrapper {
+  scroll-padding-inline-start: var(--edge);
+}
+
+@media (max-width: 640px) and (orientation: portrait) {
+  #app-strip {
+    padding-inline: 0;
+    gap: 0;
+  }
+  #app-strip-wrapper {
+    scroll-padding-inline-start: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  #app-strip {
+    min-width: 100%;
+    justify-content: center;
+  }
+}
+
 /* ============================================================
-   APP WINDOWS
+   COLUMNS  (scrolling / sizing unit)
    ============================================================ */
-.app-window {
+.app-col {
+  /* JS sets --app-width; CSS provides the default */
   --app-width: calc(100vw - 2 * var(--edge));
   flex-shrink: 0;
   width: var(--app-width);
   height: calc(100dvh - 5rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  scroll-snap-align: start;
+  position: relative;
+  transform-origin: center top;
+}
+
+@media (max-width: 640px) and (orientation: portrait) {
+  .app-col { --app-width: 100vw; }
+}
+
+@media (min-width: 1024px) {
+  .app-col {
+    --app-width: calc((100vw - 2 * var(--edge) - var(--gap)) / 2);
+  }
+}
+
+/* Width-change animation on the column */
+@keyframes widthShrink {
+  from { transform: scaleX(1)    scaleY(1);    }
+  to   { transform: scaleX(0.88) scaleY(1.03); }
+}
+
+@keyframes widthGrow {
+  0%   { transform: scaleX(0.88) scaleY(1.03); }
+  65%  { transform: scaleX(1.02) scaleY(0.99); }
+  100% { transform: scaleX(1)    scaleY(1);    }
+}
+
+.app-col.width-shrink {
+  animation: widthShrink 110ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.app-col.width-grow {
+  animation: widthGrow 220ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Drag visual */
+.app-col.col-dragging {
+  opacity: 0.72;
+  cursor: grabbing;
+}
+
+/* ============================================================
+   DRAG HANDLE
+   ============================================================ */
+.col-drag-handle {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  translate: -50% 0;
+  width: 3.25rem;
+  height: 1.125rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  cursor: grab;
+  border-radius: 0 0 0.5rem 0.5rem;
+  background: rgba(0, 30, 50, 0.72);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--topbar-border);
+  border-top: none;
+  color: var(--topbar-text);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.col-drag-handle:active { cursor: grabbing; }
+
+/* Show on hover (desktop) */
+.app-col:hover .col-drag-handle {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* Show when meta/ctrl held */
+#app-strip.mod-held .col-drag-handle {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* Always visible on touch devices */
+@media (pointer: coarse) {
+  .col-drag-handle {
+    opacity: 0.75;
+    pointer-events: all;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  .col-drag-handle {
+    background: rgba(225, 243, 255, 0.85);
+  }
+}
+
+/* ============================================================
+   APP WINDOWS  (children of .app-col)
+   ============================================================ */
+.app-window {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
   border-radius: 1rem;
   border: 1px solid var(--app-border);
   background-color: var(--app-bg);
@@ -402,9 +518,9 @@ body {
   outline: 0.25rem solid transparent;
   outline-offset: 0;
   transition: box-shadow 200ms ease, outline-color 200ms ease;
-  scroll-snap-align: start;
   position: relative;
-  transform-origin: center top;
+  /* Container query context — labels shown based on window width */
+  container-type: inline-size;
 }
 
 .app-window.focused {
@@ -412,69 +528,12 @@ body {
   box-shadow: 0 0.5rem 2.5rem rgba(0, 170, 255, 0.22);
 }
 
-/* Width-change animation */
-@keyframes widthShrink {
-  from { transform: scaleX(1)    scaleY(1);     }
-  to   { transform: scaleX(0.88) scaleY(1.03);  }
-}
-
-@keyframes widthGrow {
-  0%   { transform: scaleX(0.88) scaleY(1.03);  }
-  65%  { transform: scaleX(1.02) scaleY(0.99);  }
-  100% { transform: scaleX(1)    scaleY(1);      }
-}
-
-.app-window.width-shrink {
-  animation: widthShrink 110ms cubic-bezier(0.4, 0, 1, 1) forwards;
-}
-
-.app-window.width-grow {
-  animation: widthGrow 220ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-/* ----
-   Default (medium): 2rem edge inset, 1rem peek of next app.
-   ---- */
-#app-strip {
-  padding-inline: var(--edge);
-}
-
-#app-strip-wrapper {
-  scroll-padding-inline-start: var(--edge);
-}
-
-.app-window {
-  --app-width: calc(100vw - 2 * var(--edge));
-}
-
-/* ---- Small portrait: full-width, no inset ---- */
+/* On small portrait, strip out rounded edges */
 @media (max-width: 640px) and (orientation: portrait) {
-  #app-strip {
-    padding-inline: 0;
-  }
-
-  #app-strip-wrapper {
-    scroll-padding-inline-start: 0;
-  }
-
   .app-window {
-    --app-width: 100vw;
     border-radius: 0;
     border-left: none;
     border-right: none;
-  }
-}
-
-/* ---- Large (≥ 1024px): two apps side-by-side, centered ---- */
-@media (min-width: 1024px) {
-  #app-strip {
-    padding-inline: var(--edge);
-    min-width: 100%;
-    justify-content: center;
-  }
-
-  .app-window {
-    --app-width: calc((100vw - 2 * var(--edge) - var(--gap)) / 2);
   }
 }
 
@@ -530,11 +589,14 @@ body {
 
 .tool-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
 
-.tool-btn .lbl {
-  display: none;
-}
+/*
+  Labels: hidden by default (icon-only fallback for browsers that
+  don't support container queries).
+  @container shows them when the app window is wide enough.
+*/
+.tool-btn .lbl { display: none; }
 
-@media (min-width: 540px) {
+@container (width > 380px) {
   .tool-btn .lbl { display: inline; }
 }
 
@@ -776,7 +838,6 @@ kbd {
   text-align: center;
 }
 
-/* "Open App Launcher" button inside help */
 .help-actions {
   display: flex;
   justify-content: center;
@@ -800,23 +861,13 @@ kbd {
   transition: background-color 140ms ease, transform 140ms ease;
 }
 
-.help-launch-btn:hover {
-  background-color: var(--btn-hover);
-  transform: translateY(-1px);
-}
-
+.help-launch-btn:hover { background-color: var(--btn-hover); transform: translateY(-1px); }
 .help-launch-btn:active { transform: none; }
-
-.help-launch-btn:focus-visible {
-  outline: 2px solid var(--focus-color);
-  outline-offset: 2px;
-}
+.help-launch-btn:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 
 /* ============================================================
    FILE MANAGER
    ============================================================ */
-
-/* Toolbar override — allow wrapping for type chips */
 .fm-toolbar {
   flex-wrap: wrap;
   gap: 0.375rem;
@@ -836,9 +887,7 @@ kbd {
 }
 
 .fm-filter-sep {
-  flex: 0 0 0.0625rem;
-  min-width: 0.0625rem;
-  width: 1px;
+  flex: 0 0 1px;
   align-self: stretch;
   background: var(--toolbar-sep);
   margin-inline: 0.25rem;
@@ -879,25 +928,18 @@ kbd {
 }
 
 @media (prefers-color-scheme: light) {
-  .fm-filter-chip.active {
-    color: var(--chip-color, var(--accent));
-  }
+  .fm-filter-chip.active { color: var(--chip-color, var(--accent)); }
 }
 
-.fm-filter-chip:hover  { opacity: 0.85; }
-.fm-filter-chip:focus-visible {
-  outline: 2px solid var(--focus-color);
-  outline-offset: 1px;
-}
+.fm-filter-chip:hover { opacity: 0.85; }
+.fm-filter-chip:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
 
-/* Body: sidebar + main */
 .fm-body {
   display: flex !important;
   flex-direction: row;
   overflow: hidden;
 }
 
-/* Sidebar */
 .fm-sidebar {
   width: 9rem;
   flex-shrink: 0;
@@ -908,7 +950,13 @@ kbd {
   scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
+/* Narrow sidebar on small portrait or when window is narrow */
 @media (max-width: 640px) and (orientation: portrait) {
+  .fm-sidebar { width: 3.5rem; }
+  .fm-sidebar-label { display: none; }
+}
+
+@container (width < 380px) {
   .fm-sidebar { width: 3.5rem; }
   .fm-sidebar-label { display: none; }
 }
@@ -918,7 +966,7 @@ kbd {
   align-items: center;
   gap: 0.5rem;
   width: 100%;
-  padding: 0.5rem 0.5rem;
+  padding: 0.5rem;
   border: none;
   border-radius: 0.5rem;
   background: transparent;
@@ -932,21 +980,10 @@ kbd {
 }
 
 .fm-sidebar-btn:hover  { background-color: var(--btn-hover); }
-.fm-sidebar-btn.active {
-  background-color: var(--btn-active);
-  font-weight: 600;
-}
+.fm-sidebar-btn.active { background-color: var(--btn-active); font-weight: 600; }
+.fm-sidebar-btn:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
 
-.fm-sidebar-btn:focus-visible {
-  outline: 2px solid var(--focus-color);
-  outline-offset: 1px;
-}
-
-.fm-sidebar-icon {
-  display: inline-flex;
-  flex-shrink: 0;
-}
-
+.fm-sidebar-icon { display: inline-flex; flex-shrink: 0; }
 .fm-sidebar-icon svg { width: 16px; height: 16px; }
 
 .fm-sidebar-label {
@@ -955,7 +992,6 @@ kbd {
   text-overflow: ellipsis;
 }
 
-/* Main scroll */
 .fm-main {
   flex: 1;
   overflow: hidden;
@@ -972,9 +1008,7 @@ kbd {
 }
 
 /* ---- Folder section ---- */
-.fm-folder-section {
-  margin-bottom: 1.25rem;
-}
+.fm-folder-section { margin-bottom: 1.25rem; }
 
 .fm-folder-tile-row {
   display: grid;
@@ -991,7 +1025,6 @@ kbd {
   margin-bottom: 0.75rem;
 }
 
-/* Folder card – tile mode */
 .fm-folder-card--tile {
   display: flex;
   flex-direction: column;
@@ -1008,30 +1041,13 @@ kbd {
   text-align: center;
 }
 
-.fm-folder-card--tile:hover {
-  background-color: var(--btn-hover);
-  transform: translateY(-1px);
-}
-
-.fm-folder-card--tile:focus-visible {
-  outline: 2px solid var(--focus-color);
-  outline-offset: 2px;
-}
+.fm-folder-card--tile:hover { background-color: var(--btn-hover); transform: translateY(-1px); }
+.fm-folder-card--tile:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 
 .fm-folder-card-icon svg { width: 32px; height: 32px; }
+.fm-folder-card-name { font-size: 0.75rem; font-weight: 500; line-height: 1.2; }
+.fm-folder-card-count { font-size: 0.6875rem; opacity: 0.5; }
 
-.fm-folder-card-name {
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1.2;
-}
-
-.fm-folder-card-count {
-  font-size: 0.6875rem;
-  opacity: 0.5;
-}
-
-/* Folder card – list mode (re-uses .fm-list-row styles below) */
 .fm-folder-card--list {
   display: flex;
   align-items: center;
@@ -1050,16 +1066,10 @@ kbd {
 }
 
 .fm-folder-card--list:hover { background-color: var(--btn-hover); }
-
-.fm-folder-card--list:focus-visible {
-  outline: 2px solid var(--focus-color);
-  outline-offset: 1px;
-}
+.fm-folder-card--list:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
 
 /* ---- Timeline groups ---- */
-.fm-group {
-  margin-bottom: 0.5rem;
-}
+.fm-group { margin-bottom: 0.5rem; }
 
 .fm-group-header {
   display: flex;
@@ -1072,11 +1082,7 @@ kbd {
 }
 
 .fm-group-header::-webkit-details-marker { display: none; }
-
-.fm-group-header:focus-visible {
-  outline: 2px solid var(--focus-color);
-  border-radius: 0.375rem;
-}
+.fm-group-header:focus-visible { outline: 2px solid var(--focus-color); border-radius: 0.375rem; }
 
 .fm-group-arrow {
   width: 12px;
@@ -1084,11 +1090,6 @@ kbd {
   flex-shrink: 0;
   opacity: 0.55;
   transition: rotate 160ms ease;
-  stroke: currentColor;
-  stroke-width: 2;
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .fm-group[open] .fm-group-arrow { rotate: 0deg; }
@@ -1133,7 +1134,6 @@ kbd {
 }
 
 .fm-tile:hover { background-color: var(--btn-hover); }
-
 .fm-tile-icon svg { width: 28px; height: 28px; }
 
 .fm-tile-name {
@@ -1148,10 +1148,7 @@ kbd {
   overflow: hidden;
 }
 
-.fm-tile-date {
-  font-size: 0.625rem;
-  opacity: 0.4;
-}
+.fm-tile-date { font-size: 0.625rem; opacity: 0.4; }
 
 /* ---- List rows ---- */
 .fm-list-rows {
@@ -1185,37 +1182,23 @@ kbd {
 .fm-list-row:hover { background-color: var(--btn-hover); }
 
 .fm-list-icon svg { width: 16px; height: 16px; }
+.fm-list-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--app-text); }
+.fm-list-meta { font-size: 0.75rem; opacity: 0.5; white-space: nowrap; }
+.fm-list-size { font-size: 0.75rem; opacity: 0.5; text-align: right; white-space: nowrap; }
 
-.fm-list-name {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--app-text);
-}
-
-.fm-list-meta {
-  font-size: 0.75rem;
-  opacity: 0.5;
-  white-space: nowrap;
-}
-
-.fm-list-size {
-  font-size: 0.75rem;
-  opacity: 0.5;
-  text-align: right;
-  white-space: nowrap;
-}
-
-/* Smaller grid on portrait mobile */
+/* Narrow list on small screens */
 @media (max-width: 640px) and (orientation: portrait) {
   .fm-list-header,
-  .fm-list-row {
-    grid-template-columns: 1.25rem 1fr 4.5rem;
-  }
+  .fm-list-row { grid-template-columns: 1.25rem 1fr 4.5rem; }
   .fm-list-meta { display: none; }
 }
 
-/* Empty message */
+@container (width < 420px) {
+  .fm-list-header,
+  .fm-list-row { grid-template-columns: 1.25rem 1fr 4.5rem; }
+  .fm-list-meta { display: none; }
+}
+
 .fm-empty-msg {
   margin: 2rem auto;
   text-align: center;
