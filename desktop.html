@@ -59,6 +59,47 @@
     </div>
   </header>
 
+  <div id="help-overlay" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" hidden>
+    <div id="help-inner">
+      <div class="help-header">
+        <h2 class="help-title">Keyboard Shortcuts</h2>
+        <button id="help-close-btn" class="icon-btn" aria-label="Close keyboard shortcuts">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <line x1="3" y1="3" x2="13" y2="13"/>
+            <line x1="13" y1="3" x2="3" y2="13"/>
+          </svg>
+        </button>
+      </div>
+      <dl class="shortcut-list">
+        <div class="shortcut-row">
+          <dt><kbd>←</kbd> <kbd>→</kbd></dt>
+          <dd>Focus previous / next app</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt><kbd>Tab</kbd> / <kbd>Shift+Tab</kbd></dt>
+          <dd>Cycle through open apps</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt><kbd>⌘</kbd><kbd>1</kbd>–<kbd>9</kbd></dt>
+          <dd>Focus app by number</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt><kbd>⌘</kbd><kbd>D</kbd></dt>
+          <dd>Open app launcher</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt><kbd>?</kbd></dt>
+          <dd>Show this help</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt><kbd>Esc</kbd></dt>
+          <dd>Close overlay / menu</dd>
+        </div>
+      </dl>
+      <p class="help-note">On Windows / Linux, use <kbd>⊞</kbd> instead of <kbd>⌘</kbd>.</p>
+    </div>
+  </div>
+
   <div id="app-menu" role="dialog" aria-modal="true" aria-label="App launcher" hidden>
     <div id="app-menu-inner">
       <p class="app-menu-heading">Apps</p>
@@ -95,7 +136,7 @@
           <rect x="1" y="11" width="6" height="6" rx="1.25"/>
           <rect x="11" y="11" width="6" height="6" rx="1.25"/>
         </svg>
-        <p>Press <strong>the grid button</strong> to open an app</p>
+        <p>Press <strong>the grid button</strong> to open an app &nbsp;·&nbsp; <kbd class="hint-kbd">?</kbd> for shortcuts</p>
       </div>
     </div>
   </main>

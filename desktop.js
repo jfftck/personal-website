@@ -30,13 +30,15 @@ let nextId = 1;
 
 // ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const appMenuBtn  = $('app-menu-btn');
-const appMenu     = $('app-menu');
-const openAppsBar = $('open-apps-bar');
-const activeTitle = $('active-title');
-const closeBtn    = $('close-btn');
-const appStrip    = $('app-strip');
-const emptyState  = $('empty-state');
+const appMenuBtn   = $('app-menu-btn');
+const appMenu      = $('app-menu');
+const helpOverlay  = $('help-overlay');
+const helpCloseBtn = $('help-close-btn');
+const openAppsBar  = $('open-apps-bar');
+const activeTitle  = $('active-title');
+const closeBtn     = $('close-btn');
+const appStrip     = $('app-strip');
+const emptyState   = $('empty-state');
 
 // ── Width helpers ─────────────────────────────────────────────
 function rem() {
@@ -174,10 +176,36 @@ function updateStripLayout() {
   appStrip.classList.toggle('center-apps', apps.length === 1);
 }
 
+// ── App focus navigation ───────────────────────────────────────
+function focusNextApp() {
+  if (apps.length === 0) return;
+  const idx = apps.findIndex(a => a.id === focusedId);
+  const next = apps[(idx + 1) % apps.length];
+  focusApp(next.id);
+}
+
+function focusPrevApp() {
+  if (apps.length === 0) return;
+  const idx = apps.findIndex(a => a.id === focusedId);
+  const prev = apps[(idx - 1 + apps.length) % apps.length];
+  focusApp(prev.id);
+}
+
+function focusAppByIndex(n) {
+  if (n < 1 || n > apps.length) return;
+  focusApp(apps[n - 1].id);
+}
+
 // ── App menu ──────────────────────────────────────────────────
 function openAppMenu() {
   appMenu.removeAttribute('hidden');
   appMenuBtn.setAttribute('aria-expanded', 'true');
+  closeHelp();
+  // Move DOM focus into the menu so keyboard users can pick an app
+  requestAnimationFrame(() => {
+    const first = appMenu.querySelector('.app-launcher');
+    if (first) first.focus();
+  });
 }
 
 function closeAppMenu() {
@@ -187,6 +215,21 @@ function closeAppMenu() {
 
 function toggleAppMenu() {
   appMenu.hasAttribute('hidden') ? openAppMenu() : closeAppMenu();
+}
+
+// ── Help overlay ───────────────────────────────────────────────
+function openHelp() {
+  helpOverlay.removeAttribute('hidden');
+  closeAppMenu();
+  requestAnimationFrame(() => helpCloseBtn.focus());
+}
+
+function closeHelp() {
+  helpOverlay.setAttribute('hidden', '');
+}
+
+function toggleHelp() {
+  helpOverlay.hasAttribute('hidden') ? openHelp() : closeHelp();
 }
 
 // ── Toast ──────────────────────────────────────────────────────
@@ -484,10 +527,62 @@ document.addEventListener('click', e => {
 
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && !appMenu.hasAttribute('hidden')) {
-    closeAppMenu();
-    appMenuBtn.focus();
+  const menuOpen = !appMenu.hasAttribute('hidden');
+  const helpOpen = !helpOverlay.hasAttribute('hidden');
+  const inContent = e.target.closest('.app-content');
+  const isTyping  = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) ||
+                    e.target.isContentEditable;
+
+  // Escape: close overlays
+  if (e.key === 'Escape') {
+    if (helpOpen) { closeHelp(); appMenuBtn.focus(); return; }
+    if (menuOpen) { closeAppMenu(); appMenuBtn.focus(); return; }
+    return;
   }
+
+  // ? — toggle help (only when not typing)
+  if (e.key === '?' && !isTyping && !menuOpen) {
+    e.preventDefault();
+    toggleHelp();
+    return;
+  }
+
+  // Don't capture navigation shortcuts while overlays are open or focus is in a form
+  if (helpOpen || menuOpen || isTyping) return;
+
+  // Meta/Ctrl + D — open app launcher
+  if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
+    e.preventDefault();
+    openAppMenu();
+    return;
+  }
+
+  // Meta/Ctrl + 1–9 — focus app by number
+  if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '9') {
+    e.preventDefault();
+    focusAppByIndex(parseInt(e.key, 10));
+    return;
+  }
+
+  // Arrow keys — cycle apps (skip when focus is inside scrollable app content)
+  if (!inContent) {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); focusPrevApp(); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); focusNextApp(); return; }
+  }
+
+  // Tab / Shift+Tab — cycle apps (skip when focus is inside app content)
+  if (e.key === 'Tab' && !inContent) {
+    e.preventDefault();
+    e.shiftKey ? focusPrevApp() : focusNextApp();
+    return;
+  }
+});
+
+helpCloseBtn.addEventListener('click', () => closeHelp());
+
+// Close help when clicking outside its inner panel
+helpOverlay.addEventListener('click', e => {
+  if (e.target === helpOverlay) closeHelp();
 });
 
 // ── Init ──────────────────────────────────────────────────────

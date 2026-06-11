@@ -666,3 +666,116 @@ body {
 
 @keyframes toastIn  { from { opacity: 0; translate: -50% 0.5rem; } to { opacity: 1; translate: -50% 0; } }
 @keyframes toastOut { from { opacity: 1; } to { opacity: 0; } }
+
+/* ============================================================
+   HELP OVERLAY
+   ============================================================ */
+#help-overlay {
+  position: fixed;
+  inset: 3rem 0 0;
+  background-color: var(--overlay-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(0.6);
+  backdrop-filter: blur(20px) saturate(0.6);
+  z-index: 950;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 2.5rem 1rem 2rem;
+  overflow-y: auto;
+  animation: fadeIn 160ms ease;
+}
+
+#help-overlay[hidden] { display: none; }
+
+#help-inner {
+  width: 100%;
+  max-width: 420px;
+}
+
+.help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.help-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--topbar-text);
+  opacity: 0.55;
+}
+
+.shortcut-list {
+  margin: 0 0 1.25rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.625rem;
+  background: var(--overlay-card);
+  -webkit-backdrop-filter: var(--backdrop);
+  backdrop-filter: var(--backdrop);
+}
+
+.shortcut-row dt {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.shortcut-row dd {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--topbar-text);
+  text-align: right;
+}
+
+kbd {
+  display: inline-block;
+  padding: 0.125rem 0.4375rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-bottom-width: 2px;
+  border-radius: 0.3125rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--topbar-text);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+@media (prefers-color-scheme: light) {
+  kbd {
+    border-color: rgba(0, 80, 130, 0.3);
+    border-bottom-color: rgba(0, 80, 130, 0.5);
+    background: rgba(0, 80, 130, 0.07);
+  }
+}
+
+.help-note {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--topbar-text);
+  opacity: 0.45;
+  text-align: center;
+}
+
+/* Inline kbd hint in the empty state */
+.hint-kbd {
+  vertical-align: baseline;
+  font-size: 0.7em;
+}
