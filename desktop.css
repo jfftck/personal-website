@@ -180,6 +180,11 @@ body {
 .icon-btn:hover  { background-color: var(--btn-hover); }
 .icon-btn:active { background-color: var(--btn-active); }
 
+.width-btn[aria-pressed="true"] {
+  background-color: var(--btn-active);
+  box-shadow: inset 0 0 0 1.5px var(--focus-color);
+}
+
 .icon-btn:focus-visible {
   outline: 2px solid var(--focus-color);
   outline-offset: 1px;

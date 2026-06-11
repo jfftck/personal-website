@@ -185,6 +185,7 @@ function setFocusedWidth(preset) {
   app.el.style.setProperty('--app-width', `${Math.max(px, 160)}px`);
   app.widthPreset = preset;
   saveSession();
+  updateWidthButtons();
 }
 
 function cycleFocusedWidthWider() {
@@ -227,6 +228,16 @@ function updateTopBar() {
 
   // Close button
   closeBtn.disabled = focusedId === null;
+
+  updateWidthButtons();
+}
+
+function updateWidthButtons() {
+  const focused = apps.find(a => a.id === focusedId);
+  const activePreset = focused ? focused.widthPreset : null;
+  document.querySelectorAll('.width-btn').forEach(btn => {
+    btn.setAttribute('aria-pressed', btn.dataset.width === activePreset ? 'true' : 'false');
+  });
 }
 
 function updateEmptyState() {
