@@ -23,7 +23,7 @@ const APP_DEFS = {
 };
 
 // ── State ─────────────────────────────────────────────────────
-/** @type {{ id: string; type: string; el: HTMLElement }[]} */
+/** @type {{ id: string; type: string; widthPreset: string; el: HTMLElement }[]} */
 let apps = [];
 let focusedId = null;
 let nextId = 1;
@@ -77,7 +77,7 @@ function openApp(type) {
   el.addEventListener('pointerdown', () => focusApp(id), { capture: true });
 
   appStrip.appendChild(el);
-  apps.push({ id, type, el });
+  apps.push({ id, type, widthPreset: 'full', el });
 
   focusApp(id);
   updateEmptyState();
@@ -131,12 +131,33 @@ function scrollToApp(id) {
   app.el.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
 }
 
+const WIDTH_PRESETS = ['third', 'half', 'full'];
+
 function setFocusedWidth(preset) {
   if (!focusedId) return;
   const app = apps.find(a => a.id === focusedId);
   if (!app) return;
   const px = computeWidth(preset);
   app.el.style.setProperty('--app-width', `${Math.max(px, 160)}px`);
+  app.widthPreset = preset;
+}
+
+function cycleFocusedWidthWider() {
+  if (!focusedId) return;
+  const app = apps.find(a => a.id === focusedId);
+  if (!app) return;
+  const idx = WIDTH_PRESETS.indexOf(app.widthPreset);
+  const next = WIDTH_PRESETS[Math.min(idx + 1, WIDTH_PRESETS.length - 1)];
+  setFocusedWidth(next);
+}
+
+function cycleFocusedWidthNarrower() {
+  if (!focusedId) return;
+  const app = apps.find(a => a.id === focusedId);
+  if (!app) return;
+  const idx = WIDTH_PRESETS.indexOf(app.widthPreset);
+  const next = WIDTH_PRESETS[Math.max(idx - 1, 0)];
+  setFocusedWidth(next);
 }
 
 // ── Top-bar rendering ─────────────────────────────────────────
@@ -561,6 +582,18 @@ document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '9') {
     e.preventDefault();
     focusAppByIndex(parseInt(e.key, 10));
+    return;
+  }
+
+  // Meta/Ctrl + [ / ] — resize focused window narrower / wider
+  if ((e.metaKey || e.ctrlKey) && e.key === '[') {
+    e.preventDefault();
+    cycleFocusedWidthNarrower();
+    return;
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key === ']') {
+    e.preventDefault();
+    cycleFocusedWidthWider();
     return;
   }
 
