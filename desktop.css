@@ -437,9 +437,47 @@ body {
   animation: widthGrow 220ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-.app-col.col-dragging {
-  opacity: 0.72;
+/* ── Drag ghost (floating clone) ── */
+.app-col.drag-ghost {
+  position: fixed !important;
+  z-index: 500;
+  pointer-events: none;
+  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.65), 0 4px 14px rgba(0, 0, 0, 0.35);
+  will-change: transform;
+  overflow: hidden;
+  opacity: 0.88;
   cursor: grabbing;
+}
+
+/* ── Drag placeholder (narrow slot) ── */
+.app-col.col-placeholder {
+  width: calc(var(--app-width) / 6) !important;
+  min-width: 2.5rem;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 2px dashed color-mix(in srgb, var(--accent) 50%, transparent);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  pointer-events: none;
+}
+.app-col.col-placeholder > * { visibility: hidden; }
+
+/* ── Drop zones ── */
+.drag-zone {
+  position: fixed;
+  z-index: 490;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 2px dashed color-mix(in srgb, var(--accent-glow) 65%, transparent);
+  border-radius: 0.625rem;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  opacity: 0.75;
+  transition: background 100ms, border-color 100ms, opacity 100ms, border-style 80ms;
+}
+.drag-zone.hovered {
+  border-style: solid;
+  border-color: var(--accent-glow);
+  background: color-mix(in srgb, var(--accent-glow) 28%, transparent);
+  opacity: 1;
 }
 
 /* ============================================================

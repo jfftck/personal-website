@@ -281,7 +281,7 @@ function createColEl(colId) {
 
   const handle = document.createElement('div');
   handle.className = 'col-drag-handle';
-  handle.setAttribute('title', 'Drag left/right to swap · Drag up/down to stack · Hold ⌘/Ctrl + drag anywhere');
+  handle.setAttribute('title', 'Drag to move · Drop on a zone to swap or stack · Hold ⌘/Ctrl to drag from anywhere');
   handle.setAttribute('aria-hidden', 'true');
   handle.innerHTML = `<svg width="22" height="6" viewBox="0 0 22 6" fill="currentColor" aria-hidden="true">
     <circle cx="3"  cy="3" r="1.75"/>
@@ -507,103 +507,185 @@ function wireColEvents(colEl, colId) {
   }, { capture: true });
 }
 
-// ── Directional drag to swap / stack ─────────────────────────
-function startColDrag(colId, e, colEl) {
-  const MIN_DIST  = 40;
-  const DEBOUNCE  = 500;
+// ── Column merge helper ────────────────────────────────────────
+function mergeColInto(fromCol, toCol, atTop, fromIdx) {
+  for (const appId of [...fromCol.appIds]) {
+    const app = apps.find(a => a.id === appId);
+    if (!app) continue;
+    fromCol.appIds.splice(fromCol.appIds.indexOf(appId), 1);
+    app.el.remove();
+    if (atTop) {
+      toCol.appIds.unshift(appId);
+      const firstWin = toCol.el.querySelector('.app-window');
+      if (firstWin) toCol.el.insertBefore(app.el, firstWin);
+      else          toCol.el.appendChild(app.el);
+    } else {
+      toCol.appIds.push(appId);
+      toCol.el.appendChild(app.el);
+    }
+  }
+  fromCol.el.remove();
+  columns.splice(fromIdx, 1);
+}
 
-  dragState = {
-    colId, colEl,
-    pointerId: e.pointerId,
-    originX: e.clientX,
-    originY: e.clientY,
-    lastActionAt: 0,
-  };
-  colEl.classList.add('col-dragging');
+// ── Visual drag-and-drop ───────────────────────────────────────
+function startColDrag(colId, e, colEl) {
+  if (dragState) return;
+
+  const dragIdx = columns.findIndex(c => c.id === colId);
+  if (dragIdx === -1) return;
+
+  const origRect = colEl.getBoundingClientRect();
+  const startX   = e.clientX;
+  const startY   = e.clientY;
+
+  // ── Ghost: full-size floating clone ───────────────────────────
+  const ghost = colEl.cloneNode(true);
+  ghost.classList.add('drag-ghost');
+  ghost.removeAttribute('data-col-id');
+  Object.assign(ghost.style, {
+    left:      origRect.left   + 'px',
+    top:       origRect.top    + 'px',
+    width:     origRect.width  + 'px',
+    height:    origRect.height + 'px',
+    transform: 'none',
+  });
+  document.body.appendChild(ghost);
+
+  // ── Placeholder: narrow slot in original position ──────────────
+  colEl.classList.add('col-placeholder');
+
+  // ── Drop zones ─────────────────────────────────────────────────
+  const zones = [];      // { action, rect:{left,top,width,height}, el }
+  let hoveredZone = null;
+
+  function buildZones() {
+    zones.forEach(z => z.el.remove());
+    zones.length = 0;
+
+    const leftCol  = dragIdx > 0                  ? columns[dragIdx - 1] : null;
+    const rightCol = dragIdx < columns.length - 1 ? columns[dragIdx + 1] : null;
+
+    function addZone(action, r) {
+      const el = document.createElement('div');
+      el.className = 'drag-zone';
+      Object.assign(el.style, {
+        left:   r.left   + 'px',
+        top:    r.top    + 'px',
+        width:  r.width  + 'px',
+        height: r.height + 'px',
+      });
+      document.body.appendChild(el);
+      zones.push({ action, rect: r, el });
+    }
+
+    if (leftCol) {
+      const lr = leftCol.el.getBoundingClientRect();
+      if (lr.width > 1) {
+        const w6 = lr.width  / 6;
+        const h6 = lr.height / 6;
+        // Stack zones span full width, at top/bottom 1/6 height
+        addZone('stack-top-left',    { left: lr.left,        top: lr.top,          width: lr.width, height: h6              });
+        addZone('stack-bottom-left', { left: lr.left,        top: lr.bottom - h6,  width: lr.width, height: h6              });
+        // Swap zone: right 1/6 of column, middle 4/6 height (avoids overlap with stack zones)
+        addZone('swap-left',         { left: lr.right - w6,  top: lr.top + h6,     width: w6,       height: lr.height - 2 * h6 });
+      }
+    }
+
+    if (rightCol) {
+      const rr = rightCol.el.getBoundingClientRect();
+      if (rr.width > 1) {
+        const w6 = rr.width  / 6;
+        const h6 = rr.height / 6;
+        addZone('stack-top-right',    { left: rr.left,        top: rr.top,          width: rr.width, height: h6              });
+        addZone('stack-bottom-right', { left: rr.left,        top: rr.bottom - h6,  width: rr.width, height: h6              });
+        addZone('swap-right',         { left: rr.left,        top: rr.top + h6,     width: w6,       height: rr.height - 2 * h6 });
+      }
+    }
+  }
+
+  requestAnimationFrame(buildZones);
+
+  dragState = { colId, colEl, pointerId: e.pointerId };
   try { colEl.setPointerCapture(e.pointerId); } catch { /* */ }
 
-  function endDrag() {
-    const ds = dragState;
-    dragState = null;
-    if (ds) {
-      ds.colEl.classList.remove('col-dragging');
-      try { ds.colEl.releasePointerCapture(ds.pointerId); } catch { /* */ }
+  // ── Hit test (stack zones take priority over swap zones) ───────
+  function hitTest(px, py) {
+    for (const z of zones) {
+      if (!z.action.startsWith('stack-')) continue;
+      const r = z.rect;
+      if (px >= r.left && px < r.left + r.width && py >= r.top && py < r.top + r.height) return z;
     }
+    for (const z of zones) {
+      if (!z.action.startsWith('swap-')) continue;
+      const r = z.rect;
+      if (px >= r.left && px < r.left + r.width && py >= r.top && py < r.top + r.height) return z;
+    }
+    return null;
+  }
+
+  function cleanup() {
+    dragState = null;
+    zones.forEach(z => z.el.remove());
+    zones.length = 0;
+    if (ghost.parentNode) ghost.remove();
+    try { colEl.releasePointerCapture(e.pointerId); } catch { /* */ }
     colEl.removeEventListener('pointermove', onMove);
+    colEl.removeEventListener('pointerup',   onEnd);
+    colEl.removeEventListener('pointercancel', onEnd);
   }
 
   function onMove(ev) {
     if (!dragState || ev.pointerId !== dragState.pointerId) return;
-    const now = Date.now();
-    if (now - dragState.lastActionAt < DEBOUNCE) return;
+    ghost.style.transform = `translate(${ev.clientX - startX}px, ${ev.clientY - startY}px)`;
 
-    const dx  = ev.clientX - dragState.originX;
-    const dy  = ev.clientY - dragState.originY;
-    const adx = Math.abs(dx);
-    const ady = Math.abs(dy);
-    if (adx < MIN_DIST && ady < MIN_DIST) return;
-
-    const dragIdx = columns.findIndex(c => c.id === dragState.colId);
-    if (dragIdx === -1) { endDrag(); return; }
-
-    if (ady > adx * 1.3) {
-      // ── Vertical: stack into adjacent column (top or bottom) ──
-      let targetIdx = -1;
-      for (let i = 0; i < columns.length; i++) {
-        if (i === dragIdx) continue;
-        const r = columns[i].el.getBoundingClientRect();
-        if (ev.clientX >= r.left && ev.clientX <= r.right) { targetIdx = i; break; }
-      }
-      if (targetIdx === -1) return;
-
-      const fromCol = columns[dragIdx];
-      const toCol   = columns[targetIdx];
-      const atTop   = dy < 0;
-
-      for (const appId of [...fromCol.appIds]) {
-        const app = apps.find(a => a.id === appId);
-        if (!app) continue;
-        fromCol.appIds.splice(fromCol.appIds.indexOf(appId), 1);
-        app.el.remove();
-        if (atTop) {
-          toCol.appIds.unshift(appId);
-          const firstWin = toCol.el.querySelector('.app-window');
-          if (firstWin) toCol.el.insertBefore(app.el, firstWin);
-          else toCol.el.appendChild(app.el);
-        } else {
-          toCol.appIds.push(appId);
-          toCol.el.appendChild(app.el);
-        }
-      }
-      fromCol.el.remove();
-      columns.splice(dragIdx, 1);
-      saveSession();
-      updateStripLayout();
-      endDrag();
-
-    } else {
-      // ── Horizontal: swap with adjacent column ──
-      const targetIdx = dx < 0 ? dragIdx - 1 : dragIdx + 1;
-      if (targetIdx < 0 || targetIdx >= columns.length) return;
-
-      [columns[dragIdx], columns[targetIdx]] = [columns[targetIdx], columns[dragIdx]];
-      if (dragIdx < targetIdx) columns[targetIdx].el.after(dragState.colEl);
-      else                     columns[targetIdx].el.before(dragState.colEl);
-
-      dragState.originX    = ev.clientX;
-      dragState.originY    = ev.clientY;
-      dragState.lastActionAt = now;
-      saveSession();
+    const hit = hitTest(ev.clientX, ev.clientY);
+    if (hit !== hoveredZone) {
+      if (hoveredZone) hoveredZone.el.classList.remove('hovered');
+      hoveredZone = hit;
+      if (hoveredZone) hoveredZone.el.classList.add('hovered');
     }
   }
 
   function onEnd(ev) {
     if (!dragState || ev.pointerId !== dragState.pointerId) return;
-    endDrag();
+    const action = hoveredZone ? hoveredZone.action : null;
+
+    if (action === 'stack-top-left' && dragIdx > 0) {
+      mergeColInto(columns[dragIdx], columns[dragIdx - 1], true,  dragIdx);
+
+    } else if (action === 'stack-bottom-left' && dragIdx > 0) {
+      mergeColInto(columns[dragIdx], columns[dragIdx - 1], false, dragIdx);
+
+    } else if (action === 'stack-top-right' && dragIdx < columns.length - 1) {
+      mergeColInto(columns[dragIdx], columns[dragIdx + 1], true,  dragIdx);
+
+    } else if (action === 'stack-bottom-right' && dragIdx < columns.length - 1) {
+      mergeColInto(columns[dragIdx], columns[dragIdx + 1], false, dragIdx);
+
+    } else {
+      // Swap or cancel: restore placeholder to full-width column
+      colEl.classList.remove('col-placeholder');
+      if (action === 'swap-left' && dragIdx > 0) {
+        const ti = dragIdx - 1;
+        columns[ti].el.before(colEl);
+        [columns[dragIdx], columns[ti]] = [columns[ti], columns[dragIdx]];
+      } else if (action === 'swap-right' && dragIdx < columns.length - 1) {
+        const ti = dragIdx + 1;
+        columns[ti].el.after(colEl);
+        [columns[dragIdx], columns[ti]] = [columns[ti], columns[dragIdx]];
+      }
+      // null → cancel, column stays in original slot
+    }
+
+    updateStripLayout();
+    saveSession();
+    updateTopBar();
+    cleanup();
   }
 
   colEl.addEventListener('pointermove', onMove);
-  colEl.addEventListener('pointerup',     onEnd, { once: true });
+  colEl.addEventListener('pointerup',   onEnd, { once: true });
   colEl.addEventListener('pointercancel', onEnd, { once: true });
 }
 
