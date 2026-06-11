@@ -20,6 +20,13 @@ const APP_DEFS = {
     </svg>`,
     build: buildImgViewer,
   },
+  'file-manager': {
+    title: 'File Manager',
+    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+    </svg>`,
+    build: buildFileManager,
+  },
 };
 
 // ── State ─────────────────────────────────────────────────────
@@ -31,15 +38,16 @@ let _skipSave = false;
 
 // ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const appMenuBtn   = $('app-menu-btn');
-const appMenu      = $('app-menu');
-const helpOverlay  = $('help-overlay');
-const helpCloseBtn = $('help-close-btn');
-const openAppsBar  = $('open-apps-bar');
-const activeTitle  = $('active-title');
-const closeBtn     = $('close-btn');
-const appStrip     = $('app-strip');
-const emptyState   = $('empty-state');
+const appMenuBtn      = $('app-menu-btn');
+const appMenu         = $('app-menu');
+const helpOverlay     = $('help-overlay');
+const helpCloseBtn    = $('help-close-btn');
+const helpOpenLauncher= $('help-open-launcher');
+const openAppsBar     = $('open-apps-bar');
+const activeTitle     = $('active-title');
+const closeBtn        = $('close-btn');
+const appStrip        = $('app-strip');
+const emptyState      = $('empty-state');
 
 // ── Width helpers ─────────────────────────────────────────────
 function rem() {
@@ -126,7 +134,6 @@ function openApp(type) {
   updateStripLayout();
   saveSession();
 
-  // Give the DOM a tick then scroll to the new window
   requestAnimationFrame(() => scrollToApp(id));
 }
 
@@ -181,8 +188,25 @@ function setFocusedWidth(preset) {
   if (!focusedId) return;
   const app = apps.find(a => a.id === focusedId);
   if (!app) return;
-  const px = computeWidth(preset);
-  app.el.style.setProperty('--app-width', `${Math.max(px, 160)}px`);
+
+  const px = Math.max(computeWidth(preset), 160);
+
+  // Phase 1: squish in
+  app.el.classList.remove('width-shrink', 'width-grow');
+  void app.el.offsetWidth; // force reflow to restart animation
+  app.el.classList.add('width-shrink');
+
+  app.el.addEventListener('animationend', () => {
+    app.el.classList.remove('width-shrink');
+    // Snap to new width, then spring back out
+    app.el.style.setProperty('--app-width', `${px}px`);
+    void app.el.offsetWidth;
+    app.el.classList.add('width-grow');
+    app.el.addEventListener('animationend', () => {
+      app.el.classList.remove('width-grow');
+    }, { once: true });
+  }, { once: true });
+
   app.widthPreset = preset;
   saveSession();
   updateWidthButtons();
@@ -208,7 +232,6 @@ function cycleFocusedWidthNarrower() {
 
 // ── Top-bar rendering ─────────────────────────────────────────
 function updateTopBar() {
-  // App tab buttons
   openAppsBar.innerHTML = '';
   for (const { id, type } of apps) {
     const def = APP_DEFS[type];
@@ -222,11 +245,9 @@ function updateTopBar() {
     openAppsBar.appendChild(btn);
   }
 
-  // Active title
   const focused = apps.find(a => a.id === focusedId);
   activeTitle.textContent = focused ? APP_DEFS[focused.type].title : '';
 
-  // Close button
   closeBtn.disabled = focusedId === null;
 
   updateWidthButtons();
@@ -248,7 +269,6 @@ function updateEmptyState() {
   }
 }
 
-/** Center the strip when only 1 app is open (on non-small-portrait). */
 function updateStripLayout() {
   appStrip.classList.toggle('center-apps', apps.length === 1);
 }
@@ -278,7 +298,6 @@ function openAppMenu() {
   appMenu.removeAttribute('hidden');
   appMenuBtn.setAttribute('aria-expanded', 'true');
   closeHelp();
-  // Move DOM focus into the menu so keyboard users can pick an app
   requestAnimationFrame(() => {
     const first = appMenu.querySelector('.app-launcher');
     if (first) first.focus();
@@ -322,12 +341,12 @@ function toast(anchorEl, msg) {
 
 // ── SVG icon helpers (toolbar) ────────────────────────────────
 const ICONS = {
-  zoomIn: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><line x1="10" y1="6.5" x2="10" y2="13.5"/><line x1="6.5" y1="10" x2="13.5" y2="10"/><line x1="15.5" y1="15.5" x2="20.5" y2="20.5"/></svg>`,
-  zoomOut:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><line x1="6.5" y1="10" x2="13.5" y2="10"/><line x1="15.5" y1="15.5" x2="20.5" y2="20.5"/></svg>`,
-  share:  `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>`,
+  zoomIn:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><line x1="10" y1="6.5" x2="10" y2="13.5"/><line x1="6.5" y1="10" x2="13.5" y2="10"/><line x1="15.5" y1="15.5" x2="20.5" y2="20.5"/></svg>`,
+  zoomOut: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><line x1="6.5" y1="10" x2="13.5" y2="10"/><line x1="15.5" y1="15.5" x2="20.5" y2="20.5"/></svg>`,
+  share:   `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>`,
   download:`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>`,
-  print:  `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>`,
-  rotate: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.11 8.53L5.7 7.11C4.8 8.27 4.24 9.61 4.07 11h2.02c.14-.87.49-1.72 1.02-2.47zm-.02 4.47H5.07c.17 1.39.72 2.73 1.62 3.89l1.41-1.42c-.52-.75-.87-1.59-1.01-2.47zm1.01 5.32c1.16.9 2.51 1.44 3.9 1.61V17.9c-.87-.15-1.71-.49-2.46-1.03L8.1 18.32zM13 4.07V1L8.45 5.55 13 10V6.09c2.84.48 5 2.94 5 5.91s-2.16 5.43-5 5.91v2.02c3.95-.49 7-3.85 7-7.93s-3.05-7.44-7-7.93z"/></svg>`,
+  print:   `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>`,
+  rotate:  `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.11 8.53L5.7 7.11C4.8 8.27 4.24 9.61 4.07 11h2.02c.14-.87.49-1.72 1.02-2.47zm-.02 4.47H5.07c.17 1.39.72 2.73 1.62 3.89l1.41-1.42c-.52-.75-.87-1.59-1.01-2.47zm1.01 5.32c1.16.9 2.51 1.44 3.9 1.61V17.9c-.87-.15-1.71-.49-2.46-1.03L8.1 18.32zM13 4.07V1L8.45 5.55 13 10V6.09c2.84.48 5 2.94 5 5.91s-2.16 5.43-5 5.91v2.02c3.95-.49 7-3.85 7-7.93s-3.05-7.44-7-7.93z"/></svg>`,
 };
 
 function toolBtn(action, icon, label) {
@@ -403,7 +422,6 @@ function buildDocViewer() {
 
   const el = document.createElement('div');
 
-  // Toolbar
   const toolbar = document.createElement('div');
   toolbar.className = 'app-toolbar';
   toolbar.innerHTML = `
@@ -416,7 +434,6 @@ function buildDocViewer() {
     ${toolBtn('print',    'print',    'Print')}
   `;
 
-  // Content
   const content = document.createElement('div');
   content.className = 'app-content';
 
@@ -495,7 +512,6 @@ function buildImgViewer() {
 
   const el = document.createElement('div');
 
-  // Toolbar
   const toolbar = document.createElement('div');
   toolbar.className = 'app-toolbar';
   toolbar.innerHTML = `
@@ -507,7 +523,6 @@ function buildImgViewer() {
     ${toolBtn('share',    'share',   'Share')}
   `;
 
-  // Content
   const content = document.createElement('div');
   content.className = 'app-content';
 
@@ -568,7 +583,6 @@ function buildImgViewer() {
     }
   });
 
-  // Scroll-wheel zoom
   viewport.addEventListener('wheel', e => {
     e.preventDefault();
     const delta = e.deltaY < 0 ? 0.1 : -0.1;
@@ -576,6 +590,326 @@ function buildImgViewer() {
     applyTransform();
   }, { passive: false });
 
+  return el;
+}
+
+// ── File Manager ───────────────────────────────────────────────
+function buildFileManager() {
+  const FOLDERS   = ['All Files', 'Documents', 'Pictures', 'Videos', 'Posts'];
+  const TYPE_KEYS = ['document', 'image', 'video', 'post'];
+  const TYPE_LABEL  = { document: 'Docs', image: 'Images', video: 'Videos', post: 'Posts' };
+  const FOLDER_TYPE = { Documents: 'document', Pictures: 'image', Videos: 'video', Posts: 'post' };
+  const MONTH_NAMES = ['January','February','March','April','May','June',
+                       'July','August','September','October','November','December'];
+
+  const FM_FILES = [
+    { name: 'Pacific Crest Trail Day 1', type: 'post',     folder: 'Posts',     date: new Date(2026, 5, 8),  size: '3.8 KB'  },
+    { name: 'trail-sunrise.jpg',          type: 'image',    folder: 'Pictures',  date: new Date(2026, 5, 7),  size: '4.2 MB'  },
+    { name: 'annual-review.pdf',          type: 'document', folder: 'Documents', date: new Date(2026, 5, 3),  size: '182 KB'  },
+    { name: 'Spring Garden Update',       type: 'post',     folder: 'Posts',     date: new Date(2026, 4, 22), size: '2.1 KB'  },
+    { name: 'garden-may.jpg',             type: 'image',    folder: 'Pictures',  date: new Date(2026, 4, 20), size: '2.8 MB'  },
+    { name: 'seattle-walk.mp4',           type: 'video',    folder: 'Videos',    date: new Date(2026, 4, 14), size: '124 MB'  },
+    { name: 'recipe-notes.txt',           type: 'document', folder: 'Documents', date: new Date(2026, 4, 5),  size: '8 KB'    },
+    { name: 'Family Visit Notes',         type: 'post',     folder: 'Posts',     date: new Date(2026, 3, 18), size: '1.6 KB'  },
+    { name: 'family-dinner.jpg',          type: 'image',    folder: 'Pictures',  date: new Date(2026, 3, 17), size: '3.1 MB'  },
+    { name: 'family-reunion.mp4',         type: 'video',    folder: 'Videos',    date: new Date(2026, 3, 17), size: '890 MB'  },
+    { name: 'tax-return-2025.pdf',        type: 'document', folder: 'Documents', date: new Date(2026, 3, 2),  size: '412 KB'  },
+    { name: 'Spring Arrives in Seattle',  type: 'post',     folder: 'Posts',     date: new Date(2026, 2, 20), size: '2.4 KB'  },
+    { name: 'cherry-blossoms.jpg',        type: 'image',    folder: 'Pictures',  date: new Date(2026, 2, 19), size: '5.7 MB'  },
+    { name: 'budget-q1.xlsx',             type: 'document', folder: 'Documents', date: new Date(2026, 2, 2),  size: '68 KB'   },
+    { name: 'snowfall-2026.jpg',          type: 'image',    folder: 'Pictures',  date: new Date(2026, 1, 11), size: '2.2 MB'  },
+    { name: 'meeting-notes.txt',          type: 'document', folder: 'Documents', date: new Date(2026, 1, 5),  size: '14 KB'   },
+    { name: 'winter-walk.mp4',            type: 'video',    folder: 'Videos',    date: new Date(2026, 1, 3),  size: '58 MB'   },
+    { name: 'New Year Reflections',       type: 'post',     folder: 'Posts',     date: new Date(2026, 0, 2),  size: '3.2 KB'  },
+    { name: 'new-year-fireworks.jpg',     type: 'image',    folder: 'Pictures',  date: new Date(2026, 0, 1),  size: '3.9 MB'  },
+    { name: 'goals-2026.txt',             type: 'document', folder: 'Documents', date: new Date(2026, 0, 1),  size: '6 KB'    },
+    { name: 'Christmas Morning',          type: 'post',     folder: 'Posts',     date: new Date(2025, 11, 25), size: '2.8 KB' },
+    { name: 'christmas-tree.jpg',         type: 'image',    folder: 'Pictures',  date: new Date(2025, 11, 25), size: '4.4 MB' },
+    { name: 'xmas-party.mp4',             type: 'video',    folder: 'Videos',    date: new Date(2025, 11, 24), size: '210 MB' },
+    { name: 'holiday-budget.xlsx',        type: 'document', folder: 'Documents', date: new Date(2025, 11, 1),  size: '34 KB'  },
+    { name: 'Thanksgiving in Ohio',       type: 'post',     folder: 'Posts',     date: new Date(2025, 10, 28), size: '1.9 KB' },
+    { name: 'thanksgiving.jpg',           type: 'image',    folder: 'Pictures',  date: new Date(2025, 10, 27), size: '2.6 MB' },
+    { name: 'q3-report.pdf',              type: 'document', folder: 'Documents', date: new Date(2025, 10, 10), size: '1.1 MB' },
+  ];
+
+  // ── State ────────────────────────────────────────────────────
+  let currentFolder  = 'All Files';
+  let viewMode       = 'tile';
+  let activeTypes    = new Set(TYPE_KEYS);
+  let collapsedGroups = new Set();
+
+  // ── SVG icons for file types ─────────────────────────────────
+  const FM_ICON = {
+    folder:   `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`,
+    document: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 14h8v1.5H8zm0 3h8v1.5H8zm0-6h4v1.5H8z"/></svg>`,
+    image:    `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`,
+    video:    `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>`,
+    post:     `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`,
+  };
+
+  const TYPE_COLOR = {
+    document: 'var(--accent)',
+    image:    '#8b5cf6',
+    video:    '#f59e0b',
+    post:     '#10b981',
+    folder:   '#e07b39',
+  };
+
+  // ── Root element ──────────────────────────────────────────────
+  const el = document.createElement('div');
+
+  // ── Toolbar (view + type filters) ────────────────────────────
+  const toolbar = document.createElement('div');
+  toolbar.className = 'app-toolbar fm-toolbar';
+  toolbar.innerHTML = `
+    <div class="fm-view-toggle" role="group" aria-label="View mode">
+      <button class="tool-btn fm-view-btn" data-view="tile" aria-pressed="true" title="Tile view" aria-label="Tile view">
+        <svg viewBox="0 0 20 20" fill="currentColor"><rect x="1" y="1" width="7" height="7" rx="1.5"/><rect x="12" y="1" width="7" height="7" rx="1.5"/><rect x="1" y="12" width="7" height="7" rx="1.5"/><rect x="12" y="12" width="7" height="7" rx="1.5"/></svg>
+        <span class="lbl">Tile</span>
+      </button>
+      <button class="tool-btn fm-view-btn" data-view="list" aria-pressed="false" title="List view" aria-label="List view">
+        <svg viewBox="0 0 20 20" fill="currentColor"><rect x="1" y="2" width="18" height="3" rx="1.5"/><rect x="1" y="8.5" width="18" height="3" rx="1.5"/><rect x="1" y="15" width="18" height="3" rx="1.5"/></svg>
+        <span class="lbl">List</span>
+      </button>
+    </div>
+    <span class="toolbar-sep fm-filter-sep" role="separator"></span>
+    <div class="fm-type-filters" role="group" aria-label="File type filters">
+      <button class="fm-filter-chip fm-chip-all active" data-filter="all">All</button>
+      ${TYPE_KEYS.map(t => `<button class="fm-filter-chip fm-chip-type active" data-filter="${t}" style="--chip-color:${TYPE_COLOR[t]}">${TYPE_LABEL[t]}</button>`).join('')}
+    </div>
+  `;
+
+  // ── Body: sidebar + main ──────────────────────────────────────
+  const body = document.createElement('div');
+  body.className = 'app-content fm-body';
+
+  // Sidebar
+  const sidebar = document.createElement('nav');
+  sidebar.className = 'fm-sidebar';
+  sidebar.setAttribute('aria-label', 'Folders');
+
+  for (const folder of FOLDERS) {
+    const btn = document.createElement('button');
+    btn.className = 'fm-sidebar-btn' + (folder === 'All Files' ? ' active' : '');
+    btn.dataset.folder = folder;
+    btn.setAttribute('aria-current', folder === 'All Files' ? 'true' : 'false');
+
+    const iconKey = folder === 'All Files' ? 'folder' : FOLDER_TYPE[folder];
+    btn.innerHTML = `
+      <span class="fm-sidebar-icon" style="color:${folder === 'All Files' ? TYPE_COLOR.folder : TYPE_COLOR[iconKey]}">${FM_ICON[folder === 'All Files' ? 'folder' : iconKey]}</span>
+      <span class="fm-sidebar-label">${folder}</span>
+    `;
+    sidebar.appendChild(btn);
+  }
+
+  // Main (scroll area)
+  const main = document.createElement('div');
+  main.className = 'fm-main';
+
+  const scroll = document.createElement('div');
+  scroll.className = 'fm-scroll';
+
+  main.appendChild(scroll);
+  body.appendChild(sidebar);
+  body.appendChild(main);
+  el.appendChild(toolbar);
+  el.appendChild(body);
+
+  // ── Helpers ──────────────────────────────────────────────────
+  function fmDate(d) {
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function buildFolderCard(folder, mode) {
+    const typeKey = FOLDER_TYPE[folder];
+    const card = document.createElement('button');
+    card.className = `fm-folder-card fm-folder-card--${mode}`;
+    card.dataset.folder = folder;
+    const count = FM_FILES.filter(f => f.folder === folder).length;
+    if (mode === 'tile') {
+      card.innerHTML = `
+        <span class="fm-folder-card-icon" style="color:${TYPE_COLOR[typeKey]}">${FM_ICON[typeKey]}</span>
+        <span class="fm-folder-card-name">${folder}</span>
+        <span class="fm-folder-card-count">${count}</span>
+      `;
+    } else {
+      card.innerHTML = `
+        <span class="fm-list-icon" style="color:${TYPE_COLOR.folder}">${FM_ICON.folder}</span>
+        <span class="fm-list-name">${folder}</span>
+        <span class="fm-list-meta">${count} items</span>
+        <span class="fm-list-size"></span>
+      `;
+    }
+    card.addEventListener('click', () => {
+      currentFolder = folder;
+      updateSidebar();
+      render();
+    });
+    return card;
+  }
+
+  function buildFileTile(file) {
+    const tile = document.createElement('div');
+    tile.className = 'fm-tile';
+    tile.innerHTML = `
+      <span class="fm-tile-icon" style="color:${TYPE_COLOR[file.type]}">${FM_ICON[file.type]}</span>
+      <span class="fm-tile-name">${file.name}</span>
+      <span class="fm-tile-date">${fmDate(file.date)}</span>
+    `;
+    return tile;
+  }
+
+  function buildFileRow(file) {
+    const row = document.createElement('div');
+    row.className = 'fm-list-row';
+    row.innerHTML = `
+      <span class="fm-list-icon" style="color:${TYPE_COLOR[file.type]}">${FM_ICON[file.type]}</span>
+      <span class="fm-list-name">${file.name}</span>
+      <span class="fm-list-meta">${fmDate(file.date)}</span>
+      <span class="fm-list-size">${file.size}</span>
+    `;
+    return row;
+  }
+
+  function updateSidebar() {
+    sidebar.querySelectorAll('.fm-sidebar-btn').forEach(btn => {
+      const active = btn.dataset.folder === currentFolder;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-current', active ? 'true' : 'false');
+    });
+  }
+
+  function render() {
+    const filtered = FM_FILES.filter(f => {
+      if (currentFolder !== 'All Files' && f.folder !== currentFolder) return false;
+      return activeTypes.has(f.type);
+    });
+
+    // Group by year-month descending
+    const groupMap = new Map();
+    for (const file of filtered) {
+      const yr  = file.date.getFullYear();
+      const mo  = file.date.getMonth();
+      const key = `${yr}-${String(mo).padStart(2, '0')}`;
+      if (!groupMap.has(key)) groupMap.set(key, { year: yr, month: mo, files: [] });
+      groupMap.get(key).files.push(file);
+    }
+
+    scroll.innerHTML = '';
+
+    // Folders row at top when showing All Files
+    if (currentFolder === 'All Files') {
+      const foldersRow = document.createElement('div');
+      foldersRow.className = viewMode === 'tile' ? 'fm-folder-section fm-folder-tile-row' : 'fm-folder-section fm-folder-list-rows';
+      for (const folder of ['Documents', 'Pictures', 'Videos', 'Posts']) {
+        foldersRow.appendChild(buildFolderCard(folder, viewMode));
+      }
+      scroll.appendChild(foldersRow);
+    }
+
+    if (groupMap.size === 0) {
+      const msg = document.createElement('p');
+      msg.className = 'fm-empty-msg';
+      msg.textContent = filtered.length === 0 ? 'No files match the current filters.' : '';
+      scroll.appendChild(msg);
+      return;
+    }
+
+    const nowYear = new Date().getFullYear();
+
+    for (const [key, { year, month, files: groupFiles }] of groupMap) {
+      const section = document.createElement('details');
+      section.className = 'fm-group';
+      if (!collapsedGroups.has(key)) section.open = true;
+
+      section.addEventListener('toggle', () => {
+        if (section.open) collapsedGroups.delete(key);
+        else collapsedGroups.add(key);
+      });
+
+      const summary = document.createElement('summary');
+      summary.className = 'fm-group-header';
+      const label = year === nowYear
+        ? MONTH_NAMES[month]
+        : `${MONTH_NAMES[month]} ${year}`;
+      summary.innerHTML = `
+        <svg class="fm-group-arrow" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2 4l4 4 4-4"/></svg>
+        <span class="fm-group-label">${label}</span>
+        <span class="fm-group-count">${groupFiles.length}</span>
+      `;
+      section.appendChild(summary);
+
+      const content = document.createElement('div');
+      content.className = viewMode === 'tile' ? 'fm-tile-grid' : 'fm-list-rows';
+
+      if (viewMode === 'list') {
+        const header = document.createElement('div');
+        header.className = 'fm-list-header';
+        header.innerHTML = `<span></span><span>Name</span><span>Date</span><span>Size</span>`;
+        content.appendChild(header);
+      }
+
+      for (const file of groupFiles) {
+        content.appendChild(viewMode === 'tile' ? buildFileTile(file) : buildFileRow(file));
+      }
+
+      section.appendChild(content);
+      scroll.appendChild(section);
+    }
+  }
+
+  // ── Toolbar events ────────────────────────────────────────────
+  toolbar.addEventListener('click', e => {
+    // View toggle
+    const viewBtn = e.target.closest('.fm-view-btn');
+    if (viewBtn) {
+      viewMode = viewBtn.dataset.view;
+      toolbar.querySelectorAll('.fm-view-btn').forEach(b => {
+        b.setAttribute('aria-pressed', b.dataset.view === viewMode ? 'true' : 'false');
+      });
+      render();
+      return;
+    }
+
+    // Type filter chips
+    const chip = e.target.closest('.fm-filter-chip');
+    if (!chip) return;
+
+    if (chip.dataset.filter === 'all') {
+      // Toggle all on/off
+      const allActive = activeTypes.size === TYPE_KEYS.length;
+      if (allActive) {
+        activeTypes.clear();
+      } else {
+        TYPE_KEYS.forEach(t => activeTypes.add(t));
+      }
+    } else {
+      const t = chip.dataset.filter;
+      if (activeTypes.has(t)) activeTypes.delete(t);
+      else activeTypes.add(t);
+    }
+
+    // Sync chip states
+    toolbar.querySelectorAll('.fm-chip-type').forEach(c => {
+      c.classList.toggle('active', activeTypes.has(c.dataset.filter));
+    });
+    const allChip = toolbar.querySelector('.fm-chip-all');
+    allChip.classList.toggle('active', activeTypes.size === TYPE_KEYS.length);
+
+    render();
+  });
+
+  // Sidebar events
+  sidebar.addEventListener('click', e => {
+    const btn = e.target.closest('.fm-sidebar-btn');
+    if (!btn) return;
+    currentFolder = btn.dataset.folder;
+    updateSidebar();
+    render();
+  });
+
+  // Initial render
+  render();
   return el;
 }
 
@@ -592,6 +926,8 @@ document.querySelectorAll('.width-btn').forEach(btn => {
 
 closeBtn.addEventListener('click', () => { if (focusedId) closeApp(focusedId); });
 
+helpOpenLauncher.addEventListener('click', () => { closeHelp(); openAppMenu(); });
+
 // Close app menu when clicking outside
 document.addEventListener('click', e => {
   if (!appMenu.hasAttribute('hidden') &&
@@ -604,8 +940,8 @@ document.addEventListener('click', e => {
 
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {
-  const menuOpen = !appMenu.hasAttribute('hidden');
-  const helpOpen = !helpOverlay.hasAttribute('hidden');
+  const menuOpen  = !appMenu.hasAttribute('hidden');
+  const helpOpen  = !helpOverlay.hasAttribute('hidden');
   const inContent = e.target.closest('.app-content');
   const isTyping  = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) ||
                     e.target.isContentEditable;
@@ -641,13 +977,13 @@ document.addEventListener('keydown', e => {
     return;
   }
 
-  // Meta/Ctrl + [ / ] — resize focused window narrower / wider
-  if ((e.metaKey || e.ctrlKey) && e.key === '[') {
+  // Meta/Ctrl + < / > — resize focused window narrower / wider
+  if ((e.metaKey || e.ctrlKey) && e.key === '<') {
     e.preventDefault();
     cycleFocusedWidthNarrower();
     return;
   }
-  if ((e.metaKey || e.ctrlKey) && e.key === ']') {
+  if ((e.metaKey || e.ctrlKey) && e.key === '>') {
     e.preventDefault();
     cycleFocusedWidthWider();
     return;
@@ -655,7 +991,7 @@ document.addEventListener('keydown', e => {
 
   // Arrow keys — cycle apps (skip when focus is inside scrollable app content)
   if (!inContent) {
-    if (e.key === 'ArrowLeft') { e.preventDefault(); focusPrevApp(); return; }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); focusPrevApp(); return; }
     if (e.key === 'ArrowRight') { e.preventDefault(); focusNextApp(); return; }
   }
 

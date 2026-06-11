@@ -84,7 +84,7 @@
           <dd>Focus app by number</dd>
         </div>
         <div class="shortcut-row">
-          <dt><kbd>⌘</kbd><kbd>[</kbd> / <kbd>⌘</kbd><kbd>]</kbd></dt>
+          <dt><kbd>⌘</kbd><kbd>&lt;</kbd> / <kbd>⌘</kbd><kbd>&gt;</kbd></dt>
           <dd>Resize focused window narrower / wider</dd>
         </div>
         <div class="shortcut-row">
@@ -101,6 +101,17 @@
         </div>
       </dl>
       <p class="help-note">On Windows / Linux, use <kbd>⊞</kbd> instead of <kbd>⌘</kbd>.</p>
+      <div class="help-actions">
+        <button id="help-open-launcher" class="help-launch-btn">
+          <svg width="16" height="16" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+            <rect x="1" y="1" width="6" height="6" rx="1.25"/>
+            <rect x="11" y="1" width="6" height="6" rx="1.25"/>
+            <rect x="1" y="11" width="6" height="6" rx="1.25"/>
+            <rect x="11" y="11" width="6" height="6" rx="1.25"/>
+          </svg>
+          Open App Launcher
+        </button>
+      </div>
     </div>
   </div>
 
@@ -124,6 +135,14 @@
           </span>
           <span class="app-launcher-name">Image Viewer</span>
         </button>
+        <button class="app-launcher" data-type="file-manager">
+          <span class="app-launcher-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+            </svg>
+          </span>
+          <span class="app-launcher-name">File Manager</span>
+        </button>
       </div>
     </div>
   </div>
@@ -132,17 +151,7 @@
     <div id="app-strip-wrapper">
       <div id="app-strip"></div>
     </div>
-    <div id="empty-state">
-      <div class="empty-inner">
-        <svg width="48" height="48" viewBox="0 0 18 18" fill="currentColor" opacity="0.4" aria-hidden="true">
-          <rect x="1" y="1" width="6" height="6" rx="1.25"/>
-          <rect x="11" y="1" width="6" height="6" rx="1.25"/>
-          <rect x="1" y="11" width="6" height="6" rx="1.25"/>
-          <rect x="11" y="11" width="6" height="6" rx="1.25"/>
-        </svg>
-        <p>Press <strong>the grid button</strong> to open an app &nbsp;·&nbsp; <kbd class="hint-kbd">?</kbd> for shortcuts</p>
-      </div>
-    </div>
+    <div id="empty-state" aria-hidden="true"></div>
   </main>
 
   <script type="module" src="desktop.js"></script>
