@@ -27,6 +27,7 @@ const APP_DEFS = {
 let apps = [];
 let focusedId = null;
 let nextId = 1;
+let _skipSave = false;
 
 // ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -63,6 +64,47 @@ function computeWidth(preset) {
   }
 }
 
+// ── Session persistence ────────────────────────────────────────
+const SESSION_KEY = 'desktop-session-v1';
+
+function saveSession() {
+  if (_skipSave) return;
+  try {
+    const data = apps.map(({ type, widthPreset }) => ({ type, widthPreset }));
+    localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+  } catch { /* storage unavailable */ }
+}
+
+function safeRemoveSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch { /* storage unavailable */ }
+}
+
+function restoreSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data)) { safeRemoveSession(); return; }
+    _skipSave = true;
+    for (const entry of data) {
+      if (typeof entry.type !== 'string' || !APP_DEFS[entry.type]) continue;
+      openApp(entry.type);
+      const app = apps[apps.length - 1];
+      const preset = WIDTH_PRESETS.includes(entry.widthPreset) ? entry.widthPreset : 'full';
+      if (app && preset !== 'full') {
+        const px = computeWidth(preset);
+        app.el.style.setProperty('--app-width', `${Math.max(px, 160)}px`);
+        app.widthPreset = preset;
+      }
+    }
+    _skipSave = false;
+    saveSession();
+  } catch {
+    _skipSave = false;
+    safeRemoveSession();
+  }
+}
+
 // ── App lifecycle ─────────────────────────────────────────────
 function openApp(type) {
   const def = APP_DEFS[type];
@@ -82,6 +124,7 @@ function openApp(type) {
   focusApp(id);
   updateEmptyState();
   updateStripLayout();
+  saveSession();
 
   // Give the DOM a tick then scroll to the new window
   requestAnimationFrame(() => scrollToApp(id));
@@ -106,6 +149,7 @@ function closeApp(id) {
   updateTopBar();
   updateEmptyState();
   updateStripLayout();
+  saveSession();
 }
 
 function focusApp(id) {
@@ -140,6 +184,7 @@ function setFocusedWidth(preset) {
   const px = computeWidth(preset);
   app.el.style.setProperty('--app-width', `${Math.max(px, 160)}px`);
   app.widthPreset = preset;
+  saveSession();
 }
 
 function cycleFocusedWidthWider() {
@@ -619,6 +664,7 @@ helpOverlay.addEventListener('click', e => {
 });
 
 // ── Init ──────────────────────────────────────────────────────
+restoreSession();
 updateTopBar();
 updateEmptyState();
 updateStripLayout();
