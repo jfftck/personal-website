@@ -11,7 +11,7 @@ export const classes = (...classes) => {
                     sb.push(cls.join(' '));
                 } else {
                     for (var [c, v] of Object.entries(cls)) {
-                        if (v) {
+                        if (v == true) {
                             sb.push(c);
                         }
                     }

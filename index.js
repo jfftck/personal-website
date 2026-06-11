@@ -1,5 +1,5 @@
 'use strict'
-//import { GalleryDetails, PhotoDetails, gallery } from './gallery';
+//import { GalleryDetails, PhotoDetails, gallery } from './gallery.js';
 
 const aniEnd = (e) => {
     if (e.animationName === 'curtian') {
@@ -8,7 +8,7 @@ const aniEnd = (e) => {
     }
 };
 
-const themeSelectorButton = (e) => {
+const disablePropagation = (e) => {
     e.stopPropagation();
 }
 
@@ -18,7 +18,7 @@ document.body.addEventListener("click", () => {
 
     if (shouldBlur) {
         document.body.focus();
-        console.log(`blurring: ${document.activeElement.nodeName}`)
+        console.log(`blurring: ${document.activeElement.nodeName}`);
     }
 });
 
@@ -28,5 +28,6 @@ document.body.onload = () => {
         document.body.addEventListener("animationend", aniEnd);
     })
 
-    document.querySelectorAll("input[name='color']").forEach(e => e.addEventListener("click", themeSelectorButton))
+    const themeSelectorButtons = document.querySelectorAll("input[name='color']");
+    themeSelectorButtons.forEach(e => e.addEventListener("click", disablePropagation));
 };
