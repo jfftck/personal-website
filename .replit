@@ -10,7 +10,7 @@ publicDir = "/"
 deploymentTarget = "static"
 
 [workflows]
-runButton = "Serve static"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "Serve static"
@@ -25,9 +25,34 @@ Console logs are available in the Preview devtools or your browser devtools.\" &
 """
 waitForPort = 80
 
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Admin server"
+
+[[workflows.workflow]]
+name = "Admin server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node admin/server.js"
+waitForPort = 3001
+
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[ports]]
 localPort = 80
 externalPort = 80
+
+[[ports]]
+localPort = 3001
+externalPort = 3001
 
 [agent]
 expertMode = true

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JMT Content Admin</title>
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+
+<header id="topbar">
+  <span class="brand">JMT Content Admin</span>
+  <span class="dev-badge">dev only · port 3001</span>
+</header>
+
+<nav id="tab-strip" role="tablist" aria-label="Content sections">
+  <button class="tab-btn active" role="tab" aria-selected="true"  data-section="posts">Posts</button>
+  <button class="tab-btn"        role="tab" aria-selected="false" data-section="documents">Documents</button>
+  <button class="tab-btn"        role="tab" aria-selected="false" data-section="pictures">Pictures</button>
+  <button class="tab-btn"        role="tab" aria-selected="false" data-section="videos">Videos</button>
+</nav>
+
+<main id="main-area">
+
+  <!-- ── List pane ───────────────────────────────────────────── -->
+  <div id="list-pane">
+    <div id="list-header">
+      <h2 id="section-title"></h2>
+      <div class="list-actions">
+        <button id="add-entry-btn" class="action-btn">+ Add entry</button>
+      </div>
+    </div>
+
+    <!-- Add-entry form (hidden by default) -->
+    <form id="add-form" hidden>
+      <div class="form-row">
+        <label>Filename <input type="text" id="add-filename" placeholder="20260712_My_Post.md" required></label>
+      </div>
+      <div class="form-row" id="add-url-row" hidden>
+        <label>URL <input type="url" id="add-url" placeholder="https://..."></label>
+      </div>
+      <div class="form-row" id="add-poster-row" hidden>
+        <label>Poster URL <input type="url" id="add-poster" placeholder="https://..."></label>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="action-btn primary">Add</button>
+        <button type="button" id="add-cancel-btn" class="action-btn">Cancel</button>
+      </div>
+    </form>
+
+    <!-- Upload form -->
+    <form id="upload-form">
+      <label class="upload-label">
+        <input type="file" id="upload-input" multiple>
+        <span class="upload-hint">or drag &amp; drop files here</span>
+      </label>
+      <div id="upload-progress" hidden></div>
+    </form>
+
+    <div id="manifest-list" role="list"></div>
+  </div>
+
+  <!-- ── Markdown editor pane ────────────────────────────────── -->
+  <div id="editor-pane" hidden>
+    <div id="editor-topbar">
+      <span id="editor-filename"></span>
+      <div class="editor-actions">
+        <button id="editor-save-btn" class="action-btn primary">Save</button>
+        <button id="editor-close-btn" class="action-btn">Close</button>
+      </div>
+    </div>
+    <div id="editor-body">
+      <div id="editor-source-pane">
+        <div class="pane-label">Markdown</div>
+        <textarea id="editor-textarea" spellcheck="false" autocorrect="off" autocapitalize="off"></textarea>
+      </div>
+      <div id="editor-preview-pane">
+        <div class="pane-label">Preview</div>
+        <div id="editor-preview" class="md-body"></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div id="toast-container" aria-live="polite"></div>
+
+<script type="module" src="/admin/admin.js"></script>
+</body>
+</html>
