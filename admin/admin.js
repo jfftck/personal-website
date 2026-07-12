@@ -104,7 +104,7 @@ async function saveManifest(dir) {
 // ── Connectivity check ────────────────────────────────────────
 async function checkConnectivity() {
   try {
-    const res = await fetch('/api/manifest/posts');
+    const res = await fetch(`${API}/api/manifest/posts`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (!Array.isArray(data)) throw new Error('Unexpected response');
