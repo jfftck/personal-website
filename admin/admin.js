@@ -39,6 +39,9 @@ let editorOpen    = false;
 let editorDirty   = false;
 let editorEntry   = null; // { dir, filename }
 
+// ── Drag-to-reorder state ─────────────────────────────────────
+let dragSrcIdx = -1;
+
 // ── DOM refs ──────────────────────────────────────────────────
 const tabBtns        = document.querySelectorAll('.tab-btn');
 const sectionTitle   = document.getElementById('section-title');
@@ -64,8 +67,10 @@ const toastContainer = document.getElementById('toast-container');
 const mainArea       = document.getElementById('main-area');
 
 // ── SVG icons ─────────────────────────────────────────────────
-const SVG_EDIT  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
-const SVG_TRASH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+const SVG_EDIT   = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+const SVG_TRASH  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+const SVG_RENAME = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`;
+const SVG_DRAG   = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>`;
 
 // ── Toast ─────────────────────────────────────────────────────
 function toast(msg, isError = false) {
@@ -170,6 +175,33 @@ function makeEditable(entry, dir, key, opts = {}) {
   return span;
 }
 
+// ── Rename a file ─────────────────────────────────────────────
+async function handleRename(dir, entry) {
+  const oldName = entry.filename;
+  const newName = prompt(`Rename "${oldName}" to:`, oldName);
+  if (!newName || newName === oldName) return;
+  const trimmed = newName.trim();
+  if (!trimmed) return;
+
+  try {
+    await apiFetch(`/api/file/${dir}/${encodeURIComponent(oldName)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newFilename: trimmed }),
+    });
+    entry.filename = trimmed;
+    await loadManifest(dir);
+    renderList();
+    toast(`Renamed to ${trimmed}`);
+    if (editorOpen && editorEntry?.dir === dir && editorEntry?.filename === oldName) {
+      editorEntry.filename = trimmed;
+      editorFilename.textContent = `${dir}/${trimmed}`;
+    }
+  } catch (e) {
+    toast(`Rename failed: ${e.message}`, true);
+  }
+}
+
 // ── Render manifest list ──────────────────────────────────────
 function renderList() {
   const section = SECTIONS[activeSection];
@@ -187,13 +219,22 @@ function renderList() {
 
   manifestList.innerHTML = '';
 
-  for (const entry of entries) {
+  entries.forEach((entry, idx) => {
     const item = document.createElement('div');
     item.className = 'manifest-item';
     item.setAttribute('role', 'listitem');
+    item.draggable = true;
+    item.dataset.idx = idx;
 
     const isMd    = entry.filename.endsWith('.md');
     const canEdit = section.mdEdit && isMd;
+
+    // ── Drag handle ─────────────────────────────────────────
+    const handle = document.createElement('div');
+    handle.className = 'drag-handle';
+    handle.title = 'Drag to reorder';
+    handle.innerHTML = SVG_DRAG;
+    item.appendChild(handle);
 
     // ── Info column ─────────────────────────────────────────
     const info = document.createElement('div');
@@ -251,6 +292,13 @@ function renderList() {
     const actions = document.createElement('div');
     actions.className = 'item-actions';
 
+    const renameBtn = document.createElement('button');
+    renameBtn.className = 'icon-btn rename-btn';
+    renameBtn.title     = 'Rename';
+    renameBtn.innerHTML = SVG_RENAME;
+    renameBtn.addEventListener('click', () => handleRename(section.dir, entry));
+    actions.appendChild(renameBtn);
+
     if (canEdit) {
       const editBtn = document.createElement('button');
       editBtn.className = 'icon-btn edit-btn';
@@ -268,8 +316,55 @@ function renderList() {
     actions.appendChild(deleteBtn);
 
     item.appendChild(actions);
+
+    // ── Drag-to-reorder events ───────────────────────────────
+    item.addEventListener('dragstart', e => {
+      dragSrcIdx = idx;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', idx);
+      item.classList.add('dragging');
+    });
+
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      manifestList.querySelectorAll('.manifest-item').forEach(el => el.classList.remove('drag-over'));
+    });
+
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      manifestList.querySelectorAll('.manifest-item').forEach(el => el.classList.remove('drag-over'));
+      item.classList.add('drag-over');
+    });
+
+    item.addEventListener('dragleave', e => {
+      if (!item.contains(e.relatedTarget)) item.classList.remove('drag-over');
+    });
+
+    item.addEventListener('drop', async e => {
+      e.preventDefault();
+      item.classList.remove('drag-over');
+      if (dragSrcIdx === -1 || dragSrcIdx === idx) return;
+
+      const dir     = section.dir;
+      const arr     = manifests[dir];
+      const [moved] = arr.splice(dragSrcIdx, 1);
+      arr.splice(idx, 0, moved);
+      dragSrcIdx = -1;
+
+      renderList();
+      try {
+        await saveManifest(dir);
+        toast('Order saved');
+      } catch (err) {
+        toast(`Save failed: ${err.message}`, true);
+        await loadManifest(dir);
+        renderList();
+      }
+    });
+
     manifestList.appendChild(item);
-  }
+  });
 }
 
 // ── Delete ────────────────────────────────────────────────────

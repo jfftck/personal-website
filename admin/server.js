@@ -46,7 +46,7 @@ function setCORS(res, req) {
     }
     // Untrusted origins: no CORS headers → browser blocks the request
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, PATCH, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
@@ -191,6 +191,28 @@ async function handle(req, res) {
         fs.writeFileSync(abs, text, 'utf8');
         const size = Buffer.byteLength(text, 'utf8');
         json(res, 200, { ok: true, size: formatSize(size) }); return;
+      } catch (e) { err(res, 500, e.message); return; }
+    }
+
+    if (req.method === 'PATCH') {
+      try {
+        const body = await readBody(req);
+        const { newFilename } = JSON.parse(body.toString('utf8'));
+        if (!newFilename || typeof newFilename !== 'string') {
+          err(res, 400, 'newFilename required'); return;
+        }
+        const newAbs = safePath(dir, newFilename);
+        if (!newAbs) { err(res, 400, 'Invalid new filename'); return; }
+        if (!fs.existsSync(abs)) { err(res, 404, 'Source file not found'); return; }
+        if (fs.existsSync(newAbs)) { err(res, 409, `A file named "${newFilename}" already exists`); return; }
+        fs.renameSync(abs, newAbs);
+        const manifest = readManifest(dir);
+        const idx = manifest.findIndex(e => e.filename === filename);
+        if (idx !== -1) {
+          manifest[idx] = { ...manifest[idx], filename: newFilename };
+          writeManifest(dir, manifest);
+        }
+        json(res, 200, { ok: true, filename: newFilename }); return;
       } catch (e) { err(res, 500, e.message); return; }
     }
 

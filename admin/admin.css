@@ -254,15 +254,46 @@ html, body {
 
 .manifest-item {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto 1fr auto;
   align-items: start;
   gap: 0.25rem;
-  padding: 0.625rem 1rem;
+  padding: 0.625rem 0.75rem 0.625rem 0.5rem;
   border-bottom: 1px solid var(--border);
   transition: background 100ms;
+  cursor: default;
 }
 
 .manifest-item:hover { background: var(--surface-2); }
+
+.manifest-item.drag-over {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.manifest-item.dragging {
+  opacity: 0.4;
+}
+
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.75rem;
+  color: var(--text-muted);
+  opacity: 0.35;
+  cursor: grab;
+  flex-shrink: 0;
+  transition: opacity 120ms;
+  margin-top: 0.05rem;
+}
+
+.drag-handle:active { cursor: grabbing; }
+
+.manifest-item:hover .drag-handle { opacity: 0.75; }
+
+.drag-handle svg { width: 14px; height: 14px; }
 
 .item-info { min-width: 0; }
 
