@@ -519,6 +519,82 @@ html, body {
 @keyframes toastIn  { from { opacity: 0; transform: translateY(0.5rem); } to { opacity: 1; transform: none; } }
 @keyframes toastOut { from { opacity: 1; } to { opacity: 0; } }
 
+/* ── Inline field editing ────────────────────────────────── */
+.editable-field {
+  cursor: pointer;
+  padding: 0.1em 0.3em;
+  border-radius: 0.2em;
+  border: 1px solid transparent;
+  transition: border-color 120ms, background 120ms;
+  display: inline-block;
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.editable-field:hover {
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+
+.editable-field.editable-url {
+  color: var(--accent-light);
+  opacity: 0.85;
+}
+
+.inline-edit-input {
+  background: var(--surface);
+  border: 1px solid var(--focus-color);
+  border-radius: 0.25rem;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.45rem;
+  outline: none;
+  box-shadow: var(--focus-ring);
+  max-width: 28ch;
+  width: 28ch;
+}
+
+.meta-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  opacity: 0.75;
+  user-select: none;
+}
+
+.meta-sep {
+  color: var(--text-muted);
+  opacity: 0.4;
+  margin-inline: 0.2rem;
+  user-select: none;
+}
+
+.meta-size { color: var(--text-muted); }
+
+/* ── Connectivity error ───────────────────────────────────── */
+.connectivity-error {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem;
+  text-align: center;
+  color: var(--text);
+}
+
+.connectivity-error .empty-icon { font-size: 2.5rem; }
+
+.connectivity-error p {
+  color: var(--text-muted);
+  line-height: 1.6;
+  max-width: 34ch;
+}
+
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 680px) {
   #list-pane { flex: 1; border-right: none; }
