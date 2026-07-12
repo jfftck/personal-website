@@ -320,6 +320,25 @@ addForm.addEventListener('submit', async e => {
 
   try {
     await saveManifest(section.dir);
+
+    if (section.mdEdit && filename.endsWith('.md')) {
+      const stem     = filename.replace(/\.md$/i, '');
+      const template = `# ${stem}\n`;
+      try {
+        const res  = await apiFetch(
+          `/api/file/${section.dir}/${encodeURIComponent(filename)}`,
+          { method: 'PUT', headers: { 'Content-Type': 'text/plain' }, body: template },
+        );
+        const data = await res.json();
+        if (data.size) {
+          entry.size = data.size;
+          await saveManifest(section.dir);
+        }
+      } catch (e3) {
+        toast(`Warning: could not create starter file: ${e3.message}`, true);
+      }
+    }
+
     renderList();
     hideAddForm();
     toast(`Added ${filename}`);
