@@ -26,10 +26,11 @@ const SECTIONS = {
   },
 };
 
-// ── API base: same-origin when on port 3001; show error otherwise ──
-// The admin server self-hosts on port 3001. If opened from any other
-// port, the connectivity check will fail and show a helpful message.
-const API = '';
+// ── API base ──────────────────────────────────────────────────
+// Set by the inline <script> in admin.html. Empty string = same-origin
+// (when opened directly on port 3001). Full origin when opened from
+// another port (e.g. port 80 static server).
+const API = (window.ADMIN_API_BASE != null) ? window.ADMIN_API_BASE : '';
 
 // ── State ─────────────────────────────────────────────────────
 let activeSection = 'posts';
@@ -482,8 +483,8 @@ document.addEventListener('keydown', e => {
       <div class="connectivity-error">
         <div class="empty-icon">⚠️</div>
         <strong>Admin server not reachable</strong>
-        <p>This page must be opened via the <strong>port 3001</strong> preview.<br>
-           Switch to the "Admin server" workflow in Replit and open its preview.</p>
+        <p>Make sure the <strong>Admin server</strong> workflow is running on port 3001.<br>
+           You can open this page from either the port 80 or port 3001 preview.</p>
       </div>`;
     return;
   }

@@ -29,14 +29,28 @@ const MIME = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────
-function setCORS(res) {
-  res.setHeader('Access-Control-Allow-Origin',  '*');
+function isTrustedOrigin(origin) {
+  if (!origin) return false;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  if (/^https:\/\/[\w-]+\.[\w.-]*replit\.dev$/.test(origin)) return true;
+  if (/^https:\/\/[\w-]+\.[\w.-]*repl\.co$/.test(origin)) return true;
+  return false;
+}
+
+function setCORS(res, req) {
+  const origin = req && req.headers && req.headers.origin;
+  if (origin) {
+    if (isTrustedOrigin(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+    }
+    // Untrusted origins: no CORS headers → browser blocks the request
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
 function json(res, code, data) {
-  setCORS(res);
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(data));
 }
@@ -127,7 +141,7 @@ function parseMultipart(body, boundary) {
 
 // ── Request handler ───────────────────────────────────────────
 async function handle(req, res) {
-  setCORS(res);
+  setCORS(res, req);
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
@@ -164,7 +178,6 @@ async function handle(req, res) {
     if (req.method === 'GET') {
       try {
         const text = fs.readFileSync(abs, 'utf8');
-        setCORS(res);
         res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end(text); return;
       } catch { err(res, 404, 'Not found'); return; }
@@ -257,7 +270,6 @@ async function handle(req, res) {
       const idx = path.join(abs, 'index.html');
       if (fs.existsSync(idx)) {
         const content = fs.readFileSync(idx);
-        setCORS(res);
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(content); return;
       }
@@ -266,7 +278,6 @@ async function handle(req, res) {
     const ext  = path.extname(abs).toLowerCase();
     const mime = MIME[ext] || 'application/octet-stream';
     const content = fs.readFileSync(abs);
-    setCORS(res);
     res.writeHead(200, { 'Content-Type': mime });
     if (req.method === 'HEAD') { res.end(); return; }
     res.end(content);

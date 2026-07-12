@@ -5,6 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>JMT Content Admin</title>
   <link rel="stylesheet" href="/admin/admin.css">
+  <script>
+    // Compute the API base URL so the page works from both port 80 (static
+    // server) and port 3001 (admin server). In Replit, each port gets a
+    // distinct hostname like "slug-PORT.user.replit.dev", so we swap the
+    // port fragment. In local/other environments we change the port number.
+    window.ADMIN_API_BASE = (() => {
+      if (location.port === '3001') return '';        // already on admin server
+      const h = location.hostname;
+      const replitMatch = h.match(/^(.+?)-\d+(\..+)$/);
+      if (replitMatch) {
+        // Replit dev proxy: swap port fragment in hostname
+        return `${location.protocol}//${replitMatch[1]}-3001${replitMatch[2]}`;
+      }
+      // Fallback: standard host:port
+      return `${location.protocol}//${location.hostname}:3001`;
+    })();
+  </script>
 </head>
 <body>
 
