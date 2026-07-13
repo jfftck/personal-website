@@ -8,6 +8,43 @@ const url  = require('url');
 const PORT = 3001;
 const ROOT = process.cwd();
 const ALLOWED_DIRS = new Set(['videos', 'pictures', 'documents', 'posts']);
+const CLERK_DIST = path.join(ROOT, 'node_modules/@clerk/clerk-js/dist');
+
+// ── Clerk auth ────────────────────────────────────────────────
+let _clerkVerifyToken = null;
+
+async function getClerkVerifier() {
+  if (_clerkVerifyToken) return _clerkVerifyToken;
+  try {
+    const clerk = await import('@clerk/backend');
+    _clerkVerifyToken = clerk.verifyToken;
+    return _clerkVerifyToken;
+  } catch (e) {
+    console.error('[clerk] Failed to load @clerk/backend:', e.message);
+    return null;
+  }
+}
+
+async function requireAuth(req, res) {
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  if (!token) {
+    err(res, 401, 'Authentication required');
+    return false;
+  }
+  const verifyToken = await getClerkVerifier();
+  if (!verifyToken) {
+    err(res, 500, 'Auth service unavailable');
+    return false;
+  }
+  try {
+    await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
+    return true;
+  } catch {
+    err(res, 401, 'Invalid or expired session');
+    return false;
+  }
+}
 
 // ── MIME types for static serving ─────────────────────────────
 const MIME = {
@@ -47,7 +84,7 @@ function setCORS(res, req) {
     // Untrusted origins: no CORS headers → browser blocks the request
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, PATCH, POST, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
 function json(res, code, data) {
@@ -148,9 +185,100 @@ async function handle(req, res) {
   const parsed  = url.parse(req.url, true);
   const pathname = parsed.pathname;
 
-  // ── API routes ─────────────────────────────────────────────
+  // ── Public: Clerk config bootstrap ────────────────────────
+  if (pathname === '/api/clerk-config' && req.method === 'GET') {
+    const pk = process.env.CLERK_PUBLISHABLE_KEY || '';
+    json(res, 200, { publishableKey: pk });
+    return;
+  }
+
+  // ── Public: Clerk API proxy ────────────────────────────────
+  // Forwards /clerk-proxy/* → https://clerk.<fapi-domain>/*
+  // This lets the browser reach Clerk's backend even when the Replit
+  // preview sandbox blocks direct outbound connections.
+  if (pathname.startsWith('/clerk-proxy/')) {
+    const pk = process.env.CLERK_PUBLISHABLE_KEY || '';
+    let fapiHost = null;
+    if (pk) {
+      try {
+        const decoded = Buffer.from(pk.split('_')[2], 'base64url').toString('utf8').replace(/\$+$/, '');
+        fapiHost = `clerk.${decoded}`;
+      } catch { /* ignore */ }
+    }
+    if (!fapiHost) { err(res, 500, 'Cannot determine Clerk FAPI host'); return; }
+
+    // Strip /clerk-proxy prefix; keep everything after (path + query)
+    const upstreamPath = req.url.slice('/clerk-proxy'.length);
+    const upstreamUrl  = `https://${fapiHost}${upstreamPath}`;
+
+    const https = require('https');
+    const body  = await readBody(req);
+
+    const upstreamReq = https.request(upstreamUrl, {
+      method:  req.method,
+      headers: {
+        ...req.headers,
+        host:   fapiHost,
+        origin: `https://${fapiHost}`,
+      },
+    }, (upstreamRes) => {
+      // Copy upstream response headers, rewriting CORS to allow the browser
+      const forwardHeaders = {};
+      for (const [k, v] of Object.entries(upstreamRes.headers)) {
+        if (/^(access-control-|content-type|content-length|set-cookie|location|retry-after)/i.test(k)) {
+          forwardHeaders[k] = v;
+        }
+      }
+      forwardHeaders['access-control-allow-origin']  = req.headers.origin || '*';
+      forwardHeaders['access-control-allow-credentials'] = 'true';
+      forwardHeaders['access-control-allow-headers'] = 'Content-Type, Authorization, Cookie';
+      forwardHeaders['access-control-allow-methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
+      res.writeHead(upstreamRes.statusCode, forwardHeaders);
+      upstreamRes.pipe(res);
+    });
+
+    upstreamReq.on('error', (e) => {
+      console.error('[clerk-proxy] upstream error:', e.message);
+      if (!res.headersSent) err(res, 502, 'Clerk API proxy error');
+    });
+
+    if (body.length) upstreamReq.write(body);
+    upstreamReq.end();
+    return;
+  }
+
+  // ── Public: Clerk JS bundle (served locally from node_modules) ──
+  if (pathname.startsWith('/clerk-js/') && (req.method === 'GET' || req.method === 'HEAD')) {
+    const clerkFile = path.resolve(CLERK_DIST, pathname.slice('/clerk-js/'.length));
+    if (!clerkFile.startsWith(CLERK_DIST + path.sep) && clerkFile !== CLERK_DIST) {
+      err(res, 403, 'Forbidden'); return;
+    }
+    try {
+      let content = fs.readFileSync(clerkFile);
+      const ext  = path.extname(clerkFile).toLowerCase();
+      const mime = MIME[ext] || 'application/javascript';
+      // For the main clerk.browser.js, patch in the public path so
+      // webpack chunk loading works regardless of iframe currentScript state.
+      if (pathname === '/clerk-js/clerk.browser.js') {
+        const str   = content.toString('utf8');
+        // The bundle auto-detects public path via currentScript.src. If that
+        // fails it throws. Patch i.p before the auto-detect code runs.
+        const patched = str.replace(
+          /if\(!e\)throw Error\("Automatic publicPath[^"]*"\)/,
+          'if(!e)e="/clerk-js/"',
+        );
+        content = Buffer.from(patched, 'utf8');
+      }
+      res.writeHead(200, { 'Content-Type': mime });
+      if (req.method === 'HEAD') { res.end(); return; }
+      res.end(content); return;
+    } catch { err(res, 404, 'Not found'); return; }
+  }
+
+  // ── API routes (all require auth) ──────────────────────────
   const mManifest = pathname.match(/^\/api\/manifest\/([^/]+)$/);
   if (mManifest) {
+    if (!await requireAuth(req, res)) return;
     const dir = mManifest[1];
     if (!ALLOWED_DIRS.has(dir)) { err(res, 403, 'Forbidden'); return; }
 
@@ -171,6 +299,7 @@ async function handle(req, res) {
 
   const mFile = pathname.match(/^\/api\/file\/([^/]+)\/([^/]+)$/);
   if (mFile) {
+    if (!await requireAuth(req, res)) return;
     const [, dir, filename] = mFile;
     const abs = safePath(dir, filename);
     if (!abs) { err(res, 403, 'Forbidden'); return; }
@@ -231,6 +360,7 @@ async function handle(req, res) {
 
   const mUpload = pathname.match(/^\/api\/upload\/([^/]+)$/);
   if (mUpload && req.method === 'POST') {
+    if (!await requireAuth(req, res)) return;
     const dir    = mUpload[1];
     const dirAbs = safeDir(dir);
     if (!dirAbs) { err(res, 403, 'Forbidden'); return; }

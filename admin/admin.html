@@ -25,19 +25,31 @@
 </head>
 <body>
 
+<div id="loading-screen">
+  <div class="loading-inner">
+    <div class="loading-spinner"></div>
+    <p>Loading…</p>
+  </div>
+</div>
+
+<div id="auth-screen" hidden>
+  <div id="clerk-signin-root"></div>
+</div>
+
 <header id="topbar">
   <span class="brand">JMT Content Admin</span>
   <span class="dev-badge">dev only · port 3001</span>
+  <button id="signout-btn" class="action-btn" hidden>Sign out</button>
 </header>
 
-<nav id="tab-strip" role="tablist" aria-label="Content sections">
+<nav id="tab-strip" role="tablist" aria-label="Content sections" hidden>
   <button class="tab-btn active" role="tab" aria-selected="true"  data-section="posts">Posts</button>
   <button class="tab-btn"        role="tab" aria-selected="false" data-section="documents">Documents</button>
   <button class="tab-btn"        role="tab" aria-selected="false" data-section="pictures">Pictures</button>
   <button class="tab-btn"        role="tab" aria-selected="false" data-section="videos">Videos</button>
 </nav>
 
-<main id="main-area">
+<main id="main-area" hidden>
 
   <!-- ── List pane ───────────────────────────────────────────── -->
   <div id="list-pane">

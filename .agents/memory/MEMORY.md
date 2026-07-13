@@ -1,1 +1,2 @@
 - [Desktop module split](desktop-module-split.md) — desktop.js split into 7 ES modules; drag targets individual windows not columns; 3-zone drop system.
+- [Clerk admin auth](clerk-admin-auth.md) — clerk-js served locally with public-path patch; screenshot tool can't verify auth (Cloudflare blocks TLS from Replit IPs); use curl to verify 401 gating.

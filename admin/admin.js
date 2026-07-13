@@ -2,6 +2,54 @@
 
 import { renderMarkdown, esc } from '/shared/markdown.js';
 
+// ── Clerk auth ────────────────────────────────────────────────
+let clerk = null;
+
+async function initClerk() {
+  const API_BASE = (window.ADMIN_API_BASE != null) ? window.ADMIN_API_BASE : '';
+  const cfgRes = await fetch(`${API_BASE}/api/clerk-config`);
+  if (!cfgRes.ok) throw new Error('Could not load auth config');
+  const { publishableKey } = await cfgRes.json();
+  if (!publishableKey) throw new Error('Publishable key missing — check CLERK_PUBLISHABLE_KEY secret');
+
+  // Load clerk-js. Try the local copy first (always available).
+  // The admin server patches webpack's public path so chunk requests resolve
+  // to /clerk-js/* regardless of how the page is accessed.
+  const localClerkJsUrl = `${API_BASE}/clerk-js/clerk.browser.js`;
+
+  await new Promise((resolve, reject) => {
+    if (document.getElementById('clerk-js')) { resolve(); return; }
+    const s = document.createElement('script');
+    s.id  = 'clerk-js';
+    s.src = localClerkJsUrl;
+    s.onload  = () => { console.log('[auth] clerk-js loaded'); resolve(); };
+    s.onerror = () => reject(new Error(`Failed to load Clerk JS from ${localClerkJsUrl}`));
+    document.head.appendChild(s);
+    console.log('[auth] loading clerk-js from', localClerkJsUrl);
+  });
+
+  if (!window.Clerk) {
+    // Short poll — onload fires after script executes, Clerk should be set
+    await new Promise((resolve, reject) => {
+      const t = Date.now() + 3000;
+      const id = setInterval(() => {
+        if (window.Clerk) { clearInterval(id); resolve(); }
+        else if (Date.now() > t) { clearInterval(id); reject(new Error('window.Clerk not set after script loaded')); }
+      }, 50);
+    });
+  }
+
+  clerk = window.Clerk;
+  console.log('[auth] clerk.load()...');
+  await clerk.load({ publishableKey });
+  console.log('[auth] signed in:', !!clerk.user);
+}
+
+async function getAuthToken() {
+  if (!clerk || !clerk.session) return null;
+  return clerk.session.getToken();
+}
+
 // ── Section schemas ───────────────────────────────────────────
 const SECTIONS = {
   posts: {
@@ -65,6 +113,10 @@ const editorSaveBtn  = document.getElementById('editor-save-btn');
 const editorCloseBtn = document.getElementById('editor-close-btn');
 const toastContainer = document.getElementById('toast-container');
 const mainArea       = document.getElementById('main-area');
+const authScreen     = document.getElementById('auth-screen');
+const loadingScreen  = document.getElementById('loading-screen');
+const signoutBtn     = document.getElementById('signout-btn');
+const tabStrip       = document.getElementById('tab-strip');
 
 // ── SVG icons ─────────────────────────────────────────────────
 const SVG_EDIT   = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
@@ -83,7 +135,10 @@ function toast(msg, isError = false) {
 
 // ── API helpers ───────────────────────────────────────────────
 async function apiFetch(path, opts = {}) {
-  const res = await fetch(API + path, opts);
+  const token = await getAuthToken();
+  const headers = { ...(opts.headers || {}) };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(API + path, { ...opts, headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(body.error || res.statusText);
@@ -109,10 +164,8 @@ async function saveManifest(dir) {
 // ── Connectivity check ────────────────────────────────────────
 async function checkConnectivity() {
   try {
-    const res = await fetch(`${API}/api/manifest/posts`);
+    const res = await fetch(`${API}/api/clerk-config`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (!Array.isArray(data)) throw new Error('Unexpected response');
     return true;
   } catch {
     return false;
@@ -589,10 +642,47 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// ── Auth UI helpers ───────────────────────────────────────────
+function showAuthScreen() {
+  loadingScreen.setAttribute('hidden', '');
+  authScreen.removeAttribute('hidden');
+  tabStrip.setAttribute('hidden', '');
+  mainArea.setAttribute('hidden', '');
+  signoutBtn.setAttribute('hidden', '');
+  clerk.mountSignIn(document.getElementById('clerk-signin-root'), {
+    appearance: {
+      variables: {
+        colorPrimary: '#069',
+        colorBackground: '#011826',
+        colorText: '#ddeeff',
+        colorInputBackground: 'rgba(0,45,70,0.90)',
+        colorInputText: '#ddeeff',
+        borderRadius: '0.5rem',
+      },
+    },
+  });
+}
+
+function showAdminUI() {
+  loadingScreen.setAttribute('hidden', '');
+  authScreen.setAttribute('hidden', '');
+  tabStrip.removeAttribute('hidden');
+  mainArea.removeAttribute('hidden');
+  signoutBtn.removeAttribute('hidden');
+}
+
+// ── Sign out ──────────────────────────────────────────────────
+signoutBtn.addEventListener('click', async () => {
+  await clerk.signOut();
+  location.reload();
+});
+
 // ── Init ──────────────────────────────────────────────────────
 (async () => {
   const ok = await checkConnectivity();
   if (!ok) {
+    loadingScreen.setAttribute('hidden', '');
+    mainArea.removeAttribute('hidden');
     mainArea.innerHTML = `
       <div class="connectivity-error">
         <div class="empty-icon">⚠️</div>
@@ -602,5 +692,31 @@ document.addEventListener('keydown', e => {
       </div>`;
     return;
   }
-  switchTab('posts');
+
+  try {
+    await initClerk();
+  } catch (e) {
+    loadingScreen.setAttribute('hidden', '');
+    mainArea.removeAttribute('hidden');
+    mainArea.innerHTML = `
+      <div class="connectivity-error">
+        <div class="empty-icon">⚠️</div>
+        <strong>Auth failed to initialize</strong>
+        <p>${esc(e.message)}</p>
+      </div>`;
+    return;
+  }
+
+  if (clerk.user) {
+    showAdminUI();
+    switchTab('posts');
+  } else {
+    showAuthScreen();
+    clerk.addListener(({ user }) => {
+      if (user) {
+        showAdminUI();
+        switchTab('posts');
+      }
+    });
+  }
 })();
