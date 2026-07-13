@@ -22,6 +22,9 @@ async function initClerk() {
     const s = document.createElement('script');
     s.id  = 'clerk-js';
     s.src = localClerkJsUrl;
+    // The bundle reads data-clerk-publishable-key to auto-init window.Clerk.
+    // Without this attribute the bundle throws "Missing publishableKey" on load.
+    s.setAttribute('data-clerk-publishable-key', publishableKey);
     s.onload  = () => { console.log('[auth] clerk-js loaded'); resolve(); };
     s.onerror = () => reject(new Error(`Failed to load Clerk JS from ${localClerkJsUrl}`));
     document.head.appendChild(s);
@@ -650,6 +653,8 @@ function showAuthScreen() {
   mainArea.setAttribute('hidden', '');
   signoutBtn.setAttribute('hidden', '');
   clerk.mountSignIn(document.getElementById('clerk-signin-root'), {
+    // Hide the "Don't have an account? Sign up" footer — invite-only, no public registration.
+    signUpUrl: null,
     appearance: {
       variables: {
         colorPrimary: '#069',
@@ -658,6 +663,10 @@ function showAuthScreen() {
         colorInputBackground: 'rgba(0,45,70,0.90)',
         colorInputText: '#ddeeff',
         borderRadius: '0.5rem',
+      },
+      elements: {
+        // Hide the sign-up link in the footer
+        footerAction: { display: 'none' },
       },
     },
   });
