@@ -135,8 +135,25 @@ export function buildFileManager(id, ctx) {
     tile.setAttribute('role', 'button');
     tile.setAttribute('tabindex', '0');
     tile.setAttribute('title', file.displayName);
+
+    const iconColor = TYPE_COLOR[file.type] || TYPE_COLOR.document;
+    const iconSvg   = TYPE_ICONS[file.type] || TYPE_ICONS.document;
+
+    let iconHtml;
+    if (file.type === 'video') {
+      iconHtml = `
+        <span class="fm-tile-icon fm-tile-icon--video" style="color:${iconColor}">
+          ${iconSvg}
+          <span class="fm-tile-play" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>
+          </span>
+        </span>`;
+    } else {
+      iconHtml = `<span class="fm-tile-icon" style="color:${iconColor}">${iconSvg}</span>`;
+    }
+
     tile.innerHTML = `
-      <span class="fm-tile-icon" style="color:${TYPE_COLOR[file.type] || TYPE_COLOR.document}">${TYPE_ICONS[file.type] || TYPE_ICONS.document}</span>
+      ${iconHtml}
       <span class="fm-tile-name">${file.displayName}</span>
       <span class="fm-tile-date">${fmDate(file.date)}</span>
     `;

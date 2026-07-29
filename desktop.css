@@ -1203,6 +1203,32 @@ kbd {
 .fm-tile:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 .fm-tile-icon svg { width: 28px; height: 28px; }
 
+/* ── Video tile play overlay ── */
+.fm-tile-icon--video {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fm-tile-play {
+  position: absolute;
+  inset: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.42);
+  border-radius: 0.375rem;
+  color: #fff;
+  pointer-events: none;
+}
+
+.fm-tile-play svg {
+  width: 12px;
+  height: 12px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+
 .fm-tile-name {
   font-size: 0.6875rem;
   line-height: 1.3;
