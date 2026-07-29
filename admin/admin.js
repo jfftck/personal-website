@@ -296,10 +296,33 @@ function renderList() {
     const info = document.createElement('div');
     info.className = 'item-info';
 
+    // Thumbnail — pictures (url) and videos (poster)
+    if (activeSection === 'pictures' || activeSection === 'videos') {
+      const thumbUrl = activeSection === 'pictures' ? (entry.url || '') : (entry.poster || '');
+      const thumb = document.createElement('img');
+      thumb.className = 'item-thumb';
+      thumb.loading  = 'lazy';
+      thumb.alt      = '';
+      if (thumbUrl) {
+        thumb.src = thumbUrl;
+      } else {
+        thumb.classList.add('item-thumb--empty');
+      }
+      thumb.addEventListener('error', () => {
+        thumb.classList.add('item-thumb--empty');
+        thumb.removeAttribute('src');
+      });
+      info.appendChild(thumb);
+    }
+
+    // Text stack (filename + meta)
+    const textStack = document.createElement('div');
+    textStack.className = 'item-text';
+
     const filenamEl = document.createElement('div');
     filenamEl.className = 'item-filename';
     filenamEl.textContent = entry.filename;
-    info.appendChild(filenamEl);
+    textStack.appendChild(filenamEl);
 
     const meta = document.createElement('div');
     meta.className = 'item-meta';
@@ -341,7 +364,8 @@ function renderList() {
       meta.appendChild(posterEl);
     }
 
-    info.appendChild(meta);
+    textStack.appendChild(meta);
+    info.appendChild(textStack);
     item.appendChild(info);
 
     // ── Actions column ──────────────────────────────────────

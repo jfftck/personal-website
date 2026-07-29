@@ -299,7 +299,49 @@ html, body {
 
 .drag-handle svg { width: 14px; height: 14px; }
 
-.item-info { min-width: 0; }
+.item-info {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.item-text { min-width: 0; flex: 1; }
+
+/* ── Thumbnail (pictures / videos) ───────────────────────── */
+.item-thumb {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: calc(var(--radius) * 0.6);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  display: block;
+}
+
+/* Broken or missing URL — show a neutral placeholder icon */
+.item-thumb--empty,
+.item-thumb:not([src]) {
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  position: relative;
+  overflow: hidden;
+}
+
+.item-thumb--empty::after,
+.item-thumb:not([src])::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    /* simple image/film-frame icon using CSS */
+    radial-gradient(circle 5px at 14px 14px, var(--text-muted) 100%, transparent 100%),
+    linear-gradient(var(--border) 1px, transparent 1px) 0 24px / 40px 1px,
+    linear-gradient(90deg, var(--border) 1px, transparent 1px) 6px 26px / 1px 14px,
+    linear-gradient(90deg, var(--border) 1px, transparent 1px) 33px 26px / 1px 14px;
+  opacity: 0.5;
+}
 
 .item-filename {
   font-size: 0.875rem;
