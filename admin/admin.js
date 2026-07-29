@@ -458,9 +458,14 @@ function hideAddForm() {
 
 addForm.addEventListener('submit', async e => {
   e.preventDefault();
-  const section  = SECTIONS[activeSection];
-  const filename = addFilename.value.trim();
+  const section = SECTIONS[activeSection];
+  let filename  = addFilename.value.trim();
   if (!filename) return;
+
+  if (section.mdEdit && !filename.endsWith('.md')) {
+    filename += '.md';
+    addFilename.value = filename;
+  }
 
   const entry = { filename, size: '0 B' };
   if (addUrl.value.trim())    entry.url    = addUrl.value.trim();
