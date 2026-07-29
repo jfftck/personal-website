@@ -309,6 +309,36 @@ html, body {
 .item-text { min-width: 0; flex: 1; }
 
 /* ── Thumbnail (pictures / videos) ───────────────────────── */
+.item-thumb-wrap {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.item-thumb-wrap .item-thumb {
+  width: 100%;
+  height: 100%;
+}
+
+.item-thumb-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.40);
+  border-radius: calc(var(--radius) * 0.6);
+  pointer-events: none;
+  color: #fff;
+}
+
+.item-thumb-play svg {
+  width: 16px;
+  height: 16px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+}
+
 .item-thumb {
   width: 40px;
   height: 40px;

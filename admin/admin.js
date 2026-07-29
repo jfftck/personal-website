@@ -325,7 +325,19 @@ function renderList() {
         thumb.classList.add('item-thumb--empty');
         thumb.removeAttribute('src');
       });
-      info.appendChild(thumb);
+
+      if (activeSection === 'videos') {
+        const thumbWrap = document.createElement('div');
+        thumbWrap.className = 'item-thumb-wrap';
+        thumbWrap.appendChild(thumb);
+        const playOverlay = document.createElement('div');
+        playOverlay.className = 'item-thumb-play';
+        playOverlay.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>`;
+        thumbWrap.appendChild(playOverlay);
+        info.appendChild(thumbWrap);
+      } else {
+        info.appendChild(thumb);
+      }
     }
 
     // Text stack (filename + meta)
