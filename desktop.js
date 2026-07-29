@@ -365,6 +365,7 @@ function openAppMenu() {
   appMenu.removeAttribute('hidden');
   appMenuBtn.setAttribute('aria-expanded', 'true');
   closeHelp();
+  populateLauncherFiles();
   requestAnimationFrame(() => { const f = appMenu.querySelector('.app-launcher'); if (f) f.focus(); });
 }
 function closeAppMenu() {
@@ -390,6 +391,83 @@ function requestOpenFile(file) {
   const appType   = typeToApp[file.type] || 'doc-viewer';
   const newId = openApp(appType);
   if (newId) S.appApis[newId]?.openFile(file.url, file.displayName, file.poster);
+}
+
+// ── App-launcher file listing ─────────────────────────────────
+const _launcherCache  = {};
+const appFilesSection = $('app-files-section');
+const docFilesList    = $('doc-files-list');
+const picFilesList    = $('pic-files-list');
+const docFilesCount   = $('doc-files-count');
+const picFilesCount   = $('pic-files-count');
+
+function parseManifestForLauncher(folder, entries) {
+  return entries.map(entry => {
+    const { filename, url: mUrl } = entry;
+    const m = filename.match(/^(\d{4})(\d{2})(\d{2})_(.+)$/);
+    if (!m) return null;
+    const [, , , , rest] = m;
+    const dotIdx  = rest.lastIndexOf('.');
+    const rawName = dotIdx >= 0 ? rest.slice(0, dotIdx) : rest;
+    const displayName = rawName.replace(/_/g, ' ');
+    const url = mUrl || `${folder}/${encodeURIComponent(filename)}`;
+    const extRaw = dotIdx >= 0 ? rest.slice(dotIdx + 1).toLowerCase() : '';
+    const IMG_EXTS = ['jpg','jpeg','png','gif','webp','svg'];
+    const type = IMG_EXTS.includes(extRaw) ? 'image' : 'document';
+    return { displayName, url, type, folder };
+  }).filter(Boolean);
+}
+
+async function ensureLauncherManifest(folder) {
+  if (_launcherCache[folder] !== undefined) return _launcherCache[folder];
+  try {
+    const r = await fetch(`${folder}/manifest.json`);
+    if (!r.ok) throw new Error();
+    _launcherCache[folder] = parseManifestForLauncher(folder, await r.json());
+  } catch {
+    _launcherCache[folder] = [];
+  }
+  return _launcherCache[folder];
+}
+
+function buildFileLauncherBtn(file, iconSvg, iconColor) {
+  const btn = document.createElement('button');
+  btn.className = 'app-file-btn';
+  btn.setAttribute('title', `Open "${file.displayName}"`);
+  btn.innerHTML = `
+    <span class="app-file-icon" style="color:${iconColor}" aria-hidden="true">${iconSvg}</span>
+    <span class="app-file-name">${file.displayName}</span>
+  `;
+  btn.addEventListener('click', () => {
+    requestOpenFile(file);
+    closeAppMenu();
+  });
+  return btn;
+}
+
+async function populateLauncherFiles() {
+  const DOC_ICON = `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`;
+  const IMG_ICON = `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`;
+
+  const [docs, posts, pics] = await Promise.all([
+    ensureLauncherManifest('documents'),
+    ensureLauncherManifest('posts'),
+    ensureLauncherManifest('pictures'),
+  ]);
+
+  const allDocs = [...docs, ...posts];
+
+  docFilesList.innerHTML = '';
+  allDocs.forEach(f => docFilesList.appendChild(buildFileLauncherBtn(f, DOC_ICON, 'var(--accent-light)')));
+  docFilesCount.textContent = allDocs.length ? `${allDocs.length}` : '';
+
+  picFilesList.innerHTML = '';
+  pics.forEach(f => picFilesList.appendChild(buildFileLauncherBtn(f, IMG_ICON, '#a78bfa')));
+  picFilesCount.textContent = pics.length ? `${pics.length}` : '';
+
+  if (allDocs.length > 0 || pics.length > 0) {
+    appFilesSection.removeAttribute('hidden');
+  }
 }
 
 // ── App context (passed to all app builders) ──────────────────
