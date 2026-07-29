@@ -498,6 +498,9 @@ addForm.addEventListener('submit', async e => {
     renderList();
     hideAddForm();
     toast(`Added ${filename}`);
+    if (section.mdEdit && filename.endsWith('.md')) {
+      openEditor(section.dir, filename);
+    }
   } catch (e2) {
     toast(`Save failed: ${e2.message}`, true);
   }
