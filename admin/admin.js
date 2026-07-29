@@ -84,11 +84,12 @@ const SECTIONS = {
 const API = (window.ADMIN_API_BASE != null) ? window.ADMIN_API_BASE : '';
 
 // ── State ─────────────────────────────────────────────────────
-let activeSection = 'posts';
-let manifests     = {};
-let editorOpen    = false;
-let editorDirty   = false;
-let editorEntry   = null; // { dir, filename }
+let activeSection     = 'posts';
+let manifests         = {};
+let editorOpen        = false;
+let editorDirty       = false;
+let editorEntry       = null; // { dir, filename }
+let inlineEditPromise = null; // non-null while an inline-edit input is active
 
 // ── Drag-to-reorder state ─────────────────────────────────────
 let dragSrcIdx = -1;
@@ -198,6 +199,11 @@ function makeEditable(entry, dir, key, opts = {}) {
     input.focus();
     input.select();
 
+    // Track that an inline edit is in progress so beforeunload and switchTab
+    // can guard against losing the edit.
+    let resolveInlineEdit;
+    inlineEditPromise = new Promise(resolve => { resolveInlineEdit = resolve; });
+
     let committed = false;
     async function commit() {
       if (committed) return;
@@ -218,13 +224,20 @@ function makeEditable(entry, dir, key, opts = {}) {
           toast(`Save failed: ${e.message}`, true);
         }
       }
+      inlineEditPromise = null;
+      resolveInlineEdit();
       renderList();
     }
 
     input.addEventListener('blur',    () => commit());
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter')  { e.preventDefault(); input.blur(); }
-      if (e.key === 'Escape') { committed = true; renderList(); }
+      if (e.key === 'Escape') {
+        committed = true;
+        inlineEditPromise = null;
+        resolveInlineEdit();
+        renderList();
+      }
     });
   });
 
@@ -641,6 +654,12 @@ tabBtns.forEach(btn => {
 });
 
 async function switchTab(section) {
+  // Auto-commit any active inline-edit input before switching tabs.
+  if (inlineEditPromise) {
+    const active = document.activeElement;
+    if (active && active.classList.contains('inline-edit-input')) active.blur();
+    await inlineEditPromise;
+  }
   if (editorDirty && !confirm('You have unsaved changes. Discard them?')) return;
   closeEditor();
 
@@ -661,6 +680,15 @@ async function switchTab(section) {
     manifestList.innerHTML = `<div class="empty-state"><div>Error: ${esc(e.message)}</div></div>`;
   }
 }
+
+// ── Unload guard ──────────────────────────────────────────────
+// Warn before navigating away or closing the tab while an inline URL/poster
+// edit is in progress (similar to the existing editorDirty guard).
+window.addEventListener('beforeunload', e => {
+  if (inlineEditPromise) {
+    e.preventDefault();
+  }
+});
 
 // ── Keyboard ──────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
