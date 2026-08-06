@@ -1142,10 +1142,7 @@ function closeWelcomeWindow() {
 
 // ── Empty state ───────────────────────────────────────────────
 function populateEmptyState() {
-  emptyState.innerHTML = `
-    <div class="welcome-screen">
-      <img src="jmt.svg" class="welcome-logo" alt="" aria-hidden="true" width="72" height="72">
-    </div>`;
+  emptyState.innerHTML = '';
 }
 
 // ── Launcher flash + tooltip after "Get started" ──────────────
