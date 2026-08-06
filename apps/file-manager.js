@@ -167,8 +167,20 @@ export function buildFileManager(id, ctx) {
     row.setAttribute('role', 'button');
     row.setAttribute('tabindex', '0');
     row.setAttribute('title', file.displayName);
+
+    const iconColor = TYPE_COLOR[file.type] || TYPE_COLOR.document;
+    const iconSvg   = TYPE_ICONS[file.type] || TYPE_ICONS.document;
+    const iconHtml  = file.type === 'video'
+      ? `<span class="fm-list-icon fm-list-icon--video" style="color:${iconColor}">
+           ${iconSvg}
+           <span class="fm-list-play" aria-hidden="true">
+             <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>
+           </span>
+         </span>`
+      : `<span class="fm-list-icon" style="color:${iconColor}">${iconSvg}</span>`;
+
     row.innerHTML = `
-      <span class="fm-list-icon" style="color:${TYPE_COLOR[file.type] || TYPE_COLOR.document}">${TYPE_ICONS[file.type] || TYPE_ICONS.document}</span>
+      ${iconHtml}
       <span class="fm-list-name">${file.displayName}</span>
       <span class="fm-list-meta">${fmDate(file.date)}</span>
       <span class="fm-list-size">${file.size}</span>
