@@ -67,73 +67,130 @@
     </div>
   </header>
 
-  <div id="help-overlay" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" hidden>
+  <div id="help-overlay" role="dialog" aria-modal="true" aria-label="Help" hidden>
     <div id="help-inner">
       <div class="help-header">
-        <h2 class="help-title">Keyboard Shortcuts</h2>
-        <button id="help-close-btn" class="icon-btn" aria-label="Close keyboard shortcuts">
+        <h2 class="help-title">Help</h2>
+        <button id="help-close-btn" class="icon-btn" aria-label="Close help">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <line x1="3" y1="3" x2="13" y2="13"/>
             <line x1="13" y1="3" x2="3" y2="13"/>
           </svg>
         </button>
       </div>
-      <dl class="shortcut-list">
-        <div class="shortcut-row">
-          <dt><kbd>←</kbd> <kbd>→</kbd></dt>
-          <dd>Focus previous / next app</dd>
+      <div class="help-tabs" role="tablist">
+        <button class="help-tab active" data-panel="shortcuts" role="tab" aria-selected="true">Keyboard Shortcuts</button>
+        <button class="help-tab" data-panel="pointer" role="tab" aria-selected="false">Touch &amp; Mouse</button>
+      </div>
+
+      <!-- Panel: Keyboard Shortcuts -->
+      <div class="help-panel" id="help-panel-shortcuts">
+        <dl class="shortcut-list">
+          <div class="shortcut-row">
+            <dt><kbd>←</kbd> <kbd>→</kbd></dt>
+            <dd>Focus previous / next app</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>Tab</kbd> / <kbd>Shift+Tab</kbd></dt>
+            <dd>Cycle through open apps</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>⌘</kbd><kbd>1</kbd>–<kbd>9</kbd></dt>
+            <dd>Focus app by number</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>⌘</kbd><kbd>&lt;</kbd> / <kbd>⌘</kbd><kbd>&gt;</kbd></dt>
+            <dd>Resize window narrower / wider</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>[</kbd></dt>
+            <dd>Consume window from left column</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>]</kbd></dt>
+            <dd>Expel window to new column</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>⌘</kbd><kbd>D</kbd></dt>
+            <dd>Open app launcher</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>?</kbd></dt>
+            <dd>Show this help</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>Esc</kbd></dt>
+            <dd>Close overlay / menu</dd>
+          </div>
+        </dl>
+        <p class="help-note">On Windows / Linux, use <kbd>Ctrl</kbd> instead of <kbd>⌘</kbd>.</p>
+        <div class="help-actions">
+          <button id="help-open-launcher" class="help-launch-btn">
+            <svg width="16" height="16" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+              <rect x="1" y="1" width="6" height="6" rx="1.25"/>
+              <rect x="11" y="1" width="6" height="6" rx="1.25"/>
+              <rect x="1" y="11" width="6" height="6" rx="1.25"/>
+              <rect x="11" y="11" width="6" height="6" rx="1.25"/>
+            </svg>
+            Open App Launcher
+          </button>
         </div>
-        <div class="shortcut-row">
-          <dt><kbd>Tab</kbd> / <kbd>Shift+Tab</kbd></dt>
-          <dd>Cycle through open apps</dd>
-        </div>
-        <div class="shortcut-row">
-          <dt><kbd>⌘</kbd><kbd>1</kbd>–<kbd>9</kbd></dt>
-          <dd>Focus app by number</dd>
-        </div>
-        <div class="shortcut-row">
-          <dt><kbd>⌘</kbd><kbd>&lt;</kbd> / <kbd>⌘</kbd><kbd>&gt;</kbd></dt>
-          <dd>Resize window narrower / wider</dd>
-        </div>
-        <div class="shortcut-row">
-          <dt><kbd>[</kbd></dt>
-          <dd>Consume window from left column</dd>
-        </div>
-        <div class="shortcut-row">
-          <dt><kbd>]</kbd></dt>
-          <dd>Expel window to new column</dd>
-        </div>
-        <div class="shortcut-row">
-          <dt><kbd>⌘</kbd><kbd>D</kbd></dt>
-          <dd>Open app launcher</dd>
-        </div>
-        <div class="shortcut-row">
-          <dt><kbd>?</kbd></dt>
-          <dd>Show this help</dd>
-        </div>
-        <div class="shortcut-row">
-          <dt><kbd>Esc</kbd></dt>
-          <dd>Close overlay / menu</dd>
-        </div>
-      </dl>
-      <p class="help-note">On Windows / Linux, use <kbd>Ctrl</kbd> instead of <kbd>⌘</kbd>.</p>
-      <div class="help-actions">
-        <button id="help-open-launcher" class="help-launch-btn">
-          <svg width="16" height="16" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
-            <rect x="1" y="1" width="6" height="6" rx="1.25"/>
-            <rect x="11" y="1" width="6" height="6" rx="1.25"/>
-            <rect x="1" y="11" width="6" height="6" rx="1.25"/>
-            <rect x="11" y="11" width="6" height="6" rx="1.25"/>
-          </svg>
-          Open App Launcher
-        </button>
+      </div>
+
+      <!-- Panel: Touch & Mouse -->
+      <div class="help-panel" id="help-panel-pointer" hidden>
+        <p class="help-panel-section-label">Touch</p>
+        <dl class="shortcut-list">
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Tap</span></dt>
+            <dd>Open an app or select a file</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Drag header</span></dt>
+            <dd>Move a window into another column</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Swipe left / right</span></dt>
+            <dd>Pan between columns</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Tap backdrop</span></dt>
+            <dd>Close the open menu or overlay</dd>
+          </div>
+        </dl>
+        <p class="help-panel-section-label" style="margin-top:1.25rem">Mouse</p>
+        <dl class="shortcut-list">
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Click</span></dt>
+            <dd>Open an app or select a file</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Drag header</span></dt>
+            <dd>Move a window into another column</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Scroll wheel</span></dt>
+            <dd>Pan the desktop left and right</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Click backdrop</span></dt>
+            <dd>Close the open menu or overlay</dd>
+          </div>
+        </dl>
       </div>
     </div>
   </div>
 
   <div id="app-menu" role="dialog" aria-modal="true" aria-label="App launcher" hidden>
     <div id="app-menu-inner">
-      <p class="app-menu-heading">Apps</p>
+      <div class="app-menu-header">
+        <p class="app-menu-heading" style="margin:0">Apps</p>
+        <button id="app-menu-help-btn" class="icon-btn" aria-label="Help">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+          </svg>
+        </button>
+      </div>
       <div id="app-list">
         <button class="app-launcher" data-type="welcome">
           <span class="app-launcher-icon" aria-hidden="true">

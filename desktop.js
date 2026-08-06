@@ -610,6 +610,24 @@ winMenuBtn.addEventListener('click', e => {
 });
 helpOpenLauncher.addEventListener('click', () => { closeHelp(); openAppMenu(); });
 
+// ── App-menu help button → open help overlay ──────────────────
+$('app-menu-help-btn').addEventListener('click', () => { closeAppMenu(); openHelp(); });
+
+// ── Help overlay tab switching ────────────────────────────────
+document.querySelectorAll('.help-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.help-tab').forEach(t => {
+      t.classList.remove('active');
+      t.setAttribute('aria-selected', 'false');
+    });
+    document.querySelectorAll('.help-panel').forEach(p => p.setAttribute('hidden', ''));
+    tab.classList.add('active');
+    tab.setAttribute('aria-selected', 'true');
+    const panel = document.getElementById('help-panel-' + tab.dataset.panel);
+    if (panel) panel.removeAttribute('hidden');
+  });
+});
+
 document.addEventListener('click', e => {
   // Close app menu when clicking outside
   if (!appMenu.hasAttribute('hidden') &&
