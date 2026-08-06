@@ -47,6 +47,7 @@
   <button class="tab-btn"        role="tab" aria-selected="false" data-section="documents">Documents</button>
   <button class="tab-btn"        role="tab" aria-selected="false" data-section="pictures">Pictures</button>
   <button class="tab-btn"        role="tab" aria-selected="false" data-section="videos">Videos</button>
+  <button class="tab-btn"        role="tab" aria-selected="false" data-section="welcome">Welcome</button>
 </nav>
 
 <main id="main-area" hidden>
@@ -87,6 +88,26 @@
     </form>
 
     <div id="manifest-list" role="list"></div>
+  </div>
+
+  <!-- ── Welcome message editor pane ────────────────────────── -->
+  <div id="welcome-pane" hidden>
+    <div id="welcome-topbar">
+      <span id="welcome-filename">welcome/welcome.md</span>
+      <div class="editor-actions">
+        <button id="welcome-save-btn" class="action-btn primary">Save</button>
+      </div>
+    </div>
+    <div id="welcome-body">
+      <div class="welcome-source-pane">
+        <div class="pane-label">Markdown</div>
+        <textarea id="welcome-textarea" spellcheck="false" autocorrect="off" autocapitalize="off"></textarea>
+      </div>
+      <div class="welcome-preview-pane">
+        <div class="pane-label">Preview</div>
+        <div id="welcome-preview" class="md-body"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ── Markdown editor pane ────────────────────────────────── -->

@@ -94,6 +94,9 @@ let inlineEditPromise = null; // non-null while an inline-edit input is active
 // ── Drag-to-reorder state ─────────────────────────────────────
 let dragSrcIdx = -1;
 
+// ── Welcome editor state ──────────────────────────────────────
+let welcomeDirty = false;
+
 // ── DOM refs ──────────────────────────────────────────────────
 const tabBtns        = document.querySelectorAll('.tab-btn');
 const sectionTitle   = document.getElementById('section-title');
@@ -115,6 +118,10 @@ const editorTextarea = document.getElementById('editor-textarea');
 const editorPreview  = document.getElementById('editor-preview');
 const editorSaveBtn  = document.getElementById('editor-save-btn');
 const editorCloseBtn = document.getElementById('editor-close-btn');
+const welcomePane     = document.getElementById('welcome-pane');
+const welcomeTextarea = document.getElementById('welcome-textarea');
+const welcomePreview  = document.getElementById('welcome-preview');
+const welcomeSaveBtn  = document.getElementById('welcome-save-btn');
 const toastContainer = document.getElementById('toast-container');
 const mainArea       = document.getElementById('main-area');
 const authScreen     = document.getElementById('auth-screen');
@@ -660,6 +667,47 @@ function closeEditor() {
   editorPane.setAttribute('hidden', '');
 }
 
+// ── Welcome editor ────────────────────────────────────────────
+const listPane = document.getElementById('list-pane');
+
+async function openWelcomeEditor() {
+  try {
+    const res  = await apiFetch('/api/welcome');
+    const text = await res.text();
+    welcomeTextarea.value = text;
+    welcomeDirty = false;
+    updateWelcomePreview();
+  } catch (e) {
+    toast(`Could not load welcome.md: ${e.message}`, true);
+  }
+}
+
+function updateWelcomePreview() {
+  welcomePreview.innerHTML = renderMarkdown(welcomeTextarea.value);
+}
+
+welcomeTextarea.addEventListener('input', () => {
+  welcomeDirty = true;
+  updateWelcomePreview();
+});
+
+welcomeSaveBtn.addEventListener('click', async () => {
+  welcomeSaveBtn.disabled = true;
+  try {
+    await apiFetch('/api/welcome', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/plain' },
+      body: welcomeTextarea.value,
+    });
+    welcomeDirty = false;
+    toast('Welcome message saved');
+  } catch (e) {
+    toast(`Save failed: ${e.message}`, true);
+  } finally {
+    welcomeSaveBtn.disabled = false;
+  }
+});
+
 // ── Tab switching ─────────────────────────────────────────────
 tabBtns.forEach(btn => {
   btn.addEventListener('click', () => switchTab(btn.dataset.section));
@@ -673,6 +721,7 @@ async function switchTab(section) {
     await inlineEditPromise;
   }
   if (editorDirty && !confirm('You have unsaved changes. Discard them?')) return;
+  if (welcomeDirty && !confirm('You have unsaved changes to the welcome message. Discard them?')) return;
   closeEditor();
 
   activeSection = section;
@@ -681,6 +730,18 @@ async function switchTab(section) {
     b.classList.toggle('active', active);
     b.setAttribute('aria-selected', active ? 'true' : 'false');
   });
+
+  // Show/hide the welcome pane vs the regular list pane
+  if (section === 'welcome') {
+    listPane.hidden = true;
+    welcomePane.removeAttribute('hidden');
+    welcomeDirty = false;
+    await openWelcomeEditor();
+    return;
+  }
+
+  welcomePane.setAttribute('hidden', '');
+  listPane.hidden = false;
 
   hideAddForm();
   manifestList.innerHTML = '<div class="empty-state"><div>Loading…</div></div>';
@@ -697,7 +758,7 @@ async function switchTab(section) {
 // Warn before navigating away or closing the tab while an inline URL/poster
 // edit is in progress (similar to the existing editorDirty guard).
 window.addEventListener('beforeunload', e => {
-  if (inlineEditPromise) {
+  if (inlineEditPromise || welcomeDirty) {
     e.preventDefault();
   }
 });
@@ -711,9 +772,9 @@ document.addEventListener('keydown', e => {
       closeEditor();
     }
   }
-  if ((e.ctrlKey || e.metaKey) && e.key === 's' && editorOpen) {
-    e.preventDefault();
-    editorSaveBtn.click();
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    if (editorOpen) { e.preventDefault(); editorSaveBtn.click(); }
+    else if (activeSection === 'welcome') { e.preventDefault(); welcomeSaveBtn.click(); }
   }
 });
 

@@ -276,6 +276,33 @@ async function handle(req, res) {
   }
 
   // ── API routes (all require auth) ──────────────────────────
+
+  // Welcome message — read/write welcome/welcome.md
+  if (pathname === '/api/welcome') {
+    if (!await requireAuth(req, res)) return;
+    const welcomePath = path.join(ROOT, 'welcome', 'welcome.md');
+
+    if (req.method === 'GET') {
+      try {
+        const text = fs.readFileSync(welcomePath, 'utf8');
+        res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end(text); return;
+      } catch { err(res, 404, 'welcome.md not found'); return; }
+    }
+
+    if (req.method === 'PUT') {
+      try {
+        const body = await readBody(req);
+        const text = body.toString('utf8');
+        fs.mkdirSync(path.dirname(welcomePath), { recursive: true });
+        fs.writeFileSync(welcomePath, text, 'utf8');
+        json(res, 200, { ok: true }); return;
+      } catch (e) { err(res, 500, e.message); return; }
+    }
+
+    err(res, 405, 'Method not allowed'); return;
+  }
+
   const mManifest = pathname.match(/^\/api\/manifest\/([^/]+)$/);
   if (mManifest) {
     if (!await requireAuth(req, res)) return;
