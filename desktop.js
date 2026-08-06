@@ -856,7 +856,7 @@ function _wireOvDrag(handle, appId, layer) {
     ghost.style.top  = (e.clientY - 14) + 'px';
     layer.querySelectorAll('.ov-drag-handle').forEach(h => h.classList.remove('drop-above', 'drop-below'));
     const t = _ovFindDrop(e.clientX, e.clientY, appId);
-    if (t) t.el.classList.add(t.pos === 'above' ? 'drop-above' : 'drop-below');
+    if (t?.kind === 'onto') t.el.classList.add(t.pos === 'above' ? 'drop-above' : 'drop-below');
   });
 
   handle.addEventListener('pointerup', e => {
