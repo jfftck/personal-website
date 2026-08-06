@@ -1067,24 +1067,52 @@ function closeWinMenu() {
 }
 
 // ── Welcome floating window ───────────────────────────────────
-let _welcomeBodyLoaded = false;
+const _welcomeTabs = {
+  welcome: { url: 'posts/20240101_Welcome.md',  html: null },
+  about:   { url: 'posts/20240115_About_Me.md', html: null },
+  links:   { url: 'posts/20240201_My_Sites.md', html: null },
+};
+let _welcomeActiveTab = 'welcome';
+
+function _selectWelcomeTab(name) {
+  _welcomeActiveTab = name;
+  document.querySelectorAll('#welcome-tabs .welcome-tab').forEach(btn => {
+    const active = btn.dataset.tab === name;
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    btn.classList.toggle('active', active);
+  });
+
+  const body = document.getElementById('welcome-win-body');
+  if (!body) return;
+
+  const tab = _welcomeTabs[name];
+  if (!tab) return;
+
+  if (tab.html !== null) {
+    body.innerHTML = tab.html;
+    body.scrollTop = 0;
+    return;
+  }
+
+  body.innerHTML = '<p class="doc-status">Loading\u2026</p>';
+  fetch(tab.url)
+    .then(r => r.ok ? r.text() : Promise.reject(r.status))
+    .then(text => {
+      tab.html = renderMarkdown(text);
+      if (_welcomeActiveTab === name) { body.innerHTML = tab.html; body.scrollTop = 0; }
+    })
+    .catch(() => {
+      tab.html = '';
+      if (_welcomeActiveTab === name) body.innerHTML = '';
+    });
+}
 
 function openWelcomeWindow() {
   const overlay = document.getElementById('welcome-overlay');
   if (!overlay) return;
   overlay.removeAttribute('hidden');
   overlay.removeAttribute('aria-hidden');
-
-  if (!_welcomeBodyLoaded) {
-    _welcomeBodyLoaded = true;
-    const body = document.getElementById('welcome-win-body');
-    if (body) {
-      fetch('welcome/welcome.md')
-        .then(r => r.ok ? r.text() : Promise.reject(r.status))
-        .then(text => { body.innerHTML = renderMarkdown(text); })
-        .catch(() => { /* header content is sufficient on failure */ });
-    }
-  }
+  _selectWelcomeTab(_welcomeActiveTab);
 }
 
 function closeWelcomeWindow() {
@@ -1102,10 +1130,14 @@ function populateEmptyState() {
     </div>`;
 }
 
-// ── Welcome window close wiring ───────────────────────────────
+// ── Welcome window wiring ─────────────────────────────────────
 document.getElementById('welcome-win-close')?.addEventListener('click', closeWelcomeWindow);
 document.getElementById('welcome-overlay')?.addEventListener('click', e => {
   if (e.target === e.currentTarget) closeWelcomeWindow();
+});
+document.getElementById('welcome-tabs')?.addEventListener('click', e => {
+  const btn = e.target.closest('.welcome-tab');
+  if (btn?.dataset.tab) _selectWelcomeTab(btn.dataset.tab);
 });
 
 // ── Init ──────────────────────────────────────────────────────

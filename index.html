@@ -210,7 +210,12 @@
           <p class="welcome-win-tagline">Documents, photos &amp; media</p>
         </div>
       </div>
-      <div id="welcome-win-body" class="doc-body"></div>
+      <nav id="welcome-tabs" role="tablist" aria-label="Welcome sections">
+        <button class="welcome-tab" role="tab" data-tab="welcome" aria-selected="true">Welcome</button>
+        <button class="welcome-tab" role="tab" data-tab="about"   aria-selected="false">About</button>
+        <button class="welcome-tab" role="tab" data-tab="links"   aria-selected="false">Links</button>
+      </nav>
+      <div id="welcome-win-body" class="doc-body" role="tabpanel"></div>
       <div id="welcome-win-footer">
         <button id="welcome-win-close" class="welcome-win-btn">Get started</button>
       </div>
