@@ -29,14 +29,17 @@ export function buildImgViewer(id, ctx) {
   let isPanning = false, panStartX = 0, panStartY = 0, panOriginX = 0, panOriginY = 0;
   let pinching = false, pinchDist0 = 0, scale0 = 1;
   let currentFile = null;
-  let gallery     = [];   // loaded from manifest
-  let galleryIdx  = 0;    // current index into gallery
+  let gallery     = [];
+  let galleryIdx  = 0;
+  let sidebarOpen = false;
 
   const el = document.createElement('div');
 
   const toolbar = document.createElement('div');
   toolbar.className = 'app-toolbar';
   toolbar.innerHTML = `
+    ${toolBtn('open',     'open',     'Browse pictures')}
+    <span class="toolbar-sep"></span>
     ${toolBtn('prev',     'prev',     'Previous image')}
     <span class="img-counter" aria-live="polite"></span>
     ${toolBtn('next',     'next',     'Next image')}
@@ -52,8 +55,19 @@ export function buildImgViewer(id, ctx) {
   const counterEl = toolbar.querySelector('.img-counter');
 
   const content = document.createElement('div');
-  content.className = 'app-content';
+  content.className = 'app-content doc-layout';
 
+  // ── Sidebar ────────────────────────────────────────────────────
+  const sidebar = document.createElement('div');
+  sidebar.className = 'doc-sidebar';
+  sidebar.setAttribute('aria-label', 'Picture list');
+  sidebar.hidden = true;
+
+  const sidebarList = document.createElement('div');
+  sidebarList.className = 'doc-sidebar-list';
+  sidebar.appendChild(sidebarList);
+
+  // ── Viewport ───────────────────────────────────────────────────
   const viewport = document.createElement('div');
   viewport.className = 'img-viewport';
 
@@ -73,18 +87,18 @@ export function buildImgViewer(id, ctx) {
 
   // ── Gallery navigation ────────────────────────────────────────
   function updateCounter() {
-    if (gallery.length === 0) {
-      counterEl.textContent = '';
-      return;
-    }
-    counterEl.textContent = `${galleryIdx + 1} / ${gallery.length}`;
+    counterEl.textContent = gallery.length ? `${galleryIdx + 1} / ${gallery.length}` : '';
   }
 
   function updateNavButtons() {
-    const prevBtn = toolbar.querySelector('[data-action="prev"]');
-    const nextBtn = toolbar.querySelector('[data-action="next"]');
-    if (prevBtn) prevBtn.disabled = gallery.length <= 1;
-    if (nextBtn) nextBtn.disabled = gallery.length <= 1;
+    toolbar.querySelector('[data-action="prev"]')?.toggleAttribute('disabled', gallery.length <= 1);
+    toolbar.querySelector('[data-action="next"]')?.toggleAttribute('disabled', gallery.length <= 1);
+  }
+
+  function updateSidebarActive() {
+    sidebarList.querySelectorAll('.doc-sidebar-item').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.url === currentFile?.url);
+    });
   }
 
   function showGalleryItem(idx) {
@@ -97,16 +111,49 @@ export function buildImgViewer(id, ctx) {
     img.alt = item.displayName;
     resetTransform();
     updateCounter();
+    updateSidebarActive();
+  }
+
+  // ── Sidebar rendering ─────────────────────────────────────────
+  function renderSidebar(pics) {
+    sidebarList.innerHTML = '';
+    const label = document.createElement('p');
+    label.className = 'doc-sidebar-section';
+    label.textContent = 'Pictures';
+    sidebarList.appendChild(label);
+    for (const pic of pics) {
+      const btn = document.createElement('button');
+      btn.className   = 'doc-sidebar-item';
+      btn.dataset.url = pic.url;
+      btn.setAttribute('title', pic.displayName);
+      btn.innerHTML = `
+        <span class="doc-sidebar-name">${pic.displayName}</span>
+        <span class="doc-sidebar-date">${pic.date}</span>
+      `;
+      btn.addEventListener('click', () => {
+        const gIdx = gallery.findIndex(g => g.url === pic.url);
+        if (gIdx >= 0) showGalleryItem(gIdx);
+      });
+      sidebarList.appendChild(btn);
+    }
+    updateSidebarActive();
+  }
+
+  function toggleSidebar() {
+    sidebarOpen = !sidebarOpen;
+    sidebar.hidden = !sidebarOpen;
+    const btn = toolbar.querySelector('[data-action="open"]');
+    if (btn) btn.setAttribute('aria-pressed', String(sidebarOpen));
   }
 
   // ── Manifest loading ──────────────────────────────────────────
   async function loadGallery() {
     gallery = await fetchPicturesManifest();
     updateNavButtons();
+    renderSidebar(gallery);
     if (gallery.length > 0 && !currentFile) {
       showGalleryItem(0);
     } else if (gallery.length === 0) {
-      // Fallback: keep a placeholder so the viewer isn't blank
       img.src = 'https://picsum.photos/seed/default/1200/800';
       img.alt = 'Sample image';
       counterEl.textContent = '';
@@ -116,7 +163,6 @@ export function buildImgViewer(id, ctx) {
   // ── Public API ────────────────────────────────────────────────
   ctx.appApis[id] = {
     openFile: (url, name) => {
-      // If the URL matches a gallery item, navigate to it
       const gIdx = gallery.findIndex(g => g.url === url);
       if (gIdx >= 0) {
         showGalleryItem(gIdx);
@@ -127,6 +173,7 @@ export function buildImgViewer(id, ctx) {
         img.alt = name;
         resetTransform();
         counterEl.textContent = '';
+        updateSidebarActive();
       }
     },
   };
@@ -136,11 +183,12 @@ export function buildImgViewer(id, ctx) {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     switch (btn.dataset.action) {
+      case 'open':     toggleSidebar(); break;
       case 'prev':     showGalleryItem(galleryIdx - 1); break;
       case 'next':     showGalleryItem(galleryIdx + 1); break;
-      case 'zoom-in':  scale = Math.min(scale * 1.25, 8);  applyTransform(); break;
+      case 'zoom-in':  scale = Math.min(scale * 1.25, 8);   applyTransform(); break;
       case 'zoom-out': scale = Math.max(scale / 1.25, 0.1); applyTransform(); break;
-      case 'rotate':   rot = (rot + 90) % 360;             applyTransform(); break;
+      case 'rotate':   rot = (rot + 90) % 360;              applyTransform(); break;
       case 'share': {
         const url = currentFile ? new URL(currentFile.url, location.href).href : img.src;
         if (navigator.share) {
@@ -206,6 +254,7 @@ export function buildImgViewer(id, ctx) {
   // ── Assemble DOM ──────────────────────────────────────────────
   transform.appendChild(img);
   viewport.appendChild(transform);
+  content.appendChild(sidebar);
   content.appendChild(viewport);
   el.appendChild(toolbar);
   el.appendChild(content);
