@@ -232,10 +232,13 @@ body {
    ------------------------------------------------------------ */
 #app-menu {
   position: fixed;
-  inset: 3.5rem 0 0;
+  inset: 3.5rem 0.5rem 0.5rem;
   background-color: var(--overlay-bg);
   -webkit-backdrop-filter: blur(20px) saturate(0.6);
   backdrop-filter: blur(20px) saturate(0.6);
+  border: 1px solid var(--topbar-border);
+  border-radius: 0.875rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
   z-index: 900;
   display: flex;
   align-items: flex-start;
@@ -1194,10 +1197,13 @@ body.mod-overview .app-window.focused {
 
 #help-overlay {
   position: fixed;
-  inset: 3.5rem 0 0;
+  inset: 3.5rem 0.5rem 0.5rem;
   background-color: var(--overlay-bg);
   -webkit-backdrop-filter: blur(20px) saturate(0.6);
   backdrop-filter: blur(20px) saturate(0.6);
+  border: 1px solid var(--topbar-border);
+  border-radius: 0.875rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
   z-index: 950;
   display: flex;
   align-items: flex-start;
