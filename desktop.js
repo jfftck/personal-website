@@ -562,18 +562,29 @@ function restoreSession() {
 
 // ── Column event wiring (click-to-focus) ─────────────────────
 function wireColEvents(colEl) {
+  // In overview: block scroll/interaction on non-focused windows but allow the
+  // focused window to scroll naturally; exit/focus handled by the click event.
   colEl.addEventListener('pointerdown', e => {
     const appEl = e.target.closest('.app-window');
-    if (appEl?.dataset.id) {
-      if (document.body.classList.contains('mod-overview')) {
-        e.preventDefault();
-        if (appEl.dataset.id === S.focusedId) {
-          exitOverview();
-        } else {
-          focusApp(appEl.dataset.id); // positionOverview called by focusApp via rAF
-        }
-        return;
-      }
+    if (!appEl?.dataset.id) return;
+    if (document.body.classList.contains('mod-overview')) {
+      if (appEl.dataset.id !== S.focusedId) e.preventDefault();
+      return; // click event handles exit / focus-change
+    }
+    focusApp(appEl.dataset.id);
+  }, { capture: true });
+
+  // Click fires only after a tap/click (not after a scroll drag), so this
+  // naturally handles "exit overview on tap, not on hold/scroll".
+  colEl.addEventListener('click', e => {
+    if (!document.body.classList.contains('mod-overview')) return;
+    const appEl = e.target.closest('.app-window');
+    if (!appEl?.dataset.id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (appEl.dataset.id === S.focusedId) {
+      exitOverview();
+    } else {
       focusApp(appEl.dataset.id);
     }
   }, { capture: true });
@@ -689,25 +700,26 @@ function positionOverview() {
   const SCALE    = 0.5;
   const TOPBAR_H = 48;
 
-  // Reset transform before measuring natural positions (no-transition avoids flicker)
+  // Reset transform and measure NATURAL positions before any scaling.
+  // The scrollable wrapper can clip children, making post-transform
+  // getBoundingClientRect().width return 0 — measuring here avoids that.
   appStrip.classList.add('ov-notransition');
   appStrip.style.transform      = '';
   appStrip.style.transformOrigin = '';
   void appStrip.offsetWidth; // force reflow
 
   const stripRect = appStrip.getBoundingClientRect();
-  let tX = 0, tY = 0;
+  const natColRects = S.columns.map(col => col.el.getBoundingClientRect());
+  const natWinRects = new Map(S.apps.map(app => [app.id, app.el.getBoundingClientRect()]));
 
+  let tX = 0, tY = 0;
   if (S.focusedId) {
-    const fApp = S.apps.find(a => a.id === S.focusedId);
-    if (fApp) {
-      const wr   = fApp.el.getBoundingClientRect();
-      const wCxS = wr.left + wr.width  / 2 - stripRect.left;
-      const wCyS = wr.top  + wr.height / 2 - stripRect.top;
+    const natWR = natWinRects.get(S.focusedId);
+    if (natWR) {
+      const wCxS = natWR.left + natWR.width  / 2 - stripRect.left;
+      const wCyS = natWR.top  + natWR.height / 2 - stripRect.top;
       const vCX  = window.innerWidth  / 2;
       const vCY  = TOPBAR_H + (window.innerHeight - TOPBAR_H) / 2;
-      // With transform: translate(tX,tY) scale(SCALE), origin 0 0:
-      //   viewport_x = stripRect.left + tX + contentX * SCALE
       tX = vCX - stripRect.left - wCxS * SCALE;
       tY = vCY - stripRect.top  - wCyS * SCALE;
     }
@@ -715,10 +727,10 @@ function positionOverview() {
 
   appStrip.style.transformOrigin = '0 0';
   appStrip.style.transform       = `translate(${tX}px,${tY}px) scale(${SCALE})`;
-  void appStrip.offsetWidth; // commit new transform before re-enabling transition
+  void appStrip.offsetWidth; // commit before re-enabling transition
   appStrip.classList.remove('ov-notransition');
 
-  _buildOverviewControls(stripRect, tX, tY, SCALE);
+  _buildOverviewControls(natColRects, natWinRects, stripRect, tX, tY, SCALE);
 }
 
 function _ovRect(natRect, stripRect, tX, tY, scale) {
@@ -734,46 +746,51 @@ const _ARROW_L = `<svg width="10" height="16" viewBox="0 0 10 16" fill="none" st
 const _ARROW_R = `<svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3,2 8,8 3,14"/></svg>`;
 const _DRAG_IC = `<svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor" aria-hidden="true"><rect y="0" width="14" height="2" rx="1"/><rect y="4" width="14" height="2" rx="1"/><rect y="8" width="14" height="2" rx="1"/></svg>`;
 
-function _buildOverviewControls(stripRect, tX, tY, scale) {
-  // NOTE: this is called AFTER the new transform is applied, so getBoundingClientRect()
-  // returns post-transform viewport coords — exactly what we need for fixed-layer positioning.
+function _buildOverviewControls(natColRects, natWinRects, stripRect, tX, tY, scale) {
   const layer = document.createElement('div');
   layer.id = 'overview-controls';
   document.body.appendChild(layer);
 
-  const order   = getAppOrder();
-  const firstId = order[0];
-  const lastId  = order[order.length - 1];
-
-  S.columns.forEach(col => {
-    const cr   = col.el.getBoundingClientRect(); // visual viewport coords
+  S.columns.forEach((col, ci) => {
+    // Compute visual rect from natural rect using the known transform parameters.
+    // This is reliable even when the scrollable wrapper clips the visual output.
+    const cr = _ovRect(natColRects[ci], stripRect, tX, tY, scale);
     const midY = cr.top + cr.height / 2;
 
-    // Left nav arrow
+    // ── Left arrow: navigate to the column on the left ──
     const lBtn = document.createElement('button');
     lBtn.className = 'ov-arrow';
     lBtn.innerHTML = _ARROW_L;
-    lBtn.setAttribute('aria-label', 'Previous window');
-    lBtn.disabled  = S.focusedId === firstId;
-    lBtn.style.cssText = `left:${cr.left - 40}px;top:${midY - 18}px;`;
-    lBtn.addEventListener('click', e => { e.stopPropagation(); focusPrevApp(); });
+    lBtn.setAttribute('aria-label', 'Previous column');
+    lBtn.disabled = ci === 0;
+    lBtn.style.cssText = `left:${cr.left - 44}px;top:${midY - 18}px;`;
+    lBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const prevCol = S.columns[ci - 1];
+      if (prevCol?.appIds.length) focusApp(prevCol.appIds[0]);
+    });
     layer.appendChild(lBtn);
 
-    // Right nav arrow
+    // ── Right arrow: navigate to the column on the right ──
     const rBtn = document.createElement('button');
     rBtn.className = 'ov-arrow';
     rBtn.innerHTML = _ARROW_R;
-    rBtn.setAttribute('aria-label', 'Next window');
-    rBtn.disabled  = S.focusedId === lastId;
+    rBtn.setAttribute('aria-label', 'Next column');
+    rBtn.disabled = ci === S.columns.length - 1;
     rBtn.style.cssText = `left:${cr.left + cr.width + 8}px;top:${midY - 18}px;`;
-    rBtn.addEventListener('click', e => { e.stopPropagation(); focusNextApp(); });
+    rBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const nextCol = S.columns[ci + 1];
+      if (nextCol?.appIds.length) focusApp(nextCol.appIds[0]);
+    });
     layer.appendChild(rBtn);
 
-    // Drag handle per window
+    // ── Drag handle per window ──
     col.appIds.forEach(appId => {
-      const app = S.apps.find(a => a.id === appId);
-      if (!app) return;
-      const wr = app.el.getBoundingClientRect(); // visual viewport coords
+      const app   = S.apps.find(a => a.id === appId);
+      const natWR = natWinRects.get(appId);
+      if (!app || !natWR) return;
+      const wr = _ovRect(natWR, stripRect, tX, tY, scale);
       const h  = document.createElement('div');
       h.className = 'ov-drag-handle';
       h.dataset.appId = appId;
@@ -785,12 +802,13 @@ function _buildOverviewControls(stripRect, tX, tY, scale) {
     });
   });
 
-  // Width pill above focused window
+  // ── Width pill above the focused window ──
   if (S.focusedId) {
-    const fApp = S.apps.find(a => a.id === S.focusedId);
-    const fCol = fApp ? getAppColumn(S.focusedId) : null;
-    if (fApp && fCol) {
-      const wr   = fApp.el.getBoundingClientRect(); // visual viewport coords
+    const fApp  = S.apps.find(a => a.id === S.focusedId);
+    const fCol  = fApp ? getAppColumn(S.focusedId) : null;
+    const natWR = natWinRects.get(S.focusedId);
+    if (fApp && fCol && natWR) {
+      const wr   = _ovRect(natWR, stripRect, tX, tY, scale);
       const pill = document.createElement('div');
       pill.id    = 'ov-width-pill';
       const active = fCol.widthPreset;
@@ -806,7 +824,8 @@ function _buildOverviewControls(stripRect, tX, tY, scale) {
         pill.appendChild(b);
       });
       const PW = 156;
-      pill.style.cssText = `left:${wr.left + wr.width / 2 - PW / 2}px;top:${wr.top - 52}px;width:${PW}px;`;
+      pill.style.cssText =
+        `left:${wr.left + wr.width / 2 - PW / 2}px;top:${wr.top - 52}px;width:${PW}px;`;
       layer.appendChild(pill);
     }
   }
@@ -845,8 +864,8 @@ function _wireOvDrag(handle, appId, layer) {
     ghost?.remove(); ghost = null;
     handle.classList.remove('dragging');
     layer.querySelectorAll('.ov-drag-handle').forEach(h => h.classList.remove('drop-above', 'drop-below'));
-    const t = _ovFindDrop(e.clientX, e.clientY, appId);
-    if (t) _ovPerformDrop(appId, t.targetId, t.pos);
+    const drop = _ovFindDrop(e.clientX, e.clientY, appId);
+    if (drop) _ovPerformDrop(appId, drop);
     _ovDrag = null;
   });
 
@@ -858,25 +877,71 @@ function _wireOvDrag(handle, appId, layer) {
 }
 
 function _ovFindDrop(x, y, draggedId) {
+  // 1. Try to land on another window's drag handle
   for (const h of document.querySelectorAll('#overview-controls .ov-drag-handle')) {
     const tid = h.dataset.appId;
     if (tid === draggedId) continue;
     const r = h.getBoundingClientRect();
     if (x >= r.left - 60 && x <= r.right + 60 && y >= r.top - 60 && y <= r.bottom + 60) {
-      return { targetId: tid, pos: y < r.top + r.height / 2 ? 'above' : 'below', el: h };
+      return { kind: 'onto', targetId: tid, pos: y < r.top + r.height / 2 ? 'above' : 'below', el: h };
     }
+  }
+  // 2. Drag to empty space — create a new column if the source has >1 window
+  const srcCol = getAppColumn(draggedId);
+  if (srcCol && srcCol.appIds.length > 1) {
+    return { kind: 'new-col', insertX: x };
   }
   return null;
 }
 
-function _ovPerformDrop(draggedId, targetId, pos) {
+function _ovPerformDrop(draggedId, drop) {
+  if (!drop) return;
+
+  if (drop.kind === 'new-col') {
+    const srcCol = getAppColumn(draggedId);
+    if (!srcCol || srcCol.appIds.length <= 1) return;
+
+    // Remove window from source column
+    srcCol.appIds.splice(srcCol.appIds.indexOf(draggedId), 1);
+    const app = S.apps.find(a => a.id === draggedId);
+    app.el.remove();
+    // srcCol still has ≥1 app — don't remove it
+
+    // Build the new column
+    const newColId  = `col-${S.nextColId++}`;
+    const newColEl  = createColEl(newColId);
+    newColEl.style.setProperty('--app-width', `${computeWidth(srcCol.widthPreset)}px`);
+    newColEl.appendChild(app.el);
+    const newCol = { id: newColId, appIds: [draggedId], widthPreset: srcCol.widthPreset, el: newColEl };
+
+    // Find insertion point in the strip by viewport x
+    const refEl = Array.from(appStrip.children).find(c => {
+      const r = c.getBoundingClientRect();
+      return drop.insertX < r.left + r.width / 2;
+    }) || null;
+    appStrip.insertBefore(newColEl, refEl);
+    wireColEvents(newColEl);
+
+    // Rebuild S.columns from DOM order so indices stay in sync
+    const colMap = new Map(S.columns.map(c => [c.el, c]));
+    colMap.set(newColEl, newCol);
+    S.columns = Array.from(appStrip.children).map(el => colMap.get(el)).filter(Boolean);
+
+    saveSession();
+    updateTopBar();
+    updateStripLayout();
+    requestAnimationFrame(() => positionOverview());
+    return;
+  }
+
+  // kind === 'onto' — reorder within/across existing columns
+  const { targetId, pos } = drop;
   if (draggedId === targetId) return;
   const srcCol = getAppColumn(draggedId);
   const dstCol = getAppColumn(targetId);
   if (!srcCol || !dstCol) return;
 
-  const srcIdx = srcCol.appIds.indexOf(draggedId);
-  srcCol.appIds.splice(srcIdx, 1);
+  srcCol.appIds.splice(srcCol.appIds.indexOf(draggedId), 1);
   const app = S.apps.find(a => a.id === draggedId);
   app.el.remove();
 
@@ -891,9 +956,7 @@ function _ovPerformDrop(draggedId, targetId, pos) {
   const dstIdx   = freshDst.appIds.indexOf(targetId);
   const insertAt = pos === 'above' ? dstIdx : dstIdx + 1;
   freshDst.appIds.splice(insertAt, 0, draggedId);
-
-  const winEls = freshDst.el.querySelectorAll('.app-window');
-  freshDst.el.insertBefore(app.el, winEls[insertAt] || null);
+  freshDst.el.insertBefore(app.el, freshDst.el.querySelectorAll('.app-window')[insertAt] || null);
 
   saveSession();
   updateTopBar();
