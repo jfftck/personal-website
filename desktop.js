@@ -674,63 +674,98 @@ helpCloseBtn.addEventListener('click', () => closeHelp());
 helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) closeHelp(); });
 
 // ── Overview mode ─────────────────────────────────────────────
+// Shared state kept alive between positionOverview calls so _ovRender
+// can pan the view without re-measuring natural positions.
+const _OV_SCALE    = 0.5;
+const _OV_TOPBAR_H = 48;
+let _ovNatColRects = null;
+let _ovNatWinRects = null;
+let _ovStripRect   = null;
+let _ovTX = 0, _ovTY = 0;
+
+// Apply a translate+scale transform and rebuild the controls overlay.
+// Called both by positionOverview (after measuring) and by the wheel handler.
+function _ovRender(tX, tY) {
+  _ovTX = tX;
+  _ovTY = tY;
+  appStrip.classList.add('ov-notransition');
+  appStrip.style.transformOrigin = '0 0';
+  appStrip.style.transform = `translate(${tX}px,${tY}px) scale(${_OV_SCALE})`;
+  void appStrip.offsetWidth;
+  appStrip.classList.remove('ov-notransition');
+  document.getElementById('overview-controls')?.remove();
+  if (_ovNatColRects && _ovNatWinRects && _ovStripRect) {
+    _buildOverviewControls(_ovNatColRects, _ovNatWinRects, _ovStripRect, tX, tY, _OV_SCALE);
+  }
+}
+
+// Wheel handler: horizontal scroll (deltaX) or shift+wheel pans the overview.
+// Vertical wheel over the focused window is left to native scroll.
+function _ovWheelHandler(e) {
+  const dx = e.deltaX || (e.shiftKey ? e.deltaY : 0);
+  if (dx === 0) return;          // leave plain vertical wheel for window scroll
+  e.preventDefault();
+  _ovRender(_ovTX - dx, _ovTY);
+}
+
 function enterOverview() {
   document.body.classList.add('mod-overview');
   overviewBtn.setAttribute('aria-pressed', 'true');
+  window.addEventListener('wheel', _ovWheelHandler, { passive: false });
   requestAnimationFrame(() => positionOverview());
 }
 
 function exitOverview() {
   document.body.classList.remove('mod-overview');
   overviewBtn.setAttribute('aria-pressed', 'false');
-  appStrip.style.transform      = '';
+  window.removeEventListener('wheel', _ovWheelHandler);
+  appStrip.style.transform       = '';
   appStrip.style.transformOrigin = '';
   document.getElementById('overview-controls')?.remove();
+  _ovNatColRects = _ovNatWinRects = _ovStripRect = null;
 }
 
 function toggleOverview() {
   document.body.classList.contains('mod-overview') ? exitOverview() : enterOverview();
 }
 
+// Re-measure natural positions, compute centering transform, then render.
+// Call this when the column layout changes (open/close/resize/swap).
 function positionOverview() {
   if (!document.body.classList.contains('mod-overview')) return;
   document.getElementById('overview-controls')?.remove();
   if (S.apps.length === 0) return;
 
-  const SCALE    = 0.5;
-  const TOPBAR_H = 48;
-
-  // Reset transform and measure NATURAL positions before any scaling.
-  // The scrollable wrapper can clip children, making post-transform
-  // getBoundingClientRect().width return 0 — measuring here avoids that.
+  // Temporarily remove transform so getBoundingClientRect gives natural coords.
   appStrip.classList.add('ov-notransition');
-  appStrip.style.transform      = '';
+  appStrip.style.transform       = '';
   appStrip.style.transformOrigin = '';
-  void appStrip.offsetWidth; // force reflow
+  void appStrip.offsetWidth;
 
-  const stripRect = appStrip.getBoundingClientRect();
-  const natColRects = S.columns.map(col => col.el.getBoundingClientRect());
-  const natWinRects = new Map(S.apps.map(app => [app.id, app.el.getBoundingClientRect()]));
+  _ovStripRect   = appStrip.getBoundingClientRect();
+  _ovNatColRects = S.columns.map(col => col.el.getBoundingClientRect());
+  _ovNatWinRects = new Map(S.apps.map(app => [app.id, app.el.getBoundingClientRect()]));
+
+  // Restore CSS transition before the new transform is applied.
+  appStrip.style.transform = ''; // ensure blank so removing notransition triggers transition
+  appStrip.classList.remove('ov-notransition');
 
   let tX = 0, tY = 0;
   if (S.focusedId) {
-    const natWR = natWinRects.get(S.focusedId);
+    const natWR = _ovNatWinRects.get(S.focusedId);
     if (natWR) {
-      const wCxS = natWR.left + natWR.width  / 2 - stripRect.left;
-      const wCyS = natWR.top  + natWR.height / 2 - stripRect.top;
+      const wCxS = natWR.left + natWR.width  / 2 - _ovStripRect.left;
+      const wCyS = natWR.top  + natWR.height / 2 - _ovStripRect.top;
       const vCX  = window.innerWidth  / 2;
-      const vCY  = TOPBAR_H + (window.innerHeight - TOPBAR_H) / 2;
-      tX = vCX - stripRect.left - wCxS * SCALE;
-      tY = vCY - stripRect.top  - wCyS * SCALE;
+      const vCY  = _OV_TOPBAR_H + (window.innerHeight - _OV_TOPBAR_H) / 2;
+      tX = vCX - _ovStripRect.left - wCxS * _OV_SCALE;
+      tY = vCY - _ovStripRect.top  - wCyS * _OV_SCALE;
     }
   }
 
-  appStrip.style.transformOrigin = '0 0';
-  appStrip.style.transform       = `translate(${tX}px,${tY}px) scale(${SCALE})`;
-  void appStrip.offsetWidth; // commit before re-enabling transition
-  appStrip.classList.remove('ov-notransition');
-
-  _buildOverviewControls(natColRects, natWinRects, stripRect, tX, tY, SCALE);
+  // Apply via _ovRender (saves tX/tY, applies transform, builds controls).
+  // Use requestAnimationFrame so the CSS transition plays from the reset state.
+  requestAnimationFrame(() => _ovRender(tX, tY));
 }
 
 function _ovRect(natRect, stripRect, tX, tY, scale) {
@@ -764,26 +799,32 @@ function _buildOverviewControls(natColRects, natWinRects, stripRect, tX, tY, sca
       const lBtn = document.createElement('button');
       lBtn.className = 'ov-arrow';
       lBtn.innerHTML = _ARROW_L;
-      lBtn.setAttribute('aria-label', 'Previous column');
+      lBtn.setAttribute('aria-label', 'Move column left');
       lBtn.disabled = ci === 0;
       lBtn.style.cssText = `left:${cr.left - 44}px;top:${midY - 18}px;`;
       lBtn.addEventListener('click', e => {
         e.stopPropagation();
-        const prevCol = S.columns[ci - 1];
-        if (prevCol?.appIds.length) focusApp(prevCol.appIds[0]);
+        if (ci === 0) return;
+        [S.columns[ci - 1], S.columns[ci]] = [S.columns[ci], S.columns[ci - 1]];
+        appStrip.insertBefore(S.columns[ci - 1].el, S.columns[ci].el);
+        saveSession();
+        positionOverview();
       });
       layer.appendChild(lBtn);
 
       const rBtn = document.createElement('button');
       rBtn.className = 'ov-arrow';
       rBtn.innerHTML = _ARROW_R;
-      rBtn.setAttribute('aria-label', 'Next column');
+      rBtn.setAttribute('aria-label', 'Move column right');
       rBtn.disabled = ci === S.columns.length - 1;
       rBtn.style.cssText = `left:${cr.left + cr.width + 8}px;top:${midY - 18}px;`;
       rBtn.addEventListener('click', e => {
         e.stopPropagation();
-        const nextCol = S.columns[ci + 1];
-        if (nextCol?.appIds.length) focusApp(nextCol.appIds[0]);
+        if (ci === S.columns.length - 1) return;
+        [S.columns[ci], S.columns[ci + 1]] = [S.columns[ci + 1], S.columns[ci]];
+        S.columns[ci].el.after(S.columns[ci + 1].el);
+        saveSession();
+        positionOverview();
       });
       layer.appendChild(rBtn);
     }
