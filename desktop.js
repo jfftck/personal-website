@@ -37,8 +37,9 @@ function computeWidth(preset) {
 }
 
 // ── Session persistence ────────────────────────────────────────
-const SESSION_KEY    = 'desktop-session-v2';
-const SESSION_KEY_V1 = 'desktop-session-v1';
+const SESSION_KEY      = 'desktop-session-v2';
+const SESSION_KEY_V1   = 'desktop-session-v1';
+const WELCOME_SHOWN_KEY = 'desktop-welcome-shown';
 
 function saveSession() {
   if (S._skipSave) return;
@@ -651,8 +652,26 @@ document.addEventListener('keydown', e => {
 helpCloseBtn.addEventListener('click', () => closeHelp());
 helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) closeHelp(); });
 
+// ── First-visit welcome ───────────────────────────────────────
+function maybeShowWelcome() {
+  try {
+    if (localStorage.getItem(WELCOME_SHOWN_KEY)) return;
+    localStorage.setItem(WELCOME_SHOWN_KEY, '1');
+  } catch { return; }
+
+  // Only show if no prior session was restored
+  if (S.apps.length > 0) return;
+
+  requestOpenFile({
+    type: 'document',
+    url: 'posts/20240101_Welcome.md',
+    displayName: 'Welcome',
+  });
+}
+
 // ── Init ──────────────────────────────────────────────────────
 restoreSession();
+maybeShowWelcome();
 updateTopBar();
 updateEmptyState();
 updateStripLayout();
