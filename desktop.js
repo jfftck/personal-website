@@ -105,47 +105,6 @@ function openApp(type, insertIntoColId = null) {
   el.dataset.id   = id;
   el.dataset.type = type;
 
-  // Per-window floating controls (overview + ⋮ menu)
-  const winControls = document.createElement('div');
-  winControls.className = 'win-controls';
-
-  const overviewBtn = document.createElement('button');
-  overviewBtn.className = 'win-ctrl-btn';
-  overviewBtn.setAttribute('aria-label', 'Toggle overview');
-  overviewBtn.setAttribute('title', 'Overview');
-  overviewBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-    <rect x="0" y="0" width="5.5" height="5.5" rx="1"/>
-    <rect x="8.5" y="0" width="5.5" height="5.5" rx="1"/>
-    <rect x="0" y="8.5" width="5.5" height="5.5" rx="1"/>
-    <rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1"/>
-  </svg>`;
-  overviewBtn.addEventListener('click', e => { e.stopPropagation(); toggleOverview(); });
-
-  const menuBtn = document.createElement('button');
-  menuBtn.className = 'win-ctrl-btn';
-  menuBtn.dataset.appId = id;
-  menuBtn.setAttribute('aria-label', 'Window options');
-  menuBtn.setAttribute('title', 'Window options');
-  menuBtn.setAttribute('aria-haspopup', 'true');
-  menuBtn.setAttribute('aria-expanded', 'false');
-  menuBtn.innerHTML = `<svg width="4" height="16" viewBox="0 0 4 16" fill="currentColor" aria-hidden="true">
-    <circle cx="2" cy="2"  r="1.75"/>
-    <circle cx="2" cy="8"  r="1.75"/>
-    <circle cx="2" cy="14" r="1.75"/>
-  </svg>`;
-  menuBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    const existing = document.getElementById('win-menu-open');
-    if (existing && existing.dataset.forApp === id) { closeWinMenu(); return; }
-    closeWinMenu();
-    focusApp(id);
-    openWinMenu(menuBtn, id);
-  });
-
-  winControls.appendChild(overviewBtn);
-  winControls.appendChild(menuBtn);
-  el.appendChild(winControls);
-
   S.apps.push({ id, type, el });
 
   const existingCol = insertIntoColId ? S.columns.find(c => c.id === insertIntoColId) : null;
@@ -225,10 +184,15 @@ function focusApp(id) {
   const next = S.apps.find(a => a.id === id);
   if (next) {
     next.el.classList.add('focused');
-    if (!S._skipSave) requestAnimationFrame(() => scrollToApp(id));
+    if (!S._skipSave && !document.body.classList.contains('mod-overview')) {
+      requestAnimationFrame(() => scrollToApp(id));
+    }
   }
 
   updateTopBar();
+  if (document.body.classList.contains('mod-overview')) {
+    requestAnimationFrame(() => positionOverview());
+  }
 }
 
 function scrollToApp(id) {
@@ -601,13 +565,13 @@ function wireColEvents(colEl) {
   colEl.addEventListener('pointerdown', e => {
     const appEl = e.target.closest('.app-window');
     if (appEl?.dataset.id) {
-      // Exit overview on window click — but not when clicking window controls
-      // (those have their own click handlers that manage overview state)
-      if (document.body.classList.contains('mod-overview') &&
-          !e.target.closest('.win-controls')) {
+      if (document.body.classList.contains('mod-overview')) {
         e.preventDefault();
-        exitOverview();
-        focusApp(appEl.dataset.id);
+        if (appEl.dataset.id === S.focusedId) {
+          exitOverview();
+        } else {
+          focusApp(appEl.dataset.id); // positionOverview called by focusApp via rAF
+        }
         return;
       }
       focusApp(appEl.dataset.id);
@@ -623,6 +587,12 @@ document.querySelectorAll('.app-launcher').forEach(btn => {
 });
 
 closeBtn.addEventListener('click', () => { if (S.focusedId) closeApp(S.focusedId); });
+overviewBtn.addEventListener('click', () => toggleOverview());
+winMenuBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  if (document.getElementById('win-menu-open')) { closeWinMenu(); return; }
+  openWinMenu();
+});
 helpOpenLauncher.addEventListener('click', () => { closeHelp(); openAppMenu(); });
 
 document.addEventListener('click', e => {
@@ -634,8 +604,16 @@ document.addEventListener('click', e => {
 
   // Close win menu when clicking outside
   const openMenu = document.getElementById('win-menu-open');
-  if (openMenu && !openMenu.contains(e.target) && !e.target.closest('.win-ctrl-btn')) {
+  if (openMenu && !openMenu.contains(e.target) && e.target !== winMenuBtn && !winMenuBtn.contains(e.target)) {
     closeWinMenu();
+  }
+
+  // Exit overview when clicking outside any window or control
+  if (document.body.classList.contains('mod-overview') &&
+      !e.target.closest('.app-window') &&
+      !e.target.closest('#overview-controls') &&
+      e.target !== overviewBtn && !overviewBtn.contains(e.target)) {
+    exitOverview();
   }
 });
 
@@ -685,13 +663,247 @@ helpCloseBtn.addEventListener('click', () => closeHelp());
 helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) closeHelp(); });
 
 // ── Overview mode ─────────────────────────────────────────────
-function toggleOverview() {
-  document.body.classList.toggle('mod-overview');
+function enterOverview() {
+  document.body.classList.add('mod-overview');
+  overviewBtn.setAttribute('aria-pressed', 'true');
+  requestAnimationFrame(() => positionOverview());
 }
 
 function exitOverview() {
   document.body.classList.remove('mod-overview');
+  overviewBtn.setAttribute('aria-pressed', 'false');
+  appStrip.style.transform      = '';
+  appStrip.style.transformOrigin = '';
+  document.getElementById('overview-controls')?.remove();
 }
+
+function toggleOverview() {
+  document.body.classList.contains('mod-overview') ? exitOverview() : enterOverview();
+}
+
+function positionOverview() {
+  if (!document.body.classList.contains('mod-overview')) return;
+  document.getElementById('overview-controls')?.remove();
+  if (S.apps.length === 0) return;
+
+  const SCALE    = 0.5;
+  const TOPBAR_H = 48;
+
+  // Reset transform before measuring natural positions (no-transition avoids flicker)
+  appStrip.classList.add('ov-notransition');
+  appStrip.style.transform      = '';
+  appStrip.style.transformOrigin = '';
+  void appStrip.offsetWidth; // force reflow
+
+  const stripRect = appStrip.getBoundingClientRect();
+  let tX = 0, tY = 0;
+
+  if (S.focusedId) {
+    const fApp = S.apps.find(a => a.id === S.focusedId);
+    if (fApp) {
+      const wr   = fApp.el.getBoundingClientRect();
+      const wCxS = wr.left + wr.width  / 2 - stripRect.left;
+      const wCyS = wr.top  + wr.height / 2 - stripRect.top;
+      const vCX  = window.innerWidth  / 2;
+      const vCY  = TOPBAR_H + (window.innerHeight - TOPBAR_H) / 2;
+      // With transform: translate(tX,tY) scale(SCALE), origin 0 0:
+      //   viewport_x = stripRect.left + tX + contentX * SCALE
+      tX = vCX - stripRect.left - wCxS * SCALE;
+      tY = vCY - stripRect.top  - wCyS * SCALE;
+    }
+  }
+
+  appStrip.style.transformOrigin = '0 0';
+  appStrip.style.transform       = `translate(${tX}px,${tY}px) scale(${SCALE})`;
+  void appStrip.offsetWidth; // commit new transform before re-enabling transition
+  appStrip.classList.remove('ov-notransition');
+
+  _buildOverviewControls(stripRect, tX, tY, SCALE);
+}
+
+function _ovRect(natRect, stripRect, tX, tY, scale) {
+  return {
+    left:   stripRect.left + (natRect.left - stripRect.left) * scale + tX,
+    top:    stripRect.top  + (natRect.top  - stripRect.top)  * scale + tY,
+    width:  natRect.width  * scale,
+    height: natRect.height * scale,
+  };
+}
+
+const _ARROW_L = `<svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="7,2 2,8 7,14"/></svg>`;
+const _ARROW_R = `<svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3,2 8,8 3,14"/></svg>`;
+const _DRAG_IC = `<svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor" aria-hidden="true"><rect y="0" width="14" height="2" rx="1"/><rect y="4" width="14" height="2" rx="1"/><rect y="8" width="14" height="2" rx="1"/></svg>`;
+
+function _buildOverviewControls(stripRect, tX, tY, scale) {
+  // NOTE: this is called AFTER the new transform is applied, so getBoundingClientRect()
+  // returns post-transform viewport coords — exactly what we need for fixed-layer positioning.
+  const layer = document.createElement('div');
+  layer.id = 'overview-controls';
+  document.body.appendChild(layer);
+
+  const order   = getAppOrder();
+  const firstId = order[0];
+  const lastId  = order[order.length - 1];
+
+  S.columns.forEach(col => {
+    const cr   = col.el.getBoundingClientRect(); // visual viewport coords
+    const midY = cr.top + cr.height / 2;
+
+    // Left nav arrow
+    const lBtn = document.createElement('button');
+    lBtn.className = 'ov-arrow';
+    lBtn.innerHTML = _ARROW_L;
+    lBtn.setAttribute('aria-label', 'Previous window');
+    lBtn.disabled  = S.focusedId === firstId;
+    lBtn.style.cssText = `left:${cr.left - 40}px;top:${midY - 18}px;`;
+    lBtn.addEventListener('click', e => { e.stopPropagation(); focusPrevApp(); });
+    layer.appendChild(lBtn);
+
+    // Right nav arrow
+    const rBtn = document.createElement('button');
+    rBtn.className = 'ov-arrow';
+    rBtn.innerHTML = _ARROW_R;
+    rBtn.setAttribute('aria-label', 'Next window');
+    rBtn.disabled  = S.focusedId === lastId;
+    rBtn.style.cssText = `left:${cr.left + cr.width + 8}px;top:${midY - 18}px;`;
+    rBtn.addEventListener('click', e => { e.stopPropagation(); focusNextApp(); });
+    layer.appendChild(rBtn);
+
+    // Drag handle per window
+    col.appIds.forEach(appId => {
+      const app = S.apps.find(a => a.id === appId);
+      if (!app) return;
+      const wr = app.el.getBoundingClientRect(); // visual viewport coords
+      const h  = document.createElement('div');
+      h.className = 'ov-drag-handle';
+      h.dataset.appId = appId;
+      h.title = 'Drag to reorder';
+      h.innerHTML = _DRAG_IC;
+      h.style.cssText = `left:${wr.left + wr.width / 2 - 20}px;top:${wr.top + 6}px;`;
+      _wireOvDrag(h, appId, layer);
+      layer.appendChild(h);
+    });
+  });
+
+  // Width pill above focused window
+  if (S.focusedId) {
+    const fApp = S.apps.find(a => a.id === S.focusedId);
+    const fCol = fApp ? getAppColumn(S.focusedId) : null;
+    if (fApp && fCol) {
+      const wr   = fApp.el.getBoundingClientRect(); // visual viewport coords
+      const pill = document.createElement('div');
+      pill.id    = 'ov-width-pill';
+      const active = fCol.widthPreset;
+      [{ p: 'third', l: '⅓' }, { p: 'half', l: '½' }, { p: 'full', l: 'Full' }].forEach(({ p, l }) => {
+        const b = document.createElement('button');
+        b.className = 'ov-pill-btn' + (active === p ? ' active' : '');
+        b.textContent = l;
+        b.addEventListener('click', e => {
+          e.stopPropagation();
+          setFocusedWidth(p);
+          setTimeout(() => positionOverview(), 260);
+        });
+        pill.appendChild(b);
+      });
+      const PW = 156;
+      pill.style.cssText = `left:${wr.left + wr.width / 2 - PW / 2}px;top:${wr.top - 52}px;width:${PW}px;`;
+      layer.appendChild(pill);
+    }
+  }
+}
+
+// ── Overview drag-to-reorder ──────────────────────────────────
+let _ovDrag = null;
+
+function _wireOvDrag(handle, appId, layer) {
+  let ghost = null;
+
+  handle.addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    _ovDrag = { appId };
+    ghost = document.createElement('div');
+    ghost.className = 'ov-drag-ghost';
+    ghost.innerHTML = _DRAG_IC;
+    ghost.style.cssText = `left:${e.clientX - 20}px;top:${e.clientY - 14}px;`;
+    layer.appendChild(ghost);
+    handle.classList.add('dragging');
+  });
+
+  handle.addEventListener('pointermove', e => {
+    if (!_ovDrag || !ghost) return;
+    ghost.style.left = (e.clientX - 20) + 'px';
+    ghost.style.top  = (e.clientY - 14) + 'px';
+    layer.querySelectorAll('.ov-drag-handle').forEach(h => h.classList.remove('drop-above', 'drop-below'));
+    const t = _ovFindDrop(e.clientX, e.clientY, appId);
+    if (t) t.el.classList.add(t.pos === 'above' ? 'drop-above' : 'drop-below');
+  });
+
+  handle.addEventListener('pointerup', e => {
+    if (!_ovDrag) return;
+    ghost?.remove(); ghost = null;
+    handle.classList.remove('dragging');
+    layer.querySelectorAll('.ov-drag-handle').forEach(h => h.classList.remove('drop-above', 'drop-below'));
+    const t = _ovFindDrop(e.clientX, e.clientY, appId);
+    if (t) _ovPerformDrop(appId, t.targetId, t.pos);
+    _ovDrag = null;
+  });
+
+  handle.addEventListener('pointercancel', () => {
+    ghost?.remove(); ghost = null;
+    handle.classList.remove('dragging');
+    _ovDrag = null;
+  });
+}
+
+function _ovFindDrop(x, y, draggedId) {
+  for (const h of document.querySelectorAll('#overview-controls .ov-drag-handle')) {
+    const tid = h.dataset.appId;
+    if (tid === draggedId) continue;
+    const r = h.getBoundingClientRect();
+    if (x >= r.left - 60 && x <= r.right + 60 && y >= r.top - 60 && y <= r.bottom + 60) {
+      return { targetId: tid, pos: y < r.top + r.height / 2 ? 'above' : 'below', el: h };
+    }
+  }
+  return null;
+}
+
+function _ovPerformDrop(draggedId, targetId, pos) {
+  if (draggedId === targetId) return;
+  const srcCol = getAppColumn(draggedId);
+  const dstCol = getAppColumn(targetId);
+  if (!srcCol || !dstCol) return;
+
+  const srcIdx = srcCol.appIds.indexOf(draggedId);
+  srcCol.appIds.splice(srcIdx, 1);
+  const app = S.apps.find(a => a.id === draggedId);
+  app.el.remove();
+
+  if (srcCol.appIds.length === 0) {
+    srcCol.el.remove();
+    S.columns.splice(S.columns.indexOf(srcCol), 1);
+  }
+
+  const freshDst = getAppColumn(targetId);
+  if (!freshDst) return;
+
+  const dstIdx   = freshDst.appIds.indexOf(targetId);
+  const insertAt = pos === 'above' ? dstIdx : dstIdx + 1;
+  freshDst.appIds.splice(insertAt, 0, draggedId);
+
+  const winEls = freshDst.el.querySelectorAll('.app-window');
+  freshDst.el.insertBefore(app.el, winEls[insertAt] || null);
+
+  saveSession();
+  updateTopBar();
+  updateStripLayout();
+  requestAnimationFrame(() => positionOverview());
+}
+
+window.addEventListener('resize', () => {
+  if (document.body.classList.contains('mod-overview')) positionOverview();
+});
 
 // ── Per-window ⋮ menu ─────────────────────────────────────────
 const WIDTH_MENU_ITEMS = [
@@ -712,12 +924,12 @@ const WIDTH_MENU_ITEMS = [
   },
 ];
 
-function openWinMenu(btn, appId) {
-  const col = getAppColumn(appId);
+function openWinMenu() {
+  if (!S.focusedId) return;
+  const col = getAppColumn(S.focusedId);
   const dropdown = document.createElement('div');
   dropdown.className = 'win-menu-dropdown';
   dropdown.id = 'win-menu-open';
-  dropdown.dataset.forApp = appId;
 
   WIDTH_MENU_ITEMS.forEach(({ preset, label, svg }) => {
     const item = document.createElement('button');
@@ -725,23 +937,22 @@ function openWinMenu(btn, appId) {
     item.innerHTML = `${svg}<span>${label}</span>`;
     item.addEventListener('click', e => {
       e.stopPropagation();
-      focusApp(appId);
       setFocusedWidth(preset);
       closeWinMenu();
     });
     dropdown.appendChild(item);
   });
 
-  const rect = btn.getBoundingClientRect();
-  dropdown.style.top  = (rect.bottom + 4) + 'px';
+  const rect = winMenuBtn.getBoundingClientRect();
+  dropdown.style.top   = (rect.bottom + 4) + 'px';
   dropdown.style.right = (window.innerWidth - rect.right) + 'px';
   document.body.appendChild(dropdown);
-  btn.setAttribute('aria-expanded', 'true');
+  winMenuBtn.setAttribute('aria-expanded', 'true');
 }
 
 function closeWinMenu() {
   document.getElementById('win-menu-open')?.remove();
-  document.querySelectorAll('.win-ctrl-btn[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+  winMenuBtn.setAttribute('aria-expanded', 'false');
 }
 
 // ── First-visit welcome ───────────────────────────────────────

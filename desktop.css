@@ -515,55 +515,116 @@ body {
   box-shadow: inset 0 0 0 1.5px var(--focus-color);
 }
 
-/* ------------------------------------------------------------
-   PER-WINDOW CONTROLS (overview + ⋮ menu)
-   ------------------------------------------------------------ */
-.win-controls {
+/* ── Overview controls layer ── */
+#overview-controls {
+  position: fixed;
+  inset: 0;
+  z-index: 510;
+  pointer-events: none;
+}
+
+/* Width preset pill above active window */
+#ov-width-pill {
   position: absolute;
-  top: 5px;
-  right: 6px;
-  z-index: 30;
   display: flex;
   align-items: center;
-  gap: 1px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 150ms ease;
+  gap: 2px;
+  padding: 3px;
+  background: var(--overlay-card);
+  -webkit-backdrop-filter: var(--backdrop);
+  backdrop-filter: var(--backdrop);
+  border: 1px solid var(--topbar-border);
+  border-radius: 0.625rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  pointer-events: auto;
 }
 
-.app-window:hover .win-controls,
-.app-window.focused .win-controls {
-  opacity: 1;
-  pointer-events: all;
+.ov-pill-btn {
+  flex: 1;
+  border: none;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--topbar-text);
+  font-size: 0.75rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.3125rem 0;
+  text-align: center;
+  transition: background 100ms ease;
 }
+.ov-pill-btn:hover  { background: var(--btn-hover); }
+.ov-pill-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+.ov-pill-btn:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
 
-.win-ctrl-btn {
+/* Column navigation arrows */
+.ov-arrow {
+  position: absolute;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.625rem;
-  height: 1.625rem;
+  width: 2rem;
+  height: 2.25rem;
   border: none;
-  border-radius: 0.375rem;
-  background: rgba(0, 20, 40, 0.58);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  border-radius: 0.5rem;
+  background: var(--overlay-card);
+  -webkit-backdrop-filter: var(--backdrop);
+  backdrop-filter: var(--backdrop);
+  border: 1px solid var(--topbar-border);
   color: var(--topbar-text);
   cursor: pointer;
-  flex-shrink: 0;
+  pointer-events: auto;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.35);
   transition: background 120ms ease;
 }
-.win-ctrl-btn:hover  { background: rgba(0, 102, 153, 0.6); }
-.win-ctrl-btn:active { background: rgba(0, 102, 153, 0.8); }
-.win-ctrl-btn:focus-visible {
-  outline: 2px solid var(--focus-color);
-  outline-offset: 1px;
-}
+.ov-arrow:hover  { background: var(--btn-hover); }
+.ov-arrow:active { background: var(--btn-active); }
+.ov-arrow:disabled { opacity: 0.25; pointer-events: none; }
+.ov-arrow:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
 
-@media (prefers-color-scheme: light) {
-  .win-ctrl-btn { background: rgba(200, 230, 255, 0.75); color: #002840; }
-  .win-ctrl-btn:hover  { background: rgba(0, 102, 153, 0.18); }
-  .win-ctrl-btn:active { background: rgba(0, 102, 153, 0.28); }
+/* Window drag handles */
+.ov-drag-handle {
+  position: absolute;
+  width: 40px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--overlay-card);
+  -webkit-backdrop-filter: var(--backdrop);
+  backdrop-filter: var(--backdrop);
+  border: 1px solid var(--topbar-border);
+  border-radius: 0.375rem;
+  color: var(--topbar-text);
+  cursor: grab;
+  pointer-events: auto;
+  opacity: 0.7;
+  transition: opacity 120ms ease, background 120ms ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.ov-drag-handle:hover  { opacity: 1; background: var(--btn-hover); }
+.ov-drag-handle.dragging { opacity: 0.4; cursor: grabbing; }
+.ov-drag-handle.drop-above { box-shadow: 0 -3px 0 0 var(--focus-color); }
+.ov-drag-handle.drop-below { box-shadow: 0  3px 0 0 var(--focus-color); }
+
+/* Drag ghost */
+.ov-drag-ghost {
+  position: fixed;
+  z-index: 520;
+  width: 40px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 0.375rem;
+  pointer-events: none;
+  opacity: 0.9;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
 }
 
 /* ── Per-window ⋮ dropdown ── */
@@ -611,17 +672,26 @@ body {
 }
 
 /* ── Overview mode ── */
-/* Scale the strip content to 50% while the wrapper stays full-size viewport */
+/* JS computes the precise translate+scale — CSS only sets the transition and cursor */
+body.mod-overview #desktop {
+  overflow: visible;
+}
 body.mod-overview #app-strip-wrapper {
-  overflow: hidden;
-  cursor: zoom-in;
+  overflow: visible;
 }
 body.mod-overview #app-strip {
-  transform: scale(0.5);
-  transform-origin: top left;
+  transition: transform 260ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+body.mod-overview #app-strip.ov-notransition {
+  transition: none !important;
 }
 body.mod-overview .app-window {
-  cursor: zoom-in;
+  cursor: pointer;
+  pointer-events: auto;
+}
+body.mod-overview .app-window.focused {
+  cursor: zoom-out;
 }
 
 /* ------------------------------------------------------------
