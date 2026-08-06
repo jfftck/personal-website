@@ -1,175 +1,198 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width">
-    <title>Jeffrey M. Tackett's Personal Page</title>
-    <link href="index.css" rel="stylesheet" type="text/css" importance="high" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"
-        integrity="sha512-LhccdVNGe2QMEfI3x4DVV3ckMRe36TfydKss6mJpdHjNFiV07dFpS2xzeZedptKZrwxfICJpez09iNioiSZ3hA=="
-        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="index.js" type="module"></script>
-    <link href="favicon.png" rel="icon" type="image/png" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jeffrey M. Tackett</title>
+  <link rel="stylesheet" href="desktop.css">
+  <link rel="icon" href="favicon.png" type="image/png">
 </head>
 
-<body class="curtian" style="background-color: #069;">
-    <form id="color-scheme" title="Page Theme">
-        <label tabindex="1"><input type="radio" id="color" value="auto" name="color" checked data-blur="true"><svg
-                xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px"
-                fill="currentColor">
-                <path
-                    d="M396-396q-32-32-58.5-67T289-537q-5 14-6.5 28.5T281-480q0 83 58 141t141 58q14 0 28.5-2t28.5-6q-39-22-74-48.5T396-396Zm57-56q51 51 114 87.5T702-308q-40 51-98 79.5T481-200q-117 0-198.5-81.5T201-480q0-65 28.5-123t79.5-98q20 72 56.5 135T453-452Zm290 72q-20-5-39.5-11T665-405q8-18 11.5-36.5T680-480q0-83-58.5-141.5T480-680q-20 0-38.5 3.5T405-665q-8-19-13.5-38T381-742q24-9 49-13.5t51-4.5q117 0 198.5 81.5T761-480q0 26-4.5 51T743-380ZM440-840v-120h80v120h-80Zm0 840v-120h80V0h-80Zm323-706-57-57 85-84 57 56-85 85ZM169-113l-57-56 85-85 57 57-85 84Zm671-327v-80h120v80H840ZM0-440v-80h120v80H0Zm791 328-85-85 57-57 84 85-56 57ZM197-706l-84-85 56-57 85 85-57 57Zm199 310Z" />
-            </svg><span>Auto</span></label>
-        <label tabindex="1"><input type="radio" id="color" value="dark" name="color" data-blur="true"><svg
-                xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px"
-                fill="currentColor">
-                <path
-                    d="M480-120q-150 0-255-105T120-480q0-150 105-255t255-105q14 0 27.5 1t26.5 3q-41 29-65.5 75.5T444-660q0 90 63 153t153 63q55 0 101-24.5t75-65.5q2 13 3 26.5t1 27.5q0 150-105 255T480-120Zm0-80q88 0 158-48.5T740-375q-20 5-40 8t-40 3q-123 0-209.5-86.5T364-660q0-20 3-40t8-40q-78 32-126.5 102T200-480q0 116 82 198t198 82Zm-10-270Z" />
-            </svg><span>Dark</span></label>
-        <label tabindex="1"><input type="radio" id="color" value="light" name="color" data-blur="true"><svg
-                xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px"
-                fill="currentColor">
-                <path
-                    d="M480-360q50 0 85-35t35-85q0-50-35-85t-85-35q-50 0-85 35t-35 85q0 50 35 85t85 35Zm0 80q-83 0-141.5-58.5T280-480q0-83 58.5-141.5T480-680q83 0 141.5 58.5T680-480q0 83-58.5 141.5T480-280ZM200-440H40v-80h160v80Zm720 0H760v-80h160v80ZM440-760v-160h80v160h-80Zm0 720v-160h80v160h-80ZM256-650l-101-97 57-59 96 100-52 56Zm492 496-97-101 53-55 101 97-57 59Zm-98-550 97-101 59 57-100 96-56-52ZM154-212l101-97 55 53-97 101-59-57Zm326-268Z" />
-            </svg><span>Light</span></label>
-    </form>
-    <a href="desktop.html" id="desktop-link">
-        <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor">
-            <path
-                d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm0-560v560-560Z" />
-        </svg>
-    </a>
-    <div id="logo-container">
-        <h1 id="logo">
-            <svg viewBox="0 0 256 256">
-                <use href="jmt.svg#SVGRoot" />
-            </svg>
-            Jeffrey M. Tackett
-        </h1>
-    </div>
-    <div id="content">
-        <article>
-            <section class="article-title">
-                <h1>Welcome</h1>
-            </section>
-            <section class="article-content">
-                <h2>Hey There!</h2>
-                <p>
-                    Welcome to my digital sanctuary, a space where I share intimate glimpses into the tapestry of my
-                    life.
-                    While updates may be infrequent, they will chronicle significant milestones and personal
-                    reflections.
-                    As an avid enthusiast of technology, I will also delve into my thoughts on its transformative power.
-                    Additionally, this platform will serve as a showcase for my creative endeavors, showcasing projects
-                    that have ignited my passion and ignited my imagination.
-                    Join me on this journey of self-expression and discovery, where the pages of my life unfold with
-                    authenticity and candor.
-                </p>
-                <p>
-                    I hope you enjoy your stay!
-                </p>
-            </section>
-        </article>
-        <article>
-            <section class="article-title">
-                <h1>News</h1>
-            </section>
-            <section class="article-content">
-                <h2>May 20, 2024</h2>
-                <p>
-                    Added some content to the About Me section.
-                </p>
-                <h2>April 26, 2024</h2>
-                <p>
-                    I made some changes to the site's design and layout, and also added more content.
-                    Hopefully, this will be a more cohesive and engaging experience for you.
-                    I will be adding more soon, as I want to make the gallery functional.
-                </p>
-                <h2>March 23, 2024</h2>
-                <p>
-                    I'm back!
-                    This page will be updated a little more frequently as I continue to explore my life's journey.
-                    I have many ideas that I want to explore and wish to share with you.
-                    I plan on showing off ways that I've learned to mix functional programming with object oreinted
-                    programming.
-                    Hopefully, I'll inspire you to expand on my ideas and create something new.
-                </p>
-                <p>
-                    I look forward to what we can all share and the expreriences we'll create together.
-                </p>
-                <h2>January 1, 2020</h2>
-                <p>
-                    Happy New Year!
-                </p>
-                <h2>December 25, 2019</h2>
-                <p>
-                    Merry Christmas!
-                </p>
-            </section>
-        </article>
-        <article>
-            <section class="article-title">
-                <h1>Gallery</h1>
-            </section>
-            <section class="article-content">
-                <h2>Projects</h2>
-                <h2>Pictures</h2>
-                <h2>Photos</h2>
-            </section>
-        </article>
-        <article>
-            <section class="article-title">
-                <h1>About Me</h1>
-            </section>
-            <section class="article-content">
-                <h2>Family Life</h2>
-                <p>
-                    I grew up near Columbus, Ohio.
-                    When I was a teenager, my family moved to Jackson, Ohio, where we lived for about 10 years.
-                    Afterward, I moved back to the Columbus area.
-                </p>
-                <p>
-                    After getting married, I relocated to the Seattle area to pursue a career as a Software Engineer in
-                    the big tech industry.
-                    My wife and I share a passion for hiking, and the beautiful trails in this region have provided us
-                    with countless unique experiences.
-                    We have a daughter, and we make it a tradition to visit our family every year — at least once the
-                    pandemic was over and air travel was not limited.
-                </p>
-            </section>
-        </article>
-        <article>
-            <section class="article-title">
-                <h1>Sites</h1>
-            </section>
-            <section class="article-content">
-                <h2>My Other Sites</h2>
-                <p>
-                <ul>
-                    <li><a href="https://www.informationmeltdown.com">Information Meltdown</a></li>
-                    <li><a href="https://works.jeffreytackett.us">Works</a></li>
-                    <li><a href="https://donkeytimes.informationmeltdown.com">The Donkey Times</a></li>
-                </ul>
-                </p>
-                <h2>Fun Sites</h2>
-                <p>
+<body>
 
-                <ul>
-                    <li><a href="https://www.questionablecontent.net">Questionable Content</a></li>
-                </ul>
-                </p>
-            </section>
-        </article>
+  <header id="topbar">
+    <div class="topbar-left">
+      <button id="app-menu-btn" class="icon-btn" aria-label="App menu" aria-expanded="false" aria-controls="app-menu">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+          <rect x="1" y="1" width="6" height="6" rx="1.25"/>
+          <rect x="11" y="1" width="6" height="6" rx="1.25"/>
+          <rect x="1" y="11" width="6" height="6" rx="1.25"/>
+          <rect x="11" y="11" width="6" height="6" rx="1.25"/>
+        </svg>
+      </button>
+      <div id="open-apps-bar" role="list" aria-label="Open apps"></div>
     </div>
-    <footer>
-        <span>Made by Jeffrey Tackett.</span>
-        <ul>
-            <li><a href="https://replit.com/@jfftck">Replit</a></li>
-            <li><a href="https://github.com/jfftck">GitHub</a></li>
-            <li><a href="https://www.linkedin.com/in/jfftck">LinkedIn</a></li>
-        </ul>
-    </footer>
+
+    <div class="topbar-center">
+      <span id="active-title" aria-live="polite"></span>
+    </div>
+
+    <div class="topbar-right">
+      <div id="width-controls" role="group" aria-label="Window width presets">
+        <button class="icon-btn width-btn" data-width="third" title="One-third width" aria-label="Set window to one-third width">
+          <svg width="20" height="13" viewBox="0 0 20 13" fill="currentColor" aria-hidden="true">
+            <rect x="0" y="0" width="5" height="13" rx="1"/>
+            <rect x="7.5" y="0" width="5" height="13" rx="1" opacity="0.3"/>
+            <rect x="15" y="0" width="5" height="13" rx="1" opacity="0.3"/>
+          </svg>
+        </button>
+        <button class="icon-btn width-btn" data-width="half" title="Half width" aria-label="Set window to half width">
+          <svg width="20" height="13" viewBox="0 0 20 13" fill="currentColor" aria-hidden="true">
+            <rect x="0" y="0" width="9" height="13" rx="1"/>
+            <rect x="11" y="0" width="9" height="13" rx="1" opacity="0.3"/>
+          </svg>
+        </button>
+        <button class="icon-btn width-btn" data-width="full" title="Full width" aria-label="Set window to full width">
+          <svg width="20" height="13" viewBox="0 0 20 13" fill="currentColor" aria-hidden="true">
+            <rect x="0" y="0" width="20" height="13" rx="1"/>
+          </svg>
+        </button>
+      </div>
+
+      <button id="close-btn" class="icon-btn" title="Close focused app" aria-label="Close focused app" disabled>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="3" y1="3" x2="13" y2="13"/>
+          <line x1="13" y1="3" x2="3" y2="13"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="help-overlay" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" hidden>
+    <div id="help-inner">
+      <div class="help-header">
+        <h2 class="help-title">Keyboard Shortcuts</h2>
+        <button id="help-close-btn" class="icon-btn" aria-label="Close keyboard shortcuts">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <line x1="3" y1="3" x2="13" y2="13"/>
+            <line x1="13" y1="3" x2="3" y2="13"/>
+          </svg>
+        </button>
+      </div>
+      <dl class="shortcut-list">
+        <div class="shortcut-row">
+          <dt><kbd>←</kbd> <kbd>→</kbd></dt>
+          <dd>Focus previous / next app</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt><kbd>Tab</kbd> / <kbd>Shift+Tab</kbd></dt>
+          <dd>Cycle through open apps</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt><kbd>⌘</kbd><kbd>1</kbd>–<kbd>9</kbd></dt>
+          <dd>Focus app by number</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt><kbd>⌘</kbd><kbd>&lt;</kbd> / <kbd>⌘</kbd><kbd>&gt;</kbd></dt>
+          <dd>Resize window narrower / wider</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt><kbd>[</kbd></dt>
+          <dd>Consume window from left column</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt><kbd>]</kbd></dt>
+          <dd>Expel window to new column</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt>Drag ← →</dt>
+          <dd>Swap column position</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt>Drag ↑ ↓</dt>
+          <dd>Stack into adjacent column</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt><kbd>⌘</kbd><kbd>D</kbd></dt>
+          <dd>Open app launcher</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt><kbd>?</kbd></dt>
+          <dd>Show this help</dd>
+        </div>
+        <div class="shortcut-row">
+          <dt><kbd>Esc</kbd></dt>
+          <dd>Close overlay / menu</dd>
+        </div>
+      </dl>
+      <p class="help-note">On Windows / Linux, use <kbd>Ctrl</kbd> instead of <kbd>⌘</kbd>.</p>
+      <div class="help-actions">
+        <button id="help-open-launcher" class="help-launch-btn">
+          <svg width="16" height="16" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+            <rect x="1" y="1" width="6" height="6" rx="1.25"/>
+            <rect x="11" y="1" width="6" height="6" rx="1.25"/>
+            <rect x="1" y="11" width="6" height="6" rx="1.25"/>
+            <rect x="11" y="11" width="6" height="6" rx="1.25"/>
+          </svg>
+          Open App Launcher
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="app-menu" role="dialog" aria-modal="true" aria-label="App launcher" hidden>
+    <div id="app-menu-inner">
+      <p class="app-menu-heading">Apps</p>
+      <div id="app-list">
+        <button class="app-launcher" data-type="doc-viewer">
+          <span class="app-launcher-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
+            </svg>
+          </span>
+          <span class="app-launcher-name">Document Viewer</span>
+        </button>
+        <button class="app-launcher" data-type="img-viewer">
+          <span class="app-launcher-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+            </svg>
+          </span>
+          <span class="app-launcher-name">Image Viewer</span>
+        </button>
+        <button class="app-launcher" data-type="file-manager">
+          <span class="app-launcher-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+            </svg>
+          </span>
+          <span class="app-launcher-name">File Manager</span>
+        </button>
+        <button class="app-launcher" data-type="media-player">
+          <span class="app-launcher-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M21 3H3c-1.11 0-2 .89-2 2v14c0 1.11.89 2 2 2h18c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 16H3V5h18v14zM8 15l7-4-7-4v8z"/>
+            </svg>
+          </span>
+          <span class="app-launcher-name">Media Player</span>
+        </button>
+      </div>
+
+      <div id="app-files-section" hidden>
+        <p class="app-menu-heading app-files-heading">
+          <span>Documents</span>
+          <span class="app-files-count" id="doc-files-count"></span>
+        </p>
+        <div id="doc-files-list" class="app-files-list"></div>
+
+        <p class="app-menu-heading app-files-heading" style="margin-top:1.25rem">
+          <span>Pictures</span>
+          <span class="app-files-count" id="pic-files-count"></span>
+        </p>
+        <div id="pic-files-list" class="app-files-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <main id="desktop">
+    <div id="app-strip-wrapper">
+      <div id="app-strip"></div>
+    </div>
+    <div id="empty-state" aria-hidden="true"></div>
+  </main>
+
+  <script type="module" src="desktop.js"></script>
 </body>
 
 </html>
