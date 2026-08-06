@@ -751,39 +751,42 @@ function _buildOverviewControls(natColRects, natWinRects, stripRect, tX, tY, sca
   layer.id = 'overview-controls';
   document.body.appendChild(layer);
 
+  const focusedColIdx = S.columns.findIndex(col => col.appIds.includes(S.focusedId));
+
   S.columns.forEach((col, ci) => {
     // Compute visual rect from natural rect using the known transform parameters.
     // This is reliable even when the scrollable wrapper clips the visual output.
     const cr = _ovRect(natColRects[ci], stripRect, tX, tY, scale);
     const midY = cr.top + cr.height / 2;
 
-    // ── Left arrow: navigate to the column on the left ──
-    const lBtn = document.createElement('button');
-    lBtn.className = 'ov-arrow';
-    lBtn.innerHTML = _ARROW_L;
-    lBtn.setAttribute('aria-label', 'Previous column');
-    lBtn.disabled = ci === 0;
-    lBtn.style.cssText = `left:${cr.left - 44}px;top:${midY - 18}px;`;
-    lBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      const prevCol = S.columns[ci - 1];
-      if (prevCol?.appIds.length) focusApp(prevCol.appIds[0]);
-    });
-    layer.appendChild(lBtn);
+    // ── Arrows only on the active (focused) column ──
+    if (ci === focusedColIdx) {
+      const lBtn = document.createElement('button');
+      lBtn.className = 'ov-arrow';
+      lBtn.innerHTML = _ARROW_L;
+      lBtn.setAttribute('aria-label', 'Previous column');
+      lBtn.disabled = ci === 0;
+      lBtn.style.cssText = `left:${cr.left - 44}px;top:${midY - 18}px;`;
+      lBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        const prevCol = S.columns[ci - 1];
+        if (prevCol?.appIds.length) focusApp(prevCol.appIds[0]);
+      });
+      layer.appendChild(lBtn);
 
-    // ── Right arrow: navigate to the column on the right ──
-    const rBtn = document.createElement('button');
-    rBtn.className = 'ov-arrow';
-    rBtn.innerHTML = _ARROW_R;
-    rBtn.setAttribute('aria-label', 'Next column');
-    rBtn.disabled = ci === S.columns.length - 1;
-    rBtn.style.cssText = `left:${cr.left + cr.width + 8}px;top:${midY - 18}px;`;
-    rBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      const nextCol = S.columns[ci + 1];
-      if (nextCol?.appIds.length) focusApp(nextCol.appIds[0]);
-    });
-    layer.appendChild(rBtn);
+      const rBtn = document.createElement('button');
+      rBtn.className = 'ov-arrow';
+      rBtn.innerHTML = _ARROW_R;
+      rBtn.setAttribute('aria-label', 'Next column');
+      rBtn.disabled = ci === S.columns.length - 1;
+      rBtn.style.cssText = `left:${cr.left + cr.width + 8}px;top:${midY - 18}px;`;
+      rBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        const nextCol = S.columns[ci + 1];
+        if (nextCol?.appIds.length) focusApp(nextCol.appIds[0]);
+      });
+      layer.appendChild(rBtn);
+    }
 
     // ── Drag handle per window ──
     col.appIds.forEach(appId => {
