@@ -105,6 +105,47 @@ function openApp(type, insertIntoColId = null) {
   el.dataset.id   = id;
   el.dataset.type = type;
 
+  // Per-window floating controls (overview + ⋮ menu)
+  const winControls = document.createElement('div');
+  winControls.className = 'win-controls';
+
+  const overviewBtn = document.createElement('button');
+  overviewBtn.className = 'win-ctrl-btn';
+  overviewBtn.setAttribute('aria-label', 'Toggle overview');
+  overviewBtn.setAttribute('title', 'Overview');
+  overviewBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+    <rect x="0" y="0" width="5.5" height="5.5" rx="1"/>
+    <rect x="8.5" y="0" width="5.5" height="5.5" rx="1"/>
+    <rect x="0" y="8.5" width="5.5" height="5.5" rx="1"/>
+    <rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1"/>
+  </svg>`;
+  overviewBtn.addEventListener('click', e => { e.stopPropagation(); toggleOverview(); });
+
+  const menuBtn = document.createElement('button');
+  menuBtn.className = 'win-ctrl-btn';
+  menuBtn.dataset.appId = id;
+  menuBtn.setAttribute('aria-label', 'Window options');
+  menuBtn.setAttribute('title', 'Window options');
+  menuBtn.setAttribute('aria-haspopup', 'true');
+  menuBtn.setAttribute('aria-expanded', 'false');
+  menuBtn.innerHTML = `<svg width="4" height="16" viewBox="0 0 4 16" fill="currentColor" aria-hidden="true">
+    <circle cx="2" cy="2"  r="1.75"/>
+    <circle cx="2" cy="8"  r="1.75"/>
+    <circle cx="2" cy="14" r="1.75"/>
+  </svg>`;
+  menuBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const existing = document.getElementById('win-menu-open');
+    if (existing && existing.dataset.forApp === id) { closeWinMenu(); return; }
+    closeWinMenu();
+    focusApp(id);
+    openWinMenu(menuBtn, id);
+  });
+
+  winControls.appendChild(overviewBtn);
+  winControls.appendChild(menuBtn);
+  el.appendChild(winControls);
+
   S.apps.push({ id, type, el });
 
   const existingCol = insertIntoColId ? S.columns.find(c => c.id === insertIntoColId) : null;
@@ -560,7 +601,10 @@ function wireColEvents(colEl) {
   colEl.addEventListener('pointerdown', e => {
     const appEl = e.target.closest('.app-window');
     if (appEl?.dataset.id) {
-      if (document.body.classList.contains('mod-overview')) {
+      // Exit overview on window click — but not when clicking window controls
+      // (those have their own click handlers that manage overview state)
+      if (document.body.classList.contains('mod-overview') &&
+          !e.target.closest('.win-controls')) {
         e.preventDefault();
         exitOverview();
         focusApp(appEl.dataset.id);
@@ -579,12 +623,6 @@ document.querySelectorAll('.app-launcher').forEach(btn => {
 });
 
 closeBtn.addEventListener('click', () => { if (S.focusedId) closeApp(S.focusedId); });
-overviewBtn.addEventListener('click', () => toggleOverview());
-winMenuBtn.addEventListener('click', e => {
-  e.stopPropagation();
-  if (document.getElementById('win-menu-open')) { closeWinMenu(); return; }
-  openWinMenu();
-});
 helpOpenLauncher.addEventListener('click', () => { closeHelp(); openAppMenu(); });
 
 document.addEventListener('click', e => {
@@ -596,7 +634,7 @@ document.addEventListener('click', e => {
 
   // Close win menu when clicking outside
   const openMenu = document.getElementById('win-menu-open');
-  if (openMenu && !openMenu.contains(e.target) && e.target !== winMenuBtn && !winMenuBtn.contains(e.target)) {
+  if (openMenu && !openMenu.contains(e.target) && !e.target.closest('.win-ctrl-btn')) {
     closeWinMenu();
   }
 });
@@ -648,12 +686,11 @@ helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) close
 
 // ── Overview mode ─────────────────────────────────────────────
 function toggleOverview() {
-  const on = document.body.classList.toggle('mod-overview');
-  overviewBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  document.body.classList.toggle('mod-overview');
 }
+
 function exitOverview() {
   document.body.classList.remove('mod-overview');
-  overviewBtn.setAttribute('aria-pressed', 'false');
 }
 
 // ── Per-window ⋮ menu ─────────────────────────────────────────
@@ -675,12 +712,12 @@ const WIDTH_MENU_ITEMS = [
   },
 ];
 
-function openWinMenu() {
-  if (!S.focusedId) return;
-  const col = getAppColumn(S.focusedId);
+function openWinMenu(btn, appId) {
+  const col = getAppColumn(appId);
   const dropdown = document.createElement('div');
   dropdown.className = 'win-menu-dropdown';
   dropdown.id = 'win-menu-open';
+  dropdown.dataset.forApp = appId;
 
   WIDTH_MENU_ITEMS.forEach(({ preset, label, svg }) => {
     const item = document.createElement('button');
@@ -688,22 +725,23 @@ function openWinMenu() {
     item.innerHTML = `${svg}<span>${label}</span>`;
     item.addEventListener('click', e => {
       e.stopPropagation();
+      focusApp(appId);
       setFocusedWidth(preset);
       closeWinMenu();
     });
     dropdown.appendChild(item);
   });
 
-  const rect = winMenuBtn.getBoundingClientRect();
-  dropdown.style.top   = (rect.bottom + 4) + 'px';
+  const rect = btn.getBoundingClientRect();
+  dropdown.style.top  = (rect.bottom + 4) + 'px';
   dropdown.style.right = (window.innerWidth - rect.right) + 'px';
   document.body.appendChild(dropdown);
-  winMenuBtn.setAttribute('aria-expanded', 'true');
+  btn.setAttribute('aria-expanded', 'true');
 }
 
 function closeWinMenu() {
   document.getElementById('win-menu-open')?.remove();
-  winMenuBtn.setAttribute('aria-expanded', 'false');
+  document.querySelectorAll('.win-ctrl-btn[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
 }
 
 // ── First-visit welcome ───────────────────────────────────────

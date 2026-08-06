@@ -1,5 +1,5 @@
 entrypoint = "index.html"
-modules = ["web", "nodejs-20", "go-1.25"]
+modules = ["web", "nodejs-20", "go-1.25", "python-base-3.13"]
 
 [nix]
 channel = "stable-24_11"
