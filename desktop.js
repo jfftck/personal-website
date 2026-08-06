@@ -1,7 +1,6 @@
 'use strict';
 
 import { S }               from './desktop-state.js';
-import { initDrag, wireColEvents } from './desktop-drag.js';
 import { buildDocViewer }   from './apps/doc-viewer.js';
 import { buildImgViewer }   from './apps/img-viewer.js';
 import { buildMediaPlayer } from './apps/media-player.js';
@@ -17,6 +16,8 @@ const helpOpenLauncher = $('help-open-launcher');
 const openAppsBar      = $('open-apps-bar');
 const activeTitle      = $('active-title');
 const closeBtn         = $('close-btn');
+const overviewBtn      = $('overview-btn');
+const winMenuBtn       = $('win-menu-btn');
 const appStrip         = $('app-strip');
 const emptyState       = $('empty-state');
 
@@ -103,18 +104,6 @@ function openApp(type, insertIntoColId = null) {
   el.classList.add('app-window');
   el.dataset.id   = id;
   el.dataset.type = type;
-
-  // Per-window drag handle
-  const handle = document.createElement('div');
-  handle.className = 'win-drag-handle';
-  handle.setAttribute('aria-hidden', 'true');
-  handle.setAttribute('title', 'Drag to move \u00b7 Hold \u2318/Ctrl to drag from anywhere');
-  handle.innerHTML = `<svg width="22" height="6" viewBox="0 0 22 6" fill="currentColor" aria-hidden="true">
-    <circle cx="3"  cy="3" r="1.75"/>
-    <circle cx="11" cy="3" r="1.75"/>
-    <circle cx="19" cy="3" r="1.75"/>
-  </svg>`;
-  el.appendChild(handle);
 
   S.apps.push({ id, type, el });
 
@@ -322,17 +311,13 @@ function updateTopBar() {
   const def     = focused ? APP_DEFS[focused.type] : null;
   activeTitle.textContent = (S.focusedId && S.appTitles[S.focusedId]) || (def ? def.title : '');
 
-  closeBtn.disabled = S.focusedId === null;
-  updateWidthButtons();
+  const hasFocus = S.focusedId !== null;
+  closeBtn.disabled    = !hasFocus;
+  overviewBtn.disabled = S.apps.length === 0;
+  winMenuBtn.disabled  = !hasFocus;
 }
 
-function updateWidthButtons() {
-  const col = S.focusedId ? getAppColumn(S.focusedId) : null;
-  const activePreset = col ? col.widthPreset : null;
-  document.querySelectorAll('.width-btn').forEach(btn => {
-    btn.setAttribute('aria-pressed', btn.dataset.width === activePreset ? 'true' : 'false');
-  });
-}
+function updateWidthButtons() { /* width buttons now live in the per-window ⋮ menu */ }
 
 function updateEmptyState() {
   S.apps.length === 0 ? emptyState.removeAttribute('hidden') : emptyState.setAttribute('hidden', '');
@@ -570,16 +555,21 @@ function restoreSession() {
   }
 }
 
-// ── Init drag module ──────────────────────────────────────────
-initDrag({
-  focusApp,
-  getAppDef:        type => APP_DEFS[type],
-  getAppColumn,
-  createColEl,
-  updateStripLayout,
-  saveSession,
-  updateTopBar,
-});
+// ── Column event wiring (click-to-focus) ─────────────────────
+function wireColEvents(colEl) {
+  colEl.addEventListener('pointerdown', e => {
+    const appEl = e.target.closest('.app-window');
+    if (appEl?.dataset.id) {
+      if (document.body.classList.contains('mod-overview')) {
+        e.preventDefault();
+        exitOverview();
+        focusApp(appEl.dataset.id);
+        return;
+      }
+      focusApp(appEl.dataset.id);
+    }
+  }, { capture: true });
+}
 
 // ── Global event listeners ────────────────────────────────────
 appMenuBtn.addEventListener('click', e => { e.stopPropagation(); toggleAppMenu(); });
@@ -588,25 +578,27 @@ document.querySelectorAll('.app-launcher').forEach(btn => {
   btn.addEventListener('click', () => { openApp(btn.dataset.type); closeAppMenu(); });
 });
 
-document.querySelectorAll('.width-btn').forEach(btn => {
-  btn.addEventListener('click', () => setFocusedWidth(btn.dataset.width));
-});
-
 closeBtn.addEventListener('click', () => { if (S.focusedId) closeApp(S.focusedId); });
+overviewBtn.addEventListener('click', () => toggleOverview());
+winMenuBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  if (document.getElementById('win-menu-open')) { closeWinMenu(); return; }
+  openWinMenu();
+});
 helpOpenLauncher.addEventListener('click', () => { closeHelp(); openAppMenu(); });
 
 document.addEventListener('click', e => {
+  // Close app menu when clicking outside
   if (!appMenu.hasAttribute('hidden') &&
       !appMenu.contains(e.target) &&
       e.target !== appMenuBtn &&
       !appMenuBtn.contains(e.target)) closeAppMenu();
-});
 
-document.addEventListener('keydown', e => {
-  if (e.key === 'Meta' || e.key === 'Control') { S.metaHeld = true;  appStrip.classList.add('mod-held'); }
-});
-document.addEventListener('keyup', e => {
-  if (e.key === 'Meta' || e.key === 'Control') { S.metaHeld = false; appStrip.classList.remove('mod-held'); }
+  // Close win menu when clicking outside
+  const openMenu = document.getElementById('win-menu-open');
+  if (openMenu && !openMenu.contains(e.target) && e.target !== winMenuBtn && !winMenuBtn.contains(e.target)) {
+    closeWinMenu();
+  }
 });
 
 document.addEventListener('keydown', e => {
@@ -618,6 +610,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (helpOpen) { closeHelp(); appMenuBtn.focus(); return; }
     if (menuOpen) { closeAppMenu(); appMenuBtn.focus(); return; }
+    if (document.getElementById('win-menu-open')) { closeWinMenu(); return; }
+    if (document.body.classList.contains('mod-overview')) { exitOverview(); return; }
     return;
   }
 
@@ -652,7 +646,83 @@ document.addEventListener('keydown', e => {
 helpCloseBtn.addEventListener('click', () => closeHelp());
 helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) closeHelp(); });
 
+// ── Overview mode ─────────────────────────────────────────────
+function toggleOverview() {
+  const on = document.body.classList.toggle('mod-overview');
+  overviewBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
+function exitOverview() {
+  document.body.classList.remove('mod-overview');
+  overviewBtn.setAttribute('aria-pressed', 'false');
+}
+
+// ── Per-window ⋮ menu ─────────────────────────────────────────
+const WIDTH_MENU_ITEMS = [
+  {
+    preset: 'third',
+    label: '⅓ Width',
+    svg: `<svg width="16" height="11" viewBox="0 0 20 13" fill="currentColor" aria-hidden="true"><rect x="0" y="0" width="5" height="13" rx="1"/><rect x="7.5" y="0" width="5" height="13" rx="1" opacity="0.3"/><rect x="15" y="0" width="5" height="13" rx="1" opacity="0.3"/></svg>`,
+  },
+  {
+    preset: 'half',
+    label: '½ Width',
+    svg: `<svg width="16" height="11" viewBox="0 0 20 13" fill="currentColor" aria-hidden="true"><rect x="0" y="0" width="9" height="13" rx="1"/><rect x="11" y="0" width="9" height="13" rx="1" opacity="0.3"/></svg>`,
+  },
+  {
+    preset: 'full',
+    label: 'Full Width',
+    svg: `<svg width="16" height="11" viewBox="0 0 20 13" fill="currentColor" aria-hidden="true"><rect x="0" y="0" width="20" height="13" rx="1"/></svg>`,
+  },
+];
+
+function openWinMenu() {
+  if (!S.focusedId) return;
+  const col = getAppColumn(S.focusedId);
+  const dropdown = document.createElement('div');
+  dropdown.className = 'win-menu-dropdown';
+  dropdown.id = 'win-menu-open';
+
+  WIDTH_MENU_ITEMS.forEach(({ preset, label, svg }) => {
+    const item = document.createElement('button');
+    item.className = 'win-menu-item' + (col?.widthPreset === preset ? ' active' : '');
+    item.innerHTML = `${svg}<span>${label}</span>`;
+    item.addEventListener('click', e => {
+      e.stopPropagation();
+      setFocusedWidth(preset);
+      closeWinMenu();
+    });
+    dropdown.appendChild(item);
+  });
+
+  const rect = winMenuBtn.getBoundingClientRect();
+  dropdown.style.top   = (rect.bottom + 4) + 'px';
+  dropdown.style.right = (window.innerWidth - rect.right) + 'px';
+  document.body.appendChild(dropdown);
+  winMenuBtn.setAttribute('aria-expanded', 'true');
+}
+
+function closeWinMenu() {
+  document.getElementById('win-menu-open')?.remove();
+  winMenuBtn.setAttribute('aria-expanded', 'false');
+}
+
 // ── First-visit welcome ───────────────────────────────────────
+function populateEmptyState() {
+  emptyState.innerHTML = `
+    <div class="welcome-screen">
+      <img src="jmt.svg" class="welcome-logo" alt="JMT logo" width="80" height="80">
+      <h1 class="welcome-title">Jeffrey M. Tackett</h1>
+      <p class="welcome-tagline">Documents, photos &amp; media</p>
+      <button class="welcome-open-btn" id="welcome-open-fm">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" aria-hidden="true">
+          <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+        </svg>
+        Open File Manager
+      </button>
+    </div>`;
+  document.getElementById('welcome-open-fm')?.addEventListener('click', () => openApp('file-manager'));
+}
+
 function maybeShowWelcome() {
   try {
     if (localStorage.getItem(WELCOME_SHOWN_KEY)) return;
@@ -662,14 +732,11 @@ function maybeShowWelcome() {
   // Only show if no prior session was restored
   if (S.apps.length > 0) return;
 
-  requestOpenFile({
-    type: 'document',
-    url: 'posts/20240101_Welcome.md',
-    displayName: 'Welcome',
-  });
+  openApp('file-manager');
 }
 
 // ── Init ──────────────────────────────────────────────────────
+populateEmptyState();
 restoreSession();
 maybeShowWelcome();
 updateTopBar();

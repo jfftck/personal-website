@@ -43,27 +43,22 @@
     </div>
 
     <div class="topbar-right">
-      <div id="width-controls" role="group" aria-label="Window width presets">
-        <button class="icon-btn width-btn" data-width="third" title="One-third width" aria-label="Set window to one-third width">
-          <svg width="20" height="13" viewBox="0 0 20 13" fill="currentColor" aria-hidden="true">
-            <rect x="0" y="0" width="5" height="13" rx="1"/>
-            <rect x="7.5" y="0" width="5" height="13" rx="1" opacity="0.3"/>
-            <rect x="15" y="0" width="5" height="13" rx="1" opacity="0.3"/>
-          </svg>
-        </button>
-        <button class="icon-btn width-btn" data-width="half" title="Half width" aria-label="Set window to half width">
-          <svg width="20" height="13" viewBox="0 0 20 13" fill="currentColor" aria-hidden="true">
-            <rect x="0" y="0" width="9" height="13" rx="1"/>
-            <rect x="11" y="0" width="9" height="13" rx="1" opacity="0.3"/>
-          </svg>
-        </button>
-        <button class="icon-btn width-btn" data-width="full" title="Full width" aria-label="Set window to full width">
-          <svg width="20" height="13" viewBox="0 0 20 13" fill="currentColor" aria-hidden="true">
-            <rect x="0" y="0" width="20" height="13" rx="1"/>
-          </svg>
-        </button>
-      </div>
-
+      <button id="overview-btn" class="icon-btn" title="Overview" aria-label="Toggle overview" aria-pressed="false" disabled>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+          <rect x="0" y="0" width="5.5" height="5.5" rx="1"/>
+          <rect x="8.5" y="0" width="5.5" height="5.5" rx="1"/>
+          <rect x="0" y="8.5" width="5.5" height="5.5" rx="1"/>
+          <rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1"/>
+        </svg>
+      </button>
+      <button id="win-menu-btn" class="icon-btn" title="Window options" aria-label="Window options" aria-haspopup="true" aria-expanded="false" disabled>
+        <svg width="4" height="16" viewBox="0 0 4 16" fill="currentColor" aria-hidden="true">
+          <circle cx="2" cy="2"  r="1.75"/>
+          <circle cx="2" cy="8"  r="1.75"/>
+          <circle cx="2" cy="14" r="1.75"/>
+        </svg>
+      </button>
+      <div id="topbar-sep" class="topbar-sep"></div>
       <button id="close-btn" class="icon-btn" title="Close focused app" aria-label="Close focused app" disabled>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <line x1="3" y1="3" x2="13" y2="13"/>
@@ -108,14 +103,6 @@
         <div class="shortcut-row">
           <dt><kbd>]</kbd></dt>
           <dd>Expel window to new column</dd>
-        </div>
-        <div class="shortcut-row">
-          <dt>Drag ← →</dt>
-          <dd>Swap column position</dd>
-        </div>
-        <div class="shortcut-row">
-          <dt>Drag ↑ ↓</dt>
-          <dd>Stack into adjacent column</dd>
         </div>
         <div class="shortcut-row">
           <dt><kbd>⌘</kbd><kbd>D</kbd></dt>
@@ -203,7 +190,7 @@
     <div id="app-strip-wrapper">
       <div id="app-strip"></div>
     </div>
-    <div id="empty-state" aria-hidden="true"></div>
+    <div id="empty-state"></div>
   </main>
 
   <script type="module" src="desktop.js"></script>

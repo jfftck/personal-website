@@ -114,6 +114,7 @@ export function buildFileManager(id, ctx) {
     btn.innerHTML = `
       <span style="color:${fd.color}">${FOLDER_ICONS[fd.id]}</span>
       <span class="fm-sidebar-label">${fd.label}</span>
+      <span class="fm-sidebar-count" data-folder="${fd.id}"></span>
     `;
     sidebar.appendChild(btn);
   });
@@ -249,8 +250,8 @@ export function buildFileManager(id, ctx) {
   function buildFolderItem(fd) {
     const cached   = fileCache[fd.id];
     const countStr = cached !== undefined
-      ? `${cached.length} item${cached.length !== 1 ? 's' : ''}`
-      : '\u2014';
+      ? `${cached.length}`
+      : '';
 
     if (viewMode === 'tile') {
       const tile = document.createElement('div');
@@ -284,6 +285,30 @@ export function buildFileManager(id, ctx) {
     }
   }
 
+  function updateSidebarCounts() {
+    sidebar.querySelectorAll('.fm-sidebar-count[data-folder]').forEach(span => {
+      const cached = fileCache[span.dataset.folder];
+      if (cached !== undefined) span.textContent = cached.length;
+    });
+  }
+
+  function loadFolderCountsInBackground() {
+    const uncached = FOLDERS_DEF.filter(fd => fileCache[fd.id] === undefined);
+    if (!uncached.length) return;
+    let rendered = false;
+    uncached.forEach(fd => {
+      ensureFolder(fd.id).then(() => {
+        updateSidebarCounts();
+        if (currentPath === '/') {
+          if (!rendered) { rendered = true; renderContent(); }
+          // small delay to batch rapid completions into one re-render
+          rendered = false;
+          setTimeout(() => { if (currentPath === '/') renderContent(); }, 0);
+        }
+      });
+    });
+  }
+
   // ── Render ────────────────────────────────────────────────────
   function renderContent() {
     scroll.innerHTML = '';
@@ -298,11 +323,15 @@ export function buildFileManager(id, ctx) {
   }
 
   function render() {
-    if (currentPath === '/') { renderContent(); return; }
+    if (currentPath === '/') {
+      renderContent();
+      loadFolderCountsInBackground();
+      return;
+    }
     const pending = fileCache[currentPath] === undefined ? [currentPath] : [];
     if (pending.length > 0) {
       scroll.innerHTML = '<p class="fm-empty-msg">Loading\u2026</p>';
-      Promise.all(pending.map(ensureFolder)).then(renderContent);
+      Promise.all(pending.map(ensureFolder)).then(() => { renderContent(); updateSidebarCounts(); });
     } else {
       renderContent();
     }
