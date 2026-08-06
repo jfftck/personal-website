@@ -5,6 +5,7 @@ import { buildDocViewer }   from './apps/doc-viewer.js';
 import { buildImgViewer }   from './apps/img-viewer.js';
 import { buildMediaPlayer } from './apps/media-player.js';
 import { buildFileManager } from './apps/file-manager.js';
+import { renderMarkdown }   from './shared/markdown.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -38,9 +39,8 @@ function computeWidth(preset) {
 }
 
 // ── Session persistence ────────────────────────────────────────
-const SESSION_KEY      = 'desktop-session-v2';
-const SESSION_KEY_V1   = 'desktop-session-v1';
-const WELCOME_SHOWN_KEY = 'desktop-welcome-shown';
+const SESSION_KEY    = 'desktop-session-v2';
+const SESSION_KEY_V1 = 'desktop-session-v1';
 
 function saveSession() {
   if (S._skipSave) return;
@@ -594,7 +594,11 @@ function wireColEvents(colEl) {
 appMenuBtn.addEventListener('click', e => { e.stopPropagation(); toggleAppMenu(); });
 
 document.querySelectorAll('.app-launcher').forEach(btn => {
-  btn.addEventListener('click', () => { openApp(btn.dataset.type); closeAppMenu(); });
+  btn.addEventListener('click', () => {
+    if (btn.dataset.type === 'welcome') openWelcomeWindow();
+    else openApp(btn.dataset.type);
+    closeAppMenu();
+  });
 });
 
 closeBtn.addEventListener('click', () => { if (S.focusedId) closeApp(S.focusedId); });
@@ -1062,39 +1066,52 @@ function closeWinMenu() {
   winMenuBtn.setAttribute('aria-expanded', 'false');
 }
 
-// ── First-visit welcome ───────────────────────────────────────
+// ── Welcome floating window ───────────────────────────────────
+let _welcomeBodyLoaded = false;
+
+function openWelcomeWindow() {
+  const overlay = document.getElementById('welcome-overlay');
+  if (!overlay) return;
+  overlay.removeAttribute('hidden');
+  overlay.removeAttribute('aria-hidden');
+
+  if (!_welcomeBodyLoaded) {
+    _welcomeBodyLoaded = true;
+    const body = document.getElementById('welcome-win-body');
+    if (body) {
+      fetch('welcome/welcome.md')
+        .then(r => r.ok ? r.text() : Promise.reject(r.status))
+        .then(text => { body.innerHTML = renderMarkdown(text); })
+        .catch(() => { /* header content is sufficient on failure */ });
+    }
+  }
+}
+
+function closeWelcomeWindow() {
+  const overlay = document.getElementById('welcome-overlay');
+  if (!overlay) return;
+  overlay.setAttribute('hidden', '');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+// ── Empty state ───────────────────────────────────────────────
 function populateEmptyState() {
   emptyState.innerHTML = `
     <div class="welcome-screen">
-      <img src="jmt.svg" class="welcome-logo" alt="JMT logo" width="80" height="80">
-      <h1 class="welcome-title">Jeffrey M. Tackett</h1>
-      <p class="welcome-tagline">Documents, photos &amp; media</p>
-      <button class="welcome-open-btn" id="welcome-open-fm">
-        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" aria-hidden="true">
-          <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
-        </svg>
-        Open File Manager
-      </button>
+      <img src="jmt.svg" class="welcome-logo" alt="" aria-hidden="true" width="72" height="72">
     </div>`;
-  document.getElementById('welcome-open-fm')?.addEventListener('click', () => openApp('file-manager'));
 }
 
-function maybeShowWelcome() {
-  try {
-    if (localStorage.getItem(WELCOME_SHOWN_KEY)) return;
-    localStorage.setItem(WELCOME_SHOWN_KEY, '1');
-  } catch { return; }
-
-  // Only show if no prior session was restored
-  if (S.apps.length > 0) return;
-
-  openApp('file-manager');
-}
+// ── Welcome window close wiring ───────────────────────────────
+document.getElementById('welcome-win-close')?.addEventListener('click', closeWelcomeWindow);
+document.getElementById('welcome-overlay')?.addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeWelcomeWindow();
+});
 
 // ── Init ──────────────────────────────────────────────────────
 populateEmptyState();
 restoreSession();
-maybeShowWelcome();
+openWelcomeWindow();   // show on every visit / refresh
 updateTopBar();
 updateEmptyState();
 updateStripLayout();
