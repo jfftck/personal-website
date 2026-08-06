@@ -670,15 +670,21 @@ function closeEditor() {
 // ── Welcome editor ────────────────────────────────────────────
 const listPane = document.getElementById('list-pane');
 
+// Track which of the three welcome-window files is active
+let welcomeActiveDir      = 'posts';
+let welcomeActiveFilename = '20240101_Welcome.md';
+
 async function openWelcomeEditor() {
   try {
-    const res  = await apiFetch('/api/welcome');
+    const res  = await apiFetch(
+      `/api/file/${welcomeActiveDir}/${encodeURIComponent(welcomeActiveFilename)}`
+    );
     const text = await res.text();
     welcomeTextarea.value = text;
     welcomeDirty = false;
     updateWelcomePreview();
   } catch (e) {
-    toast(`Could not load welcome.md: ${e.message}`, true);
+    toast(`Could not load ${welcomeActiveFilename}: ${e.message}`, true);
   }
 }
 
@@ -694,18 +700,36 @@ welcomeTextarea.addEventListener('input', () => {
 welcomeSaveBtn.addEventListener('click', async () => {
   welcomeSaveBtn.disabled = true;
   try {
-    await apiFetch('/api/welcome', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'text/plain' },
-      body: welcomeTextarea.value,
-    });
+    await apiFetch(
+      `/api/file/${welcomeActiveDir}/${encodeURIComponent(welcomeActiveFilename)}`,
+      { method: 'PUT', headers: { 'Content-Type': 'text/plain' }, body: welcomeTextarea.value }
+    );
     welcomeDirty = false;
-    toast('Welcome message saved');
+    toast('Saved');
   } catch (e) {
     toast(`Save failed: ${e.message}`, true);
   } finally {
     welcomeSaveBtn.disabled = false;
   }
+});
+
+// Sub-tab switching inside the Welcome pane
+document.getElementById('welcome-file-tabs')?.addEventListener('click', async e => {
+  const btn = e.target.closest('.wf-tab');
+  if (!btn) return;
+  if (welcomeDirty && !confirm('You have unsaved changes. Discard them?')) return;
+
+  document.querySelectorAll('.wf-tab').forEach(b => {
+    const active = b === btn;
+    b.classList.toggle('active', active);
+    b.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+
+  welcomeActiveDir      = btn.dataset.dir;
+  welcomeActiveFilename = btn.dataset.filename;
+  welcomeTextarea.value = '';
+  welcomePreview.innerHTML = '';
+  await openWelcomeEditor();
 });
 
 // ── Tab switching ─────────────────────────────────────────────

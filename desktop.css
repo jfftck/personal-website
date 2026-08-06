@@ -1763,6 +1763,9 @@ kbd {
   font-size: 0.95rem;
   line-height: 1.7;
   color: var(--text);
+  /* Override the doc-body centring rules — content fills the window width */
+  max-width: none;
+  margin-inline: 0;
 }
 
 #welcome-win-body:empty { display: none; }
@@ -1791,3 +1794,70 @@ kbd {
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
 }
+
+/* ── Launcher pulse hint ──────────────────────────────────────── */
+@keyframes launcherPulse {
+  0%   { box-shadow: 0 0 0 0   rgba(0, 170, 255, 0.55); }
+  60%  { box-shadow: 0 0 0 9px rgba(0, 170, 255, 0);    }
+  100% { box-shadow: 0 0 0 0   rgba(0, 170, 255, 0);    }
+}
+#app-menu-btn.pulse-hint {
+  animation: launcherPulse 750ms ease 4;
+  outline: 2px solid var(--focus-color);
+  outline-offset: 3px;
+}
+
+/* ── Launcher tooltip ────────────────────────────────────────── */
+#launcher-tooltip {
+  position: fixed;
+  top: 50px;
+  left: 8px;
+  z-index: 3000;
+  background: var(--app-bg);
+  -webkit-backdrop-filter: var(--backdrop);
+  backdrop-filter: var(--backdrop);
+  border: 1px solid var(--app-border);
+  border-radius: 0.65rem;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+  padding: 0.75rem 2.25rem 0.75rem 0.9rem;
+  max-width: 230px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text);
+  animation: tooltipIn 180ms ease both;
+}
+@keyframes tooltipIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: none; }
+}
+#launcher-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 14px;
+  width: 9px;
+  height: 9px;
+  background: var(--app-bg);
+  border-left: 1px solid var(--app-border);
+  border-top:  1px solid var(--app-border);
+  transform: rotate(45deg);
+}
+#launcher-tooltip p { margin: 0 0 0.4rem; }
+#launcher-tooltip a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+#launcher-tooltip a:hover { text-decoration: underline; }
+#launcher-tooltip-close {
+  position: absolute;
+  top: 5px; right: 7px;
+  background: none; border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--text);
+  opacity: 0.4;
+  line-height: 1;
+  padding: 2px 4px;
+}
+#launcher-tooltip-close:hover { opacity: 0.85; }

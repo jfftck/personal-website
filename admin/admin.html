@@ -93,7 +93,14 @@
   <!-- ── Welcome message editor pane ────────────────────────── -->
   <div id="welcome-pane" hidden>
     <div id="welcome-topbar">
-      <span id="welcome-filename">welcome/welcome.md</span>
+      <nav id="welcome-file-tabs" role="tablist" aria-label="Welcome window documents">
+        <button class="wf-tab active" role="tab" aria-selected="true"
+                data-dir="posts" data-filename="20240101_Welcome.md">Welcome</button>
+        <button class="wf-tab" role="tab" aria-selected="false"
+                data-dir="posts" data-filename="20240115_About_Me.md">About</button>
+        <button class="wf-tab" role="tab" aria-selected="false"
+                data-dir="posts" data-filename="20240201_My_Sites.md">Links</button>
+      </nav>
       <div class="editor-actions">
         <button id="welcome-save-btn" class="action-btn primary">Save</button>
       </div>

@@ -1130,8 +1130,50 @@ function populateEmptyState() {
     </div>`;
 }
 
+// ── Launcher flash + tooltip after "Get started" ──────────────
+function _flashLauncher() {
+  // Pulse the app-menu-btn
+  appMenuBtn.classList.remove('pulse-hint');
+  void appMenuBtn.offsetWidth;
+  appMenuBtn.classList.add('pulse-hint');
+  setTimeout(() => appMenuBtn.classList.remove('pulse-hint'), 3100);
+
+  // Tooltip bubble
+  document.getElementById('launcher-tooltip')?.remove();
+  const tip = document.createElement('div');
+  tip.id = 'launcher-tooltip';
+  tip.innerHTML =
+    `<button id="launcher-tooltip-close" aria-label="Dismiss">\u00d7</button>` +
+    `<p>Open apps and browse your content from here.</p>` +
+    `<a href="#" id="launcher-guide-link">View keyboard shortcuts \u2192</a>`;
+  document.body.appendChild(tip);
+
+  tip.querySelector('#launcher-tooltip-close').addEventListener('click', () => tip.remove());
+  tip.querySelector('#launcher-guide-link').addEventListener('click', e => {
+    e.preventDefault();
+    tip.remove();
+    openHelp();
+  });
+
+  const timer = setTimeout(() => tip.remove(), 6000);
+  setTimeout(() => {
+    const dismiss = e => {
+      if (!tip.isConnected) return document.removeEventListener('click', dismiss, true);
+      if (!tip.contains(e.target) && e.target !== appMenuBtn) {
+        tip.remove();
+        clearTimeout(timer);
+        document.removeEventListener('click', dismiss, true);
+      }
+    };
+    document.addEventListener('click', dismiss, true);
+  }, 80);
+}
+
 // ── Welcome window wiring ─────────────────────────────────────
-document.getElementById('welcome-win-close')?.addEventListener('click', closeWelcomeWindow);
+document.getElementById('welcome-win-close')?.addEventListener('click', () => {
+  closeWelcomeWindow();
+  _flashLauncher();
+});
 document.getElementById('welcome-overlay')?.addEventListener('click', e => {
   if (e.target === e.currentTarget) closeWelcomeWindow();
 });
