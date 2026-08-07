@@ -2,7 +2,25 @@
   {
     "filename": "20260514_Seattle_Walk.mp4",
     "size": "124 MB",
-    "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    "url": "https://media.w3.org/2010/05/sintel/trailer_hd.mp4",
     "poster": "https://picsum.photos/seed/seattle14/640/360"
+  },
+  {
+    "filename": "20260417_Family_Reunion.mp4",
+    "size": "890 MB",
+    "url": "https://media.w3.org/2010/05/bunny/trailer.mp4",
+    "poster": "https://picsum.photos/seed/reunion17/640/360"
+  },
+  {
+    "filename": "20260203_Winter_Walk.mp4",
+    "size": "58 MB",
+    "url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+    "poster": "https://picsum.photos/seed/winter03/640/360"
+  },
+  {
+    "filename": "20251224_Christmas_Party.mp4",
+    "size": "210 MB",
+    "url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm",
+    "poster": "https://picsum.photos/seed/xmasparty/640/360"
   }
 ]
