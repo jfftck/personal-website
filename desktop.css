@@ -1132,6 +1132,8 @@ body.mod-overview .app-window.focused {
   opacity: 0.45;
 }
 
+.media-player-empty[hidden] { display: none; }
+
 .media-empty-icon {
   width: 3.5rem;
   height: 3.5rem;
@@ -1154,6 +1156,8 @@ body.mod-overview .app-window.focused {
   display: block;
   background: #000;
 }
+
+.media-video[hidden] { display: none; }
 
 .media-title-lbl {
   font-size: 0.8125rem;
