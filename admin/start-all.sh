@@ -1,4 +1,7 @@
 #!/bin/sh
+# Release port 80 if a stale process is holding it
+fuser -k 80/tcp 2>/dev/null || true
+
 # Start the static web server (port 80) in the background
 static-web-server -w ./.config/static-web-server.toml &
 STATIC_PID=$!

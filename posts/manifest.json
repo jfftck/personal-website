@@ -1,10 +1,38 @@
 [
-  { "filename": "20240520_News_Update.md",  "size": "0.3 KB" },
-  { "filename": "20240426_Site_Redesign.md","size": "0.4 KB" },
-  { "filename": "20240323_Im_Back.md",      "size": "0.5 KB" },
-  { "filename": "20240201_My_Sites.md",     "size": "0.3 KB" },
-  { "filename": "20240115_About_Me.md",     "size": "0.6 KB" },
-  { "filename": "20240101_Welcome.md",      "size": "0.7 KB" },
-  { "filename": "20200101_Happy_New_Year.md","size": "0.2 KB" },
-  { "filename": "20191225_Merry_Christmas.md","size": "0.2 KB" }
+  {
+    "filename": "20260807_Big_Update.md",
+    "size": "22 B"
+  },
+  {
+    "filename": "20240520_News_Update.md",
+    "size": "0.3 KB"
+  },
+  {
+    "filename": "20240426_Site_Redesign.md",
+    "size": "0.4 KB"
+  },
+  {
+    "filename": "20240323_Im_Back.md",
+    "size": "0.5 KB"
+  },
+  {
+    "filename": "20240201_My_Sites.md",
+    "size": "0.3 KB"
+  },
+  {
+    "filename": "20240115_About_Me.md",
+    "size": "0.6 KB"
+  },
+  {
+    "filename": "20240101_Welcome.md",
+    "size": "0.7 KB"
+  },
+  {
+    "filename": "20200101_Happy_New_Year.md",
+    "size": "0.2 KB"
+  },
+  {
+    "filename": "20191225_Merry_Christmas.md",
+    "size": "0.2 KB"
+  }
 ]
