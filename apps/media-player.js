@@ -130,7 +130,9 @@ export function buildMediaPlayer(id, ctx) {
   }
 
   // ── Error handling ─────────────────────────────────────────────
+  // MEDIA_ERR_ABORTED (code 1) fires whenever we switch videos mid-load — ignore it.
   video.addEventListener('error', () => {
+    if (!video.error || video.error.code === MediaError.MEDIA_ERR_ABORTED) return;
     if (!video.hidden) {
       const p = emptyDiv.querySelector('p');
       if (p) p.textContent = '⚠️ Could not load this video.';
