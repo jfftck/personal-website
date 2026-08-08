@@ -993,8 +993,101 @@ function _buildOverviewControls(natColRects, natWinRects, stripRect, tX, tY, sca
 // ── Overview drag-to-reorder ──────────────────────────────────
 let _ovDrag = null;
 
+// Build explicit drop-zone elements into `layer` for the given dragged window.
+// Returns an array of { el, meta } objects for hit-testing.
+function _buildDropZones(draggedId, layer) {
+  const srcCol = getAppColumn(draggedId);
+  const scale  = _OV_SCALE;
+  const tX     = _ovTX, tY = _ovTY;
+  const sr     = _ovStripRect;
+  const zones  = [];
+
+  function makeZone(extraClass, style, meta) {
+    const el = document.createElement('div');
+    el.className = `ov-drop-zone ${extraClass}`;
+    el.style.cssText = style;
+    Object.assign(el.dataset, meta);
+    layer.appendChild(el);
+    zones.push({ el, meta });
+  }
+
+  // ── Within-column zones for every column except the source ──
+  S.columns.forEach((col, ci) => {
+    if (col === srcCol) return;
+    const cr = _ovRect(_ovNatColRects[ci], sr, tX, tY, scale);
+
+    // Compute visual rects for each window in this column
+    const wrs = col.appIds.map(id => _ovRect(_ovNatWinRects.get(id), sr, tX, tY, scale));
+    const N   = wrs.length;
+
+    // Gaps: [colTop→wr[0].top], [wr[i].bottom→wr[i+1].top ...], [wr[N-1].bottom→colBottom]
+    const gaps = [];
+    gaps.push({ top: cr.top, bottom: wrs[0].top, insertAt: 0 });
+    for (let i = 0; i < N - 1; i++) {
+      gaps.push({ top: wrs[i].bottom, bottom: wrs[i + 1].top, insertAt: i + 1 });
+    }
+    gaps.push({ top: wrs[N - 1].top + wrs[N - 1].height, bottom: cr.top + cr.height, insertAt: N });
+
+    gaps.forEach(({ top, bottom, insertAt }) => {
+      const h   = Math.max(bottom - top, 0);
+      const midY = top + h / 2;
+      const PAD  = 6;
+      makeZone(
+        'ov-drop-zone--within',
+        `left:${cr.left + PAD}px;top:${midY - 10}px;width:${cr.width - PAD * 2}px;height:20px;`,
+        { type: 'within', colId: col.id, insertAt: String(insertAt) }
+      );
+    });
+  });
+
+  // ── New-column zones (only when source column has >1 window) ──
+  if (srcCol && srcCol.appIds.length > 1) {
+    const allCR  = S.columns.map((_, ci) => _ovRect(_ovNatColRects[ci], sr, tX, tY, scale));
+    const minTop = Math.min(...allCR.map(r => r.top));
+    const maxBot = Math.max(...allCR.map(r => r.top + r.height));
+    const zH     = maxBot - minTop;
+    const ZW     = 20; // zone width in px
+
+    // Before first column
+    makeZone(
+      'ov-drop-zone--new-col',
+      `left:${allCR[0].left - ZW - 4}px;top:${minTop}px;width:${ZW}px;height:${zH}px;`,
+      { type: 'new-col', insertBeforeColId: S.columns[0].id }
+    );
+
+    // Between adjacent columns
+    for (let i = 0; i < S.columns.length - 1; i++) {
+      const gapCenter = allCR[i].left + allCR[i].width + (allCR[i + 1].left - allCR[i].left - allCR[i].width) / 2;
+      makeZone(
+        'ov-drop-zone--new-col',
+        `left:${gapCenter - ZW / 2}px;top:${minTop}px;width:${ZW}px;height:${zH}px;`,
+        { type: 'new-col', insertBeforeColId: S.columns[i + 1].id }
+      );
+    }
+
+    // After last column
+    const last = allCR[allCR.length - 1];
+    makeZone(
+      'ov-drop-zone--new-col',
+      `left:${last.left + last.width + 4}px;top:${minTop}px;width:${ZW}px;height:${zH}px;`,
+      { type: 'new-col', insertBeforeColId: 'end' }
+    );
+  }
+
+  return zones;
+}
+
 function _wireOvDrag(handle, appId, layer) {
-  let ghost = null;
+  let ghost      = null;
+  let zones      = [];
+  let activeZone = null;
+
+  function clearZones() {
+    zones.forEach(({ el }) => el.remove());
+    zones      = [];
+    activeZone = null;
+    layer.classList.remove('ov-dragging');
+  }
 
   handle.addEventListener('pointerdown', e => {
     e.stopPropagation();
@@ -1007,23 +1100,35 @@ function _wireOvDrag(handle, appId, layer) {
     ghost.style.cssText = `left:${e.clientX - 20}px;top:${e.clientY - 14}px;`;
     layer.appendChild(ghost);
     handle.classList.add('dragging');
+    layer.classList.add('ov-dragging');
+    zones = _buildDropZones(appId, layer);
   });
 
   handle.addEventListener('pointermove', e => {
     if (!_ovDrag || !ghost) return;
     ghost.style.left = (e.clientX - 20) + 'px';
     ghost.style.top  = (e.clientY - 14) + 'px';
-    layer.querySelectorAll('.ov-drag-handle').forEach(h => h.classList.remove('drop-above', 'drop-below'));
-    const t = _ovFindDrop(e.clientX, e.clientY, appId);
-    if (t?.kind === 'onto') t.el.classList.add(t.pos === 'above' ? 'drop-above' : 'drop-below');
+
+    // Find which drop zone the cursor is over
+    let found = null;
+    for (const z of zones) {
+      const r = z.el.getBoundingClientRect();
+      if (e.clientX >= r.left && e.clientX <= r.right &&
+          e.clientY >= r.top  && e.clientY <= r.bottom) {
+        found = z; break;
+      }
+    }
+    if (activeZone && activeZone !== found) activeZone.el.classList.remove('active');
+    if (found && found !== activeZone)      found.el.classList.add('active');
+    activeZone = found;
   });
 
-  handle.addEventListener('pointerup', e => {
+  handle.addEventListener('pointerup', () => {
     if (!_ovDrag) return;
     ghost?.remove(); ghost = null;
     handle.classList.remove('dragging');
-    layer.querySelectorAll('.ov-drag-handle').forEach(h => h.classList.remove('drop-above', 'drop-below'));
-    const drop = _ovFindDrop(e.clientX, e.clientY, appId);
+    const drop = activeZone?.meta || null;
+    clearZones();
     if (drop) _ovPerformDrop(appId, drop);
     _ovDrag = null;
   });
@@ -1031,57 +1136,39 @@ function _wireOvDrag(handle, appId, layer) {
   handle.addEventListener('pointercancel', () => {
     ghost?.remove(); ghost = null;
     handle.classList.remove('dragging');
+    clearZones();
     _ovDrag = null;
   });
 }
 
-function _ovFindDrop(x, y, draggedId) {
-  // 1. Try to land on another window's drag handle
-  for (const h of document.querySelectorAll('#overview-controls .ov-drag-handle')) {
-    const tid = h.dataset.appId;
-    if (tid === draggedId) continue;
-    const r = h.getBoundingClientRect();
-    if (x >= r.left - 60 && x <= r.right + 60 && y >= r.top - 60 && y <= r.bottom + 60) {
-      return { kind: 'onto', targetId: tid, pos: y < r.top + r.height / 2 ? 'above' : 'below', el: h };
-    }
-  }
-  // 2. Drag to empty space — create a new column if the source has >1 window
-  const srcCol = getAppColumn(draggedId);
-  if (srcCol && srcCol.appIds.length > 1) {
-    return { kind: 'new-col', insertX: x };
-  }
-  return null;
-}
+function _ovPerformDrop(draggedId, meta) {
+  if (!meta) return;
 
-function _ovPerformDrop(draggedId, drop) {
-  if (!drop) return;
-
-  if (drop.kind === 'new-col') {
+  // ── New column ──
+  if (meta.type === 'new-col') {
     const srcCol = getAppColumn(draggedId);
     if (!srcCol || srcCol.appIds.length <= 1) return;
 
-    // Remove window from source column
     srcCol.appIds.splice(srcCol.appIds.indexOf(draggedId), 1);
     const app = S.apps.find(a => a.id === draggedId);
     app.el.remove();
-    // srcCol still has ≥1 app — don't remove it
+    // srcCol retains ≥1 window — do not remove it
 
-    // Build the new column
-    const newColId  = `col-${S.nextColId++}`;
-    const newColEl  = createColEl(newColId);
+    const newColId = `col-${S.nextColId++}`;
+    const newColEl = createColEl(newColId);
     newColEl.style.setProperty('--app-width', `${computeWidth(srcCol.widthPreset)}px`);
     newColEl.appendChild(app.el);
     const newCol = { id: newColId, appIds: [draggedId], widthPreset: srcCol.widthPreset, el: newColEl };
 
-    // Find insertion point in the strip by viewport x
-    const refEl = Array.from(appStrip.children).find(c => {
-      const r = c.getBoundingClientRect();
-      return drop.insertX < r.left + r.width / 2;
-    }) || null;
-    appStrip.insertBefore(newColEl, refEl);
+    const insertBeforeColId = meta.insertBeforeColId;
+    if (insertBeforeColId === 'end') {
+      appStrip.appendChild(newColEl);
+    } else {
+      const refCol = S.columns.find(c => c.id === insertBeforeColId);
+      appStrip.insertBefore(newColEl, refCol ? refCol.el : null);
+    }
     wireColEvents(newColEl);
 
-    // Rebuild S.columns from DOM order so indices stay in sync
     const colMap = new Map(S.columns.map(c => [c.el, c]));
     colMap.set(newColEl, newCol);
     S.columns = Array.from(appStrip.children).map(el => colMap.get(el)).filter(Boolean);
@@ -1093,34 +1180,40 @@ function _ovPerformDrop(draggedId, drop) {
     return;
   }
 
-  // kind === 'onto' — reorder within/across existing columns
-  const { targetId, pos } = drop;
-  if (draggedId === targetId) return;
-  const srcCol = getAppColumn(draggedId);
-  const dstCol = getAppColumn(targetId);
-  if (!srcCol || !dstCol) return;
+  // ── Within existing column ──
+  if (meta.type === 'within') {
+    const { colId } = meta;
+    const insertAt  = parseInt(meta.insertAt, 10);
+    const srcCol    = getAppColumn(draggedId);
+    if (!srcCol) return;
 
-  srcCol.appIds.splice(srcCol.appIds.indexOf(draggedId), 1);
-  const app = S.apps.find(a => a.id === draggedId);
-  app.el.remove();
+    // Bail if drop is a no-op (window is already in that slot)
+    if (srcCol.id === colId) {
+      const curIdx = srcCol.appIds.indexOf(draggedId);
+      if (curIdx === insertAt || curIdx === insertAt - 1) return;
+    }
 
-  if (srcCol.appIds.length === 0) {
-    srcCol.el.remove();
-    S.columns.splice(S.columns.indexOf(srcCol), 1);
+    srcCol.appIds.splice(srcCol.appIds.indexOf(draggedId), 1);
+    const app = S.apps.find(a => a.id === draggedId);
+    app.el.remove();
+
+    if (srcCol.appIds.length === 0) {
+      srcCol.el.remove();
+      S.columns.splice(S.columns.indexOf(srcCol), 1);
+    }
+
+    const dstCol = S.columns.find(c => c.id === colId);
+    if (!dstCol) return;
+
+    const at = Math.min(insertAt, dstCol.appIds.length);
+    dstCol.appIds.splice(at, 0, draggedId);
+    dstCol.el.insertBefore(app.el, dstCol.el.querySelectorAll('.app-window')[at] || null);
+
+    saveSession();
+    updateTopBar();
+    updateStripLayout();
+    requestAnimationFrame(() => positionOverview());
   }
-
-  const freshDst = getAppColumn(targetId);
-  if (!freshDst) return;
-
-  const dstIdx   = freshDst.appIds.indexOf(targetId);
-  const insertAt = pos === 'above' ? dstIdx : dstIdx + 1;
-  freshDst.appIds.splice(insertAt, 0, draggedId);
-  freshDst.el.insertBefore(app.el, freshDst.el.querySelectorAll('.app-window')[insertAt] || null);
-
-  saveSession();
-  updateTopBar();
-  updateStripLayout();
-  requestAnimationFrame(() => positionOverview());
 }
 
 window.addEventListener('resize', () => {

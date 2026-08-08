@@ -610,10 +610,42 @@ body {
   transition: opacity 120ms ease, background 120ms ease;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
-.ov-drag-handle:hover  { opacity: 1; background: var(--btn-hover); }
+.ov-drag-handle:hover    { opacity: 1; background: var(--btn-hover); }
 .ov-drag-handle.dragging { opacity: 0.4; cursor: grabbing; }
-.ov-drag-handle.drop-above { box-shadow: 0 -3px 0 0 var(--focus-color); }
-.ov-drag-handle.drop-below { box-shadow: 0  3px 0 0 var(--focus-color); }
+
+/* Hide all non-active handles while a drag is in progress */
+#overview-controls.ov-dragging .ov-drag-handle:not(.dragging) {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 80ms ease;
+}
+
+/* ── Drop zones ── */
+.ov-drop-zone {
+  position: absolute;
+  pointer-events: auto;
+  border-radius: 0.25rem;
+  border: 2px dashed var(--focus-color);
+  opacity: 0.35;
+  transition: opacity 80ms ease, background 80ms ease, border-color 80ms ease;
+}
+.ov-drop-zone.active {
+  opacity: 1;
+  background: var(--btn-active);
+  border-style: solid;
+  border-color: var(--accent-glow);
+  box-shadow: 0 0 0 1px var(--accent-glow), 0 0 8px var(--accent-glow);
+}
+
+/* Within-column zones: horizontal bars */
+.ov-drop-zone--within {
+  /* sizing set via inline style */
+}
+
+/* New-column zones: vertical bars */
+.ov-drop-zone--new-col {
+  border-radius: 0.375rem;
+}
 
 /* Drag ghost */
 .ov-drag-ghost {
