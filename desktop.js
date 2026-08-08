@@ -297,6 +297,62 @@ function expelRight() {
   requestAnimationFrame(() => scrollToApp(S.focusedId));
 }
 
+function expelLeft() {
+  if (!S.focusedId) return;
+  const col = getAppColumn(S.focusedId);
+  if (!col || col.appIds.length <= 1) return;
+
+  const colIdx = S.columns.indexOf(col);
+  const appIdx = col.appIds.indexOf(S.focusedId);
+  col.appIds.splice(appIdx, 1);
+  const app = S.apps.find(a => a.id === S.focusedId);
+  app.el.remove();
+
+  const newColId = `col-${S.nextColId++}`;
+  const newColEl = createColEl(newColId);
+  newColEl.appendChild(app.el);
+  newColEl.style.setProperty('--app-width', `${Math.max(computeWidth(col.widthPreset), 160)}px`);
+
+  const newCol = { id: newColId, appIds: [S.focusedId], widthPreset: col.widthPreset, el: newColEl };
+  S.columns.splice(colIdx, 0, newCol);
+  col.el.before(newColEl);
+  wireColEvents(newColEl);
+
+  saveSession();
+  updateTopBar();
+  updateStripLayout();
+  requestAnimationFrame(() => scrollToApp(S.focusedId));
+}
+
+function consumeRight() {
+  if (!S.focusedId) return;
+  const col = getAppColumn(S.focusedId);
+  if (!col) return;
+  const colIdx = S.columns.indexOf(col);
+  if (colIdx === S.columns.length - 1) return;
+
+  const rightCol = S.columns[colIdx + 1];
+  if (!rightCol.appIds.length) return;
+
+  const takenId  = rightCol.appIds[0];
+  const takenApp = S.apps.find(a => a.id === takenId);
+  if (!takenApp) return;
+
+  rightCol.appIds.shift();
+  takenApp.el.remove();
+
+  if (rightCol.appIds.length === 0) {
+    rightCol.el.remove();
+    S.columns.splice(colIdx + 1, 1);
+  }
+
+  col.appIds.push(takenId);
+  col.el.appendChild(takenApp.el);
+  saveSession();
+  updateTopBar();
+  updateStripLayout();
+}
+
 // ── Top-bar rendering ─────────────────────────────────────────
 function updateTopBar() {
   openAppsBar.innerHTML = '';
@@ -668,7 +724,10 @@ document.addEventListener('keydown', e => {
 
   if ((e.key === '[' || e.key === ']') && !isTyping && !helpOpen && !menuOpen) {
     e.preventDefault();
-    e.key === '[' ? consumeLeft() : expelRight();
+    const focusedCol  = S.focusedId ? getAppColumn(S.focusedId) : null;
+    const inSharedCol = focusedCol && focusedCol.appIds.length > 1;
+    if (e.key === '[') { inSharedCol ? expelLeft()  : consumeLeft();  }
+    else               { inSharedCol ? expelRight() : consumeRight(); }
     return;
   }
 
