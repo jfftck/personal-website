@@ -353,6 +353,36 @@ function consumeRight() {
   updateStripLayout();
 }
 
+function moveWindowUp() {
+  if (!S.focusedId) return;
+  const col = getAppColumn(S.focusedId);
+  if (!col || col.appIds.length <= 1) return;
+  const idx = col.appIds.indexOf(S.focusedId);
+  if (idx === 0) return;
+  // Swap in array
+  [col.appIds[idx - 1], col.appIds[idx]] = [col.appIds[idx], col.appIds[idx - 1]];
+  // Swap in DOM — move focused element before the previous sibling
+  const app    = S.apps.find(a => a.id === S.focusedId);
+  const prevEl = S.apps.find(a => a.id === col.appIds[idx]).el;
+  col.el.insertBefore(app.el, prevEl);
+  saveSession();
+}
+
+function moveWindowDown() {
+  if (!S.focusedId) return;
+  const col = getAppColumn(S.focusedId);
+  if (!col || col.appIds.length <= 1) return;
+  const idx = col.appIds.indexOf(S.focusedId);
+  if (idx === col.appIds.length - 1) return;
+  // Swap in array
+  [col.appIds[idx], col.appIds[idx + 1]] = [col.appIds[idx + 1], col.appIds[idx]];
+  // Swap in DOM — move focused element after the next sibling
+  const app    = S.apps.find(a => a.id === S.focusedId);
+  const nextEl = S.apps.find(a => a.id === col.appIds[idx]).el;
+  col.el.insertBefore(app.el, nextEl.nextSibling);
+  saveSession();
+}
+
 // ── Top-bar rendering ─────────────────────────────────────────
 function updateTopBar() {
   openAppsBar.innerHTML = '';
@@ -743,6 +773,10 @@ document.addEventListener('keydown', e => {
   if (!inContent) {
     if (e.key === 'ArrowLeft')  { e.preventDefault(); focusPrevApp(); return; }
     if (e.key === 'ArrowRight') { e.preventDefault(); focusNextApp(); return; }
+    const focusedCol  = S.focusedId ? getAppColumn(S.focusedId) : null;
+    const inSharedCol = focusedCol && focusedCol.appIds.length > 1;
+    if (inSharedCol && e.key === 'ArrowUp')   { e.preventDefault(); moveWindowUp();   return; }
+    if (inSharedCol && e.key === 'ArrowDown') { e.preventDefault(); moveWindowDown(); return; }
   }
 
   if (e.key === 'Tab' && !inContent) {
