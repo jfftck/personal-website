@@ -1016,28 +1016,21 @@ function _buildDropZones(draggedId, layer) {
     if (col === srcCol) return;
     const cr = _ovRect(_ovNatColRects[ci], sr, tX, tY, scale);
 
-    // Compute visual rects for each window in this column
-    const wrs = col.appIds.map(id => _ovRect(_ovNatWinRects.get(id), sr, tX, tY, scale));
-    const N   = wrs.length;
+    // Divide the column height equally into (N+1) drop zones
+    const N        = col.appIds.length;
+    const ZONE_GAP = 2;   // px between adjacent zones
+    const PAD      = 4;   // horizontal inset
+    const totalGap = ZONE_GAP * N;
+    const sectionH = (cr.height - totalGap) / (N + 1);
 
-    // Gaps: [colTop→wr[0].top], [wr[i].bottom→wr[i+1].top ...], [wr[N-1].bottom→colBottom]
-    const gaps = [];
-    gaps.push({ top: cr.top, bottom: wrs[0].top, insertAt: 0 });
-    for (let i = 0; i < N - 1; i++) {
-      gaps.push({ top: wrs[i].bottom, bottom: wrs[i + 1].top, insertAt: i + 1 });
-    }
-    gaps.push({ top: wrs[N - 1].top + wrs[N - 1].height, bottom: cr.top + cr.height, insertAt: N });
-
-    gaps.forEach(({ top, bottom, insertAt }) => {
-      const h   = Math.max(bottom - top, 0);
-      const midY = top + h / 2;
-      const PAD  = 6;
+    for (let i = 0; i <= N; i++) {
+      const zoneTop = cr.top + i * (sectionH + ZONE_GAP);
       makeZone(
         'ov-drop-zone--within',
-        `left:${cr.left + PAD}px;top:${midY - 10}px;width:${cr.width - PAD * 2}px;height:20px;`,
-        { type: 'within', colId: col.id, insertAt: String(insertAt) }
+        `left:${cr.left + PAD}px;top:${zoneTop}px;width:${cr.width - PAD * 2}px;height:${sectionH}px;`,
+        { type: 'within', colId: col.id, insertAt: String(i) }
       );
-    });
+    }
   });
 
   // ── New-column zones (only when source column has >1 window) ──
@@ -1217,6 +1210,10 @@ function _ovPerformDrop(draggedId, meta) {
 }
 
 window.addEventListener('resize', () => {
+  // Recompute all column widths so the preset ratios (⅓, ½, full) stay correct
+  S.columns.forEach(col => {
+    col.el.style.setProperty('--app-width', `${Math.max(computeWidth(col.widthPreset), 160)}px`);
+  });
   if (document.body.classList.contains('mod-overview')) positionOverview();
 });
 
