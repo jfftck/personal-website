@@ -1039,7 +1039,7 @@ function _buildDropZones(draggedId, layer) {
     const minTop = Math.min(...allCR.map(r => r.top));
     const maxBot = Math.max(...allCR.map(r => r.top + r.height));
     const zH     = maxBot - minTop;
-    const ZW     = 20; // zone width in px
+    const ZW     = 48; // generous hit target around each column boundary
     const srcIdx = S.columns.indexOf(srcCol);
     const sourceIsSolo = srcCol.appIds.length === 1;
 
