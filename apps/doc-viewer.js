@@ -1,6 +1,6 @@
 'use strict';
 
-import { toolBtn }             from './toolbar.js';
+import { toolBtn, initResponsiveToolbar } from './toolbar.js';
 import { renderMarkdown, esc } from '../shared/markdown.js';
 
 const MANIFEST_SOURCES = [
@@ -43,7 +43,7 @@ export function buildDocViewer(id, ctx) {
   const el = document.createElement('div');
 
   const toolbar = document.createElement('div');
-  toolbar.className = 'app-toolbar';
+  toolbar.className = 'app-toolbar doc-toolbar';
   toolbar.innerHTML = `
     ${toolBtn('open', 'open', 'Browse documents')}
     <span class="toolbar-sep"></span>
@@ -55,6 +55,7 @@ export function buildDocViewer(id, ctx) {
     ${toolBtn('download', 'download', 'Download')}
     ${toolBtn('print',    'print',    'Print')}
   `;
+  initResponsiveToolbar(toolbar);
 
   const content = document.createElement('div');
   content.className = 'app-content doc-layout';

@@ -18,3 +18,26 @@ export function toolBtn(action, icon, label) {
     ${ICONS[icon]}<span class="lbl">${label}</span>
   </button>`;
 }
+
+const supportsContainerQueries = CSS.supports('container-type: inline-size');
+
+if (!supportsContainerQueries) {
+  document.documentElement.classList.add('no-container-queries');
+}
+
+export function initResponsiveToolbar(toolbar) {
+  if (supportsContainerQueries || !toolbar) return;
+
+  let frame = 0;
+  const fit = () => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      toolbar.classList.remove('toolbar-icons-only');
+      toolbar.classList.toggle('toolbar-icons-only', toolbar.scrollWidth > toolbar.clientWidth);
+    });
+  };
+
+  const observer = new ResizeObserver(fit);
+  observer.observe(toolbar);
+  fit();
+}

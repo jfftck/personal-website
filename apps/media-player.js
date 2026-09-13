@@ -1,6 +1,6 @@
 'use strict';
 
-import { toolBtn } from './toolbar.js';
+import { toolBtn, initResponsiveToolbar } from './toolbar.js';
 
 async function fetchVideoManifest() {
   try {
@@ -32,12 +32,13 @@ export function buildMediaPlayer(id, ctx) {
   const el = document.createElement('div');
 
   const toolbar = document.createElement('div');
-  toolbar.className = 'app-toolbar';
+  toolbar.className = 'app-toolbar media-toolbar';
   toolbar.innerHTML = `
     ${toolBtn('open', 'open', 'Browse videos')}
     <span class="toolbar-sep"></span>
     ${toolBtn('external', 'external', 'Open in new tab')}
   `;
+  initResponsiveToolbar(toolbar);
 
   const content = document.createElement('div');
   content.className = 'app-content doc-layout';

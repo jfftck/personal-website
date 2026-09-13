@@ -1,5 +1,7 @@
 'use strict';
 
+import { initResponsiveToolbar } from './toolbar.js';
+
 export function buildFileManager(id, ctx) {
   const FOLDERS_DEF = [
     { id: 'posts',     label: 'Posts',     color: '#10b981' },
@@ -83,6 +85,7 @@ export function buildFileManager(id, ctx) {
       </button>
     </div>
   `;
+  initResponsiveToolbar(toolbar);
 
   const content = document.createElement('div');
   content.className = 'app-content';

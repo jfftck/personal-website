@@ -1,6 +1,6 @@
 'use strict';
 
-import { toolBtn } from './toolbar.js';
+import { toolBtn, initResponsiveToolbar } from './toolbar.js';
 
 async function fetchPicturesManifest() {
   try {
@@ -36,7 +36,7 @@ export function buildImgViewer(id, ctx) {
   const el = document.createElement('div');
 
   const toolbar = document.createElement('div');
-  toolbar.className = 'app-toolbar';
+  toolbar.className = 'app-toolbar img-toolbar';
   toolbar.innerHTML = `
     ${toolBtn('open',     'open',     'Browse pictures')}
     <span class="toolbar-sep"></span>
@@ -51,6 +51,7 @@ export function buildImgViewer(id, ctx) {
     ${toolBtn('share',    'share',    'Share')}
     ${toolBtn('download', 'download', 'Download')}
   `;
+  initResponsiveToolbar(toolbar);
 
   const counterEl = toolbar.querySelector('.img-counter');
 

@@ -777,6 +777,7 @@ body.mod-overview .app-window.focused {
    APP TOOLBAR (shared)
    ------------------------------------------------------------ */
 .app-toolbar {
+  container-type: inline-size;
   display: flex;
   align-items: center;
   gap: 0.125rem;
@@ -827,8 +828,29 @@ body.mod-overview .app-window.focused {
 
 .tool-btn .lbl { display: none; }
 
-@container (width > 380px) {
-  .tool-btn .lbl { display: inline; }
+@container (width > 600px) {
+  .doc-toolbar .tool-btn .lbl { display: inline; }
+}
+
+@container (width > 700px) {
+  .img-toolbar .tool-btn .lbl { display: inline; }
+}
+
+@container (width > 260px) {
+  .media-toolbar .tool-btn .lbl { display: inline; }
+}
+
+@container (width > 240px) {
+  .fm-toolbar .tool-btn .lbl { display: inline; }
+}
+
+/* Exact overflow fallback for browsers without container queries. */
+.no-container-queries .app-toolbar:not(.toolbar-icons-only) .tool-btn .lbl {
+  display: inline;
+}
+
+.no-container-queries .app-toolbar.toolbar-icons-only .tool-btn .lbl {
+  display: none;
 }
 
 .zoom-readout {
