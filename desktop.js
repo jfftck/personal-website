@@ -354,6 +354,7 @@ function moveWindowUp() {
   const prevEl = S.apps.find(a => a.id === col.appIds[idx]).el;
   col.el.insertBefore(app.el, prevEl);
   saveSession();
+  updateTopBar();
 }
 
 function moveWindowDown() {
@@ -369,12 +370,16 @@ function moveWindowDown() {
   const nextEl = S.apps.find(a => a.id === col.appIds[idx]).el;
   col.el.insertBefore(app.el, nextEl.nextSibling);
   saveSession();
+  updateTopBar();
 }
 
 // ── Top-bar rendering ─────────────────────────────────────────
 function updateTopBar() {
   openAppsBar.innerHTML = '';
-  for (const { id, type } of S.apps) {
+  for (const id of getAppOrder()) {
+    const app = S.apps.find(candidate => candidate.id === id);
+    if (!app) continue;
+    const { type } = app;
     const def = APP_DEFS[type];
     const btn = document.createElement('button');
     btn.className = 'app-tab-btn' + (id === S.focusedId ? ' focused' : '');
@@ -911,6 +916,7 @@ function _buildOverviewControls(natColRects, natWinRects, stripRect, tX, tY, sca
         [S.columns[ci - 1], S.columns[ci]] = [S.columns[ci], S.columns[ci - 1]];
         appStrip.insertBefore(S.columns[ci - 1].el, S.columns[ci].el);
         saveSession();
+        updateTopBar();
         positionOverview();
       });
       layer.appendChild(lBtn);
@@ -927,6 +933,7 @@ function _buildOverviewControls(natColRects, natWinRects, stripRect, tX, tY, sca
         [S.columns[ci], S.columns[ci + 1]] = [S.columns[ci + 1], S.columns[ci]];
         S.columns[ci].el.after(S.columns[ci + 1].el);
         saveSession();
+        updateTopBar();
         positionOverview();
       });
       layer.appendChild(rBtn);
