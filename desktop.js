@@ -1021,38 +1021,39 @@ function _buildDropZones(draggedId, layer) {
     }
   });
 
-  // ── New-column zones (only when source column has >1 window) ──
-  if (srcCol && srcCol.appIds.length > 1) {
+  // ── Column-boundary zones ──
+  // A shared source creates a new column; a solo source moves its whole column.
+  // For a solo source, omit its current left/right boundaries because both are no-ops.
+  if (srcCol) {
     const allCR  = S.columns.map((_, ci) => _ovRect(_ovNatColRects[ci], sr, tX, tY, scale));
     const minTop = Math.min(...allCR.map(r => r.top));
     const maxBot = Math.max(...allCR.map(r => r.top + r.height));
     const zH     = maxBot - minTop;
     const ZW     = 20; // zone width in px
+    const srcIdx = S.columns.indexOf(srcCol);
+    const sourceIsSolo = srcCol.appIds.length === 1;
 
-    // Before first column
-    makeZone(
-      'ov-drop-zone--new-col',
-      `left:${allCR[0].left - ZW - 4}px;top:${minTop}px;width:${ZW}px;height:${zH}px;`,
-      { type: 'new-col', insertBeforeColId: S.columns[0].id }
-    );
+    for (let boundary = 0; boundary <= S.columns.length; boundary++) {
+      if (sourceIsSolo && (boundary === srcIdx || boundary === srcIdx + 1)) continue;
 
-    // Between adjacent columns
-    for (let i = 0; i < S.columns.length - 1; i++) {
-      const gapCenter = allCR[i].left + allCR[i].width + (allCR[i + 1].left - allCR[i].left - allCR[i].width) / 2;
+      let centerX;
+      if (boundary === 0) {
+        centerX = allCR[0].left - ZW / 2 - 4;
+      } else if (boundary === S.columns.length) {
+        const last = allCR[allCR.length - 1];
+        centerX = last.left + last.width + ZW / 2 + 4;
+      } else {
+        const left  = allCR[boundary - 1];
+        const right = allCR[boundary];
+        centerX = left.left + left.width + (right.left - left.left - left.width) / 2;
+      }
+
       makeZone(
         'ov-drop-zone--new-col',
-        `left:${gapCenter - ZW / 2}px;top:${minTop}px;width:${ZW}px;height:${zH}px;`,
-        { type: 'new-col', insertBeforeColId: S.columns[i + 1].id }
+        `left:${centerX - ZW / 2}px;top:${minTop}px;width:${ZW}px;height:${zH}px;`,
+        { type: 'new-col', insertAt: String(boundary) }
       );
     }
-
-    // After last column
-    const last = allCR[allCR.length - 1];
-    makeZone(
-      'ov-drop-zone--new-col',
-      `left:${last.left + last.width + 4}px;top:${minTop}px;width:${ZW}px;height:${zH}px;`,
-      { type: 'new-col', insertBeforeColId: 'end' }
-    );
   }
 
   return zones;
@@ -1128,7 +1129,28 @@ function _ovPerformDrop(draggedId, meta) {
   // ── New column ──
   if (meta.type === 'new-col') {
     const srcCol = getAppColumn(draggedId);
-    if (!srcCol || srcCol.appIds.length <= 1) return;
+    if (!srcCol) return;
+    let insertAt = parseInt(meta.insertAt, 10);
+    if (!Number.isInteger(insertAt)) return;
+
+    // A solo window already is a complete column, so move that column.
+    if (srcCol.appIds.length === 1) {
+      const srcIdx = S.columns.indexOf(srcCol);
+      if (insertAt === srcIdx || insertAt === srcIdx + 1) return;
+
+      S.columns.splice(srcIdx, 1);
+      srcCol.el.remove();
+      if (insertAt > srcIdx) insertAt--;
+      insertAt = Math.min(insertAt, S.columns.length);
+      S.columns.splice(insertAt, 0, srcCol);
+      appStrip.insertBefore(srcCol.el, appStrip.children[insertAt] || null);
+
+      saveSession();
+      updateTopBar();
+      updateStripLayout();
+      requestAnimationFrame(() => positionOverview());
+      return;
+    }
 
     srcCol.appIds.splice(srcCol.appIds.indexOf(draggedId), 1);
     const app = S.apps.find(a => a.id === draggedId);
@@ -1141,18 +1163,11 @@ function _ovPerformDrop(draggedId, meta) {
     newColEl.appendChild(app.el);
     const newCol = { id: newColId, appIds: [draggedId], widthPreset: srcCol.widthPreset, el: newColEl };
 
-    const insertBeforeColId = meta.insertBeforeColId;
-    if (insertBeforeColId === 'end') {
-      appStrip.appendChild(newColEl);
-    } else {
-      const refCol = S.columns.find(c => c.id === insertBeforeColId);
-      appStrip.insertBefore(newColEl, refCol ? refCol.el : null);
-    }
+    insertAt = Math.min(insertAt, S.columns.length);
+    appStrip.insertBefore(newColEl, appStrip.children[insertAt] || null);
     wireColEvents(newColEl);
 
-    const colMap = new Map(S.columns.map(c => [c.el, c]));
-    colMap.set(newColEl, newCol);
-    S.columns = Array.from(appStrip.children).map(el => colMap.get(el)).filter(Boolean);
+    S.columns.splice(insertAt, 0, newCol);
 
     saveSession();
     updateTopBar();
