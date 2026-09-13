@@ -260,10 +260,16 @@ body {
 }
 .calendar-heading button:hover { background: var(--btn-hover); }
 .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: .2rem; text-align: center; }
-.calendar-grid span { display: grid; place-items: center; min-height: 2rem; font-size: .75rem; border-radius: 50%; }
+.calendar-grid button {
+  display: grid; place-items: center; width: 100%; aspect-ratio: 1;
+  padding: 0; border: 1px solid transparent; border-radius: 50%;
+  background: transparent; color: inherit; font: inherit; font-size: .75rem;
+}
+.calendar-grid button:hover { background: var(--btn-hover); }
 .calendar-weekdays span { min-height: 1.5rem; opacity: .5; font-weight: 700; }
 .calendar-grid .outside { opacity: .25; }
-.calendar-grid .today { background: var(--accent); color: #fff; font-weight: 700; }
+.calendar-grid .today { border-color: currentColor; font-weight: 700; }
+.calendar-grid .selected { background: var(--accent); color: #fff; }
 .reminders { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--topbar-border); }
 .reminders-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
 .reminders-heading > strong { font-size: .875rem; }

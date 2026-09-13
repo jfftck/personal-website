@@ -39,6 +39,7 @@ const THEME_KEY   = 'desktop-theme';
 const TIME_KEY    = 'desktop-time-24h';
 const REMINDER_KEY = 'desktop-reminders';
 let calendarDate  = new Date();
+let selectedCalendarDate = new Date();
 let use24HourTime = localStorage.getItem(TIME_KEY) === 'true';
 let reminders = [];
 try {
@@ -78,15 +79,28 @@ function updateClock() {
   });
 }
 
+function localDateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0')
+  ].join('-');
+}
+
 function renderReminders() {
   const list = $('reminder-list');
   list.innerHTML = '';
   reminders.sort((a, b) => new Date(a.when) - new Date(b.when));
-  if (!reminders.length) {
-    list.innerHTML = '<p class="reminder-empty">No reminders yet</p>';
+  const selectedKey = localDateKey(selectedCalendarDate);
+  const selectedReminders = reminders.filter(reminder => {
+    const date = new Date(reminder.when);
+    return !Number.isNaN(date.getTime()) && localDateKey(date) === selectedKey;
+  });
+  if (!selectedReminders.length) {
+    list.innerHTML = '<p class="reminder-empty">No reminders for this date</p>';
     return;
   }
-  reminders.forEach(reminder => {
+  selectedReminders.forEach(reminder => {
     const item = document.createElement('article');
     item.className = 'reminder-item';
     const title = document.createElement('strong');
@@ -126,11 +140,21 @@ function renderCalendar() {
   for (let i = 0; i < 42; i++) {
     const date = new Date(start);
     date.setDate(start.getDate() + i);
-    const cell = document.createElement('span');
+    const cell = document.createElement('button');
+    cell.type = 'button';
     cell.textContent = date.getDate();
     if (date.getMonth() !== month) cell.classList.add('outside');
     if (date.toDateString() === today.toDateString()) cell.classList.add('today');
+    const isSelected = date.toDateString() === selectedCalendarDate.toDateString();
+    if (isSelected) cell.classList.add('selected');
+    cell.setAttribute('aria-pressed', String(isSelected));
     cell.setAttribute('aria-label', date.toLocaleDateString());
+    cell.addEventListener('click', () => {
+      selectedCalendarDate = new Date(date);
+      calendarDate = new Date(date.getFullYear(), date.getMonth(), 1);
+      renderCalendar();
+      renderReminders();
+    });
     days.appendChild(cell);
   }
 }
@@ -171,7 +195,14 @@ $('calendar-next').addEventListener('click', () => {
 $('add-reminder-btn').addEventListener('click', () => {
   const form = $('reminder-form');
   form.hidden = false;
-  const defaultWhen = new Date(Date.now() + 60 * 60 * 1000);
+  const now = new Date();
+  const defaultWhen = new Date(
+    selectedCalendarDate.getFullYear(),
+    selectedCalendarDate.getMonth(),
+    selectedCalendarDate.getDate(),
+    selectedCalendarDate.toDateString() === now.toDateString() ? now.getHours() + 1 : 9,
+    0
+  );
   defaultWhen.setMinutes(defaultWhen.getMinutes() - defaultWhen.getTimezoneOffset());
   $('reminder-when').value = defaultWhen.toISOString().slice(0, 16);
   $('reminder-text').focus();
