@@ -28,16 +28,6 @@ const EDGE = () => 2 * rem();
 const GAP  = () => 1 * rem();
 const WIDTH_PRESETS = ['third', 'half', 'full'];
 
-function computeWidth(preset) {
-  const usable = window.innerWidth - 2 * EDGE();
-  switch (preset) {
-    case 'full':  return usable;
-    case 'half':  return (usable - GAP()) / 2;
-    case 'third': return (usable - 2 * GAP()) / 3;
-    default:      return usable;
-  }
-}
-
 // ── Session persistence ────────────────────────────────────────
 const SESSION_KEY    = 'desktop-session-v2';
 const SESSION_KEY_V1 = 'desktop-session-v1';
@@ -91,6 +81,7 @@ function createColEl(colId) {
   const el = document.createElement('div');
   el.className = 'app-col';
   el.dataset.colId = colId;
+  el.dataset.width = 'full';
   return el;
 }
 
@@ -115,7 +106,6 @@ function openApp(type, insertIntoColId = null) {
     const colId = `col-${S.nextColId++}`;
     const colEl = createColEl(colId);
     colEl.appendChild(el);
-    colEl.style.setProperty('--app-width', `${computeWidth('full')}px`);
     const col = { id: colId, appIds: [id], widthPreset: 'full', el: colEl };
     S.columns.push(col);
     appStrip.appendChild(colEl);
@@ -206,14 +196,12 @@ function setFocusedWidth(preset) {
   if (!S.focusedId) return;
   const col = getAppColumn(S.focusedId);
   if (!col) return;
-  const px = Math.max(computeWidth(preset), 160);
-
   col.el.classList.remove('width-shrink', 'width-grow');
   void col.el.offsetWidth;
   col.el.classList.add('width-shrink');
   col.el.addEventListener('animationend', () => {
     col.el.classList.remove('width-shrink');
-    col.el.style.setProperty('--app-width', `${px}px`);
+    col.el.dataset.width = preset;
     void col.el.offsetWidth;
     col.el.classList.add('width-grow');
     col.el.addEventListener('animationend', () => col.el.classList.remove('width-grow'), { once: true });
@@ -284,7 +272,7 @@ function expelRight() {
   const newColId = `col-${S.nextColId++}`;
   const newColEl = createColEl(newColId);
   newColEl.appendChild(app.el);
-  newColEl.style.setProperty('--app-width', `${Math.max(computeWidth(col.widthPreset), 160)}px`);
+  newColEl.dataset.width = col.widthPreset;
 
   const newCol = { id: newColId, appIds: [S.focusedId], widthPreset: col.widthPreset, el: newColEl };
   S.columns.splice(colIdx + 1, 0, newCol);
@@ -311,7 +299,7 @@ function expelLeft() {
   const newColId = `col-${S.nextColId++}`;
   const newColEl = createColEl(newColId);
   newColEl.appendChild(app.el);
-  newColEl.style.setProperty('--app-width', `${Math.max(computeWidth(col.widthPreset), 160)}px`);
+  newColEl.dataset.width = col.widthPreset;
 
   const newCol = { id: newColId, appIds: [S.focusedId], widthPreset: col.widthPreset, el: newColEl };
   S.columns.splice(colIdx, 0, newCol);
@@ -618,7 +606,7 @@ function restoreSession() {
           const col = S.columns.find(c => c.id === colId);
           if (col) {
             col.widthPreset = preset;
-            col.el.style.setProperty('--app-width', `${Math.max(computeWidth(preset), 160)}px`);
+            col.el.dataset.width = preset;
           }
         }
       }
@@ -631,7 +619,7 @@ function restoreSession() {
           const col = getAppColumn(appId);
           if (col) {
             col.widthPreset = preset;
-            col.el.style.setProperty('--app-width', `${Math.max(computeWidth(preset), 160)}px`);
+            col.el.dataset.width = preset;
           }
         }
       }
@@ -1149,7 +1137,7 @@ function _ovPerformDrop(draggedId, meta) {
 
     const newColId = `col-${S.nextColId++}`;
     const newColEl = createColEl(newColId);
-    newColEl.style.setProperty('--app-width', `${computeWidth(srcCol.widthPreset)}px`);
+    newColEl.dataset.width = srcCol.widthPreset;
     newColEl.appendChild(app.el);
     const newCol = { id: newColId, appIds: [draggedId], widthPreset: srcCol.widthPreset, el: newColEl };
 
@@ -1210,10 +1198,6 @@ function _ovPerformDrop(draggedId, meta) {
 }
 
 window.addEventListener('resize', () => {
-  // Recompute all column widths so the preset ratios (⅓, ½, full) stay correct
-  S.columns.forEach(col => {
-    col.el.style.setProperty('--app-width', `${Math.max(computeWidth(col.widthPreset), 160)}px`);
-  });
   if (document.body.classList.contains('mod-overview')) positionOverview();
 });
 

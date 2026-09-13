@@ -465,7 +465,7 @@ body {
    COLUMNS
    ------------------------------------------------------------ */
 .app-col {
-  --app-width: calc(100vw - 2 * var(--edge));
+  --app-width: max(160px, calc(100vw - 2 * var(--edge)));
   flex-shrink: 0;
   width: var(--app-width);
   height: calc(100dvh - 5rem);
@@ -477,14 +477,21 @@ body {
   transform-origin: center top;
 }
 
-@media (max-width: 640px) and (orientation: portrait) {
-  .app-col { --app-width: 100vw; }
+.app-col[data-width="full"] {
+  --app-width: max(160px, calc(100vw - 2 * var(--edge)));
 }
 
-@media (min-width: 1024px) {
-  .app-col {
-    --app-width: calc((100vw - 2 * var(--edge) - var(--gap)) / 2);
-  }
+.app-col[data-width="half"] {
+  --app-width: max(160px, calc((100vw - 2 * var(--edge) - var(--gap)) / 2));
+}
+
+.app-col[data-width="third"] {
+  --app-width: max(160px, calc((100vw - 2 * var(--edge) - 2 * var(--gap)) / 3));
+}
+
+@media (max-width: 640px) and (orientation: portrait) {
+  .app-col,
+  .app-col[data-width] { --app-width: 100vw; }
 }
 
 @keyframes widthShrink {
