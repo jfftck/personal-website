@@ -19,6 +19,8 @@ const activeTitle      = $('active-title');
 const closeBtn         = $('close-btn');
 const overviewBtn      = $('overview-btn');
 const winMenuBtn       = $('win-menu-btn');
+const systemTimeBtn    = $('system-time-btn');
+const systemPanel      = $('system-panel');
 const appStrip         = $('app-strip');
 const emptyState       = $('empty-state');
 
@@ -27,6 +29,101 @@ function rem() { return parseFloat(getComputedStyle(document.documentElement).fo
 const EDGE = () => 2 * rem();
 const GAP  = () => 1 * rem();
 const WIDTH_PRESETS = ['third', 'half', 'full'];
+
+// ── System panel, clock, calendar, and quick settings ─────────
+const themeToggle = $('theme-toggle');
+const themeReset  = $('theme-reset');
+const themeState  = $('theme-state');
+const themeMedia  = matchMedia('(prefers-color-scheme: dark)');
+const THEME_KEY   = 'desktop-theme';
+let calendarDate  = new Date();
+
+function effectiveTheme() {
+  return document.documentElement.dataset.theme || (themeMedia.matches ? 'dark' : 'light');
+}
+
+function applyTheme(theme = localStorage.getItem(THEME_KEY)) {
+  if (theme === 'light' || theme === 'dark') {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_KEY, theme);
+    themeState.textContent = theme[0].toUpperCase() + theme.slice(1);
+    themeReset.disabled = false;
+  } else {
+    delete document.documentElement.dataset.theme;
+    localStorage.removeItem(THEME_KEY);
+    themeState.textContent = 'System';
+    themeReset.disabled = true;
+  }
+}
+
+function updateClock() {
+  const now = new Date();
+  const time = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  $('system-time').textContent = time;
+  $('system-panel-time').textContent = time;
+  $('system-panel-date').textContent = now.toLocaleDateString([], {
+    weekday: 'long', month: 'long', day: 'numeric'
+  });
+}
+
+function renderCalendar() {
+  const year = calendarDate.getFullYear();
+  const month = calendarDate.getMonth();
+  const today = new Date();
+  $('calendar-title').textContent = calendarDate.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  const first = new Date(year, month, 1);
+  const start = new Date(year, month, 1 - first.getDay());
+  const days = $('calendar-days');
+  days.innerHTML = '';
+  for (let i = 0; i < 42; i++) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + i);
+    const cell = document.createElement('span');
+    cell.textContent = date.getDate();
+    if (date.getMonth() !== month) cell.classList.add('outside');
+    if (date.toDateString() === today.toDateString()) cell.classList.add('today');
+    cell.setAttribute('aria-label', date.toLocaleDateString());
+    days.appendChild(cell);
+  }
+}
+
+function closeSystemPanel() {
+  systemPanel.hidden = true;
+  systemTimeBtn.setAttribute('aria-expanded', 'false');
+}
+
+systemTimeBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  const opening = systemPanel.hidden;
+  systemPanel.hidden = !opening;
+  systemTimeBtn.setAttribute('aria-expanded', String(opening));
+  if (opening) { updateClock(); renderCalendar(); }
+});
+systemPanel.addEventListener('click', e => e.stopPropagation());
+themeToggle.addEventListener('click', () => applyTheme(effectiveTheme() === 'dark' ? 'light' : 'dark'));
+themeReset.addEventListener('click', () => applyTheme(null));
+themeMedia.addEventListener('change', () => { if (!localStorage.getItem(THEME_KEY)) applyTheme(null); });
+$('calendar-prev').addEventListener('click', () => {
+  calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1);
+  renderCalendar();
+});
+$('calendar-next').addEventListener('click', () => {
+  calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1);
+  renderCalendar();
+});
+document.querySelectorAll('.quick-toggle[data-setting]').forEach(button => {
+  const key = `quick-${button.dataset.setting}`;
+  const saved = localStorage.getItem(key);
+  if (saved !== null) button.setAttribute('aria-pressed', saved);
+  button.addEventListener('click', () => {
+    const next = button.getAttribute('aria-pressed') !== 'true';
+    button.setAttribute('aria-pressed', String(next));
+    localStorage.setItem(key, String(next));
+  });
+});
+applyTheme();
+updateClock();
+setInterval(updateClock, 30000);
 
 // ── Session persistence ────────────────────────────────────────
 const SESSION_KEY    = 'desktop-session-v2';
@@ -708,6 +805,13 @@ document.querySelectorAll('.help-tab').forEach(tab => {
 });
 
 document.addEventListener('click', e => {
+  if (!systemPanel.hidden &&
+      !systemPanel.contains(e.target) &&
+      e.target !== systemTimeBtn &&
+      !systemTimeBtn.contains(e.target)) {
+    closeSystemPanel();
+  }
+
   // Close app menu when clicking outside
   if (!appMenu.hasAttribute('hidden') &&
       !appMenu.contains(e.target) &&
@@ -736,6 +840,7 @@ document.addEventListener('keydown', e => {
   const isTyping  = ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName) || e.target.isContentEditable;
 
   if (e.key === 'Escape') {
+    if (!systemPanel.hidden) { closeSystemPanel(); systemTimeBtn.focus(); return; }
     if (helpOpen) { closeHelp(); appMenuBtn.focus(); return; }
     if (menuOpen) { closeAppMenu(); appMenuBtn.focus(); return; }
     if (document.getElementById('win-menu-open')) { closeWinMenu(); return; }

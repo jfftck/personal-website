@@ -64,8 +64,54 @@
           <line x1="13" y1="3" x2="3" y2="13"/>
         </svg>
       </button>
+      <button id="system-time-btn" class="system-time-btn" aria-label="Open system panel" aria-expanded="false" aria-controls="system-panel">
+        <span id="system-time">--:--</span>
+      </button>
     </div>
   </header>
+
+  <section id="system-panel" aria-label="System controls" hidden>
+    <header class="system-panel-header">
+      <div>
+        <strong id="system-panel-time">--:--</strong>
+        <span id="system-panel-date"></span>
+      </div>
+    </header>
+    <div class="quick-toggles" aria-label="Quick settings">
+      <button class="quick-toggle" data-setting="wifi" aria-pressed="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21l-2.2-2.2a3.1 3.1 0 0 1 4.4 0L12 21zm-5.3-5.3-2.1-2.1a10.5 10.5 0 0 1 14.8 0l-2.1 2.1a7.5 7.5 0 0 0-10.6 0zM1.4 10.4 0 9a17 17 0 0 1 24 0l-1.4 1.4a15 15 0 0 0-21.2 0z"/></svg>
+        <span>Internet</span>
+      </button>
+      <button class="quick-toggle" data-setting="bluetooth" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 7 6-5 4 5 4-7 6V14.4L7.8 18 6 16.2l5-4.2-5-4.2L7.8 6l4.2 3.6V2zm2 4.4v3.2L15.9 8 14 6.4zm0 8v3.2l1.9-1.6-1.9-1.6z"/></svg>
+        <span>Bluetooth</span>
+      </button>
+      <button class="quick-toggle" data-setting="dnd" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm5 11H7v-2h10z"/></svg>
+        <span>Do Not Disturb</span>
+      </button>
+      <div class="theme-split">
+        <button id="theme-toggle" class="quick-toggle" aria-label="Toggle theme">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-.5 0-1-.1-1.5A7 7 0 0 1 12 3z"/></svg>
+          <span>Theme: <b id="theme-state">System</b></span>
+        </button>
+        <button id="theme-reset" aria-label="Reset theme to system default" title="Use system theme">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L8 6l4 4V7a5 5 0 1 1-4.6 7H5.3A7 7 0 1 0 12 5z"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="calendar">
+      <div class="calendar-heading">
+        <button id="calendar-prev" aria-label="Previous month">‹</button>
+        <strong id="calendar-title"></strong>
+        <button id="calendar-next" aria-label="Next month">›</button>
+      </div>
+      <div class="calendar-grid calendar-weekdays" aria-hidden="true">
+        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      </div>
+      <div id="calendar-days" class="calendar-grid"></div>
+    </div>
+  </section>
 
   <div id="help-overlay" role="dialog" aria-modal="true" aria-label="Help" hidden>
     <div id="help-inner">
