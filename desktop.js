@@ -36,7 +36,15 @@ const themeReset  = $('theme-reset');
 const themeState  = $('theme-state');
 const themeMedia  = matchMedia('(prefers-color-scheme: dark)');
 const THEME_KEY   = 'desktop-theme';
+const TIME_KEY    = 'desktop-time-24h';
+const REMINDER_KEY = 'desktop-reminders';
 let calendarDate  = new Date();
+let use24HourTime = localStorage.getItem(TIME_KEY) === 'true';
+let reminders = [];
+try {
+  const storedReminders = JSON.parse(localStorage.getItem(REMINDER_KEY) || '[]');
+  if (Array.isArray(storedReminders)) reminders = storedReminders;
+} catch { /* ignore invalid stored reminders */ }
 
 function effectiveTheme() {
   return document.documentElement.dataset.theme || (themeMedia.matches ? 'dark' : 'light');
@@ -58,11 +66,51 @@ function applyTheme(theme = localStorage.getItem(THEME_KEY)) {
 
 function updateClock() {
   const now = new Date();
-  const time = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const time = now.toLocaleTimeString([], {
+    hour: use24HourTime ? '2-digit' : 'numeric',
+    minute: '2-digit',
+    hour12: !use24HourTime
+  });
   $('system-time').textContent = time;
   $('system-panel-time').textContent = time;
   $('system-panel-date').textContent = now.toLocaleDateString([], {
     weekday: 'long', month: 'long', day: 'numeric'
+  });
+}
+
+function renderReminders() {
+  const list = $('reminder-list');
+  list.innerHTML = '';
+  reminders.sort((a, b) => new Date(a.when) - new Date(b.when));
+  if (!reminders.length) {
+    list.innerHTML = '<p class="reminder-empty">No reminders yet</p>';
+    return;
+  }
+  reminders.forEach(reminder => {
+    const item = document.createElement('article');
+    item.className = 'reminder-item';
+    const title = document.createElement('strong');
+    title.textContent = reminder.text;
+    const time = document.createElement('time');
+    const date = new Date(reminder.when);
+    time.dateTime = reminder.when;
+    time.textContent = date.toLocaleString([], {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: use24HourTime ? '2-digit' : 'numeric',
+      minute: '2-digit', hour12: !use24HourTime
+    });
+    const remove = document.createElement('button');
+    remove.className = 'reminder-delete';
+    remove.type = 'button';
+    remove.setAttribute('aria-label', `Delete ${reminder.text}`);
+    remove.textContent = '×';
+    remove.addEventListener('click', () => {
+      reminders = reminders.filter(item => item.id !== reminder.id);
+      localStorage.setItem(REMINDER_KEY, JSON.stringify(reminders));
+      renderReminders();
+    });
+    item.append(title, time, remove);
+    list.appendChild(item);
   });
 }
 
@@ -103,6 +151,15 @@ systemPanel.addEventListener('click', e => e.stopPropagation());
 themeToggle.addEventListener('click', () => applyTheme(effectiveTheme() === 'dark' ? 'light' : 'dark'));
 themeReset.addEventListener('click', () => applyTheme(null));
 themeMedia.addEventListener('change', () => { if (!localStorage.getItem(THEME_KEY)) applyTheme(null); });
+const timeFormatToggle = $('time-format-toggle');
+timeFormatToggle.setAttribute('aria-pressed', String(use24HourTime));
+timeFormatToggle.addEventListener('click', () => {
+  use24HourTime = !use24HourTime;
+  localStorage.setItem(TIME_KEY, String(use24HourTime));
+  timeFormatToggle.setAttribute('aria-pressed', String(use24HourTime));
+  updateClock();
+  renderReminders();
+});
 $('calendar-prev').addEventListener('click', () => {
   calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1);
   renderCalendar();
@@ -111,18 +168,32 @@ $('calendar-next').addEventListener('click', () => {
   calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1);
   renderCalendar();
 });
-document.querySelectorAll('.quick-toggle[data-setting]').forEach(button => {
-  const key = `quick-${button.dataset.setting}`;
-  const saved = localStorage.getItem(key);
-  if (saved !== null) button.setAttribute('aria-pressed', saved);
-  button.addEventListener('click', () => {
-    const next = button.getAttribute('aria-pressed') !== 'true';
-    button.setAttribute('aria-pressed', String(next));
-    localStorage.setItem(key, String(next));
-  });
+$('add-reminder-btn').addEventListener('click', () => {
+  const form = $('reminder-form');
+  form.hidden = false;
+  const defaultWhen = new Date(Date.now() + 60 * 60 * 1000);
+  defaultWhen.setMinutes(defaultWhen.getMinutes() - defaultWhen.getTimezoneOffset());
+  $('reminder-when').value = defaultWhen.toISOString().slice(0, 16);
+  $('reminder-text').focus();
+});
+$('cancel-reminder').addEventListener('click', () => {
+  $('reminder-form').reset();
+  $('reminder-form').hidden = true;
+});
+$('reminder-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const text = $('reminder-text').value.trim();
+  const when = $('reminder-when').value;
+  if (!text || !when) return;
+  reminders.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text, when });
+  localStorage.setItem(REMINDER_KEY, JSON.stringify(reminders));
+  event.currentTarget.reset();
+  event.currentTarget.hidden = true;
+  renderReminders();
 });
 applyTheme();
 updateClock();
+renderReminders();
 setInterval(updateClock, 30000);
 
 // ── Session persistence ────────────────────────────────────────

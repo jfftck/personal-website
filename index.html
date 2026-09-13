@@ -78,17 +78,9 @@
       </div>
     </header>
     <div class="quick-toggles" aria-label="Quick settings">
-      <button class="quick-toggle" data-setting="wifi" aria-pressed="true">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21l-2.2-2.2a3.1 3.1 0 0 1 4.4 0L12 21zm-5.3-5.3-2.1-2.1a10.5 10.5 0 0 1 14.8 0l-2.1 2.1a7.5 7.5 0 0 0-10.6 0zM1.4 10.4 0 9a17 17 0 0 1 24 0l-1.4 1.4a15 15 0 0 0-21.2 0z"/></svg>
-        <span>Internet</span>
-      </button>
-      <button class="quick-toggle" data-setting="bluetooth" aria-pressed="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 7 6-5 4 5 4-7 6V14.4L7.8 18 6 16.2l5-4.2-5-4.2L7.8 6l4.2 3.6V2zm2 4.4v3.2L15.9 8 14 6.4zm0 8v3.2l1.9-1.6-1.9-1.6z"/></svg>
-        <span>Bluetooth</span>
-      </button>
-      <button class="quick-toggle" data-setting="dnd" aria-pressed="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm5 11H7v-2h10z"/></svg>
-        <span>Do Not Disturb</span>
+      <button id="time-format-toggle" class="quick-toggle" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 11h5v-2h-4V6h-2v7h1z"/></svg>
+        <span>24-hour time</span>
       </button>
       <div class="theme-split">
         <button id="theme-toggle" class="quick-toggle" aria-label="Toggle theme">
@@ -111,6 +103,24 @@
       </div>
       <div id="calendar-days" class="calendar-grid"></div>
     </div>
+    <section class="reminders" aria-labelledby="reminders-title">
+      <div class="reminders-heading">
+        <strong id="reminders-title">Reminders</strong>
+        <button id="add-reminder-btn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v14h-2zM5 11h14v2H5z"/></svg>
+          Add reminder
+        </button>
+      </div>
+      <form id="reminder-form" hidden>
+        <input id="reminder-text" type="text" maxlength="120" placeholder="Reminder" aria-label="Reminder" required>
+        <input id="reminder-when" type="datetime-local" aria-label="Date and time" required>
+        <div class="reminder-form-actions">
+          <button type="button" id="cancel-reminder">Cancel</button>
+          <button type="submit">Add</button>
+        </div>
+      </form>
+      <div id="reminder-list" aria-live="polite"></div>
+    </section>
   </section>
 
   <div id="help-overlay" role="dialog" aria-modal="true" aria-label="Help" hidden>
