@@ -1006,9 +1006,8 @@ function _buildDropZones(draggedId, layer) {
     zones.push({ el, meta });
   }
 
-  // ── Within-column zones for every column except the source ──
+  // ── Within-column zones ──
   S.columns.forEach((col, ci) => {
-    if (col === srcCol) return;
     const cr = _ovRect(_ovNatColRects[ci], sr, tX, tY, scale);
 
     // Divide the column height equally into (N+1) drop zones
@@ -1017,8 +1016,12 @@ function _buildDropZones(draggedId, layer) {
     const PAD      = 4;   // horizontal inset
     const totalGap = ZONE_GAP * N;
     const sectionH = (cr.height - totalGap) / (N + 1);
+    const draggedIdx = col === srcCol ? col.appIds.indexOf(draggedId) : -1;
 
     for (let i = 0; i <= N; i++) {
+      // In the source column, the slots immediately before and after the
+      // dragged window preserve its current order, so do not present them.
+      if (col === srcCol && (i === draggedIdx || i === draggedIdx + 1)) continue;
       const zoneTop = cr.top + i * (sectionH + ZONE_GAP);
       makeZone(
         'ov-drop-zone--within',
