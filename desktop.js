@@ -252,7 +252,7 @@ function updateNotificationSetting() {
   toggle.hidden = !supported;
   toggle.disabled = !supported || blocked;
   toggle.setAttribute('aria-pressed', String(backgroundNotificationsEnabled));
-  state.textContent = !supported ? 'Unavailable' : blocked ? 'Blocked' : backgroundNotificationsEnabled ? 'On' : 'Off';
+  state.textContent = !supported ? 'Unavailable' : blocked ? 'Blocked' : '';
   toggle.title = blocked
     ? 'System notifications are blocked in browser settings'
     : backgroundNotificationsEnabled

@@ -247,6 +247,7 @@ body {
 .quick-toggle svg, #theme-reset svg { width: 1.15rem; height: 1.15rem; fill: currentColor; flex: 0 0 auto; }
 #time-format-toggle,
 #reminder-notification-toggle { grid-column: 1 / -1; }
+#reminder-notification-state:not(:empty)::before { content: " — "; }
 .theme-split {
   display: grid; grid-template-columns: 1fr 0; grid-column: 1 / -1;
   transition: grid-template-columns 180ms ease;
