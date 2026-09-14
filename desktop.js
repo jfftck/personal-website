@@ -128,10 +128,45 @@ function removeQueuedPut(id) {
   saveReminderSyncQueue();
 }
 
+function showInAppReminderNotification(reminder) {
+  const container = $('in-app-notifications');
+  const existing = container.querySelector(`[data-reminder-id="${CSS.escape(reminder.id)}"]`);
+  if (existing) existing.remove();
+
+  const notice = document.createElement('article');
+  notice.className = 'in-app-notification';
+  notice.dataset.reminderId = reminder.id;
+  notice.setAttribute('role', 'alert');
+
+  const icon = document.createElement('span');
+  icon.className = 'in-app-notification-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6V11a7 7 0 0 0-6-6.92V2h-2v2.08A7 7 0 0 0 5 11v5l-2 2v1h18v-1z"/></svg>';
+
+  const copy = document.createElement('div');
+  copy.className = 'in-app-notification-copy';
+  const title = document.createElement('strong');
+  title.textContent = 'Reminder';
+  const body = document.createElement('span');
+  body.textContent = reminder.text;
+  copy.append(title, body);
+
+  const dismiss = document.createElement('button');
+  dismiss.className = 'in-app-notification-dismiss';
+  dismiss.type = 'button';
+  dismiss.setAttribute('aria-label', 'Dismiss reminder notification');
+  dismiss.textContent = '×';
+  dismiss.addEventListener('click', () => notice.remove());
+
+  notice.append(icon, copy, dismiss);
+  container.appendChild(notice);
+}
+
 function scheduleReminderNotification(reminder, forceLocal = false) {
   clearReminderNotification(reminder.id);
-  if (backgroundNotificationsEnabled && !forceLocal) return;
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const systemNotificationsGranted =
+    'Notification' in window && Notification.permission === 'granted';
+  if (backgroundNotificationsEnabled && systemNotificationsGranted && !forceLocal) return;
   const delay = new Date(reminder.dueAt || reminder.when).getTime() - Date.now();
   if (delay <= 0) return;
   const maxDelay = 2_147_483_647;
@@ -142,7 +177,9 @@ function scheduleReminderNotification(reminder, forceLocal = false) {
     }
     removeQueuedPut(reminder.id);
     try {
-      if (backgroundNotificationsEnabled && 'serviceWorker' in navigator) {
+      const systemNotificationsAvailable =
+        'Notification' in window && Notification.permission === 'granted';
+      if (systemNotificationsAvailable && backgroundNotificationsEnabled && 'serviceWorker' in navigator) {
         const registration = await navigator.serviceWorker.ready;
         await registration.showNotification('Reminder', {
           body: reminder.text,
@@ -152,12 +189,15 @@ function scheduleReminderNotification(reminder, forceLocal = false) {
           renotify: false,
           data: { id: reminder.id, url: '/' },
         });
-      } else {
+      } else if (systemNotificationsAvailable) {
         const notification = new Notification('Reminder', { body: reminder.text });
         notification.addEventListener('click', () => window.focus());
+      } else {
+        showInAppReminderNotification(reminder);
       }
     } catch (error) {
       console.warn('[reminders] Local notification failed.', error);
+      showInAppReminderNotification(reminder);
     }
     reminderNotificationTimers.delete(reminder.id);
   }, Math.min(delay, maxDelay));

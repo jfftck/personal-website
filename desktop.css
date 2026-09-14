@@ -252,6 +252,36 @@ body {
   cursor: pointer;
 }
 #theme-reset:disabled { opacity: .35; cursor: default; }
+#in-app-notifications {
+  position: fixed; z-index: 1200; top: calc(var(--topbar-h) + .75rem); right: .75rem;
+  display: grid; gap: .5rem; width: min(22rem, calc(100vw - 1.5rem)); pointer-events: none;
+}
+.in-app-notification {
+  display: grid; grid-template-columns: 2rem 1fr auto; align-items: center; gap: .65rem;
+  padding: .7rem; border: 1px solid var(--topbar-border); border-radius: 1rem;
+  background: var(--overlay-bg); color: var(--topbar-text);
+  box-shadow: 0 12px 40px rgba(0,0,0,.35);
+  -webkit-backdrop-filter: var(--backdrop); backdrop-filter: var(--backdrop);
+  pointer-events: auto; animation: inAppNotificationIn 180ms ease-out;
+}
+.in-app-notification-icon {
+  display: grid; place-items: center; width: 2rem; aspect-ratio: 1; border-radius: 50%;
+  background: var(--accent); color: #fff;
+}
+.in-app-notification-icon svg { width: 1rem; fill: currentColor; }
+.in-app-notification-copy { display: grid; gap: .15rem; min-width: 0; }
+.in-app-notification-copy strong { font-size: .78rem; }
+.in-app-notification-copy span { font-size: .72rem; overflow-wrap: anywhere; }
+.in-app-notification-dismiss {
+  display: grid; place-items: center; width: 1.8rem; aspect-ratio: 1; padding: 0;
+  border: 0; border-radius: 50%; background: transparent; color: inherit;
+  font-size: 1.1rem; cursor: pointer;
+}
+.in-app-notification-dismiss:hover { background: var(--btn-hover); }
+@keyframes inAppNotificationIn {
+  from { opacity: 0; transform: translateY(-.4rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .calendar { padding-top: .75rem; border-top: 1px solid var(--topbar-border); }
 .calendar-heading { display: grid; grid-template-columns: 2rem 1fr 2rem; align-items: center; text-align: center; margin-bottom: .5rem; }
 .calendar-heading button {
