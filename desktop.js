@@ -6,6 +6,12 @@ import { buildImgViewer }   from './apps/img-viewer.js';
 import { buildMediaPlayer } from './apps/media-player.js';
 import { buildFileManager } from './apps/file-manager.js';
 import { renderMarkdown }   from './shared/markdown.js';
+import {
+  futureReminders,
+  mergeReminderOperation,
+  removeExpiredPutOperations,
+  shouldUploadReminder,
+} from './shared/reminder-sync.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -38,11 +44,32 @@ const themeMedia  = matchMedia('(prefers-color-scheme: dark)');
 const THEME_KEY   = 'desktop-theme';
 const TIME_KEY    = 'desktop-time-24h';
 const REMINDER_KEY = 'desktop-reminders';
+const REMINDER_CLIENT_KEY = 'desktop-reminder-client-id';
+const REMINDER_BACKGROUND_KEY = 'desktop-reminder-background';
+const REMINDER_CAPABILITY_KEY = 'desktop-reminder-capability';
+const REMINDER_CLEANUP_KEY = 'desktop-reminder-cleanup-pending';
+const REMINDER_SYNC_KEY = 'desktop-reminder-sync-queue';
 let calendarDate  = new Date();
 let selectedCalendarDate = new Date();
 let use24HourTime = localStorage.getItem(TIME_KEY) === 'true';
 let reminders = [];
 const reminderNotificationTimers = new Map();
+let backgroundNotificationsEnabled = localStorage.getItem(REMINDER_BACKGROUND_KEY) === 'true';
+let reminderCapability = localStorage.getItem(REMINDER_CAPABILITY_KEY);
+let reminderSyncQueue = [];
+let reminderSyncTimer = null;
+let reminderSyncRunning = false;
+let reminderCleanupTimer = null;
+try {
+  const storedQueue = JSON.parse(localStorage.getItem(REMINDER_SYNC_KEY) || '[]');
+  if (Array.isArray(storedQueue)) reminderSyncQueue = storedQueue;
+} catch { /* ignore invalid pending operations */ }
+let reminderClientId = localStorage.getItem(REMINDER_CLIENT_KEY);
+if (!reminderClientId) {
+  const bytes = crypto.getRandomValues(new Uint8Array(18));
+  reminderClientId = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+  localStorage.setItem(REMINDER_CLIENT_KEY, reminderClientId);
+}
 try {
   const storedReminders = JSON.parse(localStorage.getItem(REMINDER_KEY) || '[]');
   if (Array.isArray(storedReminders)) reminders = storedReminders;
@@ -94,30 +121,314 @@ function clearReminderNotification(id) {
   reminderNotificationTimers.delete(id);
 }
 
-function scheduleReminderNotification(reminder) {
+function removeQueuedPut(id) {
+  const updated = reminderSyncQueue.filter(operation => operation.id !== id || operation.type !== 'put');
+  if (updated.length === reminderSyncQueue.length) return;
+  reminderSyncQueue = updated;
+  saveReminderSyncQueue();
+}
+
+function scheduleReminderNotification(reminder, forceLocal = false) {
   clearReminderNotification(reminder.id);
+  if (backgroundNotificationsEnabled && !forceLocal) return;
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  const delay = new Date(reminder.when).getTime() - Date.now();
+  const delay = new Date(reminder.dueAt || reminder.when).getTime() - Date.now();
   if (delay <= 0) return;
   const maxDelay = 2_147_483_647;
-  const timer = setTimeout(() => {
+  const timer = setTimeout(async () => {
     if (delay > maxDelay) {
-      scheduleReminderNotification(reminder);
+      scheduleReminderNotification(reminder, forceLocal);
       return;
     }
-    const notification = new Notification('Reminder', { body: reminder.text });
-    notification.addEventListener('click', () => window.focus());
+    removeQueuedPut(reminder.id);
+    try {
+      if (backgroundNotificationsEnabled && 'serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.showNotification('Reminder', {
+          body: reminder.text,
+          icon: '/favicon.png',
+          badge: '/favicon.png',
+          tag: `desktop-reminder-${reminder.id}`,
+          renotify: false,
+          data: { id: reminder.id, url: '/' },
+        });
+      } else {
+        const notification = new Notification('Reminder', { body: reminder.text });
+        notification.addEventListener('click', () => window.focus());
+      }
+    } catch (error) {
+      console.warn('[reminders] Local notification failed.', error);
+    }
     reminderNotificationTimers.delete(reminder.id);
   }, Math.min(delay, maxDelay));
   reminderNotificationTimers.set(reminder.id, timer);
 }
 
-async function offerReminderNotifications() {
-  if (!('Notification' in window) || Notification.permission !== 'default') return;
-  const wantsNotifications = window.confirm(
-    'Would you like to use system notifications for reminders while this desktop is open?'
-  );
-  if (wantsNotifications) await Notification.requestPermission();
+function backgroundNotificationsSupported() {
+  return 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
+}
+
+function urlBase64ToUint8Array(value) {
+  const padded = value + '='.repeat((4 - value.length % 4) % 4);
+  const binary = atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(binary, character => character.charCodeAt(0));
+}
+
+async function reminderApi(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+  });
+  if (!response.ok) {
+    const error = new Error(`Reminder service returned ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return response;
+}
+
+async function savePushSubscription(subscription) {
+  const response = await fetch('/api/reminders/subscription', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId: reminderClientId, subscription: subscription.toJSON() }),
+  });
+  if (!response.ok) {
+    const error = new Error(`Reminder service returned ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return response.json();
+}
+
+function updateNotificationSetting() {
+  const toggle = $('reminder-notification-toggle');
+  const status = $('reminder-notification-status');
+  if (!backgroundNotificationsSupported()) {
+    const localSupported = 'Notification' in window;
+    const localGranted = localSupported && Notification.permission === 'granted';
+    toggle.disabled = !localSupported || localGranted;
+    toggle.textContent = localGranted ? 'Enabled' : (localSupported ? 'Enable local' : 'Unavailable');
+    toggle.setAttribute('aria-pressed', String(localGranted));
+    status.textContent = localSupported
+      ? 'This browser can notify only while the desktop is open.'
+      : 'This browser does not support system notifications.';
+    return;
+  }
+  toggle.disabled = false;
+  toggle.setAttribute('aria-pressed', String(backgroundNotificationsEnabled));
+  toggle.textContent = backgroundNotificationsEnabled ? 'Disable' : 'Enable';
+  if (Notification.permission === 'denied') {
+    status.textContent = 'Blocked in browser settings. Local reminders remain active.';
+  } else {
+    status.textContent = backgroundNotificationsEnabled
+      ? (reminderSyncQueue.length
+        ? 'Sync pending — keep this page online until saved.'
+        : 'Reminders can arrive after this desktop is closed.')
+      : 'Off — reminders notify only while this desktop is open.';
+  }
+}
+
+function saveReminderSyncQueue() {
+  localStorage.setItem(REMINDER_SYNC_KEY, JSON.stringify(reminderSyncQueue));
+  updateNotificationSetting();
+}
+
+function queueReminderOperation(operation) {
+  reminderSyncQueue = mergeReminderOperation(reminderSyncQueue, operation);
+  saveReminderSyncQueue();
+}
+
+function scheduleReminderSyncRetry() {
+  if (reminderSyncTimer) return;
+  reminderSyncTimer = setTimeout(() => {
+    reminderSyncTimer = null;
+    flushReminderOperations();
+  }, 30_000);
+}
+
+function scheduleReminderCleanupRetry() {
+  if (reminderCleanupTimer) return;
+  reminderCleanupTimer = setTimeout(() => {
+    reminderCleanupTimer = null;
+    if (localStorage.getItem(REMINDER_CLEANUP_KEY) === 'true') {
+      disableBackgroundNotifications().catch(error => {
+        console.warn('[reminders] Background opt-out cleanup will be retried.', error);
+        scheduleReminderCleanupRetry();
+      });
+    }
+  }, 30_000);
+}
+
+async function flushReminderOperations() {
+  if (reminderSyncRunning || !backgroundNotificationsEnabled || !reminderCapability) return;
+  const sanitizedQueue = removeExpiredPutOperations(reminderSyncQueue);
+  if (sanitizedQueue.length !== reminderSyncQueue.length) {
+    reminderSyncQueue = sanitizedQueue;
+    saveReminderSyncQueue();
+  }
+  reminderSyncRunning = true;
+  try {
+    while (reminderSyncQueue.length) {
+      const operation = reminderSyncQueue[0];
+      try {
+        if (operation.type === 'put') {
+          if (!shouldUploadReminder(operation.reminder)) {
+            scheduleReminderNotification(operation.reminder, true);
+            reminderSyncQueue.shift();
+            saveReminderSyncQueue();
+            continue;
+          }
+          scheduleReminderNotification(operation.reminder, true);
+          await reminderApi('/api/reminders', {
+            method: 'PUT',
+            body: JSON.stringify({
+              clientId: reminderClientId,
+              capability: reminderCapability,
+              reminder: operation.reminder,
+            }),
+          });
+        } else {
+          await reminderApi(`/api/reminders/${encodeURIComponent(operation.id)}`, {
+            method: 'DELETE',
+            body: JSON.stringify({ clientId: reminderClientId, capability: reminderCapability }),
+          });
+        }
+        if (reminderSyncQueue[0]?.id === operation.id
+          && reminderSyncQueue[0]?.type === operation.type) {
+          if (operation.type === 'put') clearReminderNotification(operation.id);
+          reminderSyncQueue.shift();
+          saveReminderSyncQueue();
+        }
+      } catch (error) {
+        console.warn('[reminders] Background sync pending.', error);
+        if (operation.type === 'put' && error.status === 409) {
+          if (reminderSyncQueue[0]?.id === operation.id) {
+            reminderSyncQueue.shift();
+            saveReminderSyncQueue();
+          }
+          continue;
+        }
+        scheduleReminderSyncRetry();
+        break;
+      }
+    }
+  } finally {
+    reminderSyncRunning = false;
+    updateNotificationSetting();
+  }
+}
+
+async function syncBackgroundReminder(reminder) {
+  if (!backgroundNotificationsEnabled) return;
+  const dueAt = reminder.dueAt || new Date(reminder.when).toISOString();
+  if (new Date(dueAt).getTime() <= Date.now()) return;
+  if (reminder.dueAt !== dueAt) {
+    reminder.dueAt = dueAt;
+    localStorage.setItem(REMINDER_KEY, JSON.stringify(reminders));
+  }
+  queueReminderOperation({
+    type: 'put',
+    id: reminder.id,
+    reminder: { ...reminder, dueAt },
+  });
+  await flushReminderOperations();
+}
+
+async function enableBackgroundNotifications() {
+  if (!backgroundNotificationsSupported()) return;
+  const permission = Notification.permission === 'granted'
+    ? 'granted'
+    : await Notification.requestPermission();
+  if (permission !== 'granted') {
+    backgroundNotificationsEnabled = false;
+    localStorage.removeItem(REMINDER_BACKGROUND_KEY);
+    updateNotificationSetting();
+    reminders.forEach(scheduleReminderNotification);
+    return;
+  }
+  const registration = await navigator.serviceWorker.register('/service-worker.js');
+  const keyResponse = await reminderApi('/api/reminders/vapid-key');
+  const { publicKey } = await keyResponse.json();
+  let subscription = await registration.pushManager.getSubscription();
+  const expectedKey = urlBase64ToUint8Array(publicKey);
+  const currentKey = subscription?.options?.applicationServerKey
+    ? new Uint8Array(subscription.options.applicationServerKey)
+    : null;
+  if (subscription && (!currentKey || currentKey.length !== expectedKey.length
+    || currentKey.some((value, index) => value !== expectedKey[index]))) {
+    await subscription.unsubscribe();
+    subscription = null;
+  }
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: expectedKey,
+    });
+  }
+  let subscriptionResult;
+  try {
+    subscriptionResult = await savePushSubscription(subscription);
+  } catch (error) {
+    if (error.status !== 409) throw error;
+    await subscription.unsubscribe();
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: expectedKey,
+    });
+    subscriptionResult = await savePushSubscription(subscription);
+  }
+  reminderCapability = subscriptionResult.capability;
+  localStorage.setItem(REMINDER_CAPABILITY_KEY, reminderCapability);
+  backgroundNotificationsEnabled = true;
+  localStorage.setItem(REMINDER_BACKGROUND_KEY, 'true');
+  reminderNotificationTimers.forEach(timer => clearTimeout(timer));
+  reminderNotificationTimers.clear();
+  for (const reminder of futureReminders(reminders)) {
+    const dueAt = reminder.dueAt || new Date(reminder.when).toISOString();
+    queueReminderOperation({
+      type: 'put',
+      id: reminder.id,
+      reminder: { ...reminder, dueAt },
+    });
+  }
+  await flushReminderOperations();
+  updateNotificationSetting();
+}
+
+async function disableBackgroundNotifications() {
+  backgroundNotificationsEnabled = false;
+  localStorage.removeItem(REMINDER_BACKGROUND_KEY);
+  localStorage.setItem(REMINDER_CLEANUP_KEY, 'true');
+  const registration = await navigator.serviceWorker.getRegistration();
+  const subscription = await registration?.pushManager.getSubscription();
+  let serverRemoved = false;
+  let browserRemoved = !subscription;
+  try {
+    await reminderApi('/api/reminders/subscription', {
+      method: 'DELETE',
+      body: JSON.stringify({ clientId: reminderClientId, capability: reminderCapability }),
+    });
+    serverRemoved = true;
+  } catch (error) {
+    console.warn('[reminders] Could not remove the background subscription.', error);
+  }
+  try {
+    browserRemoved = !subscription || await subscription.unsubscribe();
+  } catch (error) {
+    console.warn('[reminders] Could not unsubscribe this browser.', error);
+  }
+  if (serverRemoved && browserRemoved) {
+    localStorage.removeItem(REMINDER_CLEANUP_KEY);
+    localStorage.removeItem(REMINDER_CAPABILITY_KEY);
+    reminderCapability = null;
+    reminderSyncQueue = [];
+    saveReminderSyncQueue();
+  } else {
+    scheduleReminderCleanupRetry();
+  }
+  reminders.forEach(scheduleReminderNotification);
+  updateNotificationSetting();
 }
 
 function renderReminders() {
@@ -155,6 +466,10 @@ function renderReminders() {
       clearReminderNotification(reminder.id);
       reminders = reminders.filter(item => item.id !== reminder.id);
       localStorage.setItem(REMINDER_KEY, JSON.stringify(reminders));
+      if (backgroundNotificationsEnabled) {
+        queueReminderOperation({ type: 'delete', id: reminder.id });
+        flushReminderOperations();
+      }
       renderReminders();
     });
     item.append(title, time, remove);
@@ -250,19 +565,68 @@ $('reminder-form').addEventListener('submit', async event => {
   const text = $('reminder-text').value.trim();
   const when = $('reminder-when').value;
   if (!text || !when) return;
-  await offerReminderNotifications();
-  const reminder = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text, when };
+  const reminder = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    text,
+    when,
+    dueAt: new Date(when).toISOString(),
+  };
   reminders.push(reminder);
   localStorage.setItem(REMINDER_KEY, JSON.stringify(reminders));
   scheduleReminderNotification(reminder);
+  await syncBackgroundReminder(reminder);
   event.currentTarget.reset();
   event.currentTarget.hidden = true;
   renderReminders();
 });
+$('reminder-notification-toggle').addEventListener('click', async event => {
+  event.currentTarget.disabled = true;
+  try {
+    if (backgroundNotificationsEnabled) {
+      await disableBackgroundNotifications();
+    } else if (backgroundNotificationsSupported()) {
+      await enableBackgroundNotifications();
+    } else if ('Notification' in window) {
+      await Notification.requestPermission();
+      reminders.forEach(scheduleReminderNotification);
+      updateNotificationSetting();
+    }
+  } catch (error) {
+    console.warn('[reminders] Background notification setting failed.', error);
+    backgroundNotificationsEnabled = false;
+    localStorage.removeItem(REMINDER_BACKGROUND_KEY);
+    reminders.forEach(scheduleReminderNotification);
+    updateNotificationSetting();
+  }
+});
 applyTheme();
 updateClock();
 renderReminders();
+updateNotificationSetting();
 reminders.forEach(scheduleReminderNotification);
+if (backgroundNotificationsEnabled) {
+  enableBackgroundNotifications().catch(error => {
+    console.warn('[reminders] Could not restore background notifications.', error);
+    backgroundNotificationsEnabled = false;
+    localStorage.removeItem(REMINDER_BACKGROUND_KEY);
+    reminders.forEach(scheduleReminderNotification);
+    updateNotificationSetting();
+  });
+} else if (localStorage.getItem(REMINDER_CLEANUP_KEY) === 'true') {
+  disableBackgroundNotifications().catch(error => {
+    console.warn('[reminders] Background opt-out cleanup will be retried later.', error);
+  });
+}
+window.addEventListener('online', () => {
+  if (localStorage.getItem(REMINDER_CLEANUP_KEY) === 'true') {
+    disableBackgroundNotifications().catch(error => {
+      console.warn('[reminders] Background opt-out cleanup will be retried.', error);
+      scheduleReminderCleanupRetry();
+    });
+  } else {
+    flushReminderOperations();
+  }
+});
 setInterval(updateClock, 30000);
 
 // ── Session persistence ────────────────────────────────────────

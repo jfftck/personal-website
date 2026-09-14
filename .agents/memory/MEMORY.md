@@ -1,2 +1,3 @@
 - [Desktop module split](desktop-module-split.md) — desktop.js split into 7 ES modules; drag targets individual windows not columns; 3-zone drop system.
 - [Clerk script injection](clerk-script-injection.md) — clerk.browser.js needs data-clerk-publishable-key on the script tag at load time; Go proxy also ruled out (network-level block).
+- [Reliable anonymous web push](reliable-anonymous-web-push.md) — verify subscriptions before storage; preserve sent state on sync; invalidate and renew dead endpoints.

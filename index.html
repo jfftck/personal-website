@@ -111,6 +111,13 @@
           Add reminder
         </button>
       </div>
+      <div id="reminder-notification-setting" class="reminder-notification-setting">
+        <div>
+          <strong>Background notifications</strong>
+          <span id="reminder-notification-status">Checking browser support…</span>
+        </div>
+        <button id="reminder-notification-toggle" type="button" aria-pressed="false">Enable</button>
+      </div>
       <form id="reminder-form" hidden>
         <input id="reminder-text" type="text" maxlength="120" placeholder="Reminder" aria-label="Reminder" required>
         <input id="reminder-when" type="datetime-local" aria-label="Date and time" required>

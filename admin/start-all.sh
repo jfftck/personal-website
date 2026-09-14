@@ -2,12 +2,5 @@
 # Release port 80 if a stale process is holding it
 fuser -k 80/tcp 2>/dev/null || true
 
-# Start the static web server (port 80) in the background
-static-web-server -w ./.config/static-web-server.toml &
-STATIC_PID=$!
-
-# Start the admin server (port 3001) in the foreground
+# The Node server serves the desktop, admin, and reminder APIs together.
 node admin/server.js
-
-# When admin server exits, clean up the static server too
-kill "$STATIC_PID" 2>/dev/null

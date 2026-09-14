@@ -6,8 +6,8 @@ channel = "stable-24_11"
 packages = ["static-web-server"]
 
 [deployment]
-publicDir = "/"
-deploymentTarget = "static"
+deploymentTarget = "vm"
+run = ["node", "admin/server.js"]
 
 [workflows]
 runButton = "Project"
@@ -47,3 +47,7 @@ externalPort = 80
 [[ports]]
 localPort = 3001
 externalPort = 3001
+
+[[ports]]
+localPort = 8098
+externalPort = 3002
