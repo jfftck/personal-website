@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jeffrey M. Tackett</title>
+  <meta name="description" content="The personal site of Jeffrey M. Tackett — documents, photos, and media in a tiling desktop interface.">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Jeffrey M. Tackett">
+  <meta property="og:description" content="The personal site of Jeffrey M. Tackett — documents, photos, and media in a tiling desktop interface.">
+  <meta property="og:image" content="favicon.png">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Jeffrey M. Tackett">
+  <meta name="twitter:description" content="The personal site of Jeffrey M. Tackett — documents, photos, and media in a tiling desktop interface.">
+  <meta name="twitter:image" content="favicon.png">
+
+  <link rel="stylesheet" href="desktop.css">
+  <link rel="icon" href="favicon.png" type="image/png">
+</head>
+
+<body>
+
+  <header id="topbar">
+    <div class="topbar-left">
+      <button id="app-menu-btn" class="icon-btn" aria-label="App menu" aria-expanded="false" aria-controls="app-menu">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+          <rect x="1" y="1" width="6" height="6" rx="1.25"/>
+          <rect x="11" y="1" width="6" height="6" rx="1.25"/>
+          <rect x="1" y="11" width="6" height="6" rx="1.25"/>
+          <rect x="11" y="11" width="6" height="6" rx="1.25"/>
+        </svg>
+      </button>
+      <div id="open-apps-bar" role="list" aria-label="Open apps"></div>
+    </div>
+
+    <div class="topbar-center">
+      <span id="active-title" aria-live="polite"></span>
+    </div>
+
+    <div class="topbar-right">
+      <button id="overview-btn" class="icon-btn" title="Overview" aria-label="Toggle overview" aria-pressed="false" disabled>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+          <rect x="0"   y="0" width="4" height="14" rx="1"/>
+          <rect x="5"   y="0" width="4" height="14" rx="1"/>
+          <rect x="10"  y="0" width="4" height="14" rx="1"/>
+        </svg>
+      </button>
+      <button id="win-menu-btn" class="icon-btn" title="Window options" aria-label="Window options" aria-haspopup="true" aria-expanded="false" disabled>
+        <svg width="4" height="16" viewBox="0 0 4 16" fill="currentColor" aria-hidden="true">
+          <circle cx="2" cy="2"  r="1.75"/>
+          <circle cx="2" cy="8"  r="1.75"/>
+          <circle cx="2" cy="14" r="1.75"/>
+        </svg>
+      </button>
+      <div id="topbar-sep" class="topbar-sep"></div>
+      <button id="close-btn" class="icon-btn" title="Close focused app" aria-label="Close focused app" disabled>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="3" y1="3" x2="13" y2="13"/>
+          <line x1="13" y1="3" x2="3" y2="13"/>
+        </svg>
+      </button>
+      <button id="system-time-btn" class="system-time-btn" aria-label="Open system panel" aria-expanded="false" aria-controls="system-panel">
+        <span id="system-time">--:--</span>
+      </button>
+    </div>
+  </header>
+
+  <div id="in-app-notifications" aria-live="assertive" aria-label="Notifications"></div>
+
+  <section id="system-panel" aria-label="System controls" hidden>
+    <header class="system-panel-header">
+      <div>
+        <strong id="system-panel-time">--:--</strong>
+        <span id="system-panel-date"></span>
+      </div>
+    </header>
+    <div class="quick-toggles" aria-label="Quick settings">
+      <button id="time-format-toggle" class="quick-toggle" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 11h5v-2h-4V6h-2v7h1z"/></svg>
+        <span>24-hour time</span>
+      </button>
+      <button id="reminder-notification-toggle" class="quick-toggle" type="button" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6V11a7 7 0 0 0-6-6.92V2h-2v2.08A7 7 0 0 0 5 11v5l-2 2v1h18v-1z"/></svg>
+        <span>System notifications<b id="reminder-notification-state"></b></span>
+      </button>
+      <div class="theme-split">
+        <button id="theme-toggle" class="quick-toggle" aria-label="Toggle dark mode" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-.5 0-1-.1-1.5A7 7 0 0 1 12 3z"/></svg>
+          <span>Dark mode</span>
+        </button>
+        <button id="theme-reset" aria-label="Reset theme to system default" title="Use system theme" aria-hidden="true" tabindex="-1">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L8 6l4 4V7a5 5 0 1 1-4.6 7H5.3A7 7 0 1 0 12 5z"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="calendar">
+      <div class="calendar-heading">
+        <button id="calendar-prev" aria-label="Previous month">‹</button>
+        <strong id="calendar-title"></strong>
+        <button id="calendar-next" aria-label="Next month">›</button>
+      </div>
+      <div class="calendar-grid calendar-weekdays" aria-hidden="true">
+        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      </div>
+      <div id="calendar-days" class="calendar-grid"></div>
+    </div>
+    <section class="reminders" aria-labelledby="reminders-title">
+      <div class="reminders-heading">
+        <strong id="reminders-title">Reminders</strong>
+        <button id="add-reminder-btn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v14h-2zM5 11h14v2H5z"/></svg>
+          Add reminder
+        </button>
+      </div>
+      <form id="reminder-form" hidden>
+        <input id="reminder-text" type="text" maxlength="120" placeholder="Reminder" aria-label="Reminder" required>
+        <input id="reminder-when" type="datetime-local" aria-label="Date and time" required>
+        <div class="reminder-form-actions">
+          <button type="button" id="cancel-reminder">Cancel</button>
+          <button type="submit">Add</button>
+        </div>
+      </form>
+      <div id="reminder-list" aria-live="polite"></div>
+    </section>
+  </section>
+
+  <div id="help-overlay" role="dialog" aria-modal="true" aria-label="Help" hidden>
+    <div id="help-inner">
+      <div class="help-header">
+        <h2 class="help-title">Help</h2>
+        <button id="help-close-btn" class="icon-btn" aria-label="Close help">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <line x1="3" y1="3" x2="13" y2="13"/>
+            <line x1="13" y1="3" x2="3" y2="13"/>
+          </svg>
+        </button>
+      </div>
+      <div class="help-tabs" role="tablist">
+        <button class="help-tab active" data-panel="shortcuts" role="tab" aria-selected="true">Keyboard Shortcuts</button>
+        <button class="help-tab" data-panel="pointer" role="tab" aria-selected="false">Touch &amp; Mouse</button>
+      </div>
+
+      <!-- Panel: Keyboard Shortcuts -->
+      <div class="help-panel" id="help-panel-shortcuts">
+        <dl class="shortcut-list">
+          <div class="shortcut-row">
+            <dt><kbd>←</kbd> <kbd>→</kbd></dt>
+            <dd>Focus previous / next app</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>Tab</kbd> / <kbd>Shift+Tab</kbd></dt>
+            <dd>Cycle through open apps</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>⌘</kbd><kbd>1</kbd>–<kbd>9</kbd></dt>
+            <dd>Focus app by number</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>⌘</kbd><kbd>&lt;</kbd> / <kbd>⌘</kbd><kbd>&gt;</kbd></dt>
+            <dd>Resize window narrower / wider</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>[</kbd></dt>
+            <dd>Consume window from left column</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>]</kbd></dt>
+            <dd>Expel window to new column</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>⌘</kbd><kbd>D</kbd></dt>
+            <dd>Open app launcher</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>?</kbd></dt>
+            <dd>Show this help</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><kbd>Esc</kbd></dt>
+            <dd>Close overlay / menu</dd>
+          </div>
+        </dl>
+        <p class="help-note">On Windows / Linux, use <kbd>Ctrl</kbd> instead of <kbd>⌘</kbd>.</p>
+        <div class="help-actions">
+          <button id="help-open-launcher" class="help-launch-btn">
+            <svg width="16" height="16" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+              <rect x="1" y="1" width="6" height="6" rx="1.25"/>
+              <rect x="11" y="1" width="6" height="6" rx="1.25"/>
+              <rect x="1" y="11" width="6" height="6" rx="1.25"/>
+              <rect x="11" y="11" width="6" height="6" rx="1.25"/>
+            </svg>
+            Open App Launcher
+          </button>
+        </div>
+      </div>
+
+      <!-- Panel: Touch & Mouse -->
+      <div class="help-panel" id="help-panel-pointer" hidden>
+        <p class="help-panel-section-label">Touch</p>
+        <dl class="shortcut-list">
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Tap</span></dt>
+            <dd>Open an app or select a file</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Drag header</span></dt>
+            <dd>Move a window into another column</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Swipe left / right</span></dt>
+            <dd>Pan between columns</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Tap backdrop</span></dt>
+            <dd>Close the open menu or overlay</dd>
+          </div>
+        </dl>
+        <p class="help-panel-section-label" style="margin-top:1.25rem">Mouse</p>
+        <dl class="shortcut-list">
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Click</span></dt>
+            <dd>Open an app or select a file</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Drag header</span></dt>
+            <dd>Move a window into another column</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Scroll wheel</span></dt>
+            <dd>Pan the desktop left and right</dd>
+          </div>
+          <div class="shortcut-row">
+            <dt><span class="gesture-key">Click backdrop</span></dt>
+            <dd>Close the open menu or overlay</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div id="app-menu" role="dialog" aria-modal="true" aria-label="App launcher" hidden>
+    <div id="app-menu-inner">
+      <div class="app-menu-header">
+        <p class="app-menu-heading" style="margin:0">Apps</p>
+        <button id="app-menu-help-btn" class="icon-btn" aria-label="Help">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-1.75 3-2 3-4 0-2.21-1.79-4-4-4z"/>
+          </svg>
+        </button>
+      </div>
+      <div id="app-list">
+        <button class="app-launcher" data-type="welcome">
+          <span class="app-launcher-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+            </svg>
+          </span>
+          <span class="app-launcher-name">Welcome</span>
+        </button>
+        <button class="app-launcher" data-type="doc-viewer">
+          <span class="app-launcher-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
+            </svg>
+          </span>
+          <span class="app-launcher-name">Document Viewer</span>
+        </button>
+        <button class="app-launcher" data-type="img-viewer">
+          <span class="app-launcher-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+            </svg>
+          </span>
+          <span class="app-launcher-name">Image Viewer</span>
+        </button>
+        <button class="app-launcher" data-type="file-manager">
+          <span class="app-launcher-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+            </svg>
+          </span>
+          <span class="app-launcher-name">File Manager</span>
+        </button>
+        <button class="app-launcher" data-type="media-player">
+          <span class="app-launcher-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M21 3H3c-1.11 0-2 .89-2 2v14c0 1.11.89 2 2 2h18c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 16H3V5h18v14zM8 15l7-4-7-4v8z"/>
+            </svg>
+          </span>
+          <span class="app-launcher-name">Media Player</span>
+        </button>
+      </div>
+
+      <div id="app-files-section" hidden>
+        <p class="app-menu-heading app-files-heading">
+          <span>Documents</span>
+          <span class="app-files-count" id="doc-files-count"></span>
+        </p>
+        <div id="doc-files-list" class="app-files-list"></div>
+
+        <p class="app-menu-heading app-files-heading" style="margin-top:1.25rem">
+          <span>Pictures</span>
+          <span class="app-files-count" id="pic-files-count"></span>
+        </p>
+        <div id="pic-files-list" class="app-files-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <main id="desktop">
+    <div id="app-strip-wrapper">
+      <div id="app-strip"></div>
+    </div>
+    <div id="empty-state"></div>
+  </main>
+
+  <!-- Welcome floating window — always on top, not part of the column strip -->
+  <div id="welcome-overlay" hidden aria-hidden="true">
+    <div id="welcome-win" role="dialog" aria-modal="true" aria-label="Welcome">
+      <div id="welcome-win-header">
+        <svg viewBox="0 0 256 256" width="72" height="72" aria-hidden="true" class="welcome-win-logo">
+          <use href="jmt.svg#SVGRoot" />
+        </svg>
+        <div>
+          <h1 class="welcome-win-title">Jeffrey M. Tackett</h1>
+          <p class="welcome-win-tagline">Documents, photos &amp; media</p>
+        </div>
+      </div>
+      <nav id="welcome-tabs" role="tablist" aria-label="Welcome sections">
+        <button class="welcome-tab" role="tab" data-tab="welcome" aria-selected="true">Welcome</button>
+        <button class="welcome-tab" role="tab" data-tab="about"   aria-selected="false">About</button>
+        <button class="welcome-tab" role="tab" data-tab="links"   aria-selected="false">Links</button>
+      </nav>
+      <div id="welcome-win-body" class="doc-body" role="tabpanel"></div>
+      <div id="welcome-win-footer">
+        <button id="welcome-win-close" class="welcome-win-btn">Get started</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="desktop.js"></script>
+</body>
+
+</html>

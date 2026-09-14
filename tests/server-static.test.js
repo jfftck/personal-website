@@ -30,8 +30,8 @@ test.after(() => {
   server?.kill('SIGTERM');
 });
 
-test('serves desktop assets and the service worker', async () => {
-  for (const pathname of ['/', '/desktop.js', '/apps/doc-viewer.js', '/service-worker.js']) {
+test('serves desktop assets', async () => {
+  for (const pathname of ['/', '/desktop.js', '/apps/doc-viewer.js']) {
     const response = await fetch(`http://127.0.0.1:${PORT}${pathname}`);
     assert.equal(response.status, 200, pathname);
   }
@@ -39,24 +39,12 @@ test('serves desktop assets and the service worker', async () => {
 
 test('does not expose hidden, server, dependency, or memory files', async () => {
   for (const pathname of [
-    '/.data/reminders.json',
     '/.git/config',
     '/.agents/memory/MEMORY.md',
     '/admin/server.js',
-    '/reminder-store.js',
     '/package.json',
-    '/node_modules/web-push/package.json',
   ]) {
     const response = await fetch(`http://127.0.0.1:${PORT}${pathname}`);
     assert.equal(response.status, 403, pathname);
   }
-});
-
-test('rejects oversized reminder bodies before buffering them', async () => {
-  const response = await fetch(`http://127.0.0.1:${PORT}/api/reminders`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ padding: 'x'.repeat(20 * 1024) }),
-  });
-  assert.equal(response.status, 413);
 });

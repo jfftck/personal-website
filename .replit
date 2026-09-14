@@ -6,9 +6,10 @@ channel = "stable-24_11"
 packages = ["static-web-server"]
 
 [deployment]
-deploymentTarget = "vm"
+deploymentTarget = "static"
 run = ["sh", "admin/start-all.sh"]
-publicDir = "/"
+publicDir = "dist"
+build = ["npm", "run", "build"]
 
 [workflows]
 runButton = "Project"

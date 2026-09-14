@@ -4,9 +4,6 @@ const http = require('http');
 const fs   = require('fs');
 const path = require('path');
 const url  = require('url');
-const crypto = require('crypto');
-const webpush = require('web-push');
-const { ReminderStore } = require('../reminder-store');
 
 const PORT = Number(process.env.PORT) || 80;
 const ROOT = process.cwd();
@@ -19,7 +16,6 @@ const PUBLIC_ROOT_FILES = new Set([
   'desktop-state.js',
   'favicon.png',
   'jmt.svg',
-  'service-worker.js',
 ]);
 const PUBLIC_STATIC_DIRS = new Set([
   'apps',
@@ -32,33 +28,6 @@ const PUBLIC_STATIC_DIRS = new Set([
 ]);
 const PUBLIC_ADMIN_FILES = new Set(['admin/admin.html', 'admin/admin.css', 'admin/admin.js']);
 const CLERK_DIST = path.join(ROOT, 'node_modules/@clerk/clerk-js/dist');
-const reminderStore = new ReminderStore(path.join(ROOT, '.data', 'reminders.json'));
-const reminderRateLimits = new Map();
-
-function toBase64Url(buffer) {
-  return Buffer.from(buffer).toString('base64url');
-}
-
-function configureWebPush() {
-  if (!process.env.SESSION_SECRET) {
-    console.warn('[reminders] SESSION_SECRET is missing; background notifications are disabled');
-    return null;
-  }
-  const curveOrder = BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551');
-  const digest = crypto.createHash('sha256')
-    .update(`desktop-reminders:${process.env.SESSION_SECRET}`)
-    .digest();
-  const scalar = (BigInt(`0x${digest.toString('hex')}`) % (curveOrder - 1n)) + 1n;
-  const privateKey = Buffer.from(scalar.toString(16).padStart(64, '0'), 'hex');
-  const ecdh = crypto.createECDH('prime256v1');
-  ecdh.setPrivateKey(privateKey);
-  const publicKey = toBase64Url(ecdh.getPublicKey(null, 'uncompressed'));
-  webpush.setVapidDetails('mailto:notifications@localhost', publicKey, toBase64Url(privateKey));
-  return publicKey;
-}
-
-const VAPID_PUBLIC_KEY = configureWebPush();
-
 // ── Clerk auth ────────────────────────────────────────────────
 let _clerkVerifyToken = null;
 
@@ -180,65 +149,6 @@ async function readJson(req) {
   return JSON.parse(body.toString('utf8') || '{}');
 }
 
-function validClientId(value) {
-  return typeof value === 'string' && /^[a-zA-Z0-9_-]{12,100}$/.test(value);
-}
-
-function validReminder(value) {
-  return value && typeof value.id === 'string' && value.id.length <= 100
-    && typeof value.text === 'string' && value.text.trim().length > 0 && value.text.length <= 120
-    && typeof value.when === 'string'
-    && typeof value.dueAt === 'string'
-    && /(?:Z|[+-]\d{2}:\d{2})$/.test(value.dueAt)
-    && Number.isFinite(new Date(value.dueAt).getTime());
-}
-
-function validPushSubscription(subscription) {
-  if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) return false;
-  try {
-    const endpoint = new URL(subscription.endpoint);
-    if (endpoint.protocol !== 'https:') return false;
-    const host = endpoint.hostname.toLowerCase();
-    const allowedHosts = [
-      'fcm.googleapis.com',
-      'updates.push.services.mozilla.com',
-      'web.push.apple.com',
-    ];
-    const allowedHost = allowedHosts.includes(host)
-      || host.endsWith('.notify.windows.com')
-      || host.endsWith('.push.services.mozilla.com');
-    const publicKey = Buffer.from(subscription.keys.p256dh, 'base64url');
-    const authSecret = Buffer.from(subscription.keys.auth, 'base64url');
-    return allowedHost && publicKey.length === 65 && publicKey[0] === 4 && authSecret.length >= 16;
-  } catch {
-    return false;
-  }
-}
-
-function reminderCapability(clientId) {
-  return crypto.createHmac('sha256', process.env.SESSION_SECRET || 'unavailable')
-    .update(`reminder-client:${clientId}`)
-    .digest('base64url');
-}
-
-function validReminderCapability(clientId, capability) {
-  if (typeof capability !== 'string') return false;
-  const expected = reminderCapability(clientId);
-  const actualBuffer = Buffer.from(capability);
-  const expectedBuffer = Buffer.from(expected);
-  return actualBuffer.length === expectedBuffer.length
-    && crypto.timingSafeEqual(actualBuffer, expectedBuffer);
-}
-
-function reminderRateLimitExceeded(req) {
-  const key = req.socket.remoteAddress || 'unknown';
-  const now = Date.now();
-  const recent = (reminderRateLimits.get(key) || []).filter(time => time > now - 60_000);
-  recent.push(now);
-  reminderRateLimits.set(key, recent);
-  return recent.length > 120;
-}
-
 function formatSize(bytes) {
   if (bytes < 1024)             return `${bytes} B`;
   if (bytes < 1024 * 1024)      return `${(bytes / 1024).toFixed(1)} KB`;
@@ -351,80 +261,6 @@ async function handle(req, res) {
     const pk = process.env.CLERK_PUBLISHABLE_KEY || '';
     json(res, 200, { publishableKey: pk });
     return;
-  }
-
-  // ── Public: background reminder delivery ──────────────────
-  if (pathname.startsWith('/api/reminders') && reminderRateLimitExceeded(req)) {
-    err(res, 429, 'Too many reminder requests'); return;
-  }
-
-  if (pathname === '/api/reminders/vapid-key' && req.method === 'GET') {
-    if (!VAPID_PUBLIC_KEY) { err(res, 503, 'Background notifications unavailable'); return; }
-    json(res, 200, { publicKey: VAPID_PUBLIC_KEY }); return;
-  }
-
-  if (pathname === '/api/reminders/subscription') {
-    try {
-      const body = await readJson(req);
-      if (!validClientId(body.clientId)) { err(res, 400, 'Invalid client ID'); return; }
-      if (req.method === 'PUT') {
-        if (!VAPID_PUBLIC_KEY || !validPushSubscription(body.subscription)) {
-          err(res, 400, 'Invalid push subscription'); return;
-        }
-        if (reminderStore.isInvalidEndpoint(body.subscription.endpoint)) {
-          err(res, 409, 'Push subscription must be renewed'); return;
-        }
-        const existing = reminderStore.data.subscriptions[body.clientId];
-        if (!existing || existing.endpoint !== body.subscription.endpoint) {
-          try {
-            await webpush.sendNotification(body.subscription, JSON.stringify({
-              type: 'setup',
-              id: 'setup',
-              text: 'Background reminders are ready.',
-            }), { TTL: 60, urgency: 'normal', timeout: 15_000 });
-          } catch {
-            err(res, 400, 'Push subscription could not be verified'); return;
-          }
-        }
-        reminderStore.setSubscription(body.clientId, body.subscription);
-        json(res, 200, { ok: true, capability: reminderCapability(body.clientId) }); return;
-      }
-      if (req.method === 'DELETE') {
-        if (!validReminderCapability(body.clientId, body.capability)) {
-          err(res, 403, 'Invalid reminder capability'); return;
-        }
-        reminderStore.removeSubscription(body.clientId);
-        json(res, 200, { ok: true }); return;
-      }
-    } catch (e) { err(res, e.statusCode || 400, e.message); return; }
-    err(res, 405, 'Method not allowed'); return;
-  }
-
-  if (pathname === '/api/reminders' && req.method === 'PUT') {
-    try {
-      const body = await readJson(req);
-      if (!validClientId(body.clientId) || !validReminderCapability(body.clientId, body.capability)
-        || !reminderStore.data.subscriptions[body.clientId] || !validReminder(body.reminder)) {
-        err(res, 400, 'Invalid reminder'); return;
-      }
-      if (new Date(body.reminder.dueAt).getTime() <= Date.now() + 20_000) {
-        err(res, 409, 'Reminder is too close to its due time for background handoff'); return;
-      }
-      reminderStore.setReminder(body.clientId, body.reminder);
-      json(res, 200, { ok: true }); return;
-    } catch (e) { err(res, e.statusCode || 400, e.message); return; }
-  }
-
-  const reminderDelete = pathname.match(/^\/api\/reminders\/([^/]+)$/);
-  if (reminderDelete && req.method === 'DELETE') {
-    try {
-      const body = await readJson(req);
-      if (!validClientId(body.clientId) || !validReminderCapability(body.clientId, body.capability)) {
-        err(res, 403, 'Invalid reminder capability'); return;
-      }
-      reminderStore.removeReminder(body.clientId, decodeURIComponent(reminderDelete[1]));
-      json(res, 200, { ok: true }); return;
-    } catch (e) { err(res, e.statusCode || 400, e.message); return; }
   }
 
   // ── Public: Clerk API proxy ────────────────────────────────
@@ -717,7 +553,7 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 // Keep the existing admin-port preview available while the public desktop and
-// service worker share port 80. Both listeners use this one process/scheduler.
+// desktop share port 80. Both listeners use this one process.
 if (PORT === 80) {
   http.createServer((req, res) => {
     handle(req, res).catch(e => {
@@ -729,42 +565,3 @@ if (PORT === 80) {
   });
 }
 
-let reminderDeliveryRunning = false;
-async function deliverDueReminders() {
-  if (reminderDeliveryRunning) return;
-  reminderDeliveryRunning = true;
-  try {
-  for (const { reminder, subscription } of reminderStore.claimDue()) {
-    if (!subscription) {
-      reminderStore.release(reminder.clientId, reminder.id);
-      continue;
-    }
-    try {
-      await webpush.sendNotification(subscription, JSON.stringify({
-        id: reminder.id,
-        text: reminder.text,
-        when: reminder.dueAt,
-      }), {
-        TTL: 60 * 60 * 24,
-        urgency: 'normal',
-        topic: reminder.id.slice(0, 32),
-        timeout: 30_000,
-      });
-      reminderStore.markSent(reminder.clientId, reminder.id);
-    } catch (e) {
-      if (e.statusCode === 404 || e.statusCode === 410) {
-        reminderStore.invalidateSubscription(reminder.clientId, subscription.endpoint);
-      } else {
-        console.error(`[reminders] Push failed (${e.statusCode || 'unknown'}):`, e.message);
-        const backoff = Math.min(15 * 60_000, 30_000 * (2 ** Math.min(reminder.attempts || 0, 5)));
-        reminderStore.release(reminder.clientId, reminder.id, Date.now() + backoff);
-      }
-    }
-  }
-  } finally {
-    reminderDeliveryRunning = false;
-  }
-}
-
-setInterval(deliverDueReminders, 15_000).unref();
-deliverDueReminders();
