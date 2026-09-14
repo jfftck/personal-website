@@ -217,7 +217,7 @@ function updateNotificationSetting() {
       : 'This browser does not support system notifications.';
     return;
   }
-  setting.hidden = backgroundNotificationsEnabled;
+  setting.hidden = Notification.permission === 'granted';
   toggle.disabled = false;
   toggle.setAttribute('aria-pressed', String(backgroundNotificationsEnabled));
   toggle.textContent = backgroundNotificationsEnabled ? 'Disable' : 'Enable';
@@ -568,6 +568,19 @@ $('reminder-form').addEventListener('submit', async event => {
   const text = $('reminder-text').value.trim();
   const when = $('reminder-when').value;
   if (!text || !when) return;
+  if ('Notification' in window && Notification.permission === 'default') {
+    try {
+      if (backgroundNotificationsSupported()) {
+        await enableBackgroundNotifications();
+      } else {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') updateNotificationSetting();
+      }
+    } catch (error) {
+      console.warn('[reminders] Notification permission or setup failed.', error);
+      updateNotificationSetting();
+    }
+  }
   const reminder = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     text,
