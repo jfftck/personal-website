@@ -284,6 +284,7 @@ body {
   display: flex; align-items: center; justify-content: space-between; gap: .75rem;
   margin-top: .65rem; padding: .55rem .65rem; border-radius: .65rem; background: var(--btn-hover);
 }
+.reminder-notification-setting[hidden] { display: none; }
 .reminder-notification-setting > div { display: grid; gap: .1rem; min-width: 0; }
 .reminder-notification-setting strong { font-size: .72rem; }
 .reminder-notification-setting span { font-size: .65rem; opacity: .65; }

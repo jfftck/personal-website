@@ -202,11 +202,13 @@ async function savePushSubscription(subscription) {
 }
 
 function updateNotificationSetting() {
+  const setting = $('reminder-notification-setting');
   const toggle = $('reminder-notification-toggle');
   const status = $('reminder-notification-status');
   if (!backgroundNotificationsSupported()) {
     const localSupported = 'Notification' in window;
     const localGranted = localSupported && Notification.permission === 'granted';
+    setting.hidden = localGranted;
     toggle.disabled = !localSupported || localGranted;
     toggle.textContent = localGranted ? 'Enabled' : (localSupported ? 'Enable local' : 'Unavailable');
     toggle.setAttribute('aria-pressed', String(localGranted));
@@ -215,6 +217,7 @@ function updateNotificationSetting() {
       : 'This browser does not support system notifications.';
     return;
   }
+  setting.hidden = backgroundNotificationsEnabled;
   toggle.disabled = false;
   toggle.setAttribute('aria-pressed', String(backgroundNotificationsEnabled));
   toggle.textContent = backgroundNotificationsEnabled ? 'Disable' : 'Enable';
