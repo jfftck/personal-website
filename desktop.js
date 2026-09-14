@@ -42,6 +42,7 @@ let calendarDate  = new Date();
 let selectedCalendarDate = new Date();
 let use24HourTime = localStorage.getItem(TIME_KEY) === 'true';
 let reminders = [];
+const reminderNotificationTimers = new Map();
 try {
   const storedReminders = JSON.parse(localStorage.getItem(REMINDER_KEY) || '[]');
   if (Array.isArray(storedReminders)) reminders = storedReminders;
@@ -87,6 +88,38 @@ function localDateKey(date) {
   ].join('-');
 }
 
+function clearReminderNotification(id) {
+  const timer = reminderNotificationTimers.get(id);
+  if (timer) clearTimeout(timer);
+  reminderNotificationTimers.delete(id);
+}
+
+function scheduleReminderNotification(reminder) {
+  clearReminderNotification(reminder.id);
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const delay = new Date(reminder.when).getTime() - Date.now();
+  if (delay <= 0) return;
+  const maxDelay = 2_147_483_647;
+  const timer = setTimeout(() => {
+    if (delay > maxDelay) {
+      scheduleReminderNotification(reminder);
+      return;
+    }
+    const notification = new Notification('Reminder', { body: reminder.text });
+    notification.addEventListener('click', () => window.focus());
+    reminderNotificationTimers.delete(reminder.id);
+  }, Math.min(delay, maxDelay));
+  reminderNotificationTimers.set(reminder.id, timer);
+}
+
+async function offerReminderNotifications() {
+  if (!('Notification' in window) || Notification.permission !== 'default') return;
+  const wantsNotifications = window.confirm(
+    'Would you like to use system notifications for reminders while this desktop is open?'
+  );
+  if (wantsNotifications) await Notification.requestPermission();
+}
+
 function renderReminders() {
   const list = $('reminder-list');
   list.innerHTML = '';
@@ -119,6 +152,7 @@ function renderReminders() {
     remove.setAttribute('aria-label', `Delete ${reminder.text}`);
     remove.textContent = '×';
     remove.addEventListener('click', () => {
+      clearReminderNotification(reminder.id);
       reminders = reminders.filter(item => item.id !== reminder.id);
       localStorage.setItem(REMINDER_KEY, JSON.stringify(reminders));
       renderReminders();
@@ -211,13 +245,16 @@ $('cancel-reminder').addEventListener('click', () => {
   $('reminder-form').reset();
   $('reminder-form').hidden = true;
 });
-$('reminder-form').addEventListener('submit', event => {
+$('reminder-form').addEventListener('submit', async event => {
   event.preventDefault();
   const text = $('reminder-text').value.trim();
   const when = $('reminder-when').value;
   if (!text || !when) return;
-  reminders.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text, when });
+  await offerReminderNotifications();
+  const reminder = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text, when };
+  reminders.push(reminder);
   localStorage.setItem(REMINDER_KEY, JSON.stringify(reminders));
+  scheduleReminderNotification(reminder);
   event.currentTarget.reset();
   event.currentTarget.hidden = true;
   renderReminders();
@@ -225,6 +262,7 @@ $('reminder-form').addEventListener('submit', event => {
 applyTheme();
 updateClock();
 renderReminders();
+reminders.forEach(scheduleReminderNotification);
 setInterval(updateClock, 30000);
 
 // ── Session persistence ────────────────────────────────────────
