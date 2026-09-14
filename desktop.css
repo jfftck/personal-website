@@ -270,6 +270,7 @@ body {
 .calendar-grid .outside { opacity: .25; }
 .calendar-grid .today { border-color: currentColor; font-weight: 700; }
 .calendar-grid .selected { background: var(--accent); color: #fff; }
+.calendar-grid .selected:hover { background: color-mix(in srgb, var(--accent) 85%, currentColor); }
 .reminders { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--topbar-border); }
 .reminders-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
 .reminders-heading > strong { font-size: .875rem; }
