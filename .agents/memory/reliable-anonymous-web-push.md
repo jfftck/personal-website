@@ -7,4 +7,8 @@ Anonymous push subscriptions must be verified with a successful setup push befor
 
 **Why:** Unverified public enrollment permits storage abuse, server-local parsing shifts due times, dropped sync failures lose reminders or cancellations, resetting sent state duplicates notifications after reload, and retaining a dead endpoint prevents recovery.
 
-**How to apply:** Keep UTC normalization, persistent operation retries, enrollment verification, endpoint uniqueness, leased single-flight delivery, retriable opt-out, and stale-endpoint renewal together when changing reminder delivery.
+The reminder service must use an always-running Reserved VM rather than Static or Autoscale publishing.
+
+**Why:** Enrollment requires live API routes, and due-reminder delivery depends on a server timer that must continue running while the site has no traffic.
+
+**How to apply:** Keep UTC normalization, persistent operation retries, enrollment verification, endpoint uniqueness, leased single-flight delivery, retriable opt-out, stale-endpoint renewal, and an always-running deployment together when changing reminder delivery.
