@@ -178,7 +178,9 @@ function scheduleReminderNotification(reminder, forceLocal = false) {
     removeQueuedPut(reminder.id);
     try {
       const systemNotificationsAvailable =
-        'Notification' in window && Notification.permission === 'granted';
+        backgroundNotificationsEnabled
+        && 'Notification' in window
+        && Notification.permission === 'granted';
       if (systemNotificationsAvailable && backgroundNotificationsEnabled && 'serviceWorker' in navigator) {
         const registration = await navigator.serviceWorker.ready;
         await registration.showNotification('Reminder', {
@@ -242,34 +244,18 @@ async function savePushSubscription(subscription) {
 }
 
 function updateNotificationSetting() {
-  const setting = $('reminder-notification-setting');
   const toggle = $('reminder-notification-toggle');
-  const status = $('reminder-notification-status');
-  if (!backgroundNotificationsSupported()) {
-    const localSupported = 'Notification' in window;
-    const localGranted = localSupported && Notification.permission === 'granted';
-    setting.hidden = localGranted;
-    toggle.disabled = !localSupported || localGranted;
-    toggle.textContent = localGranted ? 'Enabled' : (localSupported ? 'Enable local' : 'Unavailable');
-    toggle.setAttribute('aria-pressed', String(localGranted));
-    status.textContent = localSupported
-      ? 'This browser can notify only while the desktop is open.'
-      : 'This browser does not support system notifications.';
-    return;
-  }
-  setting.hidden = Notification.permission === 'granted';
-  toggle.disabled = false;
+  const state = $('reminder-notification-state');
+  const supported = 'Notification' in window;
+  const blocked = supported && Notification.permission === 'denied';
+  toggle.disabled = !supported || blocked;
   toggle.setAttribute('aria-pressed', String(backgroundNotificationsEnabled));
-  toggle.textContent = backgroundNotificationsEnabled ? 'Disable' : 'Enable';
-  if (Notification.permission === 'denied') {
-    status.textContent = 'Blocked in browser settings. Local reminders remain active.';
-  } else {
-    status.textContent = backgroundNotificationsEnabled
-      ? (reminderSyncQueue.length
-        ? 'Sync pending — keep this page online until saved.'
-        : 'Reminders can arrive after this desktop is closed.')
-      : 'Off — reminders notify only while this desktop is open.';
-  }
+  state.textContent = !supported ? 'Unavailable' : blocked ? 'Blocked' : backgroundNotificationsEnabled ? 'On' : 'Off';
+  toggle.title = blocked
+    ? 'System notifications are blocked in browser settings'
+    : backgroundNotificationsEnabled
+      ? 'Turn off system notifications and use built-in notifications'
+      : 'Turn on system notifications';
 }
 
 function saveReminderSyncQueue() {
@@ -443,7 +429,9 @@ async function disableBackgroundNotifications() {
   backgroundNotificationsEnabled = false;
   localStorage.removeItem(REMINDER_BACKGROUND_KEY);
   localStorage.setItem(REMINDER_CLEANUP_KEY, 'true');
-  const registration = await navigator.serviceWorker.getRegistration();
+  const registration = 'serviceWorker' in navigator
+    ? await navigator.serviceWorker.getRegistration()
+    : null;
   const subscription = await registration?.pushManager.getSubscription();
   let serverRemoved = false;
   let browserRemoved = !subscription;
@@ -638,12 +626,25 @@ $('reminder-form').addEventListener('submit', async event => {
 $('reminder-notification-toggle').addEventListener('click', async event => {
   event.currentTarget.disabled = true;
   try {
-    if (backgroundNotificationsEnabled) {
+    if (backgroundNotificationsEnabled && backgroundNotificationsSupported()) {
       await disableBackgroundNotifications();
+    } else if (backgroundNotificationsEnabled) {
+      backgroundNotificationsEnabled = false;
+      localStorage.removeItem(REMINDER_BACKGROUND_KEY);
+      reminders.forEach(scheduleReminderNotification);
+      updateNotificationSetting();
     } else if (backgroundNotificationsSupported()) {
       await enableBackgroundNotifications();
     } else if ('Notification' in window) {
-      await Notification.requestPermission();
+      const permission = Notification.permission === 'granted'
+        ? 'granted'
+        : await Notification.requestPermission();
+      backgroundNotificationsEnabled = permission === 'granted';
+      if (backgroundNotificationsEnabled) {
+        localStorage.setItem(REMINDER_BACKGROUND_KEY, 'true');
+      } else {
+        localStorage.removeItem(REMINDER_BACKGROUND_KEY);
+      }
       reminders.forEach(scheduleReminderNotification);
       updateNotificationSetting();
     }
