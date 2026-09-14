@@ -692,7 +692,11 @@ async function handle(req, res) {
     const ext  = path.extname(abs).toLowerCase();
     const mime = MIME[ext] || 'application/octet-stream';
     const content = fs.readFileSync(abs);
-    res.writeHead(200, { 'Content-Type': mime });
+    const headers = { 'Content-Type': mime };
+    if (['.html', '.css', '.js'].includes(ext)) {
+      headers['Cache-Control'] = 'no-cache, must-revalidate';
+    }
+    res.writeHead(200, headers);
     if (req.method === 'HEAD') { res.end(); return; }
     res.end(content);
   } catch {

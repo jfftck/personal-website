@@ -201,7 +201,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .system-time-btn:hover { background: var(--btn-hover); }
-.system-time-btn[aria-expanded="true"] { background: var(--accent); color: #fff; }
+#system-time-btn[aria-expanded="true"],
+#system-time-btn[aria-expanded="true"]:hover {
+  background-color: var(--accent);
+  color: #fff;
+}
 
 #system-panel {
   position: fixed;
@@ -239,6 +243,7 @@ body {
   cursor: pointer;
 }
 .quick-toggle[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.quick-toggle[hidden] { display: none; }
 .quick-toggle svg, #theme-reset svg { width: 1.15rem; height: 1.15rem; fill: currentColor; flex: 0 0 auto; }
 #time-format-toggle,
 #reminder-notification-toggle { grid-column: 1 / -1; }

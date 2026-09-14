@@ -248,6 +248,7 @@ function updateNotificationSetting() {
   const state = $('reminder-notification-state');
   const supported = 'Notification' in window;
   const blocked = supported && Notification.permission === 'denied';
+  toggle.hidden = !supported;
   toggle.disabled = !supported || blocked;
   toggle.setAttribute('aria-pressed', String(backgroundNotificationsEnabled));
   state.textContent = !supported ? 'Unavailable' : blocked ? 'Blocked' : backgroundNotificationsEnabled ? 'On' : 'Off';
