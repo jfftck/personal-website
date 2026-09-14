@@ -39,7 +39,7 @@ const WIDTH_PRESETS = ['third', 'half', 'full'];
 // ── System panel, clock, calendar, and quick settings ─────────
 const themeToggle = $('theme-toggle');
 const themeReset  = $('theme-reset');
-const themeState  = $('theme-state');
+const themeSplit  = themeToggle.closest('.theme-split');
 const themeMedia  = matchMedia('(prefers-color-scheme: dark)');
 const THEME_KEY   = 'desktop-theme';
 const TIME_KEY    = 'desktop-time-24h';
@@ -80,17 +80,18 @@ function effectiveTheme() {
 }
 
 function applyTheme(theme = localStorage.getItem(THEME_KEY)) {
+  const hasOverride = theme === 'light' || theme === 'dark';
   if (theme === 'light' || theme === 'dark') {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem(THEME_KEY, theme);
-    themeState.textContent = theme[0].toUpperCase() + theme.slice(1);
-    themeReset.disabled = false;
   } else {
     delete document.documentElement.dataset.theme;
     localStorage.removeItem(THEME_KEY);
-    themeState.textContent = 'System';
-    themeReset.disabled = true;
   }
+  themeToggle.setAttribute('aria-pressed', String(effectiveTheme() === 'dark'));
+  themeSplit.classList.toggle('has-override', hasOverride);
+  themeReset.setAttribute('aria-hidden', String(!hasOverride));
+  themeReset.tabIndex = hasOverride ? 0 : -1;
 }
 
 function updateClock() {

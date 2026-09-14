@@ -6,8 +6,8 @@ channel = "stable-24_11"
 packages = ["static-web-server"]
 
 [deployment]
-deploymentTarget = "static"
-run = ["node", "admin/server.js"]
+deploymentTarget = "autoscale"
+run = ["sh", "admin/start-all.sh"]
 publicDir = "/"
 
 [workflows]

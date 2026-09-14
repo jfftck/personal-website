@@ -247,17 +247,36 @@ body {
 .quick-toggle svg, #theme-reset svg { width: 1.15rem; height: 1.15rem; fill: currentColor; flex: 0 0 auto; }
 #time-format-toggle,
 #reminder-notification-toggle { grid-column: 1 / -1; }
-.theme-split { display: grid; grid-template-columns: 1fr 2.5rem; grid-column: 1 / -1; }
-.theme-split .quick-toggle { border-radius: 1.5rem 0 0 1.5rem; }
+.theme-split {
+  display: grid; grid-template-columns: 1fr 0; grid-column: 1 / -1;
+  transition: grid-template-columns 180ms ease;
+}
+.theme-split.has-override { grid-template-columns: 1fr 2.5rem; }
+.theme-split .quick-toggle {
+  border-radius: 1.5rem;
+  transition: border-radius 180ms ease, background-color 180ms ease, color 180ms ease;
+}
+.theme-split.has-override .quick-toggle { border-radius: 1.5rem 0 0 1.5rem; }
 #theme-reset {
+  min-width: 0;
+  overflow: hidden;
   border: 0;
   border-left: 1px solid var(--topbar-border);
   border-radius: 0 1.5rem 1.5rem 0;
   background: var(--btn-hover);
   color: inherit;
   cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 150ms ease, visibility 0s linear 180ms;
 }
-#theme-reset:disabled { opacity: .35; cursor: default; }
+.theme-split.has-override #theme-reset {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 180ms ease;
+}
 #in-app-notifications {
   position: fixed; z-index: 1200; top: calc(var(--topbar-h) + .75rem); right: .75rem;
   display: grid; gap: .5rem; width: min(22rem, calc(100vw - 1.5rem)); pointer-events: none;
