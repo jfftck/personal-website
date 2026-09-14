@@ -551,7 +551,7 @@ body {
 }
 
 .app-menu-heading {
-  margin: 0 0 1rem;
+  margin-bottom: 1rem;
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
