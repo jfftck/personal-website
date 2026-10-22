@@ -65,6 +65,39 @@ test('all previous app shortcuts still launch and manifest files open in the doc
     .toContainText('Big Update', { timeout: 10000 });
 });
 
+test('launcher search filters documents and pictures by name without hiding app shortcuts', async ({ page }) => {
+  await page.route('**/pictures/manifest.json', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([
+      { filename: '20261022_Summer_Beach.jpg' },
+      { filename: '20261022_Mountain_Trail.png' },
+    ]),
+  }));
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  await page.locator('#app-menu-btn').click();
+
+  const search = page.locator('#launcher-file-search');
+  await search.fill('BEACH');
+  await expect(page.locator('#app-list .app-launcher[data-type]')).toHaveCount(5);
+  await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(0);
+  await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(1);
+  await expect(page.locator('#pic-files-list .app-file-btn:visible')).toContainText('Summer Beach');
+  await expect(page.locator('#doc-files-heading')).toBeHidden();
+
+  await search.fill('welcome');
+  await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(1);
+  await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(0);
+  await expect(page.locator('#doc-files-list .app-file-btn:visible')).toContainText('Welcome');
+
+  await search.fill('not-a-file');
+  await expect(page.locator('#launcher-file-search-empty')).toBeVisible();
+  await search.fill('');
+  await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(9);
+  await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(2);
+});
+
 test('all three solitaire games deal, select, draw, undo, configure, and restart', async ({ page }) => {
   for (const [game, count] of [['klondike', 28], ['spider', 54], ['freecell', 52]]) {
     const app = await openGame(page, game);

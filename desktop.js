@@ -832,6 +832,10 @@ const docFilesList = $('doc-files-list');
 const picFilesList = $('pic-files-list');
 const docFilesCount = $('doc-files-count');
 const picFilesCount = $('pic-files-count');
+const launcherFileSearch = $('launcher-file-search');
+const launcherFileSearchEmpty = $('launcher-file-search-empty');
+const docFilesHeading = $('doc-files-heading');
+const picFilesHeading = $('pic-files-heading');
 
 function parseManifestForLauncher(folder, entries) {
   return entries.map(entry => {
@@ -871,6 +875,7 @@ function buildFileLauncherBtn(file, iconSvg, iconColor) {
   button.type = 'button';
   button.className = 'app-file-btn';
   button.title = `Open "${file.displayName}"`;
+  button.dataset.fileName = file.displayName.toLocaleLowerCase();
   const icon = document.createElement('span');
   icon.className = 'app-file-icon';
   icon.style.color = iconColor;
@@ -903,7 +908,28 @@ async function populateLauncherFiles() {
     buildFileLauncherBtn(file, IMG_ICON, '#a78bfa')));
   picFilesCount.textContent = pictures.length ? String(pictures.length) : '';
   appFilesSection.hidden = allDocs.length === 0 && pictures.length === 0;
+  updateLauncherFileSearch();
 }
+
+function updateLauncherFileSearch() {
+  const query = launcherFileSearch.value.trim().toLocaleLowerCase();
+  const filterList = list => {
+    const files = [...list.querySelectorAll('.app-file-btn')];
+    files.forEach(file => {
+      file.hidden = Boolean(query) && !file.dataset.fileName.includes(query);
+    });
+    return files.some(file => !file.hidden);
+  };
+  const hasDocuments = filterList(docFilesList);
+  const hasPictures = filterList(picFilesList);
+  docFilesHeading.hidden = !hasDocuments;
+  docFilesList.hidden = !hasDocuments;
+  picFilesHeading.hidden = !hasPictures;
+  picFilesList.hidden = !hasPictures;
+  launcherFileSearchEmpty.hidden = !query || hasDocuments || hasPictures;
+}
+
+launcherFileSearch.addEventListener('input', updateLauncherFileSearch);
 
 // ── App context (passed to all app builders) ──────────────────
 const appCtx = {
