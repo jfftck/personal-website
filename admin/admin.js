@@ -185,9 +185,9 @@ async function checkConnectivity() {
 
 // ── Inline field editing ──────────────────────────────────────
 // Creates a clickable span. Clicking it replaces it with an input;
-// blur/Enter commits the change back to the manifest and re-renders.
+// blur/Enter saves the change; URL fields update in place.
 function makeEditable(entry, dir, key, opts = {}) {
-  const { isUrl = false, placeholder = '—' } = opts;
+  const { isUrl = false, placeholder = '—', onCommit } = opts;
 
   const span = document.createElement('span');
   span.className = 'editable-field';
@@ -217,6 +217,7 @@ function makeEditable(entry, dir, key, opts = {}) {
       committed = true;
       const newVal = input.value.trim();
       const oldVal = entry[key] || '';
+      const hadValue = Object.hasOwn(entry, key);
       if (newVal !== oldVal) {
         if (newVal) {
           entry[key] = newVal;
@@ -227,23 +228,32 @@ function makeEditable(entry, dir, key, opts = {}) {
         }
         try {
           await saveManifest(dir);
+          onCommit?.();
         } catch (e) {
+          if (hadValue) entry[key] = oldVal;
+          else delete entry[key];
           toast(`Save failed: ${e.message}`, true);
         }
       }
+      if (isUrl) {
+        span.textContent = entry[key] || placeholder;
+        input.replaceWith(span);
+      }
       inlineEditPromise = null;
       resolveInlineEdit();
-      renderList();
+      if (!isUrl) renderList();
     }
 
     input.addEventListener('blur',    () => commit());
     input.addEventListener('keydown', e => {
+      if (committed) return;
       if (e.key === 'Enter')  { e.preventDefault(); input.blur(); }
       if (e.key === 'Escape') {
         committed = true;
         inlineEditPromise = null;
         resolveInlineEdit();
-        renderList();
+        if (isUrl) input.replaceWith(span);
+        else renderList();
       }
     });
   });
@@ -317,21 +327,24 @@ function renderList() {
     info.className = 'item-info';
 
     // Thumbnail — pictures (url) and videos (poster)
+    let refreshThumbnail;
     if (activeSection === 'pictures' || activeSection === 'videos') {
-      const thumbUrl = activeSection === 'pictures' ? (entry.url || '') : (entry.poster || '');
+      const thumbKey = activeSection === 'pictures' ? 'url' : 'poster';
       const thumb = document.createElement('img');
       thumb.className = 'item-thumb';
       thumb.loading  = 'lazy';
       thumb.alt      = '';
-      if (thumbUrl) {
-        thumb.src = thumbUrl;
-      } else {
-        thumb.classList.add('item-thumb--empty');
-      }
       thumb.addEventListener('error', () => {
         thumb.classList.add('item-thumb--empty');
         thumb.removeAttribute('src');
       });
+      refreshThumbnail = () => {
+        const thumbUrl = entry[thumbKey] || '';
+        thumb.classList.toggle('item-thumb--empty', !thumbUrl);
+        if (thumbUrl) thumb.src = thumbUrl;
+        else thumb.removeAttribute('src');
+      };
+      refreshThumbnail();
 
       if (activeSection === 'videos') {
         const thumbWrap = document.createElement('div');
@@ -376,7 +389,10 @@ function renderList() {
       urlLabel.textContent = 'url ';
       meta.appendChild(urlLabel);
 
-      const urlEl = makeEditable(entry, section.dir, 'url', { isUrl: true });
+      const urlEl = makeEditable(entry, section.dir, 'url', {
+        isUrl: true,
+        onCommit: section.dir === 'pictures' ? refreshThumbnail : undefined,
+      });
       meta.appendChild(urlEl);
     }
 
@@ -392,7 +408,10 @@ function renderList() {
       posterLabel.textContent = 'poster ';
       meta.appendChild(posterLabel);
 
-      const posterEl = makeEditable(entry, section.dir, 'poster', { isUrl: true });
+      const posterEl = makeEditable(entry, section.dir, 'poster', {
+        isUrl: true,
+        onCommit: refreshThumbnail,
+      });
       meta.appendChild(posterEl);
     }
 
