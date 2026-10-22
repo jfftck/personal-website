@@ -91,13 +91,21 @@ test('video manifest entries appear in Videos and open directly in Media Player'
   await expect(page.locator('#active-title')).toContainText('Trailer');
 });
 
-test('launcher search filters documents and pictures by name without hiding app shortcuts', async ({ page }) => {
+test('launcher search filters documents, pictures, and videos by name without hiding app shortcuts', async ({ page }) => {
   await page.route('**/pictures/manifest.json', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify([
       { filename: '20261022_Summer_Beach.jpg' },
       { filename: '20261022_Mountain_Trail.png' },
+    ]),
+  }));
+  await page.route('**/videos/manifest.json', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([
+      { filename: '20261022_Beach_Trip.mp4' },
+      { filename: '20261022_Welcome_Message.webm' },
     ]),
   }));
   await page.reload();
@@ -117,27 +125,35 @@ test('launcher search filters documents and pictures by name without hiding app 
   await expect(page.locator('#app-list .app-launcher[data-type]')).toHaveCount(5);
   await expect(page.locator('#doc-files-count')).toHaveText('0');
   await expect(page.locator('#pic-files-count')).toHaveText('1');
+  await expect(page.locator('#video-files-count')).toHaveText('1');
   await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(0);
   await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(1);
+  await expect(page.locator('#video-files-list .app-file-btn:visible')).toHaveCount(1);
   await expect(page.locator('#pic-files-list .app-file-btn:visible')).toContainText('Summer Beach');
+  await expect(page.locator('#video-files-list .app-file-btn:visible')).toContainText('Beach Trip');
   await expect(page.locator('#doc-files-heading')).toBeHidden();
 
   await search.fill('welcome');
   await expect(page.locator('#doc-files-count')).toHaveText('1');
   await expect(page.locator('#pic-files-count')).toHaveText('0');
+  await expect(page.locator('#video-files-count')).toHaveText('1');
   await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(1);
   await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(0);
+  await expect(page.locator('#video-files-list .app-file-btn:visible')).toHaveCount(1);
   await expect(page.locator('#doc-files-list .app-file-btn:visible')).toContainText('Welcome');
 
   await search.fill('not-a-file');
   await expect(page.locator('#doc-files-count')).toHaveText('0');
   await expect(page.locator('#pic-files-count')).toHaveText('0');
+  await expect(page.locator('#video-files-count')).toHaveText('0');
   await expect(page.locator('#launcher-file-search-empty')).toBeVisible();
   await search.fill('');
   await expect(page.locator('#doc-files-count')).toHaveText('9');
   await expect(page.locator('#pic-files-count')).toHaveText('2');
+  await expect(page.locator('#video-files-count')).toHaveText('2');
   await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(9);
   await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(2);
+  await expect(page.locator('#video-files-list .app-file-btn:visible')).toHaveCount(2);
 });
 
 test('all three solitaire games deal, select, draw, undo, configure, and restart', async ({ page }) => {

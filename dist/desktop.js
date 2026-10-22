@@ -940,13 +940,17 @@ function updateLauncherFileSearch() {
   };
   const documentCount = filterList(docFilesList);
   const pictureCount = filterList(picFilesList);
-  const hasVideos = filterList(videoFilesList) > 0;
+  const videoCount = filterList(videoFilesList);
+  const hasVideos = videoCount > 0;
   docFilesCount.textContent = query
     ? String(documentCount)
     : documentCount ? String(documentCount) : '';
   picFilesCount.textContent = query
     ? String(pictureCount)
     : pictureCount ? String(pictureCount) : '';
+  videoFilesCount.textContent = query
+    ? String(videoCount)
+    : videoCount ? String(videoCount) : '';
   const hasDocuments = documentCount > 0;
   const hasPictures = pictureCount > 0;
   docFilesHeading.hidden = !hasDocuments;
