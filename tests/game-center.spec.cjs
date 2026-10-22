@@ -107,19 +107,27 @@ test('launcher search filters documents and pictures by name without hiding app 
   const search = page.locator('#launcher-file-search');
   await search.fill('BEACH');
   await expect(page.locator('#app-list .app-launcher[data-type]')).toHaveCount(5);
+  await expect(page.locator('#doc-files-count')).toHaveText('0');
+  await expect(page.locator('#pic-files-count')).toHaveText('1');
   await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(0);
   await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(1);
   await expect(page.locator('#pic-files-list .app-file-btn:visible')).toContainText('Summer Beach');
   await expect(page.locator('#doc-files-heading')).toBeHidden();
 
   await search.fill('welcome');
+  await expect(page.locator('#doc-files-count')).toHaveText('1');
+  await expect(page.locator('#pic-files-count')).toHaveText('0');
   await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(1);
   await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(0);
   await expect(page.locator('#doc-files-list .app-file-btn:visible')).toContainText('Welcome');
 
   await search.fill('not-a-file');
+  await expect(page.locator('#doc-files-count')).toHaveText('0');
+  await expect(page.locator('#pic-files-count')).toHaveText('0');
   await expect(page.locator('#launcher-file-search-empty')).toBeVisible();
   await search.fill('');
+  await expect(page.locator('#doc-files-count')).toHaveText('9');
+  await expect(page.locator('#pic-files-count')).toHaveText('2');
   await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(9);
   await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(2);
 });

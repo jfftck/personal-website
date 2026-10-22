@@ -929,14 +929,24 @@ function updateLauncherFileSearch() {
   const query = launcherFileSearch.value.trim().toLocaleLowerCase();
   const filterList = list => {
     const files = [...list.querySelectorAll('.app-file-btn')];
+    let visibleCount = 0;
     files.forEach(file => {
       file.hidden = Boolean(query) && !file.dataset.fileName.includes(query);
+      if (!file.hidden) visibleCount++;
     });
-    return files.some(file => !file.hidden);
+    return visibleCount;
   };
-  const hasDocuments = filterList(docFilesList);
-  const hasPictures = filterList(picFilesList);
-  const hasVideos = filterList(videoFilesList);
+  const documentCount = filterList(docFilesList);
+  const pictureCount = filterList(picFilesList);
+  const hasVideos = filterList(videoFilesList) > 0;
+  docFilesCount.textContent = query
+    ? String(documentCount)
+    : documentCount ? String(documentCount) : '';
+  picFilesCount.textContent = query
+    ? String(pictureCount)
+    : pictureCount ? String(pictureCount) : '';
+  const hasDocuments = documentCount > 0;
+  const hasPictures = pictureCount > 0;
   docFilesHeading.hidden = !hasDocuments;
   docFilesList.hidden = !hasDocuments;
   picFilesHeading.hidden = !hasPictures;
