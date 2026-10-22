@@ -922,7 +922,7 @@ async function populateLauncherFiles() {
     buildFileLauncherBtn(file, IMG_ICON, '#a78bfa')));
   picFilesCount.textContent = allPictures.length ? String(allPictures.length) : '';
   const VIDEO_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M21 3H3c-1.11 0-2 .89-2 2v14c0 1.11.89 2 2 2h18c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 16H3V5h18v14zM8 15l7-4-7-4v8z"/></svg>';
-  videoFilesList.replaceChildren(...allVideos.map(file =>
+  videoFilesList.replaceChildren(...sortByDisplayName(allVideos).map(file =>
     buildFileLauncherBtn(file, VIDEO_ICON, '#f87171')));
   videoFilesCount.textContent = allVideos.length ? String(allVideos.length) : '';
   appFilesSection.hidden = allDocs.length === 0 && allPictures.length === 0 && allVideos.length === 0;
@@ -931,6 +931,9 @@ async function populateLauncherFiles() {
 
 function updateLauncherFileSearch() {
   const query = launcherFileSearch.value.trim().toLocaleLowerCase();
+  const focusedFile = document.activeElement?.matches('.app-file-btn')
+    ? document.activeElement
+    : null;
   const filterList = list => {
     const files = [...list.querySelectorAll('.app-file-btn')];
     let visibleCount = 0;
@@ -943,6 +946,7 @@ function updateLauncherFileSearch() {
   const documentCount = filterList(docFilesList);
   const pictureCount = filterList(picFilesList);
   const videoCount = filterList(videoFilesList);
+  if (focusedFile?.hidden) launcherFileSearch.focus({ preventScroll: true });
   const hasVideos = videoCount > 0;
   docFilesCount.textContent = query
     ? String(documentCount)

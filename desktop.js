@@ -931,6 +931,9 @@ async function populateLauncherFiles() {
 
 function updateLauncherFileSearch() {
   const query = launcherFileSearch.value.trim().toLocaleLowerCase();
+  const focusedFile = document.activeElement?.matches('.app-file-btn')
+    ? document.activeElement
+    : null;
   const filterList = list => {
     const files = [...list.querySelectorAll('.app-file-btn')];
     let visibleCount = 0;
@@ -943,6 +946,7 @@ function updateLauncherFileSearch() {
   const documentCount = filterList(docFilesList);
   const pictureCount = filterList(picFilesList);
   const videoCount = filterList(videoFilesList);
+  if (focusedFile?.hidden) launcherFileSearch.focus({ preventScroll: true });
   const hasVideos = videoCount > 0;
   docFilesCount.textContent = query
     ? String(documentCount)

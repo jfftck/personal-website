@@ -171,6 +171,29 @@ test('launcher search filters documents, pictures, and videos by name without hi
   await expect(page.locator('#video-files-list .app-file-btn:visible')).toHaveCount(3);
 });
 
+test('launcher search moves focus from a hidden file to search and restores keyboard navigation when cleared', async ({ page }) => {
+  await page.locator('#app-menu-btn').click();
+  const search = page.locator('#launcher-file-search');
+  const firstDocument = page.locator('#doc-files-list .app-file-btn').first();
+
+  await firstDocument.focus();
+  await page.evaluate(() => {
+    const input = document.querySelector('#launcher-file-search');
+    input.value = 'welcome';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  await expect(firstDocument).toBeHidden();
+  await expect(search).toBeFocused();
+  await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(1);
+
+  await search.fill('');
+  await page.keyboard.press('Tab');
+  await expect(firstDocument).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#doc-files-list .app-file-btn').nth(1)).toBeFocused();
+});
+
 test('all three solitaire games deal, select, draw, undo, configure, and restart', async ({ page }) => {
   for (const [game, count] of [['klondike', 28], ['spider', 54], ['freecell', 52]]) {
     const app = await openGame(page, game);
