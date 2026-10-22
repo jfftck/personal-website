@@ -70,9 +70,9 @@ test('video manifest entries appear in Videos and open directly in Media Player'
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify([
+      { filename: '20261022_Archive.mkv', url: 'https://example.test/archive.mkv' },
       { filename: '20261022_Trailer.mp4', url: 'https://example.test/trailer.mp4' },
       { filename: '20261022_Clip.WEBM', url: 'https://example.test/clip.webm' },
-      { filename: '20261022_Archive.mkv', url: 'https://example.test/archive.mkv' },
     ]),
   }));
   await page.reload();
@@ -82,7 +82,10 @@ test('video manifest entries appear in Videos and open directly in Media Player'
   await expect(page.locator('#video-files-heading')).toBeVisible();
   await expect(page.locator('#video-files-count')).toHaveText('3');
   await expect(page.locator('#video-files-list .app-file-btn')).toHaveCount(3);
-  await page.locator('#video-files-list .app-file-btn').first().click();
+  await expect(page.locator('#video-files-list .app-file-name')).toHaveText([
+    'Archive', 'Clip', 'Trailer',
+  ]);
+  await page.locator('#video-files-list .app-file-btn[data-file-name="trailer"]').click();
 
   const player = page.locator('.app-window[data-type="media-player"]');
   await expect(player).toHaveCount(1);
@@ -96,6 +99,7 @@ test('launcher search filters documents, pictures, and videos by name without hi
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify([
+      { filename: '20261022_City_Tour.mp4' },
       { filename: '20261022_Summer_Beach.jpg' },
       { filename: '20261022_Mountain_Trail.png' },
     ]),
@@ -104,8 +108,8 @@ test('launcher search filters documents, pictures, and videos by name without hi
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify([
-      { filename: '20261022_Beach_Trip.mp4' },
       { filename: '20261022_Welcome_Message.webm' },
+      { filename: '20261022_Beach_Trip.mp4' },
     ]),
   }));
   await page.reload();
@@ -118,6 +122,9 @@ test('launcher search filters documents, pictures, and videos by name without hi
   ]);
   await expect(page.locator('#pic-files-list .app-file-name')).toHaveText([
     'Mountain Trail', 'Summer Beach',
+  ]);
+  await expect(page.locator('#video-files-list .app-file-name')).toHaveText([
+    'Beach Trip', 'City Tour', 'Welcome Message',
   ]);
 
   const search = page.locator('#launcher-file-search');
@@ -158,10 +165,10 @@ test('launcher search filters documents, pictures, and videos by name without hi
     .toHaveText('All 9 documents and 2 pictures are shown.');
   await expect(page.locator('#doc-files-count')).toHaveText('9');
   await expect(page.locator('#pic-files-count')).toHaveText('2');
-  await expect(page.locator('#video-files-count')).toHaveText('2');
+  await expect(page.locator('#video-files-count')).toHaveText('3');
   await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(9);
   await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(2);
-  await expect(page.locator('#video-files-list .app-file-btn:visible')).toHaveCount(2);
+  await expect(page.locator('#video-files-list .app-file-btn:visible')).toHaveCount(3);
 });
 
 test('all three solitaire games deal, select, draw, undo, configure, and restart', async ({ page }) => {
