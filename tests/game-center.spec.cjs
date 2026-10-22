@@ -126,6 +126,8 @@ test('launcher search filters documents, pictures, and videos by name without hi
   await expect(page.locator('#doc-files-count')).toHaveText('0');
   await expect(page.locator('#pic-files-count')).toHaveText('1');
   await expect(page.locator('#video-files-count')).toHaveText('1');
+  await expect(page.locator('#launcher-file-search-status'))
+    .toHaveText('Matching files: 0 documents and 1 picture.');
   await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(0);
   await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(1);
   await expect(page.locator('#video-files-list .app-file-btn:visible')).toHaveCount(1);
@@ -137,6 +139,8 @@ test('launcher search filters documents, pictures, and videos by name without hi
   await expect(page.locator('#doc-files-count')).toHaveText('1');
   await expect(page.locator('#pic-files-count')).toHaveText('0');
   await expect(page.locator('#video-files-count')).toHaveText('1');
+  await expect(page.locator('#launcher-file-search-status'))
+    .toHaveText('Matching files: 1 document and 0 pictures.');
   await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(1);
   await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(0);
   await expect(page.locator('#video-files-list .app-file-btn:visible')).toHaveCount(1);
@@ -146,8 +150,12 @@ test('launcher search filters documents, pictures, and videos by name without hi
   await expect(page.locator('#doc-files-count')).toHaveText('0');
   await expect(page.locator('#pic-files-count')).toHaveText('0');
   await expect(page.locator('#video-files-count')).toHaveText('0');
+  await expect(page.locator('#launcher-file-search-status'))
+    .toHaveText('Matching files: 0 documents and 0 pictures.');
   await expect(page.locator('#launcher-file-search-empty')).toBeVisible();
   await search.fill('');
+  await expect(page.locator('#launcher-file-search-status'))
+    .toHaveText('All 9 documents and 2 pictures are shown.');
   await expect(page.locator('#doc-files-count')).toHaveText('9');
   await expect(page.locator('#pic-files-count')).toHaveText('2');
   await expect(page.locator('#video-files-count')).toHaveText('2');

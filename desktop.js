@@ -836,9 +836,11 @@ const picFilesCount = $('pic-files-count');
 const videoFilesCount = $('video-files-count');
 const launcherFileSearch = $('launcher-file-search');
 const launcherFileSearchEmpty = $('launcher-file-search-empty');
+const launcherFileSearchStatus = $('launcher-file-search-status');
 const docFilesHeading = $('doc-files-heading');
 const picFilesHeading = $('pic-files-heading');
 const videoFilesHeading = $('video-files-heading');
+let launcherSearchAnnouncementTimer;
 
 function parseManifestForLauncher(folder, entries) {
   return entries.map(entry => {
@@ -960,9 +962,20 @@ function updateLauncherFileSearch() {
   videoFilesHeading.hidden = !hasVideos;
   videoFilesList.hidden = !hasVideos;
   launcherFileSearchEmpty.hidden = !query || hasDocuments || hasPictures || hasVideos;
+  return { query, documentCount, pictureCount };
 }
 
-launcherFileSearch.addEventListener('input', updateLauncherFileSearch);
+launcherFileSearch.addEventListener('input', () => {
+  const { query, documentCount, pictureCount } = updateLauncherFileSearch();
+  clearTimeout(launcherSearchAnnouncementTimer);
+  launcherSearchAnnouncementTimer = setTimeout(() => {
+    const documents = `${documentCount} ${documentCount === 1 ? 'document' : 'documents'}`;
+    const pictures = `${pictureCount} ${pictureCount === 1 ? 'picture' : 'pictures'}`;
+    launcherFileSearchStatus.textContent = query
+      ? `Matching files: ${documents} and ${pictures}.`
+      : `All ${documents} and ${pictures} are shown.`;
+  }, 250);
+});
 
 // ── App context (passed to all app builders) ──────────────────
 const appCtx = {
