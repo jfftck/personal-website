@@ -206,8 +206,8 @@ function makeEditable(entry, dir, key, opts = {}) {
     input.focus();
     input.select();
 
-    // Track that an inline edit is in progress so beforeunload and switchTab
-    // can guard against losing the edit.
+    // Shared by size, URL and poster fields: beforeunload warns while editing
+    // or saving, and switchTab waits for the same commit to finish.
     let resolveInlineEdit;
     inlineEditPromise = new Promise(resolve => { resolveInlineEdit = resolve; });
 
@@ -757,7 +757,7 @@ tabBtns.forEach(btn => {
 });
 
 async function switchTab(section) {
-  // Auto-commit any active inline-edit input before switching tabs.
+  // Auto-commit any active size, URL or poster input before switching tabs.
   if (inlineEditPromise) {
     const active = document.activeElement;
     if (active && active.classList.contains('inline-edit-input')) active.blur();
@@ -798,8 +798,8 @@ async function switchTab(section) {
 }
 
 // ── Unload guard ──────────────────────────────────────────────
-// Warn before navigating away or closing the tab while an inline URL/poster
-// edit is in progress (similar to the existing editorDirty guard).
+// Warn before navigating away or closing the tab while any inline size,
+// URL or poster edit is active, including while its save is pending.
 window.addEventListener('beforeunload', e => {
   if (inlineEditPromise || welcomeDirty) {
     e.preventDefault();
