@@ -16,20 +16,53 @@ async function openGame(page, game) {
   return page.locator(`.app-window[data-type="${game}"]`).last();
 }
 
-test('root menu contains only Game Center; submenu has six games and back/Escape navigation', async ({ page }) => {
+test('root menu restores app and file entries; the six game tiles stay nested with back/Escape navigation', async ({ page }) => {
   await page.locator('#app-menu-btn').click();
-  await expect(page.locator('#app-list .app-launcher')).toHaveCount(1);
+  await expect(page.locator('#app-list .app-launcher')).toHaveCount(6);
+  await expect(page.locator('#app-list .app-launcher[data-type]')).toHaveCount(5);
+  await expect(page.locator('#doc-files-list .app-file-btn')).toHaveCount(9);
   await expect(page.locator('#game-submenu')).toBeHidden();
   await page.locator('#game-center-entry').click();
-  await expect(page.locator('#app-list')).toBeHidden();
+  await expect(page.locator('#launcher-root')).toBeHidden();
   await expect(page.locator('#game-list .app-launcher')).toHaveCount(6);
+  await expect(page.locator('#launcher-root [data-game]')).toHaveCount(0);
   await page.locator('#game-menu-back').click();
   await expect(page.locator('#game-center-entry')).toBeFocused();
   await page.keyboard.press('Enter');
   await page.keyboard.press('Escape');
-  await expect(page.locator('#app-list')).toBeVisible();
+  await expect(page.locator('#launcher-root')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.locator('#app-menu')).toBeHidden();
+});
+
+test('all previous app shortcuts still launch and manifest files open in the document viewer', async ({ page }) => {
+  await page.locator('#app-menu-btn').click();
+  await expect(page.locator('#app-list .app-launcher[data-type="welcome"]')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#app-list .app-launcher[data-type="doc-viewer"]')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveCount(1);
+  await page.locator('#close-btn').click();
+
+  for (const type of ['welcome', 'doc-viewer', 'img-viewer', 'file-manager', 'media-player']) {
+    await page.locator('#app-menu-btn').click();
+    await page.locator(`#app-list .app-launcher[data-type="${type}"]`).click();
+    if (type === 'welcome') {
+      await expect(page.locator('#welcome-overlay')).toBeVisible();
+      await page.locator('#welcome-win-close').click();
+    } else {
+      await expect(page.locator(`.app-window[data-type="${type}"]`)).toHaveCount(1);
+      await page.locator('#close-btn').click();
+    }
+  }
+
+  await page.locator('#app-menu-btn').click();
+  await expect(page.locator('#doc-files-count')).toHaveText('9');
+  await expect(page.locator('#doc-files-list .app-file-btn').first()).toContainText('Big Update');
+  await page.locator('#doc-files-list .app-file-btn').first().click();
+  await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveCount(1);
+  await expect(page.locator('.app-window[data-type="doc-viewer"] .doc-body'))
+    .toContainText('Big Update', { timeout: 10000 });
 });
 
 test('all three solitaire games deal, select, draw, undo, configure, and restart', async ({ page }) => {
@@ -119,7 +152,7 @@ test('Reversi flips discs, makes a computer move, undoes and supports local play
   await app.getByRole('button', { name: '← Game Center' }).click();
   await expect(page.locator('#game-submenu')).toBeVisible();
   await page.locator('#game-menu-back').click();
-  await expect(page.locator('#app-list')).toBeVisible();
+  await expect(page.locator('#launcher-root')).toBeVisible();
 });
 
 test('game windows restore and closing a thinking computer does not leave errors', async ({ page }) => {

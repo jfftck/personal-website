@@ -255,13 +255,59 @@
           </svg>
         </button>
       </div>
-      <div id="app-list">
-        <button id="game-center-entry" class="app-launcher" type="button" aria-expanded="false" aria-controls="game-submenu">
-          <span class="app-launcher-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 6h10a4 4 0 0 1 3.9 3.1l1.5 6.6a3 3 0 0 1-5 2.8L15 16H9l-2.4 2.5a3 3 0 0 1-5-2.8l1.5-6.6A4 4 0 0 1 7 6zm0 3v2H5v2h2v2h2v-2h2v-2H9V9zm9 1a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm3 3a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z"/></svg>
-          </span>
-          <span class="app-launcher-name">Game Center</span>
-        </button>
+      <div id="launcher-root">
+        <div id="app-list">
+          <button class="app-launcher" data-type="welcome">
+            <span class="app-launcher-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
+            </span>
+            <span class="app-launcher-name">Welcome</span>
+          </button>
+          <button class="app-launcher" data-type="doc-viewer">
+            <span class="app-launcher-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+            </span>
+            <span class="app-launcher-name">Document Viewer</span>
+          </button>
+          <button class="app-launcher" data-type="img-viewer">
+            <span class="app-launcher-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+            </span>
+            <span class="app-launcher-name">Image Viewer</span>
+          </button>
+          <button class="app-launcher" data-type="file-manager">
+            <span class="app-launcher-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+            </span>
+            <span class="app-launcher-name">File Manager</span>
+          </button>
+          <button class="app-launcher" data-type="media-player">
+            <span class="app-launcher-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3c-1.11 0-2 .89-2 2v14c0 1.11.89 2 2 2h18c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 16H3V5h18v14zM8 15l7-4-7-4v8z"/></svg>
+            </span>
+            <span class="app-launcher-name">Media Player</span>
+          </button>
+          <button id="game-center-entry" class="app-launcher" type="button" aria-expanded="false" aria-controls="game-submenu">
+            <span class="app-launcher-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 6h10a4 4 0 0 1 3.9 3.1l1.5 6.6a3 3 0 0 1-5 2.8L15 16H9l-2.4 2.5a3 3 0 0 1-5-2.8l1.5-6.6A4 4 0 0 1 7 6zm0 3v2H5v2h2v2h2v-2h2v-2H9V9zm9 1a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm3 3a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z"/></svg>
+            </span>
+            <span class="app-launcher-name">Game Center</span>
+          </button>
+        </div>
+
+        <div id="app-files-section" hidden>
+          <p class="app-menu-heading app-files-heading">
+            <span>Documents</span>
+            <span class="app-files-count" id="doc-files-count"></span>
+          </p>
+          <div id="doc-files-list" class="app-files-list"></div>
+
+          <p class="app-menu-heading app-files-heading" style="margin-top:1.25rem">
+            <span>Pictures</span>
+            <span class="app-files-count" id="pic-files-count"></span>
+          </p>
+          <div id="pic-files-list" class="app-files-list"></div>
+        </div>
       </div>
       <div id="game-submenu" hidden>
         <p class="game-menu-description">Choose a game. Everything plays right in your browser.</p>

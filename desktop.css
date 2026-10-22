@@ -567,6 +567,7 @@ body {
 }
 
 #app-list[hidden], #game-submenu[hidden], #game-menu-back[hidden] { display: none; }
+#launcher-root[hidden] { display: none; }
 #game-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));

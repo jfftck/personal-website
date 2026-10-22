@@ -792,8 +792,11 @@ function openAppMenu(showGames = false) {
   closeHelp();
   if (showGames) gameMenu.showGames(false);
   else gameMenu.showRoot(false);
+  populateLauncherFiles();
   requestAnimationFrame(() => {
-    const f = appMenu.querySelector(showGames ? '#game-menu-back' : '#game-center-entry');
+    const f = appMenu.querySelector(showGames
+      ? '#game-menu-back'
+      : '#app-list .app-launcher[data-type]') || appMenu.querySelector('#game-center-entry');
     if (!appMenu.hidden) f.focus();
   });
 }
@@ -823,6 +826,85 @@ function requestOpenFile(file) {
 }
 
 // ── App-launcher file listing ─────────────────────────────────
+const _launcherCache = {};
+const appFilesSection = $('app-files-section');
+const docFilesList = $('doc-files-list');
+const picFilesList = $('pic-files-list');
+const docFilesCount = $('doc-files-count');
+const picFilesCount = $('pic-files-count');
+
+function parseManifestForLauncher(folder, entries) {
+  return entries.map(entry => {
+    const { filename, url: manifestUrl } = entry;
+    if (typeof filename !== 'string') return null;
+    const match = filename.match(/^(\d{4})(\d{2})(\d{2})_(.+)$/);
+    if (!match) return null;
+    const [, , , , rest] = match;
+    const dotIndex = rest.lastIndexOf('.');
+    const rawName = dotIndex >= 0 ? rest.slice(0, dotIndex) : rest;
+    const displayName = rawName.replace(/_/g, ' ');
+    const url = manifestUrl || `${folder}/${encodeURIComponent(filename)}`;
+    const extension = dotIndex >= 0 ? rest.slice(dotIndex + 1).toLowerCase() : '';
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+    const type = imageExtensions.includes(extension) ? 'image' : 'document';
+    return { displayName, url, type, folder };
+  }).filter(Boolean);
+}
+
+async function ensureLauncherManifest(folder) {
+  if (_launcherCache[folder] !== undefined) return _launcherCache[folder];
+  try {
+    const response = await fetch(`${folder}/manifest.json`);
+    if (!response.ok) throw new Error(`Could not load ${folder} manifest`);
+    const entries = await response.json();
+    _launcherCache[folder] = Array.isArray(entries)
+      ? parseManifestForLauncher(folder, entries)
+      : [];
+  } catch {
+    _launcherCache[folder] = [];
+  }
+  return _launcherCache[folder];
+}
+
+function buildFileLauncherBtn(file, iconSvg, iconColor) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'app-file-btn';
+  button.title = `Open "${file.displayName}"`;
+  const icon = document.createElement('span');
+  icon.className = 'app-file-icon';
+  icon.style.color = iconColor;
+  icon.setAttribute('aria-hidden', 'true');
+  icon.innerHTML = iconSvg;
+  const name = document.createElement('span');
+  name.className = 'app-file-name';
+  name.textContent = file.displayName;
+  button.append(icon, name);
+  button.addEventListener('click', () => {
+    requestOpenFile(file);
+    closeAppMenu();
+  });
+  return button;
+}
+
+async function populateLauncherFiles() {
+  const DOC_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>';
+  const IMG_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>';
+  const [docs, posts, pictures] = await Promise.all([
+    ensureLauncherManifest('documents'),
+    ensureLauncherManifest('posts'),
+    ensureLauncherManifest('pictures'),
+  ]);
+  const allDocs = [...docs, ...posts];
+  docFilesList.replaceChildren(...allDocs.map(file =>
+    buildFileLauncherBtn(file, DOC_ICON, 'var(--accent-light)')));
+  docFilesCount.textContent = allDocs.length ? String(allDocs.length) : '';
+  picFilesList.replaceChildren(...pictures.map(file =>
+    buildFileLauncherBtn(file, IMG_ICON, '#a78bfa')));
+  picFilesCount.textContent = pictures.length ? String(pictures.length) : '';
+  appFilesSection.hidden = allDocs.length === 0 && pictures.length === 0;
+}
+
 // ── App context (passed to all app builders) ──────────────────
 const appCtx = {
   appApis:        S.appApis,
@@ -964,6 +1046,14 @@ appMenuBtn.addEventListener('click', e => { e.stopPropagation(); toggleAppMenu()
 const gameMenu = initGameMenu(appMenu, type => {
   openApp(type);
   closeAppMenu();
+});
+
+document.querySelectorAll('#app-list .app-launcher[data-type]').forEach(button => {
+  button.addEventListener('click', () => {
+    if (button.dataset.type === 'welcome') openWelcomeWindow();
+    else openApp(button.dataset.type);
+    closeAppMenu();
+  });
 });
 
 closeBtn.addEventListener('click', () => { if (S.focusedId) closeApp(S.focusedId); });

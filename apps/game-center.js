@@ -21,7 +21,7 @@ export function buildGame(type, id, ctx) {
 }
 
 export function initGameMenu(menu, openGame) {
-  const root = menu.querySelector('#app-list');
+  const root = menu.querySelector('#launcher-root');
   const submenu = menu.querySelector('#game-submenu');
   const entry = menu.querySelector('#game-center-entry');
   const back = menu.querySelector('#game-menu-back');
