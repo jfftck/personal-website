@@ -566,6 +566,17 @@ body {
   gap: 1rem;
 }
 
+#app-list[hidden], #game-submenu[hidden], #game-menu-back[hidden] { display: none; }
+#game-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1rem;
+}
+#app-menu-title { flex: 1; }
+.game-menu-description { margin: 0 0 1.5rem; font-size: .875rem; opacity: .7; }
+.game-launcher-symbol { font-family: "DejaVu Sans", "Segoe UI Symbol", serif; font-size: 2.2rem; }
+#game-list small { font-size: .7rem; opacity: .65; text-align: center; }
+
 .app-launcher {
   display: flex;
   flex-direction: column;

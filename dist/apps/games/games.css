@@ -1,0 +1,593 @@
+/* Game Center — a quiet arcade nested inside the translucent desktop.
+   The inherited desktop tokens keep the chrome in step with the active theme;
+   game surfaces use their own tactile, high-contrast table colors. */
+.game-app {
+  --game-ink: var(--app-text);
+  --game-muted: color-mix(in srgb, var(--app-text) 62%, transparent);
+  --game-line: var(--app-border);
+  --felt: #174c52;
+  --felt-deep: #10383f;
+  --felt-edge: #0b2b33;
+  --card-face: #fffdf5;
+  --card-ink: #17232a;
+  --card-red: #b9323d;
+  --tile-light: #e7d9bd;
+  --tile-dark: #667b73;
+  --tile-mark: #d7a842;
+
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--game-ink);
+  font: 500 0.875rem/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .game-app {
+    --felt: #27666b;
+    --felt-deep: #1d5058;
+    --felt-edge: #153b43;
+    --tile-light: #f0e6d2;
+    --tile-dark: #82938a;
+  }
+}
+
+:root[data-theme="light"] .game-app {
+  --felt: #27666b;
+  --felt-deep: #1d5058;
+  --felt-edge: #153b43;
+  --tile-light: #f0e6d2;
+  --tile-dark: #82938a;
+}
+
+.game-app *,
+.game-app *::before,
+.game-app *::after { box-sizing: border-box; }
+
+.game-toolbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--toolbar-sep);
+  background: var(--toolbar-bg);
+  -webkit-backdrop-filter: var(--toolbar-backdrop);
+  backdrop-filter: var(--toolbar-backdrop);
+}
+
+.game-toolbar > :first-child { margin-inline-start: 0; }
+.game-toolbar > label,
+.game-toolbar .game-toolbar-label {
+  color: var(--game-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.game-toolbar button,
+.game-toolbar select,
+.game-options select,
+.game-promotion button {
+  min-height: 2.1rem;
+  padding: 0.42rem 0.72rem;
+  border: 1px solid var(--game-line);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--app-bg) 72%, var(--app-text) 5%);
+  color: var(--game-ink);
+  font: inherit;
+}
+
+.game-toolbar button,
+.game-promotion button { cursor: pointer; }
+.game-toolbar button:hover,
+.game-promotion button:hover { background: var(--btn-hover); }
+.game-toolbar button:active,
+.game-promotion button:active { background: var(--btn-active); }
+.game-toolbar button:disabled { cursor: not-allowed; opacity: 0.42; }
+
+.game-toolbar select,
+.game-options select {
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.game-toolbar button:focus-visible,
+.game-toolbar select:focus-visible,
+.game-options select:focus-visible,
+.game-promotion button:focus-visible,
+.game-area button:focus-visible,
+.game-rules summary:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+}
+
+.game-toolbar [aria-pressed="true"],
+.game-toolbar button[aria-current="true"] {
+  border-color: color-mix(in srgb, var(--focus-color) 68%, var(--game-line));
+  background: color-mix(in srgb, var(--accent) 25%, var(--app-bg));
+}
+
+.game-status {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 2.35rem;
+  padding: 0.45rem 0.85rem;
+  border-bottom: 1px solid var(--toolbar-sep);
+  color: var(--game-muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-status:empty { display: none; }
+
+.game-rules {
+  flex: 0 0 auto;
+  margin: 0.55rem 0.8rem 0;
+  border: 1px solid var(--game-line);
+  border-radius: 0.7rem;
+  background: color-mix(in srgb, var(--app-bg) 76%, transparent);
+  color: var(--game-muted);
+  font-size: 0.76rem;
+}
+
+.game-rules summary {
+  padding: 0.45rem 0.65rem;
+  color: var(--game-ink);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.game-rules p {
+  margin: 0;
+  padding: 0 0.7rem 0.65rem;
+  line-height: 1.55;
+}
+
+.game-area {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: clamp(0.75rem, 2.2vw, 1.4rem);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+.game-area::-webkit-scrollbar { width: 0.65rem; height: 0.65rem; }
+.game-area::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 1rem;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+.game-area::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+
+.game-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem 1rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+}
+
+.game-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--game-muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.game-options select { min-width: 6.5rem; }
+
+/* Solitaire table */
+.solitaire-table {
+  position: relative;
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  gap: clamp(1.15rem, 3vw, 2.1rem);
+  width: max-content;
+  min-width: min(100%, 34rem);
+  max-width: 100%;
+  padding: clamp(0.75rem, 2vw, 1.25rem);
+  overflow: visible;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 1.15rem;
+  background:
+    radial-gradient(ellipse at 50% 25%, rgba(111,174,153,.17), transparent 60%),
+    linear-gradient(145deg, var(--felt), var(--felt-deep));
+  box-shadow: inset 0 1px rgba(255,255,255,.1), 0 12px 30px rgba(0,0,0,.2);
+  container-type: inline-size;
+}
+
+.card-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: clamp(0.35rem, 1.3vw, 0.9rem);
+  width: 100%;
+}
+
+.card-top-row .card-pile {
+  display: flex;
+  flex: 0 1 7.6rem;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+.pile-label {
+  align-self: stretch;
+  margin: 0 0 0.35rem;
+  color: rgba(255,255,255,.75);
+  font-size: 0.62rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.card-columns {
+  display: grid;
+  grid-template-columns: repeat(var(--columns, 7), minmax(2.5rem, 5.15rem));
+  align-items: start;
+  justify-content: space-between;
+  gap: clamp(0.3rem, 1.2vw, 0.75rem);
+  width: 100%;
+  min-width: max-content;
+}
+
+.card-columns .card-pile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  min-height: 6rem;
+}
+
+.playing-card {
+  position: relative;
+  display: block;
+  width: clamp(2.55rem, 7.3vw, 5.15rem);
+  aspect-ratio: 0.70;
+  flex: 0 0 auto;
+  overflow: hidden;
+  padding: 0.28em;
+  border: 1px solid rgba(19,34,39,.24);
+  border-radius: clamp(0.35rem, 0.8vw, 0.65rem);
+  background: var(--card-face);
+  box-shadow: 0 2px 5px rgba(0,0,0,.24), inset 0 0 0 1px rgba(255,255,255,.72);
+  color: var(--card-ink);
+  font: 700 clamp(0.8rem, 2vw, 1.2rem)/1.02 Georgia, "Times New Roman", serif;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 130ms ease, box-shadow 130ms ease;
+}
+
+.playing-card:hover {
+  z-index: 3;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 10px rgba(0,0,0,.28), inset 0 0 0 1px rgba(255,255,255,.8);
+}
+.playing-card.red { color: var(--card-red); }
+.playing-card.selected {
+  z-index: 4;
+  outline: 3px solid #f1c85b;
+  outline-offset: 1px;
+  transform: translateY(-4px);
+}
+.playing-card.face-down {
+  border-color: #f0e9d9;
+  background:
+    repeating-linear-gradient(45deg, transparent 0 4px, rgba(255,255,255,.12) 4px 5px),
+    linear-gradient(135deg, #315e82, #173d60);
+  box-shadow: 0 2px 5px rgba(0,0,0,.28), inset 0 0 0 2px rgba(246,239,220,.75), inset 0 0 0 5px rgba(255,255,255,.1);
+  color: transparent;
+}
+
+.card-columns .playing-card + .playing-card { margin-top: -68%; }
+.card-columns .playing-card.face-down + .playing-card { margin-top: -78%; }
+.card-columns .playing-card.selected + .playing-card { margin-top: calc(-68% + 4px); }
+.card-top-row .playing-card + .playing-card { margin-inline-start: -0.35rem; }
+.card-top-row .card-pile .playing-card { width: clamp(2.45rem, 7vw, 4.8rem); }
+
+.empty-pile {
+  display: grid;
+  place-items: center;
+  width: clamp(2.55rem, 7.3vw, 5.15rem);
+  aspect-ratio: 0.70;
+  border: 1px dashed rgba(255,255,255,.52);
+  border-radius: clamp(0.35rem, 0.8vw, 0.65rem);
+  background: rgba(1,25,31,.13);
+  color: rgba(255,255,255,.62);
+}
+.empty-pile::before { content: "+"; font: 300 1.8rem/1 ui-sans-serif, sans-serif; }
+.empty-pile:hover { background: rgba(255,255,255,.11); border-color: #fff; color: #fff; }
+
+.card-stock {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.card-stock button {
+  width: clamp(2.55rem, 7.3vw, 5.15rem);
+  aspect-ratio: 0.70;
+  border: 1px solid rgba(255,255,255,.78);
+  border-radius: clamp(0.35rem, 0.8vw, 0.65rem);
+  background:
+    repeating-linear-gradient(45deg, transparent 0 4px, rgba(255,255,255,.12) 4px 5px),
+    linear-gradient(135deg, #315e82, #173d60);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 2px rgba(246,239,220,.6), inset 0 0 0 5px rgba(255,255,255,.1), 0 2px 5px rgba(0,0,0,.24);
+}
+.card-stock button:hover { filter: brightness(1.12); transform: translateY(-2px); }
+
+/* Chess + Reversi boards share an 8×8 geometry, but keep the game identity
+   visible through their distinct square and piece treatments. */
+.game-board,
+.reversi-board {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  width: min(100%, min(68vh, 36rem));
+  aspect-ratio: 1;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: clamp(0.35rem, 1.2vw, 0.65rem) solid #493b2c;
+  border-radius: 0.55rem;
+  background: #493b2c;
+  box-shadow: 0 10px 28px rgba(0,0,0,.3), inset 0 1px rgba(255,255,255,.25);
+  container-type: inline-size;
+}
+
+.board-square {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: #20272a;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.board-square.light { background: var(--tile-light); }
+.board-square.dark { background: var(--tile-dark); }
+.board-square:hover { filter: brightness(1.08); }
+.board-square.selected { box-shadow: inset 0 0 0 4px #e3b54f; z-index: 1; }
+.board-square.legal::after {
+  position: absolute;
+  width: 27%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(23,64,53,.38);
+  content: "";
+  pointer-events: none;
+}
+.board-square.legal:has(.piece-white)::after,
+.board-square.legal:has(.piece-black)::after {
+  width: 88%;
+  border: max(3px, 0.45cqw) solid rgba(179,55,51,.76);
+  background: transparent;
+}
+
+.piece-white,
+.piece-black {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-family: "Noto Sans Symbols 2", "DejaVu Sans", "Segoe UI Symbol", serif;
+  font-size: clamp(1.55rem, 7.1cqw, 3.75rem);
+  line-height: 1;
+  user-select: none;
+}
+.piece-white {
+  color: #fffdf3;
+  text-shadow: 0 1px 0 #655747, 0 2px 2px rgba(16,20,18,.72);
+  -webkit-text-stroke: 0.45px #514b40;
+}
+.piece-black {
+  color: #182124;
+  text-shadow: 0 1px 0 rgba(255,255,255,.3), 0 2px 2px rgba(0,0,0,.36);
+  -webkit-text-stroke: 0.35px #f4ead6;
+}
+
+.reversi-board {
+  border-color: #6c4835;
+  background: #176249;
+  gap: 1px;
+  padding: clamp(0.2rem, 0.8vw, 0.4rem);
+}
+.reversi-board .board-square.light,
+.reversi-board .board-square.dark {
+  background: #247958;
+}
+.reversi-board .board-square:hover { background: #2d8d66; }
+.reversi-board .board-square.legal::after {
+  width: 26%;
+  border: 1px solid rgba(239,244,220,.55);
+  background: rgba(239,244,220,.34);
+}
+.disc {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 76%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0,0,0,.45), inset 0 1px 2px rgba(255,255,255,.45);
+}
+.disc.black { background: radial-gradient(circle at 32% 25%, #454b4a, #101718 68%); }
+.disc.white { background: radial-gradient(circle at 32% 25%, #fffef5, #d3d6ca 72%); }
+
+.game-promotion {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.65rem;
+  border: 1px solid var(--game-line);
+  border-radius: 0.8rem;
+  background: var(--overlay-card);
+}
+.game-promotion button { min-width: 3rem; font-size: 1.3rem; }
+
+/* Minesweeper retains touch-sized cells while the board itself can scroll
+   horizontally on expert layouts and narrow tiled windows. */
+.mine-board-wrap {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--game-line);
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--app-bg) 76%, transparent);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+.mine-board {
+  display: grid;
+  grid-template-columns: repeat(var(--columns, 9), 2rem);
+  gap: 2px;
+  width: max-content;
+  padding: 0.45rem;
+  background: color-mix(in srgb, var(--felt-edge) 72%, #6d746b);
+}
+.mine-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.34);
+  border-radius: 0.23rem;
+  background: linear-gradient(145deg, #e1e5db, #aebbb2);
+  color: #1d2a2a;
+  font: 800 0.92rem/1 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  cursor: pointer;
+  box-shadow: inset 1px 1px rgba(255,255,255,.75), inset -1px -1px rgba(51,68,62,.26);
+}
+.mine-cell:hover:not(.revealed) { background: #f4f0df; }
+.mine-cell.revealed {
+  border-color: rgba(0,0,0,.1);
+  background: rgba(221,232,218,.94);
+  box-shadow: inset 0 1px 3px rgba(32,56,47,.2);
+  cursor: default;
+}
+.mine-cell[data-number="1"] { color: #245caa; }
+.mine-cell[data-number="2"] { color: #277148; }
+.mine-cell[data-number="3"] { color: #b23335; }
+.mine-cell[data-number="4"] { color: #563f91; }
+.mine-cell[data-number="5"] { color: #85422f; }
+.mine-cell[data-number="6"] { color: #267e82; }
+.mine-cell[data-number="7"] { color: #26302c; }
+.mine-cell[data-number="8"] { color: #737c76; }
+.mine-cell.flagged::after {
+  width: 0;
+  height: 0;
+  border-top: 0.85rem solid #b64038;
+  border-right: 0.75rem solid transparent;
+  border-bottom: 0.15rem solid transparent;
+  content: "";
+  filter: drop-shadow(1px 1px 0 rgba(0,0,0,.23));
+}
+.mine-cell.flagged::before {
+  position: absolute;
+  bottom: 0.26rem;
+  left: 0.39rem;
+  width: 2px;
+  height: 1rem;
+  background: #333b37;
+  content: "";
+}
+.mine-cell.exploded { background: #c8493d; color: #fff; }
+
+@container (max-width: 520px) {
+  .solitaire-table { gap: 1.1rem; }
+  .card-top-row { gap: 0.3rem; }
+  .pile-label { font-size: 0.53rem; letter-spacing: 0.06em; }
+}
+
+@media (max-width: 520px) {
+  .game-toolbar { gap: 0.35rem; padding: 0.5rem; }
+  .game-toolbar button,
+  .game-toolbar select { min-height: 2rem; padding: 0.35rem 0.55rem; font-size: 0.78rem; }
+  .game-area { align-items: flex-start; gap: 0.75rem; padding: 0.7rem; }
+  .game-board,
+  .reversi-board { align-self: center; width: min(100%, 68vh); }
+  .game-options { justify-content: flex-start; }
+  .solitaire-table { min-width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .playing-card,
+  .game-toolbar button,
+  .game-promotion button,
+  .card-stock button { transition: none; }
+}
+
+/* Use explicit table geometry so inline-size containment cannot collapse its
+   intrinsic width. Narrow windows scroll a complete, readable card table. */
+.solitaire-table {
+  --card-width: clamp(2.5rem, 6.5cqw, 5.15rem);
+  flex: 0 0 auto;
+  align-self: flex-start;
+  width: 100%;
+  min-width: calc(var(--pile-count, 7) * 3rem + 2rem);
+  max-width: 68rem;
+  margin-inline: auto;
+}
+.card-columns {
+  grid-template-columns: repeat(var(--columns, 7), minmax(2.5rem, 1fr));
+  min-width: 0;
+  gap: .5rem;
+}
+.playing-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: var(--card-width);
+}
+.card-top-row .card-pile .playing-card,
+.empty-pile,
+.card-stock button { width: var(--card-width); }
+.card-columns .playing-card + .playing-card,
+.card-columns .playing-card.selected + .playing-card {
+  margin-top: calc(1.6rem - var(--card-width) / 0.7);
+}
+.card-columns .playing-card.face-down + .playing-card {
+  margin-top: calc(.75rem - var(--card-width) / 0.7);
+}
+.game-toolbar select option { background: var(--app-bg); color: var(--game-ink); }
