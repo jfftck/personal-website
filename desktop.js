@@ -911,10 +911,12 @@ async function populateLauncherFiles() {
   const allVideos = [...allDocuments, ...pictures, ...videos].filter(file => file.type === 'video');
   const allDocs = allDocuments.filter(file => file.type !== 'video');
   const allPictures = pictures.filter(file => file.type !== 'video');
-  docFilesList.replaceChildren(...allDocs.map(file =>
+  const sortByDisplayName = files => [...files].sort((a, b) =>
+    a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
+  docFilesList.replaceChildren(...sortByDisplayName(allDocs).map(file =>
     buildFileLauncherBtn(file, DOC_ICON, 'var(--accent-light)')));
   docFilesCount.textContent = allDocs.length ? String(allDocs.length) : '';
-  picFilesList.replaceChildren(...allPictures.map(file =>
+  picFilesList.replaceChildren(...sortByDisplayName(allPictures).map(file =>
     buildFileLauncherBtn(file, IMG_ICON, '#a78bfa')));
   picFilesCount.textContent = allPictures.length ? String(allPictures.length) : '';
   const VIDEO_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M21 3H3c-1.11 0-2 .89-2 2v14c0 1.11.89 2 2 2h18c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 16H3V5h18v14zM8 15l7-4-7-4v8z"/></svg>';

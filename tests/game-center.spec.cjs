@@ -58,8 +58,8 @@ test('all previous app shortcuts still launch and manifest files open in the doc
 
   await page.locator('#app-menu-btn').click();
   await expect(page.locator('#doc-files-count')).toHaveText('9');
-  await expect(page.locator('#doc-files-list .app-file-btn').first()).toContainText('Big Update');
-  await page.locator('#doc-files-list .app-file-btn').first().click();
+  await expect(page.locator('#doc-files-list .app-file-btn').first()).toContainText('About Me');
+  await page.locator('#doc-files-list .app-file-btn[data-file-name="big update"]').click();
   await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveCount(1);
   await expect(page.locator('.app-window[data-type="doc-viewer"] .doc-body'))
     .toContainText('Big Update', { timeout: 10000 });
@@ -103,6 +103,14 @@ test('launcher search filters documents and pictures by name without hiding app 
   await page.reload();
   await page.locator('#welcome-win-close').click();
   await page.locator('#app-menu-btn').click();
+
+  await expect(page.locator('#doc-files-list .app-file-name')).toHaveText([
+    'About Me', 'Big Update', 'Happy New Year', 'Im Back', 'Merry Christmas',
+    'My Sites', 'News Update', 'Site Redesign', 'Welcome',
+  ]);
+  await expect(page.locator('#pic-files-list .app-file-name')).toHaveText([
+    'Mountain Trail', 'Summer Beach',
+  ]);
 
   const search = page.locator('#launcher-file-search');
   await search.fill('BEACH');
