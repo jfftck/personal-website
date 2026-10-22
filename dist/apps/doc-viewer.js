@@ -34,11 +34,12 @@ async function fetchDocManifest(folder) {
 }
 
 // ── Document Viewer ────────────────────────────────────────────
-export function buildDocViewer(id, ctx) {
+export function buildDocViewer(id, ctx, initialState = null) {
   let docFontPct  = 100;
   let currentFile = null;
   let allDocs     = [];
   let sidebarOpen = false;
+  let pendingState = typeof initialState?.url === 'string' ? { url: initialState.url } : null;
 
   const el = document.createElement('div');
 
@@ -112,9 +113,11 @@ export function buildDocViewer(id, ctx) {
   }
 
   function loadFile(url, name) {
+    pendingState = null;
     currentFile = { url, name };
     ctx.setAppTitle(id, name);
     updateSidebarActive();
+    ctx.saveSession?.();
 
     if (isPDF(url)) {
       docBody.style.display = 'none';
@@ -175,8 +178,11 @@ export function buildDocViewer(id, ctx) {
     renderSidebar(allDocs);
 
     if (allDocs.length > 0 && !currentFile) {
-      loadFile(allDocs[0].url, allDocs[0].displayName);
-    } else if (allDocs.length === 0) {
+      const doc = allDocs.find(doc => doc.url === pendingState?.url) || allDocs[0];
+      loadFile(doc.url, doc.displayName);
+    } else if (allDocs.length === 0 && !currentFile) {
+      pendingState = null;
+      ctx.saveSession?.();
       docBody.innerHTML = `
         <div class="doc-welcome">
           <svg viewBox="0 0 24 24" fill="currentColor" class="doc-welcome-icon" aria-hidden="true">
@@ -251,6 +257,7 @@ export function buildDocViewer(id, ctx) {
   // ── Public API ────────────────────────────────────────────────
   ctx.appApis[id] = {
     openFile: (url, name) => loadFile(url, name),
+    getSessionState: () => currentFile ? { url: currentFile.url } : pendingState,
   };
 
   // ── Assemble DOM ──────────────────────────────────────────────

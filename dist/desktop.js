@@ -395,7 +395,8 @@ function saveSession() {
         widthPreset: col.widthPreset,
         apps: col.appIds.map(appId => {
           const app = S.apps.find(a => a.id === appId);
-          return { type: app.type };
+          const state = S.appApis[appId]?.getSessionState?.();
+          return { type: app.type, ...(state ? { state } : {}) };
         }),
       })),
     }));
@@ -440,12 +441,12 @@ function createColEl(colId) {
 }
 
 // ── App lifecycle ─────────────────────────────────────────────
-function openApp(type, insertIntoColId = null) {
+function openApp(type, insertIntoColId = null, initialState = null) {
   const def = APP_DEFS[type];
   if (!def) return null;
 
   const id = `app-${S.nextAppId++}`;
-  const el = def.build(id);
+  const el = def.build(id, initialState);
   el.classList.add('app-window');
   el.dataset.id   = id;
   el.dataset.type = type;
@@ -988,6 +989,7 @@ const appCtx = {
   setAppTitle,
   toast,
   requestOpenFile,
+  saveSession,
   openGameMenu: () => openAppMenu(true),
 };
 
@@ -1003,14 +1005,14 @@ const APP_DEFS = {
     iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
     </svg>`,
-    build: id => buildDocViewer(id, appCtx),
+    build: (id, state) => buildDocViewer(id, appCtx, state),
   },
   'img-viewer': {
     title: 'Image Viewer',
     iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
     </svg>`,
-    build: id => buildImgViewer(id, appCtx),
+    build: (id, state) => buildImgViewer(id, appCtx, state),
   },
   'file-manager': {
     title: 'File Manager',
@@ -1048,7 +1050,7 @@ function restoreSession() {
         for (let i = 0; i < colData.apps.length; i++) {
           const appData = colData.apps[i];
           if (typeof appData.type !== 'string' || !APP_DEFS[appData.type]) continue;
-          const appId = openApp(appData.type, colId);
+          const appId = openApp(appData.type, colId, appData.state);
           if (i === 0 && appId) {
             const col = getAppColumn(appId);
             colId = col ? col.id : null;

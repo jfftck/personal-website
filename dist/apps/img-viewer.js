@@ -24,7 +24,7 @@ async function fetchPicturesManifest() {
 }
 
 // ── Image Viewer ───────────────────────────────────────────────
-export function buildImgViewer(id, ctx) {
+export function buildImgViewer(id, ctx, initialState = null) {
   let scale = 1, rot = 0, panX = 0, panY = 0;
   let isPanning = false, panStartX = 0, panStartY = 0, panOriginX = 0, panOriginY = 0;
   let pinching = false, pinchDist0 = 0, scale0 = 1;
@@ -32,6 +32,12 @@ export function buildImgViewer(id, ctx) {
   let gallery     = [];
   let galleryIdx  = 0;
   let sidebarOpen = false;
+  let pendingState = initialState && (
+    typeof initialState.url === 'string' || Number.isInteger(initialState.galleryIdx)
+  ) ? {
+    ...(typeof initialState.url === 'string' ? { url: initialState.url } : {}),
+    galleryIdx: Number.isInteger(initialState.galleryIdx) ? initialState.galleryIdx : 0,
+  } : null;
 
   const el = document.createElement('div');
 
@@ -104,6 +110,7 @@ export function buildImgViewer(id, ctx) {
 
   function showGalleryItem(idx) {
     if (!gallery.length) return;
+    pendingState = null;
     galleryIdx  = ((idx % gallery.length) + gallery.length) % gallery.length;
     const item  = gallery[galleryIdx];
     currentFile = { url: item.url, name: item.displayName };
@@ -113,6 +120,7 @@ export function buildImgViewer(id, ctx) {
     resetTransform();
     updateCounter();
     updateSidebarActive();
+    ctx.saveSession?.();
   }
 
   // ── Sidebar rendering ─────────────────────────────────────────
@@ -153,8 +161,17 @@ export function buildImgViewer(id, ctx) {
     updateNavButtons();
     renderSidebar(gallery);
     if (gallery.length > 0 && !currentFile) {
-      showGalleryItem(0);
+      // Prefer file identity so a reordered manifest still opens the same photo.
+      const idx = pendingState?.url
+        ? gallery.findIndex(item => item.url === pendingState.url)
+        : pendingState?.galleryIdx ?? 0;
+      showGalleryItem(idx >= 0 && idx < gallery.length ? idx : 0);
+    } else if (currentFile) {
+      const idx = gallery.findIndex(item => item.url === currentFile.url);
+      if (idx >= 0) showGalleryItem(idx);
     } else if (gallery.length === 0) {
+      pendingState = null;
+      ctx.saveSession?.();
       img.src = 'https://picsum.photos/seed/default/1200/800';
       img.alt = 'Sample image';
       counterEl.textContent = '';
@@ -163,7 +180,11 @@ export function buildImgViewer(id, ctx) {
 
   // ── Public API ────────────────────────────────────────────────
   ctx.appApis[id] = {
+    getSessionState: () => currentFile
+      ? { url: currentFile.url, galleryIdx }
+      : pendingState,
     openFile: (url, name) => {
+      pendingState = null;
       const gIdx = gallery.findIndex(g => g.url === url);
       if (gIdx >= 0) {
         showGalleryItem(gIdx);
@@ -175,6 +196,7 @@ export function buildImgViewer(id, ctx) {
         resetTransform();
         counterEl.textContent = '';
         updateSidebarActive();
+        ctx.saveSession?.();
       }
     },
   };

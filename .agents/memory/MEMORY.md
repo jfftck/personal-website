@@ -2,3 +2,4 @@
 - [Clerk script injection](clerk-script-injection.md) — clerk.browser.js needs data-clerk-publishable-key on the script tag at load time; Go proxy also ruled out (network-level block).
 - [Reminder delivery scope](reminder-delivery-scope.md) — reminders intentionally run only while the page is open so production can remain static.
 - [Game Center scope](game-center-scope.md) — preserve existing app/file entries; Game Center is a root-level submenu, and its games stay browser-local.
+- [Viewer restoration](viewer-restoration.md) — pending selections must survive session saves before asynchronous manifests finish loading.
