@@ -65,6 +65,32 @@ test('all previous app shortcuts still launch and manifest files open in the doc
     .toContainText('Big Update', { timeout: 10000 });
 });
 
+test('video manifest entries appear in Videos and open directly in Media Player', async ({ page }) => {
+  await page.route('**/videos/manifest.json', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([
+      { filename: '20261022_Trailer.mp4', url: 'https://example.test/trailer.mp4' },
+      { filename: '20261022_Clip.WEBM', url: 'https://example.test/clip.webm' },
+      { filename: '20261022_Archive.mkv', url: 'https://example.test/archive.mkv' },
+    ]),
+  }));
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  await page.locator('#app-menu-btn').click();
+
+  await expect(page.locator('#video-files-heading')).toBeVisible();
+  await expect(page.locator('#video-files-count')).toHaveText('3');
+  await expect(page.locator('#video-files-list .app-file-btn')).toHaveCount(3);
+  await page.locator('#video-files-list .app-file-btn').first().click();
+
+  const player = page.locator('.app-window[data-type="media-player"]');
+  await expect(player).toHaveCount(1);
+  await expect(player.locator('.media-video')).toBeVisible();
+  await expect(player.locator('.media-video')).toHaveAttribute('src', 'https://example.test/trailer.mp4');
+  await expect(page.locator('#active-title')).toContainText('Trailer');
+});
+
 test('launcher search filters documents and pictures by name without hiding app shortcuts', async ({ page }) => {
   await page.route('**/pictures/manifest.json', route => route.fulfill({
     status: 200,

@@ -830,12 +830,15 @@ const _launcherCache = {};
 const appFilesSection = $('app-files-section');
 const docFilesList = $('doc-files-list');
 const picFilesList = $('pic-files-list');
+const videoFilesList = $('video-files-list');
 const docFilesCount = $('doc-files-count');
 const picFilesCount = $('pic-files-count');
+const videoFilesCount = $('video-files-count');
 const launcherFileSearch = $('launcher-file-search');
 const launcherFileSearchEmpty = $('launcher-file-search-empty');
 const docFilesHeading = $('doc-files-heading');
 const picFilesHeading = $('pic-files-heading');
+const videoFilesHeading = $('video-files-heading');
 
 function parseManifestForLauncher(folder, entries) {
   return entries.map(entry => {
@@ -850,8 +853,11 @@ function parseManifestForLauncher(folder, entries) {
     const url = manifestUrl || `${folder}/${encodeURIComponent(filename)}`;
     const extension = dotIndex >= 0 ? rest.slice(dotIndex + 1).toLowerCase() : '';
     const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
-    const type = imageExtensions.includes(extension) ? 'image' : 'document';
-    return { displayName, url, type, folder };
+    const videoExtensions = ['mp4', 'm4v', 'mov', 'webm', 'ogv', 'ogg', 'avi', 'mpeg', 'mpg', '3gp', 'wmv', 'mkv'];
+    const type = videoExtensions.includes(extension)
+      ? 'video'
+      : imageExtensions.includes(extension) ? 'image' : 'document';
+    return { displayName, url, type, folder, poster: entry.poster || '' };
   }).filter(Boolean);
 }
 
@@ -895,19 +901,27 @@ function buildFileLauncherBtn(file, iconSvg, iconColor) {
 async function populateLauncherFiles() {
   const DOC_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>';
   const IMG_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>';
-  const [docs, posts, pictures] = await Promise.all([
+  const [docs, posts, pictures, videos] = await Promise.all([
     ensureLauncherManifest('documents'),
     ensureLauncherManifest('posts'),
     ensureLauncherManifest('pictures'),
+    ensureLauncherManifest('videos'),
   ]);
-  const allDocs = [...docs, ...posts];
+  const allDocuments = [...docs, ...posts];
+  const allVideos = [...allDocuments, ...pictures, ...videos].filter(file => file.type === 'video');
+  const allDocs = allDocuments.filter(file => file.type !== 'video');
+  const allPictures = pictures.filter(file => file.type !== 'video');
   docFilesList.replaceChildren(...allDocs.map(file =>
     buildFileLauncherBtn(file, DOC_ICON, 'var(--accent-light)')));
   docFilesCount.textContent = allDocs.length ? String(allDocs.length) : '';
-  picFilesList.replaceChildren(...pictures.map(file =>
+  picFilesList.replaceChildren(...allPictures.map(file =>
     buildFileLauncherBtn(file, IMG_ICON, '#a78bfa')));
-  picFilesCount.textContent = pictures.length ? String(pictures.length) : '';
-  appFilesSection.hidden = allDocs.length === 0 && pictures.length === 0;
+  picFilesCount.textContent = allPictures.length ? String(allPictures.length) : '';
+  const VIDEO_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M21 3H3c-1.11 0-2 .89-2 2v14c0 1.11.89 2 2 2h18c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 16H3V5h18v14zM8 15l7-4-7-4v8z"/></svg>';
+  videoFilesList.replaceChildren(...allVideos.map(file =>
+    buildFileLauncherBtn(file, VIDEO_ICON, '#f87171')));
+  videoFilesCount.textContent = allVideos.length ? String(allVideos.length) : '';
+  appFilesSection.hidden = allDocs.length === 0 && allPictures.length === 0 && allVideos.length === 0;
   updateLauncherFileSearch();
 }
 
@@ -922,11 +936,14 @@ function updateLauncherFileSearch() {
   };
   const hasDocuments = filterList(docFilesList);
   const hasPictures = filterList(picFilesList);
+  const hasVideos = filterList(videoFilesList);
   docFilesHeading.hidden = !hasDocuments;
   docFilesList.hidden = !hasDocuments;
   picFilesHeading.hidden = !hasPictures;
   picFilesList.hidden = !hasPictures;
-  launcherFileSearchEmpty.hidden = !query || hasDocuments || hasPictures;
+  videoFilesHeading.hidden = !hasVideos;
+  videoFilesList.hidden = !hasVideos;
+  launcherFileSearchEmpty.hidden = !query || hasDocuments || hasPictures || hasVideos;
 }
 
 launcherFileSearch.addEventListener('input', updateLauncherFileSearch);
