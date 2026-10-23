@@ -3,6 +3,7 @@ import {
   gameShell, button, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt, showNewGameScreen,
 } from './ui.js';
 import { createGameSession, inspectGameSession } from './game-state.js';
+import { addGameThemeControl } from './themes.js';
 
 export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
   const { el, toolbar, status, area } = gameShell(id, 'Minesweeper',
@@ -58,6 +59,7 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
     selectControl('Difficulty', [['beginner', 'Beginner'], ['intermediate', 'Intermediate'], ['expert', 'Expert']], level, value => {
       level = value; restart();
     }), flag);
+  const removeThemeControl = addGameThemeControl(el, toolbar, 'minesweeper');
   function act(index, mark = flagMode) {
     const changed = mark ? flagMineCell(state, index) : revealMineCell(state, index);
     render();
@@ -109,6 +111,10 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
     getSessionState() {
       return pendingRestore ? initialState
         : createGameSession('minesweeper', { level, flagMode }, state);
+    },
+    destroy() {
+      newGameScreenCleanup?.();
+      removeThemeControl();
     },
   };
   if (restored.status === 'finished') ctx.saveSession();

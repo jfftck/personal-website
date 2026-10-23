@@ -4,9 +4,9 @@ import {
   gameShell, button, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt, showNewGameScreen,
 } from './ui.js';
 import { createGameSession, inspectGameSession, restoreChess } from './game-state.js';
+import { addGameThemeControl } from './themes.js';
+import { chessPieceSvg } from './chess-piece-svg.js';
 
-const pieces = { w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' },
-  b: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' } };
 const names = { k: 'King', q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight', p: 'Pawn' };
 const squareName = index => `${'abcdefgh'[index % 8]}${8 - Math.floor(index / 8)}`;
 
@@ -30,6 +30,8 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     selectControl('Opponent', [['computer', 'Computer'], ['local', 'Local two-player']], mode, value => {
       mode = value; restart();
     }), retry);
+  const removeBoardTheme = addGameThemeControl(el, toolbar, isChess ? 'chessBoard' : 'reversiBoard');
+  const removePieceTheme = addGameThemeControl(el, toolbar, isChess ? 'chessPieces' : 'reversiPieces');
 
   function cancelComputer() {
     worker?.terminate(); worker = null;
@@ -264,7 +266,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
           if (piece) {
             const span = document.createElement('span');
             span.className = `chess-piece ${piece.color === 'w' ? 'piece-white' : 'piece-black'}`;
-            span.textContent = pieces[piece.color][piece.type];
+            span.innerHTML = chessPieceSvg(piece.type);
             span.setAttribute('aria-hidden', 'true'); btn.append(span);
             description = `${piece.color === 'w' ? 'White' : 'Black'} ${names[piece.type]}`;
           }
@@ -312,6 +314,8 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     destroy() {
       disposed = true;
       clearTimeout(endScreenTimer);
+      removeBoardTheme();
+      removePieceTheme();
       newGameScreenCleanup?.();
       cancelComputer();
     },

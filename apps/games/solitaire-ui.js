@@ -7,6 +7,7 @@ import {
   gameShell, button, selectControl, preserveFocus, showRestorePrompt, showNewGameScreen,
 } from './ui.js';
 import { createGameSession, inspectGameSession } from './game-state.js';
+import { addGameThemeControl } from './themes.js';
 
 const rules = {
   klondike: 'Build the four foundations from Ace to King by suit. Tableau piles descend in alternating colors; only Kings fill empty columns. Click an exposed card or sequence, then a destination. Use Send home to move an eligible card to a foundation. Click the stock to draw or recycle. Choose draw one or draw three for a new deal.',
@@ -73,6 +74,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       options.suits = Number(value); restart();
     }));
   }
+  const removeThemeControl = addGameThemeControl(el, toolbar, 'cards');
   function action(fn, animateIds = []) {
     const before = structuredClone(state);
     const result = fn();
@@ -236,8 +238,12 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       .filter(card => Number(card.dataset.offset) >= drag.from.offset);
     const layer = document.createElement('div');
     layer.className = 'card-drag-layer';
+    layer.dataset.cardTheme = el.dataset.cardTheme;
     layer.setAttribute('aria-hidden', 'true');
-    for (const property of ['--card-face', '--card-ink', '--card-red']) {
+    for (const property of [
+      '--card-face', '--card-ink', '--card-red',
+      '--card-back-start', '--card-back-end', '--card-back-pattern', '--card-back-border',
+    ]) {
       layer.style.setProperty(property, getComputedStyle(el).getPropertyValue(property));
     }
     drag.originX = firstRect.left;
@@ -490,6 +496,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     },
     destroy() {
       dragAbort.abort();
+      removeThemeControl();
       clearTimeout(suppressClickTimer);
       clearCelebration();
       clearNewGameScreen();

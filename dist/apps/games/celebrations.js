@@ -293,6 +293,7 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
   const bounds = table.getBoundingClientRect();
   const layer = document.createElement('div');
   layer.className = `solitaire-celebration-layer celebration-${effect}`;
+  layer.dataset.cardTheme = gameElement.dataset.cardTheme || 'classic';
   layer.setAttribute('aria-hidden', 'true');
   Object.assign(layer.style, {
     left: `${bounds.left}px`,
@@ -301,7 +302,10 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
     height: `${bounds.height}px`,
   });
   const gameStyles = getComputedStyle(gameElement);
-  for (const property of ['--card-face', '--card-ink', '--card-red']) {
+  for (const property of [
+    '--card-face', '--card-ink', '--card-red',
+    '--card-back-start', '--card-back-end', '--card-back-pattern', '--card-back-border',
+  ]) {
     layer.style.setProperty(property, gameStyles.getPropertyValue(property));
   }
 

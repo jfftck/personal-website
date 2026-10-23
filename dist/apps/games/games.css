@@ -11,9 +11,37 @@
   --card-face: #fffdf5;
   --card-ink: #17232a;
   --card-red: #b9323d;
+  --card-back-start: #315e82;
+  --card-back-end: #173d60;
+  --card-back-pattern: rgba(255,255,255,.12);
+  --card-back-border: #f0e9d9;
   --tile-light: #e7d9bd;
   --tile-dark: #667b73;
   --tile-mark: #d7a842;
+  --chess-frame: #493b2c;
+  --chess-white-piece: #fffdf3;
+  --chess-black-piece: #182124;
+  --chess-white-outline: #514b40;
+  --chess-black-outline: #f4ead6;
+  --chess-white-detail: #b7aa91;
+  --chess-black-detail: #77817d;
+  --reversi-frame: #6c4835;
+  --reversi-felt: #176249;
+  --reversi-square: #247958;
+  --reversi-hover: #2d8d66;
+  --disc-black: radial-gradient(circle at 32% 25%, #454b4a, #101718 68%);
+  --disc-white: radial-gradient(circle at 32% 25%, #fffef5, #d3d6ca 72%);
+  --mine-board-frame: #858585;
+  --mine-board-surface: #808080;
+  --mine-cell-face: #c0c0c0;
+  --mine-cell-open: #c0c0c0;
+  --mine-cell-border: #7f7f7f;
+  --mine-cell-text: #222;
+  --mine-cell-highlight: #fff;
+  --mine-cell-shadow: #7f7f7f;
+  --mine-cell-hover: #d3d3d3;
+  --mine-flag-color: #d32f2f;
+  --mine-flag-stem: #333;
 
   display: flex;
   flex: 1 1 auto;
@@ -24,6 +52,8 @@
   color: var(--game-ink);
   font: 500 0.875rem/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color-scheme: light;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 @media (prefers-color-scheme: light) {
@@ -44,9 +74,162 @@
   --tile-dark: #82938a;
 }
 
+:root .game-app[data-chess-board-theme="wood"] {
+  --tile-light: #f0e6d2;
+  --tile-dark: #82938a;
+  --chess-frame: #493b2c;
+}
+:root .game-app[data-chess-board-theme="slate"] {
+  --tile-light: #dbe3ed;
+  --tile-dark: #63758d;
+  --chess-frame: #344258;
+}
+:root .game-app[data-chess-board-theme="glass"] {
+  --tile-light: color-mix(in srgb, var(--app-bg) 72%, white 16%);
+  --tile-dark: color-mix(in srgb, var(--app-bg) 72%, var(--app-text) 17%);
+  --chess-frame: color-mix(in srgb, var(--app-border) 78%, var(--app-bg));
+}
+.game-app[data-chess-pieces-theme="modern"] {
+  --chess-white-piece: #f8fafc;
+  --chess-black-piece: #172033;
+  --chess-white-outline: #64748b;
+  --chess-black-outline: #eef2ff;
+  --chess-white-detail: #94a3b8;
+  --chess-black-detail: #475569;
+}
+.game-app[data-chess-pieces-theme="glass"] {
+  --chess-white-piece: color-mix(in srgb, var(--app-bg) 36%, white 64%);
+  --chess-black-piece: color-mix(in srgb, var(--app-bg) 68%, var(--app-text) 32%);
+  --chess-white-outline: color-mix(in srgb, var(--app-text) 46%, transparent);
+  --chess-black-outline: color-mix(in srgb, var(--app-text) 46%, transparent);
+  --chess-white-detail: var(--app-text);
+  --chess-black-detail: var(--app-text);
+}
+
+.game-app[data-reversi-board-theme="ocean"] {
+  --reversi-frame: #16435c;
+  --reversi-felt: #17658a;
+  --reversi-square: #287e9f;
+  --reversi-hover: #3698ba;
+}
+.game-app[data-reversi-board-theme="glass"] {
+  --reversi-frame: color-mix(in srgb, var(--app-border) 82%, var(--app-bg));
+  --reversi-felt: color-mix(in srgb, var(--app-bg) 76%, #13876e 24%);
+  --reversi-square: color-mix(in srgb, var(--app-bg) 70%, #20a486 30%);
+  --reversi-hover: color-mix(in srgb, var(--app-bg) 54%, #20a486 46%);
+}
+.game-app[data-reversi-pieces-theme="amber"] {
+  --disc-black: radial-gradient(circle at 32% 25%, #7d5535, #322015 72%);
+  --disc-white: radial-gradient(circle at 32% 25%, #fff0cb, #c9a76e 76%);
+}
+.game-app[data-reversi-pieces-theme="glass"] {
+  --disc-black: radial-gradient(circle at 32% 25%,
+    color-mix(in srgb, var(--app-text) 68%, transparent),
+    color-mix(in srgb, var(--app-bg) 74%, var(--app-text) 26%) 72%);
+  --disc-white: radial-gradient(circle at 32% 25%,
+    color-mix(in srgb, white 72%, var(--app-bg)),
+    color-mix(in srgb, var(--app-bg) 76%, var(--app-text) 24%) 76%);
+}
+
+:root .game-app[data-card-theme="midnight"],
+:root .card-drag-layer[data-card-theme="midnight"],
+:root .solitaire-celebration-layer[data-card-theme="midnight"] {
+  --felt: #2d2b42;
+  --felt-deep: #1c1c2d;
+  --felt-edge: #151522;
+  --card-face: #eeeaf4;
+  --card-ink: #292437;
+  --card-red: #bc3653;
+  --card-back-start: #62518f;
+  --card-back-end: #292445;
+  --card-back-pattern: rgba(235,225,255,.2);
+  --card-back-border: #d9d0ed;
+}
+:root .game-app[data-card-theme="botanical"],
+:root .card-drag-layer[data-card-theme="botanical"],
+:root .solitaire-celebration-layer[data-card-theme="botanical"] {
+  --felt: #37664e;
+  --felt-deep: #254b39;
+  --felt-edge: #193727;
+  --card-face: #fff8e8;
+  --card-ink: #25382e;
+  --card-red: #b33d42;
+  --card-back-start: #477351;
+  --card-back-end: #1e4838;
+  --card-back-pattern: rgba(231,245,214,.2);
+  --card-back-border: #e6edcf;
+}
+:root .game-app[data-card-theme="glass"],
+:root .card-drag-layer[data-card-theme="glass"],
+:root .solitaire-celebration-layer[data-card-theme="glass"] {
+  --felt: color-mix(in srgb, var(--app-bg) 76%, #188b77 24%);
+  --felt-deep: color-mix(in srgb, var(--app-bg) 86%, var(--app-text) 14%);
+  --felt-edge: var(--app-border);
+  --card-face: color-mix(in srgb, var(--app-bg) 78%, var(--app-text) 22%);
+  --card-ink: var(--app-text);
+  --card-red: #d64d67;
+  --card-back-start: color-mix(in srgb, var(--app-bg) 58%, var(--app-text) 42%);
+  --card-back-end: var(--app-bg);
+  --card-back-pattern: color-mix(in srgb, var(--app-text) 24%, transparent);
+  --card-back-border: var(--app-border);
+}
+.game-app[data-card-theme="glass"] .solitaire-table {
+  border-color: var(--app-border);
+  background: color-mix(in srgb, var(--app-bg) 82%, transparent);
+  -webkit-backdrop-filter: var(--backdrop);
+  backdrop-filter: var(--backdrop);
+}
+
+.game-app[data-minesweeper-theme="ocean"] {
+  --mine-board-frame: #244d62;
+  --mine-board-surface: #1d647c;
+  --mine-cell-face: #d5edf3;
+  --mine-cell-open: #edf7f8;
+  --mine-cell-border: #7caebc;
+  --mine-cell-text: #173b49;
+  --mine-cell-highlight: #f5ffff;
+  --mine-cell-shadow: #6a9aa9;
+  --mine-cell-hover: #e9fbff;
+  --mine-flag-color: #db4d44;
+  --mine-flag-stem: #31535f;
+}
+.game-app[data-minesweeper-theme="sunset"] {
+  --mine-board-frame: #694037;
+  --mine-board-surface: #a55a43;
+  --mine-cell-face: #ffe2c5;
+  --mine-cell-open: #fff2e2;
+  --mine-cell-border: #c88c66;
+  --mine-cell-text: #492d27;
+  --mine-cell-highlight: #fff8ee;
+  --mine-cell-shadow: #a56d52;
+  --mine-cell-hover: #fff0db;
+  --mine-flag-color: #a83332;
+  --mine-flag-stem: #583a32;
+}
+.game-app[data-minesweeper-theme="glass"] {
+  --mine-board-frame: color-mix(in srgb, var(--app-border) 72%, transparent);
+  --mine-board-surface: color-mix(in srgb, var(--app-bg) 54%, transparent);
+  --mine-cell-face: color-mix(in srgb, var(--app-bg) 60%, var(--app-text) 11%);
+  --mine-cell-open: color-mix(in srgb, var(--app-bg) 78%, transparent);
+  --mine-cell-border: color-mix(in srgb, var(--app-border) 88%, transparent);
+  --mine-cell-text: var(--app-text);
+  --mine-cell-highlight: color-mix(in srgb, white 42%, var(--app-bg));
+  --mine-cell-shadow: color-mix(in srgb, var(--app-text) 24%, transparent);
+  --mine-cell-hover: color-mix(in srgb, var(--app-bg) 50%, var(--app-text) 15%);
+  --mine-flag-color: #e45a56;
+  --mine-flag-stem: var(--app-text);
+}
+:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="1"] { color: #92bcff; }
+:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="2"] { color: #8de0a8; }
+:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="3"] { color: #ff9494; }
+:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="4"] { color: #c5a9ff; }
+:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="5"] { color: #ffb38f; }
+:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="6"] { color: #8fe6e8; }
+
 .game-app *,
 .game-app *::before,
 .game-app *::after { box-sizing: border-box; }
+.game-app * { -webkit-user-select: none; user-select: none; }
 
 .game-toolbar {
   position: relative;
@@ -364,7 +547,7 @@
   border: 1px solid rgba(255,255,255,.16);
   border-radius: 1.15rem;
   background:
-    radial-gradient(ellipse at 50% 25%, rgba(111,174,153,.17), transparent 60%),
+    radial-gradient(ellipse at 50% 25%, color-mix(in srgb, var(--felt) 84%, white 16%), transparent 60%),
     linear-gradient(145deg, var(--felt), var(--felt-deep));
   box-shadow: inset 0 1px rgba(255,255,255,.1), 0 12px 30px rgba(0,0,0,.2);
   container-type: inline-size;
@@ -615,10 +798,10 @@
   animation: solitaire-firework 850ms cubic-bezier(.16,.72,.3,1) var(--spark-delay) both;
 }
 .playing-card.face-down {
-  border-color: #f0e9d9;
+  border-color: var(--card-back-border);
   background:
-    repeating-linear-gradient(45deg, transparent 0 4px, rgba(255,255,255,.12) 4px 5px),
-    linear-gradient(135deg, #315e82, #173d60);
+    repeating-linear-gradient(45deg, transparent 0 4px, var(--card-back-pattern) 4px 5px),
+    linear-gradient(135deg, var(--card-back-start), var(--card-back-end));
   box-shadow: 0 2px 5px rgba(0,0,0,.28), inset 0 0 0 2px rgba(246,239,220,.75), inset 0 0 0 5px rgba(255,255,255,.1);
   color: transparent;
 }
@@ -654,12 +837,12 @@
 .card-stock button {
   width: clamp(2.55rem, 7.3vw, 5.15rem);
   aspect-ratio: 0.70;
-  border: 1px solid rgba(255,255,255,.78);
+  border: 1px solid var(--card-back-border);
   border-radius: clamp(0.35rem, 0.8vw, 0.65rem);
   background:
-    repeating-linear-gradient(45deg, transparent 0 4px, rgba(255,255,255,.12) 4px 5px),
-    linear-gradient(135deg, #315e82, #173d60);
-  color: #fff;
+    repeating-linear-gradient(45deg, transparent 0 4px, var(--card-back-pattern) 4px 5px),
+    linear-gradient(135deg, var(--card-back-start), var(--card-back-end));
+  color: var(--card-back-border);
   cursor: pointer;
   box-shadow: inset 0 0 0 2px rgba(246,239,220,.6), inset 0 0 0 5px rgba(255,255,255,.1), 0 2px 5px rgba(0,0,0,.24);
 }
@@ -679,9 +862,9 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: clamp(0.35rem, 1.2vw, 0.65rem) solid #493b2c;
+  border: clamp(0.35rem, 1.2vw, 0.65rem) solid var(--chess-frame);
   border-radius: 0.55rem;
-  background: #493b2c;
+  background: var(--chess-frame);
   box-shadow: 0 10px 28px rgba(0,0,0,.3), inset 0 1px rgba(255,255,255,.25);
   container-type: inline-size;
 }
@@ -728,34 +911,49 @@
   place-items: center;
   width: 100%;
   height: 100%;
-  font-family: "Noto Sans Symbols 2", "DejaVu Sans", "Segoe UI Symbol", serif;
-  font-size: clamp(1.55rem, 7.1cqw, 3.75rem);
   line-height: 1;
-  user-select: none;
 }
 .piece-white {
-  color: #fffdf3;
-  text-shadow: 0 1px 0 #655747, 0 2px 2px rgba(16,20,18,.72);
-  -webkit-text-stroke: 0.45px #514b40;
+  color: var(--chess-white-piece);
 }
 .piece-black {
-  color: #182124;
-  text-shadow: 0 1px 0 rgba(255,255,255,.3), 0 2px 2px rgba(0,0,0,.36);
-  -webkit-text-stroke: 0.35px #f4ead6;
+  color: var(--chess-black-piece);
 }
+.chess-piece-svg {
+  display: block;
+  width: 82%;
+  height: 88%;
+  overflow: visible;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,.36));
+}
+.piece-body {
+  fill: currentColor;
+  stroke: var(--chess-piece-outline);
+  stroke-width: 1.45;
+  stroke-linejoin: round;
+}
+.piece-detail {
+  fill: none;
+  stroke: var(--chess-piece-detail);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+}
+.piece-eye { fill: var(--chess-piece-detail); stroke: none; }
+.piece-white { --chess-piece-outline: var(--chess-white-outline); --chess-piece-detail: var(--chess-white-detail); }
+.piece-black { --chess-piece-outline: var(--chess-black-outline); --chess-piece-detail: var(--chess-black-detail); }
 .chess-piece-moving { z-index: 10; }
 
 .reversi-board {
-  border-color: #6c4835;
-  background: #176249;
+  border-color: var(--reversi-frame);
+  background: var(--reversi-felt);
   gap: 1px;
   padding: clamp(0.2rem, 0.8vw, 0.4rem);
 }
 .reversi-board .board-square.light,
 .reversi-board .board-square.dark {
-  background: #247958;
+  background: var(--reversi-square);
 }
-.reversi-board .board-square:hover { background: #2d8d66; }
+.reversi-board .board-square:hover { background: var(--reversi-hover); }
 .reversi-board .board-square.legal::after {
   width: 26%;
   border: 1px solid rgba(239,244,220,.55);
@@ -770,8 +968,8 @@
   border-radius: 50%;
   box-shadow: 0 2px 4px rgba(0,0,0,.45), inset 0 1px 2px rgba(255,255,255,.45);
 }
-.disc.black { background: radial-gradient(circle at 32% 25%, #454b4a, #101718 68%); }
-.disc.white { background: radial-gradient(circle at 32% 25%, #fffef5, #d3d6ca 72%); }
+.disc.black { background: var(--disc-black); }
+.disc.white { background: var(--disc-white); }
 .disc.disc-placed { animation: reversi-disc-place 320ms cubic-bezier(.16,.74,.28,1) both; }
 .disc.disc-flipping {
   background: transparent;
@@ -793,10 +991,10 @@
   background: var(--disc-back);
   transform: rotateY(180deg);
 }
-.disc.flip-from-black { --disc-front: radial-gradient(circle at 32% 25%, #454b4a, #101718 68%); }
-.disc.flip-from-white { --disc-front: radial-gradient(circle at 32% 25%, #fffef5, #d3d6ca 72%); }
-.disc.flip-to-black { --disc-back: radial-gradient(circle at 32% 25%, #454b4a, #101718 68%); }
-.disc.flip-to-white { --disc-back: radial-gradient(circle at 32% 25%, #fffef5, #d3d6ca 72%); }
+.disc.flip-from-black { --disc-front: var(--disc-black); }
+.disc.flip-from-white { --disc-front: var(--disc-white); }
+.disc.flip-to-black { --disc-back: var(--disc-black); }
+.disc.flip-to-white { --disc-back: var(--disc-white); }
 
 .game-promotion {
   display: flex;
@@ -820,7 +1018,7 @@
   overflow: auto;
   border: 1px solid var(--game-line);
   border-radius: 0.8rem;
-  background: color-mix(in srgb, var(--app-bg) 76%, transparent);
+  background: var(--mine-board-frame);
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 .mine-board {
@@ -830,7 +1028,7 @@
   width: max-content;
   margin-inline: auto;
   padding: 0.45rem;
-  background: color-mix(in srgb, var(--felt-edge) 72%, #6d746b);
+  background: var(--mine-board-surface);
 }
 .mine-cell {
   position: relative;
@@ -839,19 +1037,19 @@
   width: 2rem;
   height: 2rem;
   padding: 0;
-  border: 1px solid rgba(255,255,255,.34);
+  border: 1px solid var(--mine-cell-border);
   border-radius: 0.23rem;
-  background: linear-gradient(145deg, #e1e5db, #aebbb2);
-  color: #1d2a2a;
+  background: var(--mine-cell-face);
+  color: var(--mine-cell-text);
   font: 800 0.92rem/1 ui-monospace, "SFMono-Regular", Consolas, monospace;
   cursor: pointer;
-  box-shadow: inset 1px 1px rgba(255,255,255,.75), inset -1px -1px rgba(51,68,62,.26);
+  box-shadow: inset 1px 1px var(--mine-cell-highlight), inset -1px -1px var(--mine-cell-shadow);
 }
-.mine-cell:hover:not(.revealed) { background: #f4f0df; }
+.mine-cell:hover:not(.revealed) { background: var(--mine-cell-hover); }
 .mine-cell.revealed {
-  border-color: rgba(0,0,0,.1);
-  background: rgba(221,232,218,.94);
-  box-shadow: inset 0 1px 3px rgba(32,56,47,.2);
+  border-color: var(--mine-cell-border);
+  background: var(--mine-cell-open);
+  box-shadow: inset 0 1px 3px var(--mine-cell-shadow);
   cursor: default;
 }
 .mine-cell[data-number="1"] { color: #245caa; }
@@ -865,7 +1063,7 @@
 .mine-cell.flagged::after {
   width: 0;
   height: 0;
-  border-top: 0.85rem solid #b64038;
+  border-top: 0.85rem solid var(--mine-flag-color);
   border-right: 0.75rem solid transparent;
   border-bottom: 0.15rem solid transparent;
   content: "";
@@ -877,7 +1075,7 @@
   left: 0.39rem;
   width: 2px;
   height: 1rem;
-  background: #333b37;
+  background: var(--mine-flag-stem);
   content: "";
 }
 .mine-cell.exploded { background: #c8493d; color: #fff; }

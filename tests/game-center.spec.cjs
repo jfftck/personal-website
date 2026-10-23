@@ -279,6 +279,61 @@ test('Game Center game icons stay distinct and legible in both themes at desktop
   }
 });
 
+test('all games prevent mouse text selection and expose shared, game-specific visual themes', async ({ page }) => {
+  const checkSelectionDisabled = async (app, playfield) => {
+    await expect(app).toHaveCSS('user-select', 'none');
+    await expect(app.locator(playfield).first()).toHaveCSS('user-select', 'none');
+  };
+
+  const klondike = await openGame(page, 'klondike');
+  await checkSelectionDisabled(klondike, '.solitaire-table');
+  await klondike.getByLabel('Card theme', { exact: true }).selectOption('botanical');
+
+  const spider = await openGame(page, 'spider');
+  await checkSelectionDisabled(spider, '.solitaire-table');
+  await expect(spider.getByLabel('Card theme', { exact: true })).toHaveValue('botanical');
+  await spider.getByLabel('Card theme', { exact: true }).selectOption('glass');
+  await expect(klondike).toHaveAttribute('data-card-theme', 'glass');
+
+  const freecell = await openGame(page, 'freecell');
+  await checkSelectionDisabled(freecell, '.solitaire-table');
+  await expect(freecell.getByLabel('Card theme', { exact: true })).toHaveValue('glass');
+
+  const chess = await openGame(page, 'chess');
+  await checkSelectionDisabled(chess, '.chess-board');
+  await expect(chess.locator('.chess-piece-svg')).toHaveCount(32);
+  await chess.getByLabel('Board theme', { exact: true }).selectOption('slate');
+  await chess.getByLabel('Piece theme', { exact: true }).selectOption('glass');
+  await expect(chess).toHaveAttribute('data-chess-board-theme', 'slate');
+  await expect(chess).toHaveAttribute('data-chess-pieces-theme', 'glass');
+
+  const reversi = await openGame(page, 'reversi');
+  await checkSelectionDisabled(reversi, '.reversi-board');
+  await reversi.getByLabel('Board theme', { exact: true }).selectOption('ocean');
+  await reversi.getByLabel('Piece theme', { exact: true }).selectOption('amber');
+  await expect(reversi).toHaveAttribute('data-reversi-board-theme', 'ocean');
+  await expect(reversi).toHaveAttribute('data-reversi-pieces-theme', 'amber');
+
+  const minesweeper = await openGame(page, 'minesweeper');
+  await checkSelectionDisabled(minesweeper, '.mine-board');
+  const themePicker = minesweeper.getByLabel('Theme', { exact: true });
+  for (const theme of ['classic', 'ocean', 'sunset', 'glass']) {
+    await themePicker.selectOption(theme);
+    await expect(minesweeper).toHaveAttribute('data-minesweeper-theme', theme);
+  }
+  const glassColors = await page.evaluate(async () => {
+    const cell = document.querySelector('.app-window[data-type="minesweeper"] .mine-cell');
+    document.documentElement.dataset.theme = 'light';
+    await new Promise(requestAnimationFrame);
+    const light = getComputedStyle(cell).backgroundColor;
+    document.documentElement.dataset.theme = 'dark';
+    await new Promise(requestAnimationFrame);
+    const dark = getComputedStyle(cell).backgroundColor;
+    return { light, dark };
+  });
+  expect(glassColors.light).not.toBe(glassColors.dark);
+});
+
 test('all previous app shortcuts still launch and manifest files open in the document viewer', async ({ page }) => {
   await page.locator('#app-menu-btn').click();
   await expect(page.locator('#app-list .app-launcher[data-type="welcome"]')).toBeFocused();
