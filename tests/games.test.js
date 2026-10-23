@@ -272,6 +272,25 @@ test('solitaire win celebrations select among six effects from the supplied rand
   assert.equal(cards.chooseWinCelebration(() => 0.99), 'tornado');
 });
 
+test('solitaire win celebrations randomize unseen effects before starting another cycle', () => {
+  assert.equal(
+    cards.chooseUnseenWinCelebration(['fireworks', 'bounce'], () => 0.99).celebration,
+    'tornado',
+  );
+  let seen = [];
+  const selected = [];
+  for (let index = 0; index < cards.WIN_CELEBRATIONS.length; index++) {
+    const choice = cards.chooseUnseenWinCelebration(seen, () => 0);
+    selected.push(choice.celebration);
+    seen = choice.seen;
+  }
+  assert.equal(new Set(selected).size, cards.WIN_CELEBRATIONS.length);
+  assert.deepEqual(new Set(selected), new Set(cards.WIN_CELEBRATIONS));
+  const nextCycle = cards.chooseUnseenWinCelebration(seen, () => 0.99);
+  assert.equal(nextCycle.celebration, 'tornado');
+  assert.deepEqual(nextCycle.seen, ['tornado']);
+});
+
 test('Minesweeper difficulty sizes, mine counts, and safe-first-reveal hold', () => {
   for (const level of Object.keys(mines.MINE_LEVELS)) {
     const s = mines.createMinesweeper(level);

@@ -1,9 +1,9 @@
 import {
   createSolitaire, getPile, moveCards, drawCards, isSequence, sendEligibleCardsHome,
-  removePyramidCards, isPyramidExposed, isTriPeaksExposed,
-  chooseWinCelebration, SUITS, rankLabel, isRed,
+  removePyramidCards, isPyramidExposed, isTriPeaksExposed, chooseWinCelebration,
+  SUITS, rankLabel, isRed,
 } from './cards.js';
-import { createWinCelebration } from './celebrations.js';
+import { chooseNextWinCelebration, createWinCelebration } from './celebrations.js';
 import { paintCardFace } from './card-artwork.js';
 import {
   gameShell, button, selectControl, preserveFocus, showRestorePrompt, showNewGameScreen,
@@ -97,7 +97,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     targetHints = [];
     render();
     animateCards(animateIds);
-    if (!before.won && state.won) celebrate(chooseWinCelebration());
+    if (!before.won && state.won) celebrate();
     persist();
     return result;
   }
@@ -125,14 +125,16 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
           : destination.zone;
     return `Moved ${cardDescription} to ${destinationName}.`;
   }
-  function celebrate(effect) {
+  function celebrate() {
     if (!latestTable) return;
     clearCelebration();
-    latestTable.dataset.winCelebration = effect;
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      latestTable.dataset.winCelebration = chooseWinCelebration();
       showVictoryScreen();
       return;
     }
+    const effect = chooseNextWinCelebration();
+    latestTable.dataset.winCelebration = effect;
     celebrationCleanup = createWinCelebration(effect, kind, state, latestTable, el, showVictoryScreen);
   }
   function showVictoryScreen() {

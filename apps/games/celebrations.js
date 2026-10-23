@@ -1,6 +1,28 @@
-import { isRed, SUITS } from './cards.js';
+import { chooseUnseenWinCelebration, isRed, SUITS } from './cards.js';
 import { paintCardFace } from './card-artwork.js';
 import { createParticleAnimation } from './particle-effects.js';
+
+const CELEBRATION_HISTORY_KEY = 'game-center-solitaire-celebrations-v1';
+let trackedCelebrations = null;
+
+function readCelebrationHistory() {
+  try {
+    const saved = JSON.parse(globalThis.localStorage?.getItem(CELEBRATION_HISTORY_KEY) || '[]');
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
+export function chooseNextWinCelebration(random = Math.random) {
+  if (trackedCelebrations === null) trackedCelebrations = readCelebrationHistory();
+  const choice = chooseUnseenWinCelebration(trackedCelebrations, random);
+  trackedCelebrations = choice.seen;
+  try {
+    globalThis.localStorage?.setItem(CELEBRATION_HISTORY_KEY, JSON.stringify(trackedCelebrations));
+  } catch {}
+  return choice.celebration;
+}
 
 const unit = (index, salt = 0) => {
   const value = Math.sin((index + 1) * 127.1 + (salt + 1) * 311.7) * 43758.5453;

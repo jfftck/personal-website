@@ -2,10 +2,24 @@
 export const SUITS = ['♠', '♥', '♣', '♦'];
 export const rankLabel = rank => ({ 1: 'A', 11: 'J', 12: 'Q', 13: 'K' }[rank] || String(rank));
 export const isRed = card => card.suit === 1 || card.suit === 3;
+export const WIN_CELEBRATIONS = ['fireworks', 'bounce', 'spiral', 'rain', 'wave', 'tornado'];
+const randomIndex = (length, random) =>
+  Math.max(0, Math.min(length - 1, Math.floor(random() * length)));
+
 export const chooseWinCelebration = (random = Math.random) =>
-  ['fireworks', 'bounce', 'spiral', 'rain', 'wave', 'tornado'][
-    Math.max(0, Math.min(5, Math.floor(random() * 6)))
-  ];
+  WIN_CELEBRATIONS[randomIndex(WIN_CELEBRATIONS.length, random)];
+
+export function chooseUnseenWinCelebration(seen = [], random = Math.random) {
+  const played = new Set(WIN_CELEBRATIONS.filter(effect => seen.includes(effect)));
+  let remaining = WIN_CELEBRATIONS.filter(effect => !played.has(effect));
+  if (!remaining.length) {
+    played.clear();
+    remaining = [...WIN_CELEBRATIONS];
+  }
+  const celebration = remaining[randomIndex(remaining.length, random)];
+  played.add(celebration);
+  return { celebration, seen: [...played] };
+}
 
 export function shuffle(cards, random = Math.random) {
   for (let i = cards.length - 1; i > 0; i--) {
