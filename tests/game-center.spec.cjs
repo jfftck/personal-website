@@ -471,6 +471,30 @@ test('FreeCell double-click highlights Home and an open cell, or sends the card 
   await expect(noOpenCell.locator('.game-status')).toHaveText('Moved 2♠ to Home 1.');
 });
 
+test('FreeCell double-click announces later-numbered Cell and Home destinations', async ({ page }) => {
+  const laterDestinations = await restoreGame(page, savedFreecell({
+    columnCards: [[[2, 2]]],
+    foundations: { 2: [1] },
+    cellCards: [[[5, 0]]],
+  }), 'freecell');
+  await laterDestinations.locator('[data-key="card-27"]').dblclick();
+  await expect(laterDestinations.locator('.game-status')).toHaveText('Choose Cell 2 or Home 3.');
+  await expect(laterDestinations.locator('[aria-label="Cell 2"]')).toHaveClass(/available-move/);
+  await expect(laterDestinations.locator('[aria-label="Home 3"]')).toHaveClass(/available-move/);
+  await expect(laterDestinations.locator('[aria-label="Cell 1"]')).not.toHaveClass(/available-move/);
+  await expect(laterDestinations.locator('[aria-label="Home 1"]')).not.toHaveClass(/available-move/);
+  await page.locator('#close-btn').click();
+
+  const fullCells = await restoreGame(page, savedFreecell({
+    columnCards: [[[2, 3]]],
+    foundations: { 3: [1] },
+    cellCards: [[[2, 0]], [[3, 0]], [[4, 0]], [[5, 0]]],
+  }), 'freecell');
+  await fullCells.locator('[data-key="card-40"]').dblclick();
+  await expect(fullCells.locator('[aria-label="Home 4"] .playing-card')).toHaveText('2♦');
+  await expect(fullCells.locator('.game-status')).toHaveText('Moved 2♦ to Home 4.');
+});
+
 test('manual click moves announce the card and destination', async ({ page }) => {
   const tableau = await restoreGame(page, savedKlondike({
     columns: [[[5, 0]], [[6, 1]]],
