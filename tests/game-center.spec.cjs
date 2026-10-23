@@ -98,12 +98,19 @@ test('root menu restores app and file entries; the six game tiles stay nested wi
   await expect(page.locator('#game-submenu')).toBeHidden();
   await page.locator('#game-center-entry').click();
   await expect(page.locator('#launcher-root')).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Game Center' })).toBeVisible();
   await expect(page.locator('#app-menu-title')).toHaveText('Game Center');
+  await expect(page.locator('#app-menu-title')).toHaveAttribute('aria-live', 'polite');
+  await expect(page.locator('#app-menu-title')).toHaveAttribute('aria-atomic', 'true');
   await expect(page.getByRole('button', { name: 'Back to root app menu' })).toBeVisible();
   await expect(page.locator('.game-menu-description')).toHaveCount(0);
   await expect(page.locator('#game-list .app-launcher')).toHaveCount(6);
+  for (const game of ['Klondike', 'Spider', 'FreeCell', 'Minesweeper', 'Chess', 'Reversi']) {
+    await expect(page.getByRole('button', { name: new RegExp(game) })).toBeVisible();
+  }
   await expect(page.locator('#launcher-root [data-game]')).toHaveCount(0);
   await page.locator('#game-menu-back').click();
+  await expect(page.getByRole('dialog', { name: 'App launcher' })).toBeVisible();
   await expect(page.locator('#game-center-entry')).toBeFocused();
   await page.keyboard.press('Enter');
   await page.keyboard.press('Escape');

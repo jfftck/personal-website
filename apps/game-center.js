@@ -44,12 +44,14 @@ export function initGameMenu(menu, openGame) {
   function showGames(focus = true) {
     root.hidden = true; submenu.hidden = false; back.hidden = false;
     heading.textContent = 'Game Center';
+    menu.setAttribute('aria-label', 'Game Center');
     entry.setAttribute('aria-expanded', 'true');
     if (focus) back.focus();
   }
   function showRoot(focus = true) {
     root.hidden = false; submenu.hidden = true; back.hidden = true;
     heading.textContent = 'Apps';
+    menu.setAttribute('aria-label', 'App launcher');
     entry.setAttribute('aria-expanded', 'false');
     if (focus) entry.focus();
   }
