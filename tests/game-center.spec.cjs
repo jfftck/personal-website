@@ -1821,6 +1821,49 @@ test('rain, wave, and tornado celebrations animate changing cards on the fixed l
     if (effect === 'tornado') {
       const particles = layer.locator('canvas[data-particle-effect="streaks"]');
       expect(Number(await particles.getAttribute('data-particle-duration'))).toBeGreaterThan(4000);
+      const funnel = await cards.evaluateAll(elements => {
+        const bounds = elements[0].closest('.solitaire-celebration-layer').getBoundingClientRect();
+        const samples = elements.map(card => {
+          const width = parseFloat(card.style.width);
+          const height = parseFloat(card.style.height);
+          const startX = parseFloat(card.style.left) + width / 2;
+          const startY = parseFloat(card.style.top) + height / 2;
+          const frames = card.getAnimations()[0].effect.getKeyframes();
+          const pointAt = offset => {
+            const frame = frames.find(keyframe => Math.abs(keyframe.offset - offset) < 0.0001);
+            const matrix = new DOMMatrixReadOnly(frame.transform);
+            return { x: startX + matrix.m41, y: startY + matrix.m42 };
+          };
+          const timing = card.getAnimations()[0].effect.getTiming();
+          const fadeStart = Number(frames.at(-2).offset);
+          return {
+            apex: pointAt(0.1),
+            bottom: pointAt(0.64),
+            duration: timing.duration,
+            fadeDuration: timing.duration * (1 - fadeStart),
+            finalOpacity: Number(frames.at(-1).opacity),
+          };
+        });
+        const range = values => Math.max(...values) - Math.min(...values);
+        return {
+          width: bounds.width,
+          height: bounds.height,
+          apexXSpread: range(samples.map(sample => sample.apex.x)),
+          apexY: samples.map(sample => sample.apex.y),
+          bottomXSpread: range(samples.map(sample => sample.bottom.x)),
+          bottomY: samples.map(sample => sample.bottom.y),
+          durations: new Set(samples.map(sample => sample.duration)).size,
+          fadeDurations: samples.map(sample => sample.fadeDuration),
+          finalOpacities: samples.map(sample => sample.finalOpacity),
+        };
+      });
+      expect(funnel.apexXSpread).toBeLessThan(funnel.width * 0.04);
+      expect(funnel.apexY.every(y => y < 0)).toBe(true);
+      expect(funnel.bottomXSpread).toBeGreaterThan(funnel.width * 0.2);
+      expect(funnel.bottomY.every(y => y > funnel.height - 100 && y <= funnel.height)).toBe(true);
+      expect(funnel.durations).toBeGreaterThan(1);
+      expect(funnel.fadeDurations.every(duration => duration > 800 && duration < 2800)).toBe(true);
+      expect(funnel.finalOpacities.every(opacity => opacity === 0)).toBe(true);
     }
     if (effect === 'rain') {
       const before = await cards.first().textContent();

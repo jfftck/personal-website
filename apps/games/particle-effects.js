@@ -98,12 +98,11 @@ function makeBurst(event, type, random, particles, rings) {
   }
 }
 
-function addTornadoStreaks(elapsed, width, height, random, particles) {
-  const progress = clamp(elapsed / 3000, 0, 1);
-  const entryX = width * 0.12;
-  const centerX = entryX + (width * 0.5 - entryX) * progress;
+function addTornadoStreaks(elapsed, width, height, random, particles, spawnDuration, entryX) {
+  const progress = clamp(elapsed / spawnDuration, 0, 1);
+  const centerX = entryX;
   const centerY = -45 + progress * (height + 100);
-  const radius = width * (0.19 * (1 - progress) + 0.025);
+  const radius = width * (0.22 * progress + 0.006);
   const angle = progress * Math.PI * 5;
 
   for (let index = 0; index < 7; index++) {
@@ -149,7 +148,8 @@ export function createParticleAnimation(layer, type, bounds, options = {}) {
   const events = makeEvents(type, width, height, random, options);
   const particles = [];
   const rings = [];
-  const spawnDuration = type === 'streaks' ? 3000 : 0;
+  const spawnDuration = type === 'streaks' ? (options.spawnDuration || 3000) : 0;
+  const tornadoEntryX = Number.isFinite(options.entryX) ? options.entryX : width * 0.5;
   const maximumLife = type === 'streaks' ? 1200 : Math.max(0, ...events.map(event => event.life));
   const duration = type === 'streaks'
     ? spawnDuration + maximumLife
@@ -199,7 +199,7 @@ export function createParticleAnimation(layer, type, bounds, options = {}) {
       makeBurst(event, type, random, particles, rings);
     }
     if (type === 'streaks' && elapsed >= nextStreak && elapsed < spawnDuration) {
-      addTornadoStreaks(elapsed, width, height, random, particles);
+      addTornadoStreaks(elapsed, width, height, random, particles, spawnDuration, tornadoEntryX);
       nextStreak += 68;
     }
 

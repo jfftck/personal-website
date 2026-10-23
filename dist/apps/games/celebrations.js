@@ -294,41 +294,54 @@ function animateWave(sprites, bounds, layer) {
 }
 
 function animateTornado(sprites, bounds, layer) {
+  const entryX = bounds.width * (0.1 + Math.random() * 0.8);
+  const direction = Math.random() < 0.5 ? -1 : 1;
+  let animationEnd = 0;
+
   sprites.forEach((sprite, index) => {
-    const leftSide = index % 2 === 0;
-    const direction = index % 3 === 0 ? -1 : 1;
-    const phase = unit(index, 14) * Math.PI * 2;
-    const entryX = bounds.width * (leftSide ? 0.12 : 0.88);
-    const entryY = -sprite.height;
     const startX = sprite.x + sprite.width / 2;
     const startY = sprite.y + sprite.height / 2;
+    const apexX = entryX + (unit(index, 16) - 0.5) * Math.min(12, bounds.width * 0.02);
+    const phase = index / Math.max(1, sprites.length) * Math.PI * 2 + unit(index, 14) * 0.35;
+    const delay = index * 42;
+    const duration = 5200 + unit(index, 17) * 2800;
+    const fadeOffset = 0.66 + unit(index, 18) * 0.18;
+    animationEnd = Math.max(animationEnd, delay + duration);
     const frames = [
       { transform: transform(0, 0, 1), opacity: 1, offset: 0 },
-      { transform: transform(entryX - startX, entryY - startY, 0.38), opacity: 0.72, offset: 0.12 },
+      { transform: transform(apexX - startX, -sprite.height / 2 - startY, 0.48), opacity: 1, offset: 0.1 },
     ];
-    for (let step = 0; step <= 24; step++) {
-      const progress = step / 24;
-      const centerPath = entryX + (bounds.width * 0.5 - entryX) * progress;
-      const radius = bounds.width * (0.19 * (1 - progress) + 0.025);
+    for (let step = 0; step <= 48; step++) {
+      const progress = step / 48;
+      const radius = bounds.width * (0.008 + 0.22 * progress);
       const angle = phase + direction * progress * Math.PI * 5;
-      const x = centerPath + Math.cos(angle) * radius;
-      const y = -sprite.height / 2 + progress * (bounds.height + sprite.height);
-      const scale = 0.36 + progress * 0.98 + Math.sin(angle) * 0.08;
+      const x = apexX + Math.cos(angle) * radius;
+      const bottomY = bounds.height - sprite.height * 0.45;
+      const y = -sprite.height / 2 + progress * (bottomY + sprite.height / 2);
+      const scale = 0.48 + progress * 0.86 + Math.sin(angle) * 0.06;
       frames.push({
         transform: transform(x - startX, y - startY, scale, direction * progress * 900),
-        opacity: 1 - progress * 0.25,
-        offset: 0.12 + progress * 0.88,
+        opacity: 1,
+        offset: 0.1 + progress * 0.54,
       });
     }
+    const lastFrame = frames.at(-1);
+    frames.push({ ...lastFrame, opacity: 1, offset: fadeOffset });
+    frames.push({ ...lastFrame, opacity: 0, offset: 1 });
     sprite.element.classList.add('card-tornado');
     sprite.element.animate(frames, {
-      duration: 2450,
-      delay: index * 4,
+      duration,
+      delay,
       easing: 'linear',
       fill: 'both',
     });
   });
-  return createParticleAnimation(layer, 'streaks', bounds);
+
+  const particles = createParticleAnimation(layer, 'streaks', bounds, {
+    spawnDuration: 7000,
+    entryX,
+  });
+  return { ...particles, duration: Math.max(particles.duration, animationEnd) };
 }
 
 export function createWinCelebration(effect, kind, state, table, gameElement, onComplete = () => {}) {
