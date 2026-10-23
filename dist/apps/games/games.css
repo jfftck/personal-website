@@ -308,6 +308,263 @@
   outline-offset: 2px;
 }
 
+.game-theme-control {
+  display: grid;
+  flex: 0 1 auto;
+  gap: 0.18rem;
+  min-width: 0;
+}
+.game-theme-control-label {
+  color: var(--game-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.game-theme-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.game-toolbar button.game-theme-choice {
+  display: grid;
+  flex: 0 0 auto;
+  justify-items: center;
+  gap: 0.12rem;
+  min-width: 3.05rem;
+  min-height: 0;
+  padding: 0.18rem 0.22rem;
+  border-radius: 0.45rem;
+  font-size: 0.59rem;
+  line-height: 1.05;
+}
+.game-toolbar button.game-theme-choice[aria-checked="true"] {
+  border-color: color-mix(in srgb, var(--focus-color) 78%, var(--game-line));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--focus-color) 56%, transparent);
+  background: color-mix(in srgb, var(--accent) 19%, var(--app-bg));
+}
+.game-theme-choice-label {
+  max-width: 4rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.game-theme-preview {
+  position: relative;
+  display: grid;
+  width: 2.45rem;
+  height: 1.38rem;
+  overflow: hidden;
+  border: 1px solid rgb(0 0 0 / 24%);
+  border-radius: 0.2rem;
+  background: #d9e1e7;
+}
+.game-theme-preview--cards {
+  place-items: center;
+  background: #174c52;
+}
+.game-theme-card-back {
+  display: block;
+  width: 0.82rem;
+  height: 1.08rem;
+  border: 1px solid var(--preview-card-border);
+  border-radius: 0.12rem;
+  background:
+    repeating-linear-gradient(45deg, transparent 0 3px, var(--preview-card-pattern) 3px 4px),
+    linear-gradient(145deg, var(--preview-card-start), var(--preview-card-end));
+  box-shadow: 1px 1px 0 rgb(0 0 0 / 24%);
+}
+.game-theme-preview--cards[data-preview-theme="classic"] {
+  --preview-card-start: #315e82;
+  --preview-card-end: #173d60;
+  --preview-card-pattern: rgb(255 255 255 / 28%);
+  --preview-card-border: #f0e9d9;
+}
+.game-theme-preview--cards[data-preview-theme="midnight"] {
+  --preview-card-start: #62518f;
+  --preview-card-end: #292445;
+  --preview-card-pattern: rgb(235 225 255 / 36%);
+  --preview-card-border: #d9d0ed;
+  background: #2d2b42;
+}
+.game-theme-preview--cards[data-preview-theme="botanical"] {
+  --preview-card-start: #477351;
+  --preview-card-end: #1e4838;
+  --preview-card-pattern: rgb(231 245 214 / 36%);
+  --preview-card-border: #e6edcf;
+  background: #37664e;
+}
+.game-theme-preview--cards[data-preview-theme="glass"] {
+  --preview-card-start: #718493;
+  --preview-card-end: #435866;
+  --preview-card-pattern: rgb(255 255 255 / 44%);
+  --preview-card-border: #c4d1d9;
+  background: linear-gradient(145deg, #b5d8d2, #597c7b);
+}
+.game-theme-preview--chess-board,
+.game-theme-preview--reversi-board {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  border-radius: 0.15rem;
+}
+.game-theme-preview--chess-board > span:nth-child(8n + 1),
+.game-theme-preview--chess-board > span:nth-child(8n + 3),
+.game-theme-preview--chess-board > span:nth-child(8n + 6),
+.game-theme-preview--chess-board > span:nth-child(8n + 8) {
+  background: var(--preview-square-light);
+}
+.game-theme-preview--chess-board > span:nth-child(8n + 2),
+.game-theme-preview--chess-board > span:nth-child(8n + 4),
+.game-theme-preview--chess-board > span:nth-child(8n + 5),
+.game-theme-preview--chess-board > span:nth-child(8n + 7) {
+  background: var(--preview-square-dark);
+}
+.game-theme-preview--chess-board[data-preview-theme="wood"] {
+  --preview-square-light: #f0e6d2;
+  --preview-square-dark: #82938a;
+}
+.game-theme-preview--chess-board[data-preview-theme="slate"] {
+  --preview-square-light: #dbe3ed;
+  --preview-square-dark: #63758d;
+}
+.game-theme-preview--chess-board[data-preview-theme="glass"] {
+  --preview-square-light: #d1dce5;
+  --preview-square-dark: #8295a1;
+}
+.game-theme-preview--reversi-board {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  background: var(--preview-reversi-board);
+  gap: 1px;
+}
+.game-theme-preview--reversi-board > span {
+  display: grid;
+  place-items: center;
+  background: var(--preview-reversi-square);
+}
+.game-theme-preview--reversi-board[data-preview-theme="classic"] {
+  --preview-reversi-board: #176249;
+  --preview-reversi-square: #247958;
+}
+.game-theme-preview--reversi-board[data-preview-theme="ocean"] {
+  --preview-reversi-board: #16435c;
+  --preview-reversi-square: #287e9f;
+}
+.game-theme-preview--reversi-board[data-preview-theme="glass"] {
+  --preview-reversi-board: #477f79;
+  --preview-reversi-square: #76a49a;
+}
+.game-theme-disc {
+  width: 0.34rem;
+  height: 0.34rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 25%, #454b4a, #101718 68%);
+  box-shadow: 0 0 1px rgb(0 0 0 / 70%);
+}
+.game-theme-disc--light {
+  background: radial-gradient(circle at 32% 25%, #fffef5, #d3d6ca 72%);
+}
+.game-theme-preview--chess-pieces {
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  justify-items: center;
+  background: #73847b;
+}
+.game-theme-chess-piece {
+  color: var(--preview-piece-light);
+  font-family: Georgia, serif;
+  font-size: 1.08rem;
+  line-height: 1;
+  text-shadow: 0 0 1px var(--preview-piece-outline);
+}
+.game-theme-chess-piece--dark { color: var(--preview-piece-dark); }
+.game-theme-preview--chess-pieces[data-preview-theme="classic"] {
+  --preview-piece-light: #fffdf3;
+  --preview-piece-dark: #182124;
+  --preview-piece-outline: #fff;
+}
+.game-theme-preview--chess-pieces[data-preview-theme="modern"] {
+  --preview-piece-light: #f8fafc;
+  --preview-piece-dark: #172033;
+  --preview-piece-outline: #e2e8f0;
+  background: #8794a5;
+}
+.game-theme-preview--chess-pieces[data-preview-theme="glass"] {
+  --preview-piece-light: #eef4f6;
+  --preview-piece-dark: #52616b;
+  --preview-piece-outline: #fff;
+  background: linear-gradient(140deg, #a9c4c1, #647b82);
+}
+.game-theme-preview--reversi-pieces {
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  justify-items: center;
+  background: #277858;
+}
+.game-theme-preview--reversi-pieces .game-theme-disc { width: 0.78rem; height: 0.78rem; }
+.game-theme-preview--reversi-pieces[data-preview-theme="amber"] .game-theme-disc {
+  background: radial-gradient(circle at 32% 25%, #7d5535, #322015 72%);
+}
+.game-theme-preview--reversi-pieces[data-preview-theme="amber"] .game-theme-disc--light {
+  background: radial-gradient(circle at 32% 25%, #fff0cb, #c9a76e 76%);
+}
+.game-theme-preview--reversi-pieces[data-preview-theme="glass"] {
+  background: linear-gradient(140deg, #9cc5bd, #347562);
+}
+.game-theme-preview--reversi-pieces[data-preview-theme="glass"] .game-theme-disc {
+  background: radial-gradient(circle at 32% 25%, #52625f, #172d30 72%);
+}
+.game-theme-preview--reversi-pieces[data-preview-theme="glass"] .game-theme-disc--light {
+  background: radial-gradient(circle at 32% 25%, #f8fff8, #b4cec3 76%);
+}
+.game-theme-preview--minesweeper {
+  grid-template-columns: repeat(3, 1fr);
+  align-items: center;
+  justify-items: center;
+  gap: 1px;
+  padding: 1px;
+  background: var(--preview-mine-surface);
+}
+.game-theme-preview--minesweeper > span {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--preview-mine-border);
+  background: var(--preview-mine-face);
+  color: #173b49;
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+.game-theme-mine-number { background: var(--preview-mine-open) !important; }
+.game-theme-mine-flag { color: #b93636 !important; }
+.game-theme-preview--minesweeper[data-preview-theme="classic"] {
+  --preview-mine-surface: #808080;
+  --preview-mine-face: #c0c0c0;
+  --preview-mine-open: #c0c0c0;
+  --preview-mine-border: #7f7f7f;
+}
+.game-theme-preview--minesweeper[data-preview-theme="ocean"] {
+  --preview-mine-surface: #1d647c;
+  --preview-mine-face: #d5edf3;
+  --preview-mine-open: #edf7f8;
+  --preview-mine-border: #7caebc;
+}
+.game-theme-preview--minesweeper[data-preview-theme="sunset"] {
+  --preview-mine-surface: #a55a43;
+  --preview-mine-face: #ffe2c5;
+  --preview-mine-open: #fff2e2;
+  --preview-mine-border: #c88c66;
+}
+.game-theme-preview--minesweeper[data-preview-theme="glass"] {
+  --preview-mine-surface: #728b8e;
+  --preview-mine-face: #bccbc8;
+  --preview-mine-open: #e2ece9;
+  --preview-mine-border: #879f9c;
+}
+
 .game-toolbar [aria-pressed="true"],
 .game-toolbar button[aria-current="true"] {
   border-color: color-mix(in srgb, var(--focus-color) 68%, var(--game-line));

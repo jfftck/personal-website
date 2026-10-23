@@ -287,38 +287,58 @@ test('all games prevent mouse text selection and expose shared, game-specific vi
 
   const klondike = await openGame(page, 'klondike');
   await checkSelectionDisabled(klondike, '.solitaire-table');
-  await klondike.getByLabel('Card theme', { exact: true }).selectOption('botanical');
+  const cardThemeGroup = klondike.getByRole('radiogroup', { name: 'Card theme' });
+  await expect(cardThemeGroup.getByRole('radio')).toHaveCount(4);
+  await expect(cardThemeGroup.locator('.game-theme-preview')).toHaveCount(4);
+  await cardThemeGroup.getByRole('radio', { name: 'Card theme: Botanical' }).click();
+  await expect(klondike).toHaveAttribute('data-card-theme', 'botanical');
 
   const spider = await openGame(page, 'spider');
   await checkSelectionDisabled(spider, '.solitaire-table');
-  await expect(spider.getByLabel('Card theme', { exact: true })).toHaveValue('botanical');
-  await spider.getByLabel('Card theme', { exact: true }).selectOption('glass');
+  const spiderCardThemes = spider.getByRole('radiogroup', { name: 'Card theme' });
+  await expect(spiderCardThemes.getByRole('radio', { name: 'Card theme: Botanical' }))
+    .toHaveAttribute('aria-checked', 'true');
+  await spiderCardThemes.getByRole('radio', { name: 'Card theme: Botanical' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(spiderCardThemes.getByRole('radio', { name: 'Card theme: Glass' }))
+    .toHaveAttribute('aria-checked', 'true');
   await expect(klondike).toHaveAttribute('data-card-theme', 'glass');
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('game-center-visual-themes-v1')).cards))
+    .toBe('glass');
 
   const freecell = await openGame(page, 'freecell');
   await checkSelectionDisabled(freecell, '.solitaire-table');
-  await expect(freecell.getByLabel('Card theme', { exact: true })).toHaveValue('glass');
+  await expect(freecell.getByRole('radiogroup', { name: 'Card theme' })
+    .getByRole('radio', { name: 'Card theme: Glass' })).toHaveAttribute('aria-checked', 'true');
 
   const chess = await openGame(page, 'chess');
   await checkSelectionDisabled(chess, '.chess-board');
   await expect(chess.locator('.chess-piece-svg')).toHaveCount(32);
-  await chess.getByLabel('Board theme', { exact: true }).selectOption('slate');
-  await chess.getByLabel('Piece theme', { exact: true }).selectOption('glass');
+  const chessBoardThemes = chess.getByRole('radiogroup', { name: 'Board theme' });
+  const chessPieceThemes = chess.getByRole('radiogroup', { name: 'Piece theme' });
+  await expect(chessBoardThemes.locator('.game-theme-preview')).toHaveCount(3);
+  await expect(chessPieceThemes.locator('.game-theme-preview')).toHaveCount(3);
+  await chessBoardThemes.getByRole('radio', { name: 'Board theme: Slate' }).click();
+  await chessPieceThemes.getByRole('radio', { name: 'Piece theme: Glass' }).click();
   await expect(chess).toHaveAttribute('data-chess-board-theme', 'slate');
   await expect(chess).toHaveAttribute('data-chess-pieces-theme', 'glass');
 
   const reversi = await openGame(page, 'reversi');
   await checkSelectionDisabled(reversi, '.reversi-board');
-  await reversi.getByLabel('Board theme', { exact: true }).selectOption('ocean');
-  await reversi.getByLabel('Piece theme', { exact: true }).selectOption('amber');
+  await reversi.getByRole('radiogroup', { name: 'Board theme' })
+    .getByRole('radio', { name: 'Board theme: Ocean blue' }).click();
+  await reversi.getByRole('radiogroup', { name: 'Piece theme' })
+    .getByRole('radio', { name: 'Piece theme: Amber' }).click();
   await expect(reversi).toHaveAttribute('data-reversi-board-theme', 'ocean');
   await expect(reversi).toHaveAttribute('data-reversi-pieces-theme', 'amber');
 
   const minesweeper = await openGame(page, 'minesweeper');
   await checkSelectionDisabled(minesweeper, '.mine-board');
-  const themePicker = minesweeper.getByLabel('Theme', { exact: true });
+  const themePicker = minesweeper.getByRole('radiogroup', { name: 'Theme' });
+  await expect(themePicker.locator('.game-theme-preview')).toHaveCount(4);
   for (const theme of ['classic', 'ocean', 'sunset', 'glass']) {
-    await themePicker.selectOption(theme);
+    await themePicker.getByRole('radio', { name: new RegExp(`Theme: ${theme}`, 'i') }).click();
     await expect(minesweeper).toHaveAttribute('data-minesweeper-theme', theme);
   }
   const glassColors = await page.evaluate(async () => {
@@ -332,6 +352,17 @@ test('all games prevent mouse text selection and expose shared, game-specific vi
     return { light, dark };
   });
   expect(glassColors.light).not.toBe(glassColors.dark);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const fitsToolbar = await minesweeper.evaluate(app => {
+    const toolbar = app.querySelector('.game-toolbar').getBoundingClientRect();
+    return [...app.querySelectorAll('.game-theme-control')].every(control => {
+      const rect = control.getBoundingClientRect();
+      return rect.left >= toolbar.left - 1 && rect.right <= toolbar.right + 1
+        && control.scrollWidth <= control.clientWidth;
+    });
+  });
+  expect(fitsToolbar).toBe(true);
 });
 
 test('all previous app shortcuts still launch and manifest files open in the document viewer', async ({ page }) => {
