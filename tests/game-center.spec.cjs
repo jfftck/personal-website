@@ -643,6 +643,35 @@ test('card faces and backs share independent artwork choices, and Chess silhouet
   await expect(page.locator('.app-window[data-type="klondike"]')).toHaveAttribute('data-card-back-style', 'diamonds');
 });
 
+test('selected card back artwork stays visible on face-down playfield cards as well as the stock', async ({ page }) => {
+  for (const game of ['klondike', 'spider']) {
+    const app = await openGame(page, game);
+    const dialog = await openSettings(app);
+    for (const theme of ['Classic', 'Midnight', 'Botanical', 'Glass']) {
+      await dialog.getByRole('radio', { name: `Card theme: ${theme}`, exact: true }).click();
+      for (const artwork of ['Diamonds', 'Orbit']) {
+        await dialog.getByRole('radio', { name: `Card backs: ${artwork}`, exact: true }).click();
+        const result = await app.evaluate(element => {
+          const card = element.querySelector('.card-columns .playing-card.face-down');
+          const stock = element.querySelector('.card-stock button');
+          const cardStyle = getComputedStyle(card, '::before');
+          const stockStyle = getComputedStyle(stock, '::before');
+          return {
+            color: cardStyle.color, stockColor: stockStyle.color,
+            image: cardStyle.backgroundImage, stockImage: stockStyle.backgroundImage,
+            opacity: Number(cardStyle.opacity),
+          };
+        });
+        expect(result.color, `${game}, ${theme}, ${artwork}`).not.toBe('rgba(0, 0, 0, 0)');
+        expect(result.color).toBe(result.stockColor);
+        expect(result.image).toBe(result.stockImage);
+        expect(result.image).not.toBe('none');
+        expect(result.opacity).toBeGreaterThan(0);
+      }
+    }
+  }
+});
+
 test('Minesweeper color-blind palette keeps every number legible and flags distinct in both desktop themes', async ({ page }) => {
   const app = await restoreGame(page, savedMinesweeper({ finalSafeCell: 10 }), 'minesweeper');
   await openSettings(app);

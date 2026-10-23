@@ -16,6 +16,7 @@
 [data-card-back-style="diamonds"] :is(.playing-card.face-down, .card-stock button)::before,
 [data-card-back-style="orbit"] :is(.playing-card.face-down, .card-stock button)::before {
   content: ""; position: absolute; inset: .22rem; border: 1px solid currentColor;
+  color: var(--card-back-border);
   border-radius: .3rem; pointer-events: none; opacity: .5;
 }
 [data-card-back-style="diamonds"] :is(.playing-card.face-down, .card-stock button)::before {
