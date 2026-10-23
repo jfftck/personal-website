@@ -428,7 +428,7 @@ test('FreeCell double-click highlights Home and an open cell, or sends the card 
   await expect(withOpenCell.locator('[data-key="card-1"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(withOpenCell.locator('[aria-label="Cell 1"]')).toHaveClass(/available-move/);
   await expect(withOpenCell.locator('[aria-label="Home 1"]')).toHaveClass(/available-move/);
-  await expect(withOpenCell.locator('.game-status')).toContainText('Choose the highlighted cell or Home');
+  await expect(withOpenCell.locator('.game-status')).toHaveText('Choose Cell 1 or Home 1.');
   await withOpenCell.locator('[aria-label="Home 1"] [data-key="card-0"]').click();
   await expect(withOpenCell.locator('[aria-label="Home 1"] .playing-card')).toHaveText('2♠');
   await page.locator('#close-btn').click();
@@ -440,7 +440,7 @@ test('FreeCell double-click highlights Home and an open cell, or sends the card 
   }), 'freecell');
   await noOpenCell.locator('[data-key="card-1"]').dblclick();
   await expect(noOpenCell.locator('[aria-label="Home 1"] .playing-card')).toHaveText('2♠');
-  await expect(noOpenCell.locator('.game-status')).toContainText('1 moves');
+  await expect(noOpenCell.locator('.game-status')).toHaveText('Moved 2♠ to Home 1.');
 });
 
 test('card-game fields use grouped Home and Cells labels without individual pile captions', async ({ page }) => {

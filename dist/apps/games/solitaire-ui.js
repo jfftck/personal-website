@@ -117,14 +117,17 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
             { zone: 'foundations', index: foundation },
           ];
           render();
-          status.textContent = 'Choose the highlighted cell or Home space.';
+          status.textContent = `Choose Cell ${emptyCell + 1} or Home ${foundation + 1}.`;
           return;
         }
         const movedHome = action(
           () => moveCards(state, source, { zone: 'foundations', index: foundation }),
           [card.id],
         );
-        if (movedHome) return;
+        if (movedHome) {
+          status.textContent = `Moved ${rankLabel(card.rank)}${SUITS[card.suit]} to Home ${foundation + 1}.`;
+          return;
+        }
       }
       if (source.zone === 'columns') {
         const emptyCell = state.cells.findIndex(cell => !cell.length);
