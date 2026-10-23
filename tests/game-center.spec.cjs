@@ -151,6 +151,77 @@ test('root menu restores app and file entries; the six game tiles stay nested wi
   await expect(page.locator('#app-menu')).toBeHidden();
 });
 
+test('app launcher is anchored under its button with aligned search and an inset scrollbar', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.locator('#app-menu-btn').click();
+  await expect(page.locator('#doc-files-list .app-file-btn')).toHaveCount(9);
+  await expect(page.getByLabel('Find a document, picture, or video')).toBeVisible();
+
+  const layout = await page.evaluate(() => {
+    const button = document.querySelector('#app-menu-btn').getBoundingClientRect();
+    const topbar = document.querySelector('#topbar').getBoundingClientRect();
+    const menu = document.querySelector('#app-menu');
+    const menuBox = menu.getBoundingClientRect();
+    const search = document.querySelector('#launcher-file-search').getBoundingClientRect();
+    const heading = document.querySelector('#doc-files-heading').getBoundingClientRect();
+    const label = getComputedStyle(document.querySelector('.app-files-search-label'));
+    const style = getComputedStyle(menu);
+    return {
+      buttonLeft: button.left,
+      topbarBottom: topbar.bottom,
+      menuLeft: menuBox.left,
+      menuTop: menuBox.top,
+      menuWidth: menuBox.width,
+      viewportWidth: innerWidth,
+      menuRight: innerWidth - menuBox.right,
+      searchLeft: search.left,
+      headingLeft: heading.left,
+      labelPosition: label.position,
+      labelWidth: parseFloat(label.width),
+      overflowY: style.overflowY,
+      supportsOverlayOverflow: CSS.supports('overflow-y: overlay'),
+      scrollbarWidth: style.scrollbarWidth,
+      ariaModal: menu.getAttribute('aria-modal'),
+    };
+  });
+  expect(Math.abs(layout.menuLeft - layout.buttonLeft)).toBeLessThan(2);
+  expect(layout.menuTop).toBeGreaterThanOrEqual(layout.topbarBottom);
+  expect(layout.menuWidth).toBeLessThanOrEqual(560);
+  expect(layout.menuWidth).toBeLessThan(layout.viewportWidth);
+  expect(Math.abs(layout.searchLeft - layout.headingLeft)).toBeLessThan(1);
+  expect(layout.labelPosition).toBe('absolute');
+  expect(layout.labelWidth).toBe(1);
+  expect(layout.overflowY).toBe('auto');
+  expect(layout.supportsOverlayOverflow).toBe(true);
+  expect(layout.scrollbarWidth).toBe('thin');
+  expect(layout.ariaModal).toBe('false');
+
+  const pulse = await page.locator('#app-menu-btn').evaluate(async button => {
+    button.classList.add('pulse-hint');
+    await new Promise(resolve => setTimeout(resolve, 80));
+    return {
+      boxShadow: getComputedStyle(button).boxShadow,
+      outlineStyle: getComputedStyle(button).outlineStyle,
+    };
+  });
+  expect(pulse.boxShadow).toContain('inset');
+  expect(pulse.outlineStyle).toBe('none');
+  await page.locator('#topbar').click({ position: { x: 300, y: 24 } });
+  await expect(page.locator('#app-menu')).toBeHidden();
+
+  await page.setViewportSize({ width: 402, height: 874 });
+  await page.locator('#app-menu-btn').click();
+  const mobile = await page.locator('#app-menu').evaluate(menu => {
+    const rect = menu.getBoundingClientRect();
+    return { left: rect.left, width: rect.width, right: innerWidth - rect.right };
+  });
+  expect(mobile.left).toBeGreaterThanOrEqual(12);
+  expect(mobile.right).toBeGreaterThanOrEqual(12);
+  expect(mobile.width).toBeLessThan(402);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#app-menu')).toBeHidden();
+});
+
 test('Game Center game icons stay distinct and legible in both themes at desktop and phone sizes', async ({ page }) => {
   const games = ['klondike', 'spider', 'freecell', 'minesweeper', 'chess', 'reversi'];
   const contrastRatio = (foreground, background) => {

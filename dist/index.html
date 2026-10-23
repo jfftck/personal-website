@@ -244,7 +244,7 @@
     </div>
   </div>
 
-  <div id="app-menu" role="dialog" aria-modal="true" aria-label="App launcher" hidden>
+  <div id="app-menu" role="dialog" aria-modal="false" aria-label="App launcher" hidden>
     <div id="app-menu-inner">
       <div class="app-menu-header">
         <button id="game-menu-back" class="icon-btn" type="button" aria-label="Back to root app menu" hidden>←</button>
@@ -296,7 +296,7 @@
         </div>
 
         <div id="app-files-section" hidden>
-          <label class="app-files-search-label" for="launcher-file-search">Find a document, picture, or video</label>
+          <label class="app-files-search-label sr-only" for="launcher-file-search">Find a document, picture, or video</label>
           <input id="launcher-file-search" class="app-files-search" type="search"
                  placeholder="Search by name…" autocomplete="off"
                  aria-controls="doc-files-list pic-files-list video-files-list">
