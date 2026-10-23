@@ -967,18 +967,19 @@ function updateLauncherFileSearch() {
   videoFilesHeading.hidden = !hasVideos;
   videoFilesList.hidden = !hasVideos;
   launcherFileSearchEmpty.hidden = !query || hasDocuments || hasPictures || hasVideos;
-  return { query, documentCount, pictureCount };
+  return { query, documentCount, pictureCount, videoCount };
 }
 
 launcherFileSearch.addEventListener('input', () => {
-  const { query, documentCount, pictureCount } = updateLauncherFileSearch();
+  const { query, documentCount, pictureCount, videoCount } = updateLauncherFileSearch();
   clearTimeout(launcherSearchAnnouncementTimer);
   launcherSearchAnnouncementTimer = setTimeout(() => {
     const documents = `${documentCount} ${documentCount === 1 ? 'document' : 'documents'}`;
     const pictures = `${pictureCount} ${pictureCount === 1 ? 'picture' : 'pictures'}`;
+    const videos = `${videoCount} ${videoCount === 1 ? 'video' : 'videos'}`;
     launcherFileSearchStatus.textContent = query
-      ? `Matching files: ${documents} and ${pictures}.`
-      : `All ${documents} and ${pictures} are shown.`;
+      ? `Matching files: ${documents}, ${pictures}, and ${videos}.`
+      : `All ${documents}, ${pictures}, and ${videos} are shown.`;
   }, 250);
 });
 
