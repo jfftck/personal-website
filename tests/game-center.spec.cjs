@@ -148,6 +148,7 @@ test('root menu restores app and file entries; the six game tiles stay nested wi
   await expect(page.getByRole('button', { name: 'Back to root app menu' })).toBeVisible();
   await expect(page.locator('.game-menu-description')).toHaveCount(0);
   await expect(page.locator('#game-list .app-launcher')).toHaveCount(6);
+  await expect(page.locator('#game-list .app-launcher small')).toHaveCount(0);
   for (const game of ['Klondike', 'Spider', 'FreeCell', 'Minesweeper', 'Chess', 'Reversi']) {
     await expect(page.getByRole('button', { name: new RegExp(game) })).toBeVisible();
   }
