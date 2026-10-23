@@ -666,6 +666,23 @@ body {
 
 .app-launcher-icon svg { width: 32px; height: 32px; }
 
+.game-launcher-icon {
+  background: #123c52;
+  color: #6bf;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .game-launcher-icon {
+    background: #e4f0f5;
+    color: #00516f;
+  }
+}
+
+:root[data-theme="light"] .game-launcher-icon {
+  background: #e4f0f5;
+  color: #00516f;
+}
+
 .app-launcher-name {
   font-size: 0.8125rem;
   font-weight: 500;

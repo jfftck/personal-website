@@ -151,21 +151,51 @@ test('root menu restores app and file entries; the six game tiles stay nested wi
   await expect(page.locator('#app-menu')).toBeHidden();
 });
 
-test('Game Center game icons stay visible and decorative at desktop and phone sizes', async ({ page }) => {
+test('Game Center game icons stay distinct and legible in both themes at desktop and phone sizes', async ({ page }) => {
+  const games = ['klondike', 'spider', 'freecell', 'minesweeper', 'chess', 'reversi'];
+  const contrastRatio = (foreground, background) => {
+    const luminance = color => {
+      const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map(value => value / 255);
+      const linear = channels.map(value => value <= 0.04045
+        ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+      return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+    };
+    const fg = luminance(foreground), bg = luminance(background);
+    return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+  };
+
   for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
-    await page.locator('#app-menu-btn').click();
-    await page.locator('#game-center-entry').click();
-    for (const game of ['klondike', 'spider', 'freecell', 'minesweeper', 'chess', 'reversi']) {
-      const icon = page.locator(`#game-list [data-game="${game}"] .game-launcher-icon`);
-      await expect(icon).toHaveAttribute('aria-hidden', 'true');
-      await expect(icon.locator('svg')).toBeVisible();
-      const box = await icon.locator('svg').boundingBox();
-      expect(box.width).toBeGreaterThanOrEqual(24);
-      expect(box.height).toBeGreaterThanOrEqual(24);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+      await page.locator('#app-menu-btn').click();
+      await page.locator('#game-center-entry').click();
+      const iconPaths = new Set();
+      for (const game of games) {
+        const icon = page.locator(`#game-list [data-game="${game}"] .game-launcher-icon`);
+        await expect(icon).toHaveAttribute('aria-hidden', 'true');
+        await expect(icon.locator('svg')).toBeVisible();
+        const details = await icon.evaluate(element => {
+          const style = getComputedStyle(element);
+          return {
+            color: style.color,
+            background: style.backgroundColor,
+            fill: getComputedStyle(element.querySelector('svg path')).fill,
+            path: element.querySelector('svg path').getAttribute('d'),
+          };
+        });
+        const box = await icon.locator('svg').boundingBox();
+        expect(box.width).toBeGreaterThanOrEqual(24);
+        expect(box.height).toBeGreaterThanOrEqual(24);
+        expect(details.fill).toBe(details.color);
+        expect(details.path).toBeTruthy();
+        iconPaths.add(details.path);
+        expect(contrastRatio(details.color, details.background)).toBeGreaterThanOrEqual(3);
+      }
+      expect(iconPaths.size).toBe(6);
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('Escape');
     }
-    await page.keyboard.press('Escape');
-    await page.keyboard.press('Escape');
   }
 });
 
