@@ -24,6 +24,9 @@ test('root menu restores app and file entries; the six game tiles stay nested wi
   await expect(page.locator('#game-submenu')).toBeHidden();
   await page.locator('#game-center-entry').click();
   await expect(page.locator('#launcher-root')).toBeHidden();
+  await expect(page.locator('#app-menu-title')).toHaveText('Game Center');
+  await expect(page.getByRole('button', { name: 'Back to root app menu' })).toBeVisible();
+  await expect(page.locator('.game-menu-description')).toHaveCount(0);
   await expect(page.locator('#game-list .app-launcher')).toHaveCount(6);
   await expect(page.locator('#launcher-root [data-game]')).toHaveCount(0);
   await page.locator('#game-menu-back').click();
