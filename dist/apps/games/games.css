@@ -460,6 +460,23 @@
   pointer-events: none;
   transition: none !important;
 }
+.game-layer-card {
+  position: absolute;
+  z-index: 1;
+  margin: 0;
+  box-sizing: border-box;
+  transition: none !important;
+}
+.solitaire-celebration-layer {
+  position: fixed;
+  z-index: 2147483646;
+  overflow: visible;
+  pointer-events: none;
+  isolation: isolate;
+}
+.game-layer-card.win-bounce,
+.game-layer-card.win-spiral,
+.solitaire-fireworks span { will-change: transform; }
 .card-pile.drag-over {
   border-radius: .75rem;
   outline: 2px solid #f1c85b;

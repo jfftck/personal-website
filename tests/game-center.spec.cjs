@@ -634,14 +634,48 @@ test('one selected win celebration runs and restarting allows a new celebration'
   await app.locator('[data-key="card-12"]').dblclick();
   const table = app.locator('.solitaire-table');
   await expect(table).toHaveAttribute('data-win-celebration', 'fireworks');
-  await expect(table.locator('.solitaire-fireworks span')).toHaveCount(18);
+  const celebration = page.locator('body > .solitaire-celebration-layer');
+  await expect(celebration).toHaveCount(1);
+  await expect(celebration.locator('.solitaire-fireworks span')).toHaveCount(18);
+  const layerPosition = await celebration.evaluate(layer => ({
+    position: getComputedStyle(layer).position,
+    zIndex: getComputedStyle(layer).zIndex,
+    pointerEvents: getComputedStyle(layer).pointerEvents,
+    parent: layer.parentElement.tagName,
+  }));
+  expect(layerPosition).toEqual({
+    position: 'fixed', zIndex: '2147483646', pointerEvents: 'none', parent: 'BODY',
+  });
   await expect.poll(() => page.evaluate(() => window.celebrationRandomCalls)).toBe(1);
   await app.getByRole('button', { name: 'Undo', exact: true }).click();
   await app.locator('[data-key="card-12"]').dblclick();
   await expect(table).toHaveAttribute('data-win-celebration', 'fireworks');
   await expect.poll(() => page.evaluate(() => window.celebrationRandomCalls)).toBe(2);
+  await expect(celebration).toHaveCount(1);
   await app.getByRole('button', { name: 'New deal' }).click();
+  await expect(celebration).toHaveCount(0);
   await expect(app.locator('.solitaire-table')).not.toHaveAttribute('data-win-celebration', /.+/);
+});
+
+test('bounce and spiral win celebrations use floating card layers too', async ({ page }) => {
+  const winningDeal = savedKlondike({
+    columns: [[[13, 0]]],
+    foundations: { 0: Array.from({ length: 12 }, (_, index) => index + 1),
+      1: Array.from({ length: 13 }, (_, index) => index + 1),
+      2: Array.from({ length: 13 }, (_, index) => index + 1),
+      3: Array.from({ length: 13 }, (_, index) => index + 1) },
+  });
+  for (const [randomValue, effect] of [[0.4, 'bounce'], [0.8, 'spiral']]) {
+    const app = await restoreGame(page, winningDeal);
+    await page.evaluate(value => { Math.random = () => value; }, randomValue);
+    await app.locator('[data-key="card-12"]').dblclick();
+    const layer = page.locator('body > .solitaire-celebration-layer');
+    await expect(layer).toHaveCount(1);
+    await expect(layer.locator(`.game-layer-card.win-${effect}`)).toHaveCount(4);
+    await expect(app.locator('.solitaire-table .win-bounce, .solitaire-table .win-spiral')).toHaveCount(0);
+    await page.locator('#close-btn').click();
+    await expect(layer).toHaveCount(0);
+  }
 });
 
 test('solitaire tableau scrolls independently and reduced motion suppresses celebration animation', async ({ page }) => {
@@ -671,6 +705,7 @@ test('solitaire tableau scrolls independently and reduced motion suppresses cele
   await winningApp.locator('[data-key="card-12"]').dblclick();
   await expect(winningApp.locator('.solitaire-table')).toHaveAttribute('data-win-celebration', 'fireworks');
   await expect(winningApp.locator('.solitaire-fireworks')).toHaveCount(0);
+  await expect(winningApp.locator('.solitaire-celebration-layer')).toHaveCount(0);
 });
 
 test('Minesweeper supports reveal, touch flag mode, keyboard flags, and all board sizes', async ({ page }) => {
