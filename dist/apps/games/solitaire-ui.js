@@ -100,9 +100,33 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
     }
     latestTable.append(sparks);
   }
-  function autoHome(source) {
-    if (kind === 'spider') return;
+  function autoMove(source) {
     const card = getPile(state, source)?.[source.offset];
+    if (kind === 'freecell') {
+      if (source.zone === 'columns') {
+        const emptyCell = state.cells.findIndex(cell => !cell.length);
+        const moved = emptyCell !== -1 && card && action(
+          () => moveCards(state, source, { zone: 'cells', index: emptyCell }),
+          [card.id],
+        );
+        if (!moved) status.textContent = 'No available cell can accept this card.';
+        return;
+      }
+      if (source.zone === 'cells') {
+        const destinations = state.columns.map((pile, index) => ({ pile, index }))
+          .sort((a, b) => Number(!a.pile.length) - Number(!b.pile.length));
+        const moved = card && action(() => {
+          for (const { index } of destinations) {
+            if (moveCards(state, source, { zone: 'columns', index })) return true;
+          }
+          return false;
+        }, [card.id]);
+        if (!moved) status.textContent = 'This card cannot move to a tableau pile.';
+        return;
+      }
+      return;
+    }
+    if (kind === 'spider') return;
     const moved = card && action(() => {
       for (let index = 0; index < state.foundations.length; index++) {
         if (moveCards(state, source, { zone: 'foundations', index })) return true;
@@ -164,7 +188,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
     event.preventDefault();
     pointerDrag.card.style.setProperty('--drag-x', `${event.clientX - pointerDrag.x}px`);
     pointerDrag.card.style.setProperty('--drag-y', `${event.clientY - pointerDrag.y}px`);
-    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-drop-zone]');
+    const target = resolveDropTarget(event.clientX, event.clientY);
     if (target === activeDropTarget) return;
     activeDropTarget?.classList.remove('drag-over');
     activeDropTarget = target;
@@ -183,7 +207,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
     suppressClick = true;
     clearTimeout(suppressClickTimer);
     suppressClickTimer = setTimeout(() => { suppressClick = false; }, 250);
-    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-drop-zone]');
+    const target = resolveDropTarget(event.clientX, event.clientY);
     const destination = target && { zone: target.dataset.dropZone, index: Number(target.dataset.dropIndex) };
     const movingIds = getPile(state, drag.from)?.slice(drag.from.offset).map(card => card.id) || [];
     if (!destination || !action(() => moveCards(state, drag.from, destination), movingIds)) {
@@ -238,12 +262,31 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
         btn.addEventListener('dblclick', event => {
           event.preventDefault();
           event.stopPropagation();
-          autoHome({ zone, index, offset });
+          autoMove({ zone, index, offset });
         });
         div.append(btn);
       });
     }
     return div;
+  }
+  function resolveDropTarget(clientX, clientY) {
+    const direct = document.elementFromPoint(clientX, clientY)?.closest('[data-drop-zone]');
+    if (direct) return direct;
+    const columns = latestTable?.querySelector('.card-columns');
+    if (!columns) return null;
+    const bounds = columns.getBoundingClientRect();
+    if (clientX < bounds.left || clientX > bounds.right || clientY < bounds.top || clientY > bounds.bottom) return null;
+    const piles = [...columns.querySelectorAll(':scope > .card-pile')];
+    return piles
+      .filter(pile => {
+        const rect = pile.getBoundingClientRect();
+        return clientX >= rect.left && clientX <= rect.right;
+      })
+      .sort((a, b) => {
+        const aCenter = a.getBoundingClientRect().left + a.getBoundingClientRect().width / 2;
+        const bCenter = b.getBoundingClientRect().left + b.getBoundingClientRect().width / 2;
+        return Math.abs(clientX - aCenter) - Math.abs(clientX - bCenter);
+      })[0] || null;
   }
   function render() {
     if (pendingRestore) {

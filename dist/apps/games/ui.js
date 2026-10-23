@@ -28,16 +28,22 @@ export function gameShell(id, title, rules, ctx) {
   el.className = 'game-app';
   const toolbar = document.createElement('div');
   toolbar.className = 'game-toolbar';
-  const back = button('← Game Center', event => {
-    event.stopPropagation();
-    ctx.openGameMenu();
-  });
-  toolbar.append(back);
   const instructionsId = `game-instructions-${String(id).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   const instructionsButton = button('Instructions', () => setInstructionsOpen(!instructionsOpen));
+  instructionsButton.classList.add('game-instructions-toggle');
+  const instructionsIcon = document.createElement('span');
+  instructionsIcon.className = 'game-instructions-icon';
+  instructionsIcon.setAttribute('aria-hidden', 'true');
+  instructionsIcon.innerHTML = '<svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.8"/><path d="M10 9v5m0-8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  const instructionsLabel = document.createElement('span');
+  instructionsLabel.textContent = 'Instructions';
+  instructionsButton.replaceChildren(instructionsIcon, instructionsLabel);
   instructionsButton.setAttribute('aria-expanded', 'false');
   instructionsButton.setAttribute('aria-controls', instructionsId);
-  toolbar.append(instructionsButton);
+  const instructionsControl = document.createElement('div');
+  instructionsControl.className = 'game-instructions-control';
+  instructionsControl.append(instructionsButton);
+  toolbar.append(instructionsControl);
   const status = document.createElement('div');
   status.className = 'game-status';
   status.setAttribute('role', 'status');
@@ -64,7 +70,8 @@ export function gameShell(id, title, rules, ctx) {
   const area = document.createElement('div');
   area.className = 'app-content game-area';
   area.setAttribute('aria-label', `${title} play area`);
-  stage.append(area, instructions);
+  instructionsControl.append(instructions);
+  stage.append(area);
   el.append(toolbar, status, stage);
   let instructionsOpen = false;
   function setInstructionsOpen(open) {

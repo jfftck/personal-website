@@ -6,7 +6,7 @@ import { buildImgViewer }   from './apps/img-viewer.js';
 import { buildMediaPlayer } from './apps/media-player.js';
 import { buildFileManager } from './apps/file-manager.js';
 import { renderMarkdown }   from './shared/markdown.js';
-import { GAMES, GAME_ICON, buildGame, initGameMenu } from './apps/game-center.js';
+import { GAMES, buildGame, initGameMenu } from './apps/game-center.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -998,7 +998,7 @@ const appCtx = {
 const APP_DEFS = {
   ...Object.fromEntries(GAMES.map(game => [game.type, {
     title: game.title,
-    iconSvg: GAME_ICON,
+    iconSvg: game.iconSvg,
     build: (id, state) => buildGame(game.type, id, appCtx, state),
   }])),
   'doc-viewer': {

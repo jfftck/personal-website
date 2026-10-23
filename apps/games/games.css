@@ -50,6 +50,7 @@
 
 .game-toolbar {
   position: relative;
+  container-type: inline-size;
   z-index: 2;
   display: flex;
   flex: 0 0 auto;
@@ -65,6 +66,19 @@
 }
 
 .game-toolbar > :first-child { margin-inline-start: 0; }
+.game-instructions-control { position: relative; }
+.game-toolbar .game-instructions-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.game-instructions-icon {
+  display: inline-flex;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+.game-instructions-icon svg { width: 100%; height: 100%; }
 .game-toolbar > label,
 .game-toolbar .game-toolbar-label {
   color: var(--game-muted);
@@ -170,18 +184,27 @@
 }
 
 .game-instructions {
-  z-index: 3;
+  position: absolute;
+  z-index: 4;
   display: flex;
-  flex: 0 0 min(21rem, 34%);
   flex-direction: column;
   gap: 0.75rem;
-  min-width: 15rem;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  width: min(21rem, calc(100vw - 2rem));
+  min-width: 0;
+  max-height: min(70vh, 32rem);
   padding: 1rem;
-  border-inline-start: 1px solid var(--game-line);
+  border: 1px solid var(--game-line);
+  border-radius: 0.85rem;
   background: color-mix(in srgb, var(--app-bg) 94%, var(--felt) 6%);
   color: var(--game-muted);
-  box-shadow: -8px 0 24px rgba(0,0,0,.12);
+  box-shadow: 0 10px 28px rgba(0,0,0,.2);
   overflow: auto;
+}
+
+@supports (width: 1cqw) {
+  .game-instructions { width: min(21rem, calc(100cqw - 1.5rem)); }
 }
 
 .game-instructions[hidden] { display: none; }
@@ -740,13 +763,5 @@
 }
 
 @media (max-width: 640px) {
-  .game-instructions {
-    position: absolute;
-    inset: 0 0 0 auto;
-    width: min(92%, 24rem);
-    min-width: 0;
-    flex-basis: auto;
-    border-inline-start: 1px solid var(--game-line);
-  }
   .solitaire-game-area > .solitaire-table { min-width: 100%; }
 }

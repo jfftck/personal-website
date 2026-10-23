@@ -3,15 +3,31 @@ import { buildMinesweeper } from './games/minesweeper-ui.js';
 import { buildBoardGame } from './games/board-ui.js';
 
 export const GAMES = [
-  { type: 'klondike', title: 'Klondike', symbol: '♠', description: 'The classic solitaire' },
-  { type: 'spider', title: 'Spider', symbol: '♣', description: 'Build eight complete runs' },
-  { type: 'freecell', title: 'FreeCell', symbol: '♦', description: 'Every card in view' },
-  { type: 'minesweeper', title: 'Minesweeper', symbol: '⚑', description: 'Find the safe squares' },
-  { type: 'chess', title: 'Chess', symbol: '♞', description: 'Local play or computer' },
-  { type: 'reversi', title: 'Reversi', symbol: '◉', description: 'Local play or computer' },
+  {
+    type: 'klondike', title: 'Klondike', symbol: '♠', description: 'The classic solitaire',
+    iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5 9.3 6.1C7.2 8.8 4 11.3 4 14.5a5 5 0 0 0 8 4 5 5 0 0 0 8-4c0-3.2-3.2-5.7-5.3-8.4L12 2.5zM8.5 14a3.5 3.5 0 0 0 2 3.2 3.5 3.5 0 0 1-5-3.2c0-1.4.9-2.8 2.3-4.3-.4 1.7-.1 3.1.7 4.3z"/></svg>',
+  },
+  {
+    type: 'spider', title: 'Spider', symbol: '♣', description: 'Build eight complete runs',
+    iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3a5 5 0 0 0-4.8 6.4L3 7.8l1.2 3.5L1 13l3.5 1.8L3 18l4.5-1.6A5 5 0 0 0 11 21v-4h2v4a5 5 0 0 0 3.5-4.6L21 18l-1.5-3.2L23 13l-3.2-1.7L21 7.8l-4.2 1.6A5 5 0 0 0 12 3zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>',
+  },
+  {
+    type: 'freecell', title: 'FreeCell', symbol: '♦', description: 'Every card in view',
+    iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2zm0 3.2L6.6 12 12 18.8 17.4 12 12 5.2zm-7 6.8h14v1.6H5V12z"/></svg>',
+  },
+  {
+    type: 'minesweeper', title: 'Minesweeper', symbol: '⚑', description: 'Find the safe squares',
+    iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 21h2V4h2V2H5v19zm5-17v9c3-2 6 2 9 0V4c-3 2-6-2-9 0zm2 2c2-.4 3.5.9 5 1v3c-1.5-.1-3-1.4-5-1V6z"/></svg>',
+  },
+  {
+    type: 'chess', title: 'Chess', symbol: '♞', description: 'Local play or computer',
+    iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 21h14v-2H8v-2h10l-1-6-3-2 2-4-3-3-4 2 1 4-4 3v6H6v4zm5-12-.5-3 2-1 1 1-1.5 3H11zm-1 4 2-2 3 2 .5 2H10v-2z"/></svg>',
+  },
+  {
+    type: 'reversi', title: 'Reversi', symbol: '◉', description: 'Local play or computer',
+    iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16zm0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13z"/></svg>',
+  },
 ];
-
-export const GAME_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 6h10a4 4 0 0 1 3.9 3.1l1.5 6.6a3 3 0 0 1-5 2.8L15 16H9l-2.4 2.5a3 3 0 0 1-5-2.8l1.5-6.6A4 4 0 0 1 7 6zm0 3v2H5v2h2v2h2v-2h2v-2H9V9zm9 1a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm3 3a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z"/></svg>';
 
 export function buildGame(type, id, ctx, initialState = null) {
   const title = GAMES.find(game => game.type === type).title;

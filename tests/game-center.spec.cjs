@@ -47,7 +47,7 @@ function savedKlondike({ columns = [], foundations = {} } = {}) {
   };
 }
 
-function savedFreecell({ columnCards = [], foundations = {} } = {}) {
+function savedFreecell({ columnCards = [], foundations = {}, cellCards = [] } = {}) {
   const used = new Set();
   const makeCard = (rank, suit) => {
     const id = suit * 13 + rank - 1;
@@ -58,6 +58,8 @@ function savedFreecell({ columnCards = [], foundations = {} } = {}) {
     (columnCards[index] || []).map(([rank, suit = 0]) => makeCard(rank, suit)));
   const foundationPiles = Array.from({ length: 4 }, (_, suit) =>
     (foundations[suit] || []).map(rank => makeCard(rank, suit)));
+  const cells = Array.from({ length: 4 }, (_, index) =>
+    (cellCards[index] || []).map(([rank, suit = 0]) => makeCard(rank, suit)));
   for (let id = 0; id < 52; id++) {
     if (used.has(id)) continue;
     const card = { id, rank: id % 13 + 1, suit: Math.floor(id / 13), up: true };
@@ -66,7 +68,7 @@ function savedFreecell({ columnCards = [], foundations = {} } = {}) {
   }
   const state = {
     kind: 'freecell', suits: 1, drawCount: 1, columns, stock: [], waste: [],
-    foundations: foundationPiles, cells: Array.from({ length: 4 }, () => []),
+    foundations: foundationPiles, cells,
     completed: 0, moves: 0, won: false,
   };
   return {
@@ -315,36 +317,60 @@ test('all three solitaire games deal, select, draw, undo, configure, and restart
 });
 
 test('all six games share a keyboard-operable instructions side panel', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  for (const game of ['klondike', 'spider', 'freecell', 'minesweeper', 'chess', 'reversi']) {
-    const app = await openGame(page, game);
-    const toggle = app.getByRole('button', { name: 'Instructions', exact: true });
-    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    await toggle.click();
-    const panel = app.locator('.game-instructions');
-    await expect(panel).toBeVisible();
-    const appBox = await app.boundingBox();
-    const panelBox = await panel.boundingBox();
-    expect(panelBox.x).toBeGreaterThanOrEqual(appBox.x);
-    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(appBox.x + appBox.width + 1);
-    await expect(panel.getByRole('heading', { level: 2 })).toHaveText(`How to play ${
-      game === 'minesweeper' ? 'Minesweeper'
-        : game === 'freecell' ? 'FreeCell'
-          : game[0].toUpperCase() + game.slice(1)
-    }`);
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    await expect(panel.getByRole('button', { name: 'Close instructions' })).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(panel).toBeHidden();
-    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    await expect(toggle).toBeFocused();
-    await toggle.click();
-    await panel.getByRole('button', { name: 'Close instructions' }).click();
-    await page.locator('#close-btn').click();
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    for (const game of ['klondike', 'spider', 'freecell', 'minesweeper', 'chess', 'reversi']) {
+      const app = await openGame(page, game);
+      const toggle = app.getByRole('button', { name: 'Instructions', exact: true });
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      await toggle.click();
+      const panel = app.locator('.game-instructions');
+      await expect(panel).toBeVisible();
+      await expect(toggle.locator('.game-instructions-icon')).toBeVisible();
+      await expect(toggle.locator('.game-instructions-icon')).toHaveAttribute('aria-hidden', 'true');
+      const appBox = await app.boundingBox();
+      const panelBox = await panel.boundingBox();
+      const toggleBox = await toggle.boundingBox();
+      expect(Math.abs(panelBox.x - toggleBox.x)).toBeLessThanOrEqual(1);
+      expect(panelBox.y).toBeGreaterThanOrEqual(toggleBox.y + toggleBox.height - 1);
+      expect(panelBox.x).toBeGreaterThanOrEqual(appBox.x);
+      expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(appBox.x + appBox.width + 1);
+      await expect(panel.getByRole('heading', { level: 2 })).toHaveText(`How to play ${
+        game === 'minesweeper' ? 'Minesweeper'
+          : game === 'freecell' ? 'FreeCell'
+            : game[0].toUpperCase() + game.slice(1)
+      }`);
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await expect(panel.getByRole('button', { name: 'Close instructions' })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(panel).toBeHidden();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      await expect(toggle).toBeFocused();
+      await toggle.click();
+      await panel.getByRole('button', { name: 'Close instructions' }).click();
+      await page.locator('#close-btn').click();
+    }
   }
 });
 
-test('double-click auto-home moves eligible Klondike and FreeCell cards and explains ineligible cards', async ({ page }) => {
+test('game windows use distinct game icons and do not duplicate Game Center navigation', async ({ page }) => {
+  const iconPaths = new Set();
+  for (const [game, title] of [
+    ['klondike', 'Klondike'], ['spider', 'Spider'], ['freecell', 'FreeCell'],
+    ['minesweeper', 'Minesweeper'], ['chess', 'Chess'], ['reversi', 'Reversi'],
+  ]) {
+    const app = await openGame(page, game);
+    await expect(app.locator('.game-toolbar')).not.toContainText('Game Center');
+    await expect(app.locator('.game-toolbar button', { hasText: 'Game Center' })).toHaveCount(0);
+    const tabIcon = page.locator(`.app-tab-btn[aria-label="${title}"] svg path`);
+    await expect(tabIcon).toHaveCount(1);
+    iconPaths.add(await tabIcon.getAttribute('d'));
+    await page.locator('#close-btn').click();
+  }
+  expect(iconPaths.size).toBe(6);
+});
+
+test('double-click keeps Klondike auto-home and moves FreeCell cards by their source', async ({ page }) => {
   const eligible = await restoreGame(page, savedKlondike({
     columns: [[], [[2, 0]]], foundations: { 0: [1] },
   }));
@@ -353,12 +379,31 @@ test('double-click auto-home moves eligible Klondike and FreeCell cards and expl
   await expect(eligible.locator('.game-status')).toContainText('1 moves');
   await page.locator('#close-btn').click();
 
-  const freecell = await restoreGame(page, savedFreecell({
-    columnCards: [[[2, 0]]], foundations: { 0: [1] },
+  const freecellTableau = await restoreGame(page, savedFreecell({
+    columnCards: [[[5, 0]]],
   }), 'freecell');
-  await freecell.locator('[data-key="card-1"]').dblclick();
-  await expect(freecell.locator('[aria-label="Home 1"] .playing-card')).toHaveText('2♠');
-  await expect(freecell.locator('.game-status')).toContainText('1 moves');
+  await freecellTableau.locator('[data-key="card-4"]').dblclick();
+  await expect(freecellTableau.locator('[aria-label="Cell 1"] .playing-card')).toHaveText('5♠');
+  await expect(freecellTableau.locator('.game-status')).toContainText('1 moves');
+  await page.locator('#close-btn').click();
+
+  const freecellCell = await restoreGame(page, savedFreecell({
+    columnCards: [[], [[6, 1]]],
+    cellCards: [[[5, 0]]],
+  }), 'freecell');
+  await freecellCell.locator('[data-key="card-4"]').dblclick();
+  await expect(freecellCell.locator('[aria-label="Pile 2"] [data-key="card-4"]')).toBeVisible();
+  await expect(freecellCell.locator('[aria-label="Pile 2"] .playing-card')).toHaveCount(2);
+  await expect(freecellCell.locator('.game-status')).toContainText('1 moves');
+  await page.locator('#close-btn').click();
+
+  const freecellEmptyColumn = await restoreGame(page, savedFreecell({
+    columnCards: [[[2, 1]]],
+    cellCards: [[[5, 0]]],
+  }), 'freecell');
+  await freecellEmptyColumn.locator('[data-key="card-4"]').dblclick();
+  await expect(freecellEmptyColumn.locator('[aria-label="Pile 2"] [data-key="card-4"]')).toBeVisible();
+  await expect(freecellEmptyColumn.locator('[aria-label="Pile 2"] .playing-card')).toHaveCount(1);
   await page.locator('#close-btn').click();
 
   const blocked = await restoreGame(page, savedKlondike({
@@ -368,6 +413,58 @@ test('double-click auto-home moves eligible Klondike and FreeCell cards and expl
   await expect(blocked.locator('.game-status'))
     .toContainText('This card cannot move home yet');
   await expect(blocked.locator('[data-key="card-2"]')).toBeVisible();
+});
+
+async function dragToBlankPileArea(page, source, destination) {
+  const from = await source.boundingBox();
+  const point = await destination.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    for (let y = rect.bottom - 2; y > rect.top; y -= 2) {
+      for (let x = rect.left + 2; x < rect.right - 2; x += 2) {
+        const hit = document.elementFromPoint(x, y);
+        if (hit?.closest('.card-pile') === element
+          && !hit.closest('.playing-card, .empty-pile, .pile-label')) return { x, y };
+      }
+    }
+    return null;
+  });
+  expect(point, 'destination should expose a blank drop area').not.toBeNull();
+  await page.mouse.move(from.x + from.width / 2, from.y + Math.min(8, from.height / 4));
+  await page.mouse.down();
+  await page.mouse.move(point.x, point.y, { steps: 5 });
+  await page.mouse.up();
+}
+
+test('cards and valid sequences drop in blank tableau space while invalid drops stay put', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const cardApp = await restoreGame(page, savedKlondike({
+    columns: [[[5, 0]], [[6, 1]]],
+  }));
+  const cardTarget = cardApp.locator('.card-columns .card-pile').nth(1);
+  await dragToBlankPileArea(page, cardApp.locator('[data-key="card-4"]'), cardTarget);
+  await expect(cardTarget.locator('[data-key="card-4"]')).toBeVisible();
+  await expect(cardApp.locator('.game-status')).toContainText('1 moves');
+  await page.locator('#close-btn').click();
+
+  const sequenceApp = await restoreGame(page, savedKlondike({
+    columns: [[[7, 0], [6, 1]], [[8, 1]]],
+  }));
+  const sequenceTarget = sequenceApp.locator('.card-columns .card-pile').nth(1);
+  await dragToBlankPileArea(page, sequenceApp.locator('[data-key="card-6"]'), sequenceTarget);
+  await expect(sequenceTarget.locator('[data-key="card-6"]')).toBeVisible();
+  await expect(sequenceTarget.locator('[data-key="card-18"]')).toBeVisible();
+  await expect(sequenceApp.locator('.game-status')).toContainText('1 moves');
+  await page.locator('#close-btn').click();
+
+  const invalidApp = await restoreGame(page, savedKlondike({
+    columns: [[[5, 0]]],
+  }));
+  const invalidTarget = invalidApp.locator('.card-columns .card-pile').nth(1);
+  await dragToBlankPileArea(page, invalidApp.locator('[data-key="card-4"]'), invalidTarget);
+  await expect(invalidApp.locator('[data-key="card-4"]')).toBeVisible();
+  await expect(invalidApp.locator('[aria-label="Pile 1"] [data-key="card-4"]')).toBeVisible();
+  await expect(invalidTarget.locator('[data-key="card-4"]')).toHaveCount(0);
+  await expect(invalidApp.locator('.game-status')).toContainText('cannot move to this pile');
 });
 
 test('Send home moves a chain of newly eligible cards in one undoable action', async ({ page }) => {
@@ -527,7 +624,8 @@ test('Reversi flips discs, makes a computer move, undoes and supports local play
   await app.locator('[data-square="d6"]').click();
   await expect(app.locator('.game-status')).toContainText('White to move');
   await expect(app.locator('.disc.black')).toHaveCount(4);
-  await app.getByRole('button', { name: '← Game Center' }).click();
+  await page.locator('#app-menu-btn').click();
+  await page.locator('#game-center-entry').click();
   await expect(page.locator('#game-submenu')).toBeVisible();
   await page.locator('#game-menu-back').click();
   await expect(page.locator('#launcher-root')).toBeVisible();
