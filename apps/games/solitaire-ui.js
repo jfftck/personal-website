@@ -291,7 +291,21 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     clearTimeout(suppressClickTimer);
     suppressClickTimer = setTimeout(() => { suppressClick = false; }, 250);
   }
-  function updatePeek(gesture, clientY) {
+  function canStartDrag(from) {
+    const source = getPile(state, from);
+    const cards = source?.slice(from.offset);
+    if (!isSequence(cards || [], kind)) return false;
+    const destinations = [
+      ...state.columns.map((_, index) => ({ zone: 'columns', index })),
+      ...state.cells.map((_, index) => ({ zone: 'cells', index })),
+      ...state.foundations.map((_, index) => ({ zone: 'foundations', index })),
+    ];
+    return destinations.some(destination => {
+      const candidate = structuredClone(state);
+      return moveCards(candidate, from, destination);
+    });
+  }
+  function updatePeek(gesture, clientY, clientX = gesture.x) {
     // Use the original stack positions: a raised card must not hide the
     // hit regions of the other cards while the finger moves through them.
     const slots = gesture.peekSlots;
@@ -299,9 +313,13 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     if (clientY >= slots[0].top && clientY <= slots.at(-1).bottom) {
       slot = slots.findLast(candidate => clientY >= candidate.top);
     }
-    gesture.peekCard?.classList.remove('card-peeking');
-    gesture.peekCard = slot?.card || null;
-    gesture.peekCard?.classList.add('card-peeking');
+    const nextCard = slot?.card || null;
+    if (gesture.peekCard !== nextCard) {
+      gesture.peekCard?.classList.remove('card-peeking');
+      gesture.peekCard = nextCard;
+      gesture.peekStartX = clientX;
+      gesture.peekCard?.classList.add('card-peeking');
+    }
   }
   function clearPointerGesture() {
     if (pointerDrag) {
@@ -325,6 +343,11 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     if (!card) return;
     const inStack = !!card.closest('.card-columns');
     if (event.button === 2 && !inStack) return;
+    const from = {
+      zone: card.dataset.zone,
+      index: Number(card.dataset.pileIndex),
+      offset: Number(card.dataset.offset),
+    };
     pointerDrag = {
       pointerId: event.pointerId,
       pointerType: event.pointerType,
@@ -334,18 +357,15 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
         const { top, bottom } = card.getBoundingClientRect();
         return { card, top, bottom };
       }) : null,
-      from: {
-        zone: card.dataset.zone,
-        index: Number(card.dataset.pileIndex),
-        offset: Number(card.dataset.offset),
-      },
+      from,
+      canDrag: canStartDrag(from),
       x: event.clientX,
       y: event.clientY,
       dragging: false,
     };
     if (pointerDrag.peeking) {
       event.preventDefault();
-      updatePeek(pointerDrag, event.clientY);
+      updatePeek(pointerDrag, event.clientY, event.clientX);
     }
   });
   area.addEventListener('contextmenu', event => {
@@ -355,17 +375,43 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
     if (pointerDrag.peeking) {
       event.preventDefault();
-      updatePeek(pointerDrag, event.clientY);
-      return;
+      if (pointerDrag.pointerType === 'touch' && pointerDrag.peekCard
+        && Math.abs(event.clientX - pointerDrag.peekStartX)
+          >= pointerDrag.peekCard.getBoundingClientRect().width / 2) {
+        const card = pointerDrag.peekCard;
+        const from = {
+          zone: card.dataset.zone,
+          index: Number(card.dataset.pileIndex),
+          offset: Number(card.dataset.offset),
+        };
+        if (canStartDrag(from)) {
+          card.classList.remove('card-peeking');
+          pointerDrag.peekCard = null;
+          pointerDrag.card = card;
+          pointerDrag.from = from;
+          pointerDrag.canDrag = true;
+          pointerDrag.peeking = false;
+          pointerDrag.dragging = true;
+          createDragLayer(pointerDrag);
+        } else {
+          pointerDrag.peekStartX = event.clientX;
+          updatePeek(pointerDrag, event.clientY, event.clientX);
+          return;
+        }
+      } else {
+        updatePeek(pointerDrag, event.clientY, event.clientX);
+        return;
+      }
     }
     if (!pointerDrag.dragging && Math.hypot(event.clientX - pointerDrag.x, event.clientY - pointerDrag.y) > 8) {
       const verticalSwipe = Math.abs(event.clientY - pointerDrag.y) > Math.abs(event.clientX - pointerDrag.x) * 1.2;
       if (pointerDrag.pointerType === 'touch' && pointerDrag.peekSlots && verticalSwipe) {
         pointerDrag.peeking = true;
         event.preventDefault();
-        updatePeek(pointerDrag, event.clientY);
+        updatePeek(pointerDrag, event.clientY, event.clientX);
         return;
       }
+      if (!pointerDrag.canDrag) return;
       pointerDrag.dragging = true;
       createDragLayer(pointerDrag);
     }

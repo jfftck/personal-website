@@ -1352,6 +1352,21 @@ test('cards and valid sequences drop in blank tableau space while invalid drops 
   await expect(invalidApp.locator('.game-status')).toContainText('cannot move to this pile');
 });
 
+test('an invalid face-up sequence cannot enter the drag layer', async ({ page }) => {
+  const app = await restoreGame(page, savedKlondike({
+    columns: [[[7, 0], [6, 0]], [[8, 1]]],
+  }));
+  const firstCard = app.locator('[data-key="card-6"]');
+  const bounds = await firstCard.boundingBox();
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + bounds.width / 2 + 60, bounds.y + 45, { steps: 4 });
+  await expect(page.locator('body > .card-drag-layer')).toHaveCount(0);
+  await page.mouse.up();
+  await expect(app.locator('[data-key="card-6"]')).toBeVisible();
+  await expect(app.locator('[data-key="card-5"]')).toBeVisible();
+});
+
 test('Send home moves a chain of newly eligible cards in one undoable action', async ({ page }) => {
   const app = await restoreGame(page, savedKlondike({
     columns: [[[3, 0]], [[2, 0]]], foundations: { 0: [1] },
@@ -1420,6 +1435,46 @@ test.describe('touch stack peeking', () => {
     await expect(stack.locator('.card-peeking')).toHaveCount(1);
     await touch('touchCancel');
     await expect(stack.locator('.card-peeking')).toHaveCount(0);
+  });
+
+  test('a peeked valid sequence can become a drag after a half-card sideways swipe', async ({ page }) => {
+    const app = await restoreGame(page, savedKlondike({
+      columns: [[[7, 3], [6, 0], [5, 1]], [[7, 1]]],
+    }));
+    const source = app.locator('[aria-label="Pile 1"]');
+    const startingCard = source.locator('[data-key="card-45"]');
+    const peekedCard = source.locator('[data-key="card-5"]');
+    const target = app.locator('.card-columns .card-pile').nth(1).locator('[data-key="card-19"]');
+    const startBounds = await startingCard.boundingBox();
+    const peekBounds = await peekedCard.boundingBox();
+    const start = { x: startBounds.x + startBounds.width / 2, y: startBounds.y + 6 };
+    const peekPoint = { x: start.x, y: peekBounds.y + 6 };
+    const client = await page.context().newCDPSession(page);
+    const touch = point => client.send('Input.dispatchTouchEvent', {
+      type: point ? 'touchMove' : 'touchEnd',
+      touchPoints: point ? [{ ...point, id: 0 }] : [],
+    });
+
+    await client.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ ...start, id: 0 }],
+    });
+    await touch(peekPoint);
+    await expect(peekedCard).toHaveClass(/card-peeking/);
+    const cardWidth = await peekedCard.evaluate(card => card.getBoundingClientRect().width);
+    await touch({ x: peekPoint.x + cardWidth / 2 + 2, y: peekPoint.y });
+    await expect(page.locator('body > .card-drag-layer')).toHaveCount(1);
+    await expect(peekedCard).not.toHaveClass(/card-peeking/);
+
+    const targetBounds = await target.boundingBox();
+    await touch({
+      x: targetBounds.x + targetBounds.width / 2,
+      y: targetBounds.y + targetBounds.height / 3,
+    });
+    await touch(null);
+    await expect(target).toHaveClass(/card-moved/);
+    await expect(source.locator('[data-key="card-5"]')).toHaveCount(0);
+    await expect(app.locator('.game-status')).toContainText('Moved 6♠ and 1 more card');
   });
 });
 
@@ -1584,9 +1639,55 @@ test('rain, wave, and tornado celebrations animate changing cards on the fixed l
     await expect(cards).toHaveCount(52);
     expect(await cards.first().evaluate(card => card.getAnimations().length)).toBeGreaterThan(0);
     if (effect === 'rain') {
-      const before = await cards.first().textContent();
-      await page.waitForTimeout(120);
-      await expect.poll(() => cards.first().textContent()).not.toBe(before);
+      const latestAnimationEnd = await cards.evaluateAll(elements =>
+        Math.max(...elements.map(card => {
+          const animation = card.getAnimations()[0];
+          const schedule = animation.effect.getTiming();
+          return Number(schedule.delay || 0) + Number(schedule.duration);
+        })));
+      await page.waitForTimeout(latestAnimationEnd + 50);
+      await expect(layer).toHaveCount(1);
+      const boardBottom = await app.locator('.solitaire-table').evaluate(table =>
+        table.getBoundingClientRect().bottom);
+      const remainingCardTops = await cards.evaluateAll(elements =>
+        elements.map(card => card.getBoundingClientRect().top));
+      expect(remainingCardTops.every(top => top > boardBottom)).toBe(true);
+      await expect(layer).toHaveCount(0, { timeout: 1000 });
+      await app.getByRole('button', { name: 'Start new game' }).click();
+      await page.locator('#close-btn').click();
+      continue;
+    }
+    if (effect === 'spiral') {
+      const details = await cards.evaluateAll(elements => elements.slice(0, 4).map(card => {
+        const frames = card.getAnimations()[0].effect.getKeyframes();
+        const layer = card.closest('.solitaire-celebration-layer');
+        const width = parseFloat(card.style.width);
+        const height = parseFloat(card.style.height);
+        const left = parseFloat(card.style.left);
+        const top = parseFloat(card.style.top);
+        const boundsWidth = parseFloat(layer.style.width);
+        const boundsHeight = parseFloat(layer.style.height);
+        const finalMatrix = new DOMMatrixReadOnly(frames.at(-1).transform);
+        return {
+          direction: card.dataset.spiralFirstTurn,
+          frameCount: frames.length,
+          finalOpacity: Number(frames.at(-1).opacity),
+          finalRadius: Math.hypot(
+            left + width / 2 + finalMatrix.m41 - boundsWidth / 2,
+            top + height / 2 + finalMatrix.m42 - boundsHeight / 2,
+          ),
+          exitRadius: Math.hypot(boundsWidth / 2, boundsHeight / 2)
+            + Math.hypot(width, height) / 2,
+        };
+      }));
+      expect(details.map(card => card.direction)).toEqual([
+        'clockwise', 'counterclockwise', 'clockwise', 'counterclockwise',
+      ]);
+      for (const card of details) {
+        expect(card.frameCount).toBe(65);
+        expect(card.finalOpacity).toBe(0);
+        expect(card.finalRadius).toBeGreaterThan(card.exitRadius);
+      }
     }
     await page.locator('#close-btn').click();
     await expect(layer).toHaveCount(0);

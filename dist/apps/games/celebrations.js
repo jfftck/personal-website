@@ -113,29 +113,36 @@ function animateSpiral(sprites, bounds) {
     const startY = sprite.y + sprite.height / 2;
     const startAngle = Math.atan2(startY - centerY, startX - centerX);
     const startRadius = Math.hypot(startX - centerX, startY - centerY);
-    const directions = [1, -1, 1];
+    const firstDirection = index % 2 === 0 ? 1 : -1;
+    const exitRadius = Math.max(
+      Math.hypot(bounds.width / 2, bounds.height / 2)
+        + Math.hypot(sprite.width, sprite.height) / 2 + 24,
+      startRadius + Math.max(bounds.width, bounds.height),
+    );
     const frames = [];
-    for (let step = 0; step <= 36; step++) {
-      const progress = step / 36;
-      const turn = Math.min(2, Math.floor(progress * 3));
-      const fraction = step === 36 ? 1 : progress * 3 - turn;
-      const direction = directions[turn];
-      const previousTurns = directions.slice(0, turn).reduce((sum, sign) => sum + sign, 0);
-      const angle = startAngle + (previousTurns + direction * fraction) * Math.PI * 2;
-      const radius = startRadius * (1 - progress);
+    for (let step = 0; step <= 64; step++) {
+      const progress = step / 64;
+      const turnProgress = progress <= 0.5
+        ? progress * 2
+        : 1 - (progress - 0.5) * 2;
+      const angle = startAngle + firstDirection * turnProgress * Math.PI * 2;
+      const radius = startRadius + (exitRadius - startRadius) * progress;
       const x = centerX + Math.cos(angle) * radius - startX;
       const y = centerY + Math.sin(angle) * radius - startY;
-      const rotation = (previousTurns + direction * fraction) * 360;
+      const rotation = firstDirection * (progress <= 0.5
+        ? progress * 720
+        : 720 - (progress - 0.5) * 1440);
       frames.push({
-        transform: transform(x, y, 1 - progress * 0.55, rotation),
-        opacity: 1 - progress * 0.18,
+        transform: transform(x, y, 1 - progress * 0.25, rotation),
+        opacity: Math.max(0, 1 - Math.max(0, progress - 0.78) / 0.22),
         offset: progress,
       });
     }
     sprite.element.classList.add('win-spiral');
+    sprite.element.dataset.spiralFirstTurn = firstDirection > 0 ? 'clockwise' : 'counterclockwise';
     sprite.element.animate(frames, {
-      duration: 2800,
-      delay: index * 4,
+      duration: 3400,
+      delay: index * 6,
       easing: 'linear',
       fill: 'both',
     });
@@ -184,20 +191,28 @@ function animateRain(sprites, bounds) {
   const cardWidth = sprites[0]?.width || 60;
   const lanes = Math.max(4, Math.min(12, Math.floor(bounds.width / (cardWidth * 0.9))));
   const cards = [];
+  let animationEnd = 0;
   sprites.forEach((sprite, index) => {
     const lane = index % lanes;
     const depth = Math.floor(index / lanes);
     const x = (lane + 0.5) * bounds.width / lanes - sprite.width / 2;
     const y = -(depth + 1 + unit(index, 6) * 2) * sprite.height;
+    const delay = lane * 55 + depth * 55;
+    const duration = 3000 + unit(index, 11) * 500;
+    animationEnd = Math.max(animationEnd, delay + duration);
     sprite.element.classList.add('card-rain');
     sprite.element.style.left = `${x}px`;
     sprite.element.style.top = `${y}px`;
     sprite.element.animate([
       { transform: transform(0, 0, 0.58 + unit(index, 7) * 0.32), opacity: 0.92 },
-      { transform: transform((unit(index, 8) - 0.5) * 14, bounds.height + sprite.height * 2, 0.75 + unit(index, 9) * 0.5, (unit(index, 10) - 0.5) * 24), opacity: 0.08 },
+      {
+        transform: transform((unit(index, 8) - 0.5) * 14, bounds.height + sprite.height * 2 - y,
+          0.75 + unit(index, 9) * 0.5, (unit(index, 10) - 0.5) * 24),
+        opacity: 0.08,
+      },
     ], {
-      duration: 1750 + unit(index, 11) * 650,
-      delay: lane * 70 + depth * 85,
+      duration,
+      delay,
       easing: 'linear',
       fill: 'both',
     });
@@ -214,6 +229,7 @@ function animateRain(sprites, bounds) {
       card.classList.toggle('red', isRed({ suit }));
     });
   }, 80);
+  return { interval, duration: animationEnd };
 }
 
 function animateWave(sprites, bounds) {
@@ -317,18 +333,24 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
   document.body.append(layer);
 
   let interval = null;
+  let rainDuration = 0;
   switch (effect) {
     case 'bounce': animateBounce(sprites, bounds); break;
     case 'spiral': animateSpiral(sprites, bounds); break;
     case 'fireworks': animateFireworks(sprites, bounds, layer); break;
-    case 'rain': interval = animateRain(sprites, bounds); break;
+    case 'rain': {
+      const rain = animateRain(sprites, bounds);
+      interval = rain.interval;
+      rainDuration = rain.duration;
+      break;
+    }
     case 'wave': animateWave(sprites, bounds); break;
     case 'tornado': animateTornado(sprites, bounds); break;
   }
 
   const stagger = {
     bounce: sprites.length * 7,
-    spiral: sprites.length * 4,
+    spiral: sprites.length * 6,
     fireworks: sprites.length * 4 + 24 * 12,
     rain: 1350,
     wave: sprites.length * 3,
@@ -336,12 +358,13 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
   }[effect] || 0;
   const duration = {
     bounce: 2100,
-    spiral: 2800,
+    spiral: 3400,
     fireworks: 2050,
     rain: 2400,
     wave: 2700,
     tornado: 2450,
   }[effect] || 2500;
+  const animationEnd = effect === 'rain' ? rainDuration : duration + stagger;
 
   let cleaned = false;
   let timer = null;
@@ -356,6 +379,6 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
   timer = setTimeout(() => {
     cleanup();
     onComplete();
-  }, duration + stagger + 350);
+  }, animationEnd + 350);
   return cleanup;
 }
