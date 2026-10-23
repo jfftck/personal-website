@@ -32,3 +32,9 @@ Card stack peeking must follow vertical finger movement on touchscreens; mouse u
 **Why:** The user requested sliding up and down through stack layers instead of remaining on the initially touched card, and right-click peeking for mice.
 
 **How to apply:** Keep peeking temporary and separate from moves. Distinguish vertical touch inspection from sideways card dragging, and restore the stack on release or cancellation.
+
+The scrollable card playfield needs 2rem of padding on all four sides. Chess, Reversi, and Minesweeper must scale to fit their available game-window play space.
+
+**Why:** The user requested all-sided padding rather than top-only padding, and fit-to-space boards for the other games.
+
+**How to apply:** Size boards using the remaining width and height inside each window, not viewport dimensions. Preserve square cells, centered boards, and scaling across Minesweeper difficulties.

@@ -1593,6 +1593,73 @@ test('Spider celebrations include cards from all eight completed Home runs', asy
   expect(cardCount).toBe(104);
 });
 
+test('all card playfields keep 2rem padding on every side of the scrollable tableau', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const game of ['klondike', 'spider', 'freecell']) {
+    const app = await openGame(page, game);
+    const scroll = app.locator('.card-tableau-scroll');
+    const padding = await scroll.evaluate(element => {
+      const style = getComputedStyle(element);
+      return ['Top', 'Right', 'Bottom', 'Left'].map(side => style[`padding${side}`]);
+    });
+    expect(padding).toEqual(['32px', '32px', '32px', '32px']);
+    await scroll.evaluate(element => { element.scrollLeft = element.scrollWidth; element.scrollTop = element.scrollHeight; });
+    const spacing = await scroll.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      const columns = [...element.querySelectorAll('.card-columns .card-pile')];
+      const cards = [...element.querySelectorAll('.playing-card')];
+      return {
+        right: bounds.right - columns.at(-1).getBoundingClientRect().right,
+        bottom: bounds.bottom - Math.max(...cards.map(card => card.getBoundingClientRect().bottom)),
+      };
+    });
+    expect(spacing.right, game).toBeGreaterThanOrEqual(31);
+    expect(spacing.bottom, game).toBeGreaterThanOrEqual(31);
+    await page.locator('#close-btn').click();
+  }
+});
+
+test('Chess, Reversi, and every Minesweeper difficulty fit and center in their available play space on resize', async ({ page }) => {
+  for (const game of ['chess', 'reversi', 'minesweeper']) {
+    const app = await openGame(page, game);
+    const levels = game === 'minesweeper' ? ['beginner', 'intermediate', 'expert'] : [null];
+    for (const level of levels) {
+      if (level) await setGameOption(app, 'Difficulty', level);
+      for (const viewport of [
+        { width: 1280, height: 800 }, { width: 900, height: 400 },
+        { width: 390, height: 844 }, { width: 600, height: 320 },
+      ]) {
+        await page.setViewportSize(viewport);
+        const geometry = await app.evaluate(element => {
+          const slot = element.querySelector('.game-board-fit').getBoundingClientRect();
+          const board = element.querySelector('.mine-board-wrap, .game-board').getBoundingClientRect();
+          const cell = element.querySelector('.mine-cell, .board-square').getBoundingClientRect();
+          const area = element.querySelector('.game-area');
+          return {
+            left: board.left - slot.left, right: slot.right - board.right,
+            top: board.top - slot.top, bottom: slot.bottom - board.bottom,
+            width: board.width, height: board.height,
+            cellWidth: cell.width, cellHeight: cell.height,
+            overflowX: area.scrollWidth - area.clientWidth,
+            overflowY: area.scrollHeight - area.clientHeight,
+          };
+        });
+        const context = `${game} ${level || ''} ${JSON.stringify(viewport)} ${JSON.stringify(geometry)}`;
+        for (const edge of ['left', 'right', 'top', 'bottom']) expect(geometry[edge], context).toBeGreaterThanOrEqual(-1);
+        expect(Math.abs(geometry.left - geometry.right), context).toBeLessThan(2);
+        expect(Math.abs(geometry.top - geometry.bottom), context).toBeLessThan(2);
+        expect(Math.min(geometry.left, geometry.top), context).toBeLessThan(2);
+        expect(geometry.width, context).toBeGreaterThan(40);
+        expect(geometry.height, context).toBeGreaterThan(40);
+        expect(Math.abs(geometry.cellWidth - geometry.cellHeight), context).toBeLessThan(1);
+        expect(geometry.overflowX, context).toBeLessThanOrEqual(1);
+        expect(geometry.overflowY, context).toBeLessThanOrEqual(1);
+      }
+    }
+    await page.locator('#close-btn').click();
+  }
+});
+
 test('solitaire tableau scrolls independently and reduced motion suppresses celebration animation', async ({ page }) => {
   const longColumn = Array.from({ length: 52 }, (_, id) => [id % 13 + 1, Math.floor(id / 13)]);
   const app = await restoreGame(page, savedKlondike({ columns: [longColumn] }));

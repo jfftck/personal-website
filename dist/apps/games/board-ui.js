@@ -295,7 +295,10 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
         btn.setAttribute('aria-pressed', String(isChess && selected === square));
         board.append(btn);
       }
-      wireBoardKeys(board, 8); area.replaceChildren(board);
+      const fit = document.createElement('div');
+      fit.className = 'game-board-fit';
+      fit.append(board);
+      wireBoardKeys(board, 8); area.replaceChildren(fit);
       if (transition?.type === 'chess') animateChessMoves(board, transition.moves);
       if (promotion) {
         const picker = document.createElement('div'); picker.className = 'game-promotion';

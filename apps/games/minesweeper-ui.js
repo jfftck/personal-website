@@ -91,6 +91,8 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
         : `${state.mines - flags} mines unflagged · ${flagMode ? 'Flag mode' : 'Reveal mode'}`;
     preserveFocus(area, () => {
       const wrap = document.createElement('div'); wrap.className = 'mine-board-wrap';
+      wrap.style.setProperty('--columns', state.width);
+      wrap.style.setProperty('--rows', state.height);
       const board = document.createElement('div'); board.className = 'mine-board';
       board.style.setProperty('--columns', state.width);
       board.setAttribute('role', 'group'); board.setAttribute('aria-label', `${level} minefield`);
@@ -111,7 +113,9 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
         board.append(btn);
       });
       wireBoardKeys(board, state.width);
-      wrap.append(board); area.replaceChildren(wrap);
+      const fit = document.createElement('div');
+      fit.className = 'game-board-fit';
+      wrap.append(board); fit.append(wrap); area.replaceChildren(fit);
     });
     if (state.status !== 'playing') showGameEndScreen();
   }
