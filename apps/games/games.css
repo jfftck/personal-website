@@ -1211,7 +1211,10 @@
   grid-template-columns: repeat(var(--row-card-count), minmax(2.5rem, var(--card-width)));
 }
 .tripeaks-layout .card-triangle-row:nth-child(1) {
-  transform: translateX(calc(0px - var(--card-width) / 2));
+  transform: translateX(calc(var(--card-width) / 2));
+}
+.tripeaks-layout .card-triangle-row:nth-child(2) {
+  transform: translateX(var(--card-width));
 }
 .tripeaks-layout .card-triangle-row:nth-child(3) {
   transform: translateX(calc(var(--card-width) / 2));

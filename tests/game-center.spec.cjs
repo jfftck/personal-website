@@ -188,7 +188,8 @@ test('Pyramid, TriPeaks, and Golf use shared card settings and their own playabl
         };
       });
       for (const [actual, expected] of offsets.x.map((value, index) =>
-        [value, index === 0 ? -offsets.cardWidth / 2 : index === 2 ? offsets.cardWidth / 2 : 0])) {
+        [value, index === 0 || index === 2 ? offsets.cardWidth / 2
+          : index === 1 ? offsets.cardWidth : 0])) {
         expect(Math.abs(actual - expected)).toBeLessThan(1);
       }
     }
