@@ -181,10 +181,13 @@ test('Send home repeats until cards exposed by earlier home moves are no longer 
   assert.equal(cards.sendEligibleCardsHome(blank('spider')), 0);
 });
 
-test('solitaire win celebrations select one of three effects from the supplied random source', () => {
+test('solitaire win celebrations select among six effects from the supplied random source', () => {
   assert.equal(cards.chooseWinCelebration(() => 0), 'fireworks');
-  assert.equal(cards.chooseWinCelebration(() => 0.34), 'bounce');
-  assert.equal(cards.chooseWinCelebration(() => 0.99), 'spiral');
+  assert.equal(cards.chooseWinCelebration(() => 0.17), 'bounce');
+  assert.equal(cards.chooseWinCelebration(() => 0.34), 'spiral');
+  assert.equal(cards.chooseWinCelebration(() => 0.5), 'rain');
+  assert.equal(cards.chooseWinCelebration(() => 0.67), 'wave');
+  assert.equal(cards.chooseWinCelebration(() => 0.99), 'tornado');
 });
 
 test('Minesweeper difficulty sizes, mine counts, and safe-first-reveal hold', () => {

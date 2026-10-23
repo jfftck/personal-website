@@ -671,7 +671,8 @@ test('one selected win celebration runs and restarting allows a new celebration'
   await expect(table).toHaveAttribute('data-win-celebration', 'fireworks');
   const celebration = page.locator('body > .solitaire-celebration-layer');
   await expect(celebration).toHaveCount(1);
-  await expect(celebration.locator('.solitaire-fireworks span')).toHaveCount(18);
+  await expect(celebration.locator('.game-layer-card.card-firework')).toHaveCount(52);
+  await expect(celebration.locator('.solitaire-fireworks span')).toHaveCount(24);
   const layerPosition = await celebration.evaluate(layer => ({
     position: getComputedStyle(layer).position,
     zIndex: getComputedStyle(layer).zIndex,
@@ -700,17 +701,62 @@ test('bounce and spiral win celebrations use floating card layers too', async ({
       2: Array.from({ length: 13 }, (_, index) => index + 1),
       3: Array.from({ length: 13 }, (_, index) => index + 1) },
   });
-  for (const [randomValue, effect] of [[0.4, 'bounce'], [0.8, 'spiral']]) {
+  for (const [randomValue, effect] of [[0.2, 'bounce'], [0.4, 'spiral']]) {
     const app = await restoreGame(page, winningDeal);
     await page.evaluate(value => { Math.random = () => value; }, randomValue);
     await app.locator('[data-key="card-12"]').dblclick();
     const layer = page.locator('body > .solitaire-celebration-layer');
     await expect(layer).toHaveCount(1);
-    await expect(layer.locator(`.game-layer-card.win-${effect}`)).toHaveCount(4);
+    await expect(layer.locator(`.game-layer-card.win-${effect}`)).toHaveCount(52);
     await expect(app.locator('.solitaire-table .win-bounce, .solitaire-table .win-spiral')).toHaveCount(0);
     await page.locator('#close-btn').click();
     await expect(layer).toHaveCount(0);
   }
+});
+
+test('rain, wave, and tornado celebrations animate changing cards on the fixed layer', async ({ page }) => {
+  const winningDeal = savedKlondike({
+    columns: [[[13, 0]]],
+    foundations: { 0: Array.from({ length: 12 }, (_, index) => index + 1),
+      1: Array.from({ length: 13 }, (_, index) => index + 1),
+      2: Array.from({ length: 13 }, (_, index) => index + 1),
+      3: Array.from({ length: 13 }, (_, index) => index + 1) },
+  });
+  for (const [randomValue, effect] of [[0.55, 'rain'], [0.72, 'wave'], [0.9, 'tornado']]) {
+    const app = await restoreGame(page, winningDeal);
+    await page.evaluate(value => { Math.random = () => value; }, randomValue);
+    await app.locator('[data-key="card-12"]').dblclick();
+    const layer = page.locator('body > .solitaire-celebration-layer');
+    await expect(layer).toHaveCount(1);
+    const cards = layer.locator(`.game-layer-card.card-${effect}`);
+    await expect(cards).toHaveCount(52);
+    expect(await cards.first().evaluate(card => card.getAnimations().length)).toBeGreaterThan(0);
+    if (effect === 'rain') {
+      const before = await cards.first().textContent();
+      await page.waitForTimeout(120);
+      await expect.poll(() => cards.first().textContent()).not.toBe(before);
+    }
+    await page.locator('#close-btn').click();
+    await expect(layer).toHaveCount(0);
+  }
+});
+
+test('Spider celebrations include cards from all eight completed Home runs', async ({ page }) => {
+  await openGame(page, 'spider');
+  const cardCount = await page.evaluate(async () => {
+    const app = document.querySelector('.app-window[data-type="spider"]');
+    const table = app.querySelector('.solitaire-table');
+    table.querySelectorAll('.spider-home-space').forEach(space => space.classList.add('completed'));
+    const { createWinCelebration } = await import('/apps/games/celebrations.js');
+    const cleanup = createWinCelebration('wave', 'spider', {
+      completed: 8,
+      suits: 1,
+    }, table, app);
+    const count = document.querySelectorAll('.solitaire-celebration-layer .game-layer-card').length;
+    cleanup();
+    return count;
+  });
+  expect(cardCount).toBe(104);
 });
 
 test('solitaire tableau scrolls independently and reduced motion suppresses celebration animation', async ({ page }) => {

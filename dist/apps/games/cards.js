@@ -3,7 +3,9 @@ export const SUITS = ['♠', '♥', '♣', '♦'];
 export const rankLabel = rank => ({ 1: 'A', 11: 'J', 12: 'Q', 13: 'K' }[rank] || String(rank));
 export const isRed = card => card.suit === 1 || card.suit === 3;
 export const chooseWinCelebration = (random = Math.random) =>
-  ['fireworks', 'bounce', 'spiral'][Math.max(0, Math.min(2, Math.floor(random() * 3)))];
+  ['fireworks', 'bounce', 'spiral', 'rain', 'wave', 'tornado'][
+    Math.max(0, Math.min(5, Math.floor(random() * 6)))
+  ];
 
 export function shuffle(cards, random = Math.random) {
   for (let i = cards.length - 1; i > 0; i--) {

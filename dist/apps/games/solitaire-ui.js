@@ -2,6 +2,7 @@ import {
   createSolitaire, getPile, moveCards, drawCards, isSequence, sendEligibleCardsHome,
   chooseWinCelebration, SUITS, rankLabel, isRed,
 } from './cards.js';
+import { createWinCelebration } from './celebrations.js';
 import { gameShell, button, selectControl, preserveFocus, showRestorePrompt } from './ui.js';
 import { createGameSession, inspectGameSession } from './game-state.js';
 
@@ -22,17 +23,15 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
   let latestTable = null, targetHints = [];
   let suppressClick = false, suppressClickTimer = null;
   let pointerDrag = null, activeDropTarget = null;
-  let celebrationLayer = null, celebrationTimer = null;
+  let celebrationCleanup = null;
   const dragAbort = new AbortController();
   let pendingRestore = initialState != null && restored.status !== 'finished';
   function persist() {
     if (!pendingRestore) ctx.saveSession();
   }
   function clearCelebration() {
-    clearTimeout(celebrationTimer);
-    celebrationTimer = null;
-    celebrationLayer?.remove();
-    celebrationLayer = null;
+    celebrationCleanup?.();
+    celebrationCleanup = null;
     latestTable?.removeAttribute('data-win-celebration');
   }
   const undo = button('Undo', () => {
@@ -88,68 +87,27 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       card.classList.add('card-moved');
     }
   }
-  function makeLayerCard(source, sourceRect, baseRect) {
-    const clone = document.createElement('div');
-    clone.className = 'playing-card game-layer-card';
-    for (const className of ['red', 'face-down']) {
-      clone.classList.toggle(className, source.classList.contains(className));
-    }
-    clone.textContent = source.textContent;
-    clone.style.left = `${sourceRect.left - baseRect.left}px`;
-    clone.style.top = `${sourceRect.top - baseRect.top}px`;
-    clone.style.width = `${sourceRect.width}px`;
-    clone.style.height = `${sourceRect.height}px`;
-    return clone;
+  function moveAnnouncement(from, destination) {
+    const cards = getPile(state, from)?.slice(from.offset) || [];
+    const first = cards[0];
+    if (!first) return '';
+    const cardName = `${rankLabel(first.rank)}${SUITS[first.suit]}`;
+    const extraCards = cards.length - 1;
+    const cardDescription = extraCards > 0
+      ? `${cardName} and ${extraCards} more ${extraCards === 1 ? 'card' : 'cards'}`
+      : cardName;
+    const destinationName = destination.zone === 'foundations' ? `Home ${destination.index + 1}`
+      : destination.zone === 'columns' ? `Pile ${destination.index + 1}`
+        : destination.zone === 'cells' ? `Cell ${destination.index + 1}`
+          : destination.zone;
+    return `Moved ${cardDescription} to ${destinationName}.`;
   }
   function celebrate(effect) {
     if (!latestTable) return;
     clearCelebration();
     latestTable.dataset.winCelebration = effect;
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const tableRect = latestTable.getBoundingClientRect();
-    const layer = document.createElement('div');
-    layer.className = 'solitaire-celebration-layer';
-    layer.setAttribute('aria-hidden', 'true');
-    layer.style.left = `${tableRect.left}px`;
-    layer.style.top = `${tableRect.top}px`;
-    layer.style.width = `${tableRect.width}px`;
-    layer.style.height = `${tableRect.height}px`;
-    for (const property of ['--card-face', '--card-ink', '--card-red']) {
-      layer.style.setProperty(property, getComputedStyle(el).getPropertyValue(property));
-    }
-    if (effect === 'bounce' || effect === 'spiral') {
-      latestTable.querySelectorAll('.playing-card').forEach((card, index) => {
-        const clone = makeLayerCard(card, card.getBoundingClientRect(), tableRect);
-        clone.classList.add(effect === 'bounce' ? 'win-bounce' : 'win-spiral');
-        clone.style.setProperty('--celebration-delay', `${index * (effect === 'bounce' ? 24 : 12)}ms`);
-        clone.style.setProperty('--spiral-x', `${(index - 26) * 5}px`);
-        layer.append(clone);
-      });
-    } else {
-      const sparks = document.createElement('div');
-      sparks.className = 'solitaire-fireworks';
-      for (let index = 0; index < 18; index++) {
-        const spark = document.createElement('span');
-        spark.style.setProperty('--spark-angle', `${index * 20}deg`);
-        spark.style.setProperty('--spark-delay', `${(index % 6) * 55}ms`);
-        sparks.append(spark);
-      }
-      layer.append(sparks);
-    }
-    document.body.append(layer);
-    celebrationLayer = layer;
-    const duration = effect === 'bounce'
-      ? (latestTable.querySelectorAll('.playing-card').length - 1) * 24 + 680
-      : effect === 'spiral'
-        ? (latestTable.querySelectorAll('.playing-card').length - 1) * 12 + 1100
-        : 1125;
-    const layerToRemove = layer;
-    celebrationTimer = setTimeout(() => {
-      if (celebrationLayer !== layerToRemove) return;
-      layerToRemove.remove();
-      celebrationLayer = null;
-      celebrationTimer = null;
-    }, duration + 250);
+    celebrationCleanup = createWinCelebration(effect, kind, state, latestTable, el);
   }
   function autoMove(source) {
     const card = getPile(state, source)?.[source.offset];
@@ -215,8 +173,14 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     if (suppressClick) return;
     const pile = getPile(state, { zone, index });
     if (selected) {
+      const from = { ...selected };
+      const destination = { zone, index };
       const movingIds = getPile(state, selected)?.slice(selected.offset).map(card => card.id) || [];
-      if (action(() => moveCards(state, selected, { zone, index }), movingIds)) return;
+      const announcement = moveAnnouncement(from, destination);
+      if (action(() => moveCards(state, from, destination), movingIds)) {
+        status.textContent = announcement;
+        return;
+      }
       if (selected.zone === zone && selected.index === index && selected.offset === offset) {
         selected = null; render(); return;
       }
@@ -324,8 +288,11 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     const target = resolveDropTarget(event.clientX, event.clientY);
     const destination = target && { zone: target.dataset.dropZone, index: Number(target.dataset.dropIndex) };
     const movingIds = getPile(state, drag.from)?.slice(drag.from.offset).map(card => card.id) || [];
+    const announcement = destination && moveAnnouncement(drag.from, destination);
     if (!destination || !action(() => moveCards(state, drag.from, destination), movingIds)) {
       status.textContent = 'That card or sequence cannot move to this pile.';
+    } else {
+      status.textContent = announcement;
     }
   }, { signal: dragAbort.signal });
   document.addEventListener('pointercancel', event => {
