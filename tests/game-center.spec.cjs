@@ -198,18 +198,20 @@ test('Pyramid, TriPeaks, and Golf use shared card settings and their own playabl
     const rows = [...element.querySelectorAll('.card-triangle-row')];
     const cards = [...element.querySelectorAll('.card-triangle-position .playing-card')];
     const rects = new Map(cards.map(card => [card, card.getBoundingClientRect()]));
+    const visible = element.querySelector('.card-tableau-scroll').getBoundingClientRect();
     for (let rowIndex = 0; rowIndex < rows.length - 1; rowIndex++) {
       for (const card of rows[rowIndex].querySelectorAll('.playing-card')) {
         const rect = rects.get(card);
         for (const yFraction of [.6, .75, .9]) {
-          for (const xFraction of [.1, .3, .5, .7, .9]) {
-            const x = rect.left + rect.width * xFraction;
+          for (let x = rect.left + 3; x < rect.right - 3; x += 2) {
             const y = rect.top + rect.height * yFraction;
+            if (x <= Math.max(0, visible.left) || x >= Math.min(innerWidth, visible.right)
+              || y <= Math.max(0, visible.top) || y >= Math.min(innerHeight, visible.bottom)) continue;
             const covered = cards.some(other => {
               if (other === card) return false;
               const otherRect = rects.get(other);
-              return x >= otherRect.left && x <= otherRect.right
-                && y >= otherRect.top && y <= otherRect.bottom;
+              return x >= otherRect.left - 2 && x <= otherRect.right + 2
+                && y >= otherRect.top - 2 && y <= otherRect.bottom + 2;
             });
             if (covered) continue;
             return {
@@ -253,7 +255,7 @@ test('Pyramid, TriPeaks, and Golf use shared card settings and their own playabl
       await expect(app.locator('.game-status')).not.toContainText('covered');
       const uncovered = await findUncoveredLowerHalf(table);
       expect(uncovered).not.toBeNull();
-      expect(uncovered.hitId).toBe(uncovered.cardId);
+      expect(uncovered.hitId, JSON.stringify(uncovered)).toBe(uncovered.cardId);
       await page.mouse.click(uncovered.x, uncovered.y);
       await expect(app.locator('.game-status')).toContainText('covered');
       await page.setViewportSize({ width: 402, height: 874 });
