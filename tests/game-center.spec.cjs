@@ -411,6 +411,39 @@ test('game settings dialogs contain options, trap keyboard focus, and return foc
   }
 });
 
+test('all game toolbars place instructions and undo left, new game in the center, and settings right', async ({ page }) => {
+  for (const game of ['klondike', 'spider', 'freecell', 'minesweeper', 'chess', 'reversi']) {
+    const app = await openGame(page, game);
+    const toolbar = app.locator('.game-toolbar');
+    const left = toolbar.locator('.game-toolbar-left');
+    const center = toolbar.locator('.game-toolbar-center');
+    const right = toolbar.locator('.game-toolbar-right');
+    await expect(left.getByRole('button', { name: 'Instructions' })).toBeVisible();
+    await expect(right.getByRole('button', { name: 'Settings' })).toBeVisible();
+    const centerButton = center.locator('button');
+    await expect(centerButton).toHaveCount(1);
+    await expect(centerButton).toHaveText(/^(New game|New deal)$/);
+    if (game !== 'minesweeper') await expect(left.getByRole('button', { name: 'Undo' })).toBeVisible();
+    const positions = await toolbar.evaluate(element => {
+      const bounds = selector => {
+        const { left: x, width } = element.querySelector(selector).getBoundingClientRect();
+        return { x, width };
+      };
+      const toolbarBounds = element.getBoundingClientRect();
+      return {
+        toolbarX: toolbarBounds.left,
+        toolbar: toolbarBounds.width,
+        left: bounds('.game-toolbar-left'),
+        center: bounds('.game-toolbar-center'),
+        right: bounds('.game-toolbar-right'),
+      };
+    });
+    expect(Math.abs(positions.center.x + positions.center.width / 2 - positions.toolbarX - positions.toolbar / 2)).toBeLessThan(2);
+    expect(positions.left.x + positions.left.width).toBeLessThanOrEqual(positions.center.x);
+    expect(positions.center.x + positions.center.width).toBeLessThanOrEqual(positions.right.x);
+  }
+});
+
 test('Glass cards, Chess squares and pieces, and Reversi discs retain strong contrast in both appearances', async ({ page }) => {
   for (const game of ['klondike', 'chess', 'reversi']) {
     const app = await openGame(page, game);

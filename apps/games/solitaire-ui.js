@@ -17,7 +17,7 @@ const rules = {
 
 export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSvg) {
   const shell = gameShell(id, title, rules[kind], ctx, iconSvg);
-  const { el, toolbar, area, status, settings } = shell;
+  const { el, toolbarLeft, toolbarCenter, area, status, settings } = shell;
   area.classList.add('solitaire-game-area');
   const restored = inspectGameSession(kind, initialState);
   let options = restored.status === 'valid' || restored.status === 'finished'
@@ -55,8 +55,9 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     pendingRestore = false;
     state = createSolitaire(kind, options); history = []; selected = null; render(); persist();
   }
-  toolbar.append(button('New deal', restart), undo);
-  if (kind !== 'spider') toolbar.append(button('Send home', () => {
+  toolbarCenter.append(button('New deal', restart));
+  toolbarLeft.append(undo);
+  if (kind !== 'spider') toolbarLeft.append(button('Send home', () => {
     const alreadyHome = new Set(state.foundations.flat().map(card => card.id));
     const moved = action(() => sendEligibleCardsHome(state));
     if (!moved) status.textContent = 'No card can move home yet. An Ace starts a home pile; the next card must match its suit.';

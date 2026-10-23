@@ -289,11 +289,10 @@
   position: relative;
   container-type: inline-size;
   z-index: 2;
-  display: flex;
+  display: grid;
   flex: 0 0 auto;
-  flex-wrap: wrap;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 0.45rem;
   min-width: 0;
   padding: 0.65rem 0.75rem;
   border-bottom: 1px solid var(--toolbar-sep);
@@ -302,7 +301,15 @@
   backdrop-filter: var(--toolbar-backdrop);
 }
 
-.game-toolbar > :first-child { margin-inline-start: 0; }
+.game-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+.game-toolbar-left { justify-self: start; }
+.game-toolbar-center { justify-self: center; }
+.game-toolbar-right { justify-self: end; }
 .game-instructions-control { position: relative; }
 .game-toolbar .game-instructions-toggle {
   display: inline-flex;
@@ -1552,7 +1559,15 @@
 }
 
 @media (max-width: 520px) {
-  .game-toolbar { gap: 0.35rem; padding: 0.5rem; }
+  .game-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.35rem;
+    padding: 0.5rem;
+  }
+  .game-toolbar-group { gap: 0.35rem; }
+  .game-toolbar-left { grid-column: 1; grid-row: 1; flex-wrap: wrap; }
+  .game-toolbar-right { grid-column: 2; grid-row: 1; }
+  .game-toolbar-center { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
   .game-toolbar button,
   .game-toolbar select { min-height: 2rem; padding: 0.35rem 0.55rem; font-size: 0.78rem; }
   .game-area { align-items: flex-start; gap: 0.75rem; padding: 0.7rem; }

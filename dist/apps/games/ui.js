@@ -144,6 +144,12 @@ export function gameShell(id, title, rules, ctx, iconSvg) {
   el.className = 'game-app';
   const toolbar = document.createElement('div');
   toolbar.className = 'game-toolbar';
+  const toolbarLeft = document.createElement('div');
+  toolbarLeft.className = 'game-toolbar-group game-toolbar-left';
+  const toolbarCenter = document.createElement('div');
+  toolbarCenter.className = 'game-toolbar-group game-toolbar-center';
+  const toolbarRight = document.createElement('div');
+  toolbarRight.className = 'game-toolbar-group game-toolbar-right';
   const instructionsId = `game-instructions-${String(id).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   const instructionsButton = button('Instructions', () => setInstructionsOpen(!instructionsOpen));
   instructionsButton.classList.add('game-instructions-toggle');
@@ -159,8 +165,9 @@ export function gameShell(id, title, rules, ctx, iconSvg) {
   const instructionsControl = document.createElement('div');
   instructionsControl.className = 'game-instructions-control';
   instructionsControl.append(instructionsButton);
-  toolbar.append(instructionsControl);
-  const settings = createGameSettings(el, toolbar, title, id);
+  toolbarLeft.append(instructionsControl);
+  const settings = createGameSettings(el, toolbarRight, title, id);
+  toolbar.append(toolbarLeft, toolbarCenter, toolbarRight);
   const status = document.createElement('div');
   status.className = 'game-status';
   status.setAttribute('role', 'status');
@@ -211,7 +218,10 @@ export function gameShell(id, title, rules, ctx, iconSvg) {
     }
   });
   ctx.setAppTitle(id, title);
-  return { el, toolbar, status, area, instructions, instructionsButton, settings };
+  return {
+    el, toolbar, toolbarLeft, toolbarCenter, toolbarRight,
+    status, area, instructions, instructionsButton, settings,
+  };
 }
 
 export function showRestorePrompt(area, onResume, onNew, invalid = false) {

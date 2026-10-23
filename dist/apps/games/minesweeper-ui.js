@@ -6,7 +6,7 @@ import { createGameSession, inspectGameSession } from './game-state.js';
 import { addGameThemeControl } from './themes.js';
 
 export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
-  const { el, toolbar, status, area, settings } = gameShell(id, 'Minesweeper',
+  const { el, toolbarCenter, status, area, settings } = gameShell(id, 'Minesweeper',
     'Reveal every safe square without hitting a mine. Numbers count neighboring mines. The first reveal and its neighbors are safe. Right-click or press F on a square to flag it; on touch, turn on Flag mode. Click an open number to reveal its neighbors when the neighboring flag count matches. Use arrow keys to move and Enter or Space to reveal.', ctx, iconSvg);
   const restored = inspectGameSession('minesweeper', initialState);
   let level = restored.status === 'valid' || restored.status === 'finished'
@@ -56,7 +56,7 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
     render(); persist();
   });
   flag.setAttribute('aria-pressed', 'false');
-  toolbar.append(button('New game', restart));
+  toolbarCenter.append(button('New game', restart));
   settings.addGameOption(selectControl('Difficulty', [['beginner', 'Beginner'], ['intermediate', 'Intermediate'], ['expert', 'Expert']], level, value => {
       level = value; restart();
     }));
