@@ -874,8 +874,15 @@ test('solitaire tableau scrolls independently and reduced motion suppresses cele
   const dimensions = await scroll.evaluate(element => ({
     height: element.clientHeight,
     scrollHeight: element.scrollHeight,
+    paddingTop: parseFloat(getComputedStyle(element).paddingTop),
+    firstCardOffset: element.querySelector('.playing-card').getBoundingClientRect().top
+      - element.getBoundingClientRect().top,
+    tableGap: parseFloat(getComputedStyle(element.parentElement).rowGap),
   }));
   expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.height);
+  expect(dimensions.paddingTop).toBe(32);
+  expect(dimensions.firstCardOffset).toBeGreaterThanOrEqual(31);
+  expect(dimensions.tableGap).toBe(0);
   await scroll.evaluate(element => { element.scrollTop = 180; });
   const after = await app.locator('.card-top-row').boundingBox();
   expect(Math.abs(after.y - before.y)).toBeLessThan(2);
