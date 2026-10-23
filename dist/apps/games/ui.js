@@ -57,6 +57,25 @@ export function gameShell(id, title, rules, ctx) {
   return { el, toolbar, status, area };
 }
 
+export function showRestorePrompt(area, onResume, onNew, invalid = false) {
+  const panel = document.createElement('section');
+  panel.className = 'game-restore-prompt';
+  panel.setAttribute('aria-labelledby', 'game-restore-title');
+  const heading = document.createElement('h2');
+  heading.id = 'game-restore-title';
+  heading.textContent = invalid ? 'Saved game could not be loaded' : 'You have a saved game';
+  const message = document.createElement('p');
+  message.textContent = invalid
+    ? 'This saved game is invalid or from an older format. Start a new game to continue.'
+    : 'Would you like to resume where you left off or start a new game?';
+  const actions = document.createElement('div');
+  actions.className = 'game-restore-actions';
+  if (!invalid) actions.append(button('Resume saved game', onResume));
+  actions.append(button('Start new game', onNew));
+  panel.append(heading, message, actions);
+  area.replaceChildren(panel);
+}
+
 export function preserveFocus(container, render) {
   const active = container.contains(document.activeElement) ? document.activeElement.dataset.key : null;
   render();

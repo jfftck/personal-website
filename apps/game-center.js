@@ -13,11 +13,11 @@ export const GAMES = [
 
 export const GAME_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 6h10a4 4 0 0 1 3.9 3.1l1.5 6.6a3 3 0 0 1-5 2.8L15 16H9l-2.4 2.5a3 3 0 0 1-5-2.8l1.5-6.6A4 4 0 0 1 7 6zm0 3v2H5v2h2v2h2v-2h2v-2H9V9zm9 1a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm3 3a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z"/></svg>';
 
-export function buildGame(type, id, ctx) {
+export function buildGame(type, id, ctx, initialState = null) {
   const title = GAMES.find(game => game.type === type).title;
-  if (['klondike', 'spider', 'freecell'].includes(type)) return buildSolitaire(type, id, title, ctx);
-  if (type === 'minesweeper') return buildMinesweeper(id, ctx);
-  return buildBoardGame(type, id, title, ctx);
+  if (['klondike', 'spider', 'freecell'].includes(type)) return buildSolitaire(type, id, title, ctx, initialState);
+  if (type === 'minesweeper') return buildMinesweeper(id, ctx, initialState);
+  return buildBoardGame(type, id, title, ctx, initialState);
 }
 
 export function initGameMenu(menu, openGame) {

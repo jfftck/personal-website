@@ -293,7 +293,110 @@ test('game windows restore and closing a thinking computer does not leave errors
   await openGame(page, 'freecell');
   await page.reload();
   await page.locator('#welcome-win-close').click();
-  await expect(page.locator('.app-window[data-type="freecell"] .playing-card')).toHaveCount(52);
+  const restored = page.locator('.app-window[data-type="freecell"]');
+  await restored.getByRole('button', { name: 'Resume saved game' }).click();
+  await expect(restored.locator('.playing-card')).toHaveCount(52);
+});
+
+test('unfinished solitaire and chess games offer resume and restore their rules and opponent mode', async ({ page }) => {
+  const cards = await openGame(page, 'klondike');
+  await cards.getByLabel('Draw', { exact: true }).selectOption('3');
+  await cards.locator('.card-stock button').click();
+  await expect(cards.getByRole('button', { name: /Stock: 21 cards/ })).toBeVisible();
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  const restoredCards = page.locator('.app-window[data-type="klondike"]');
+  await expect(restoredCards.getByRole('button', { name: 'Resume saved game' })).toBeVisible();
+  await restoredCards.getByRole('button', { name: 'Resume saved game' }).click();
+  await expect(restoredCards.getByLabel('Draw', { exact: true })).toHaveValue('3');
+  await expect(restoredCards.getByRole('button', { name: /Stock: 21 cards/ })).toBeVisible();
+
+  const chess = await openGame(page, 'chess');
+  await chess.getByLabel('Opponent', { exact: true }).selectOption('local');
+  await chess.locator('[data-square="e2"]').click();
+  await chess.locator('[data-square="e4"]').click();
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  const restoredChess = page.locator('.app-window[data-type="chess"]');
+  await restoredChess.getByRole('button', { name: 'Resume saved game' }).click();
+  await expect(restoredChess.getByLabel('Opponent', { exact: true })).toHaveValue('local');
+  await expect(restoredChess.locator('[data-square="e4"]')).toHaveAttribute('aria-label', /White Pawn/);
+});
+
+test('multiple game windows keep separate saved boards after refresh', async ({ page }) => {
+  const first = await openGame(page, 'minesweeper');
+  await first.locator('.mine-cell').first().click();
+  const second = await openGame(page, 'minesweeper');
+  await second.getByLabel('Difficulty', { exact: true }).selectOption('intermediate');
+  await second.getByRole('button', { name: 'Flag mode' }).click();
+  await second.locator('.mine-cell').nth(40).click();
+
+  const savedStates = await page.evaluate(() => JSON.parse(localStorage.getItem('desktop-session-v2'))
+    .columns.flatMap(column => column.apps)
+    .filter(app => app.type === 'minesweeper')
+    .map(app => app.state));
+  expect(savedStates).toHaveLength(2);
+  expect(savedStates[0].state.cells.some(cell => cell.open)).toBe(true);
+  expect(savedStates[0].state.cells.some(cell => cell.flag)).toBe(false);
+  expect(savedStates[1].state.cells[40].flag).toBe(true);
+
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  const games = page.locator('.app-window[data-type="minesweeper"]');
+  await expect(games).toHaveCount(2);
+  for (const game of await games.all()) {
+    await game.getByRole('button', { name: 'Resume saved game' }).click();
+  }
+  await expect(games.nth(0).locator('.mine-cell').filter({ hasClass: /revealed/ })).not.toHaveCount(0);
+  await expect(games.nth(0).locator('.mine-cell')).toHaveCount(81);
+  await expect(games.nth(1).locator('.mine-cell')).toHaveCount(256);
+  await expect(games.nth(0).locator('.mine-cell.flagged')).toHaveCount(0);
+  await expect(games.nth(1).locator('.mine-cell.flagged')).toHaveCount(1);
+});
+
+test('Reversi restores its board, local opponent choice, and available undo', async ({ page }) => {
+  const app = await openGame(page, 'reversi');
+  await app.getByLabel('Opponent', { exact: true }).selectOption('local');
+  await app.locator('[data-square="d6"]').click();
+  await expect(app.locator('.disc')).toHaveCount(5);
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  const restored = page.locator('.app-window[data-type="reversi"]');
+  await restored.getByRole('button', { name: 'Resume saved game' }).click();
+  await expect(restored.locator('.disc')).toHaveCount(5);
+  await expect(restored.getByLabel('Opponent', { exact: true })).toHaveValue('local');
+  await expect(restored.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled();
+  await restored.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(restored.locator('.disc')).toHaveCount(4);
+});
+
+test('invalid saves offer a clean start and finished games do not resume', async ({ page }) => {
+  const session = {
+    v: 2,
+    columns: [{ widthPreset: 'full', apps: [
+      { type: 'klondike', state: { version: 0, kind: 'klondike', options: {}, state: {} } },
+      { type: 'spider', state: {
+        version: 1, kind: 'spider', options: { suits: 1, drawCount: 1 },
+        state: {
+          kind: 'spider', suits: 1, drawCount: 1,
+          columns: Array.from({ length: 10 }, () => []), stock: [], waste: [],
+          foundations: Array.from({ length: 4 }, () => []), cells: Array.from({ length: 4 }, () => []),
+          completed: 8, moves: 900, won: true,
+        },
+      } },
+    ] }],
+  };
+  await page.evaluate(value => localStorage.setItem('desktop-session-v2', JSON.stringify(value)), session);
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  const invalid = page.locator('.app-window[data-type="klondike"]');
+  await expect(invalid.getByText('Saved game could not be loaded')).toBeVisible();
+  await expect(invalid.getByRole('button', { name: 'Resume saved game' })).toHaveCount(0);
+  await invalid.getByRole('button', { name: 'Start new game' }).click();
+  await expect(invalid.locator('.playing-card')).toHaveCount(28);
+  const finished = page.locator('.app-window[data-type="spider"]');
+  await expect(finished.getByRole('button', { name: 'Resume saved game' })).toHaveCount(0);
+  await expect(finished.locator('.playing-card')).toHaveCount(54);
 });
 
 test('phone-sized layouts keep menu, boards and controls accessible in both themes', async ({ page }) => {

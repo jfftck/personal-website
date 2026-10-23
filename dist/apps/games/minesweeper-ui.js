@@ -1,15 +1,27 @@
 import { createMinesweeper, revealMineCell, flagMineCell } from './minesweeper.js';
-import { gameShell, button, selectControl, preserveFocus, wireBoardKeys } from './ui.js';
+import { gameShell, button, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt } from './ui.js';
+import { createGameSession, inspectGameSession } from './game-state.js';
 
-export function buildMinesweeper(id, ctx) {
+export function buildMinesweeper(id, ctx, initialState = null) {
   const { el, toolbar, status, area } = gameShell(id, 'Minesweeper',
     'Reveal every safe square without hitting a mine. Numbers count neighboring mines. The first reveal and its neighbors are safe. Right-click or press F on a square to flag it; on touch, turn on Flag mode. Click an open number to reveal its neighbors when the neighboring flag count matches. Use arrow keys to move and Enter or Space to reveal.', ctx);
-  let level = 'beginner', state = createMinesweeper(level), flagMode = false;
-  function restart() { state = createMinesweeper(level); render(); }
+  const restored = inspectGameSession('minesweeper', initialState);
+  let level = restored.status === 'valid' || restored.status === 'finished'
+    ? restored.options.level : 'beginner';
+  let state = createMinesweeper(level);
+  let flagMode = Boolean(restored.options?.flagMode);
+  let pendingRestore = initialState != null && restored.status !== 'finished';
+  function persist() {
+    if (!pendingRestore) ctx.saveSession();
+  }
+  function restart() {
+    pendingRestore = false;
+    state = createMinesweeper(level); render(); persist();
+  }
   const flag = button('Flag mode', () => {
     flagMode = !flagMode;
     flag.setAttribute('aria-pressed', String(flagMode));
-    render();
+    render(); persist();
   });
   flag.setAttribute('aria-pressed', 'false');
   toolbar.append(button('New game', restart),
@@ -17,11 +29,22 @@ export function buildMinesweeper(id, ctx) {
       level = value; restart();
     }), flag);
   function act(index, mark = flagMode) {
-    if (mark) flagMineCell(state, index);
-    else revealMineCell(state, index);
+    const changed = mark ? flagMineCell(state, index) : revealMineCell(state, index);
     render();
+    if (changed) persist();
   }
   function render() {
+    if (pendingRestore) {
+      showRestorePrompt(area, () => {
+        level = restored.options.level;
+        flagMode = Boolean(restored.options.flagMode);
+        state = restored.state;
+        pendingRestore = false;
+        flag.setAttribute('aria-pressed', String(flagMode));
+        render(); persist();
+      }, restart, restored.status === 'invalid');
+      return;
+    }
     const flags = state.cells.filter(cell => cell.flag).length;
     status.textContent = state.status === 'won' ? 'You won — every safe square is revealed!'
       : state.status === 'lost' ? 'You hit a mine. Start a new game to try again.'
@@ -51,6 +74,13 @@ export function buildMinesweeper(id, ctx) {
       wrap.append(board); area.replaceChildren(wrap);
     });
   }
+  ctx.appApis[id] = {
+    getSessionState() {
+      return pendingRestore ? initialState
+        : createGameSession('minesweeper', { level, flagMode }, state);
+    },
+  };
+  if (restored.status === 'finished') ctx.saveSession();
   render();
   return el;
 }

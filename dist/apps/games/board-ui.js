@@ -1,19 +1,24 @@
 import { Chess, chessStatus } from './chess.js';
 import { createReversi, reversiMoves, playReversi, reversiScore, chooseReversiMove } from './reversi.js';
-import { gameShell, button, selectControl, preserveFocus, wireBoardKeys } from './ui.js';
+import { gameShell, button, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt } from './ui.js';
+import { createGameSession, inspectGameSession, restoreChess } from './game-state.js';
 
 const pieces = { w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' },
   b: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' } };
 const names = { k: 'King', q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight', p: 'Pawn' };
 const squareName = index => `${'abcdefgh'[index % 8]}${8 - Math.floor(index / 8)}`;
 
-export function buildBoardGame(kind, id, title, ctx) {
+export function buildBoardGame(kind, id, title, ctx, initialState = null) {
   const isChess = kind === 'chess';
   const { el, toolbar, status, area } = gameShell(id, title, isChess
     ? 'White moves first. Select a piece, then a highlighted destination. Checkmate the opposing king to win. Castling, en passant, pawn promotion, stalemate, repetition, insufficient material, and the fifty-move rule are supported. In computer mode you play White. Arrow keys move between squares; Enter or Space selects.'
     : 'Black moves first. Place a disc so it brackets at least one opposing disc between the new disc and one of yours, in any direction. All bracketed discs flip. Legal moves are marked. A player with no move automatically passes; the game ends when neither player can move. Most discs wins. In computer mode you play Black. Arrow keys navigate; Enter or Space plays.', ctx);
+  const restored = inspectGameSession(kind, initialState);
   let game = isChess ? new Chess() : createReversi();
-  let mode = 'computer', selected = null, promotion = null, snapshots = [];
+  let mode = restored.status === 'valid' || restored.status === 'finished'
+    ? restored.options.mode : 'computer';
+  let pendingRestore = initialState != null && restored.status !== 'finished';
+  let selected = null, promotion = null, snapshots = [];
   let worker = null, timer = null, thinking = false, disposed = false, aiError = '';
   const undo = button('Undo', undoMove);
   const retry = button('Retry computer', () => { aiError = ''; maybeComputer(); render(); });
@@ -29,8 +34,9 @@ export function buildBoardGame(kind, id, title, ctx) {
   }
   function restart() {
     cancelComputer();
+    pendingRestore = false;
     game = isChess ? new Chess() : createReversi();
-    selected = null; promotion = null; snapshots = []; render();
+    selected = null; promotion = null; snapshots = []; render(); persist();
   }
   function undoMove() {
     cancelComputer(); selected = null; promotion = null;
@@ -41,7 +47,7 @@ export function buildBoardGame(kind, id, title, ctx) {
       game = snapshots.pop();
       while (mode === 'computer' && game.turn === -1 && snapshots.length) game = snapshots.pop();
     }
-    render();
+    render(); persist();
     maybeComputer();
   }
   function ended() { return isChess ? game.isGameOver() : game.status !== 'playing'; }
@@ -50,7 +56,10 @@ export function buildBoardGame(kind, id, title, ctx) {
     if (isChess) game.move(move);
     else { snapshots.push(structuredClone(game)); playReversi(game, move); }
     selected = null; promotion = null;
-    render(); maybeComputer();
+    render(); persist(); maybeComputer();
+  }
+  function persist() {
+    if (!pendingRestore) ctx.saveSession();
   }
   function failComputer(message) {
     cancelComputer(); aiError = `Computer could not move: ${message}. Retry or choose local two-player.`;
@@ -105,6 +114,21 @@ export function buildBoardGame(kind, id, title, ctx) {
     render();
   }
   function render() {
+    if (pendingRestore) {
+      showRestorePrompt(area, () => {
+        mode = restored.options.mode;
+        if (isChess) {
+          game = restoreChess(restored.state.history);
+        } else {
+          const { snapshots: savedSnapshots = [], ...savedGame } = restored.state;
+          game = savedGame;
+          snapshots = savedSnapshots;
+        }
+        pendingRestore = false;
+        render(); persist(); maybeComputer();
+      }, restart, restored.status === 'invalid');
+      return;
+    }
     undo.disabled = isChess ? !game.history().length : !snapshots.length;
     retry.hidden = !aiError;
     if (isChess) status.textContent = chessStatus(game);
@@ -164,7 +188,16 @@ export function buildBoardGame(kind, id, title, ctx) {
       }
     });
   }
-  ctx.appApis[id] = { destroy() { disposed = true; cancelComputer(); } };
+  ctx.appApis[id] = {
+    getSessionState() {
+      if (pendingRestore) return initialState;
+      const state = isChess ? { history: game.history() }
+        : { ...structuredClone(game), snapshots: structuredClone(snapshots) };
+      return createGameSession(kind, { mode }, state);
+    },
+    destroy() { disposed = true; cancelComputer(); },
+  };
+  if (restored.status === 'finished') ctx.saveSession();
   render();
   return el;
 }

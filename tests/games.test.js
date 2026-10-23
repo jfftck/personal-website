@@ -1,11 +1,12 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-let cards, mines, reversi, chess;
+let cards, mines, reversi, chess, gameState;
 test.before(async () => {
-  [cards, mines, reversi, chess] = await Promise.all([
+  [cards, mines, reversi, chess, gameState] = await Promise.all([
     import('../apps/games/cards.js'), import('../apps/games/minesweeper.js'),
     import('../apps/games/reversi.js'), import('../apps/games/chess.js'),
+    import('../apps/games/game-state.js'),
   ]);
 });
 const card = (rank, suit = 0, up = true) => ({ id: `${rank}-${suit}`, rank, suit, up });
@@ -16,6 +17,55 @@ function blank(kind) {
   state.columns.forEach(pile => pile.splice(0)); state.stock = [];
   return state;
 }
+
+test('saved game snapshots validate rules, board/deal state, and reject corrupt or older formats', () => {
+  for (const kind of ['klondike', 'spider', 'freecell']) {
+    const options = { suits: kind === 'spider' ? 4 : 1, drawCount: kind === 'klondike' ? 3 : 1 };
+    const state = cards.createSolitaire(kind, options, () => 0.25);
+    const saved = gameState.createGameSession(kind, options, state);
+    assert.equal(gameState.inspectGameSession(kind, saved).status, 'valid');
+    const corrupt = structuredClone(saved);
+    corrupt.state.stock.push(corrupt.state.columns[0][0]);
+    assert.equal(gameState.inspectGameSession(kind, corrupt).status, 'invalid');
+    assert.equal(gameState.inspectGameSession(kind, { ...saved, version: 0 }).status, 'invalid');
+  }
+
+  const mineState = mines.createMinesweeper('intermediate');
+  const mineSave = gameState.createGameSession('minesweeper', { level: 'intermediate', flagMode: true }, mineState);
+  assert.equal(gameState.inspectGameSession('minesweeper', mineSave).status, 'valid');
+  mineSave.state.cells.pop();
+  assert.equal(gameState.inspectGameSession('minesweeper', mineSave).status, 'invalid');
+
+  const chessSave = gameState.createGameSession('chess', { mode: 'local' }, { history: ['e4', 'e5', 'Nf3'] });
+  assert.equal(gameState.inspectGameSession('chess', chessSave).status, 'valid');
+  chessSave.state.history.push('not a legal move');
+  assert.equal(gameState.inspectGameSession('chess', chessSave).status, 'invalid');
+
+  const reversiSave = gameState.createGameSession('reversi', { mode: 'computer' }, reversi.createReversi());
+  assert.equal(gameState.inspectGameSession('reversi', reversiSave).status, 'valid');
+  reversiSave.state.board[0] = 7;
+  assert.equal(gameState.inspectGameSession('reversi', reversiSave).status, 'invalid');
+
+  const withUndo = reversi.createReversi();
+  const previous = structuredClone(withUndo);
+  reversi.playReversi(withUndo, 19);
+  const reversiUndoSave = gameState.createGameSession('reversi', { mode: 'local' }, {
+    ...withUndo, snapshots: [previous],
+  });
+  assert.equal(gameState.inspectGameSession('reversi', reversiUndoSave).status, 'valid');
+  reversiUndoSave.state.snapshots[0].board[0] = 7;
+  assert.equal(gameState.inspectGameSession('reversi', reversiUndoSave).status, 'invalid');
+});
+
+test('finished saved games are valid but are not offered as resumable games', () => {
+  const state = cards.createSolitaire('spider');
+  state.columns.forEach(pile => pile.splice(0));
+  state.stock = [];
+  state.completed = 8;
+  state.won = true;
+  const saved = gameState.createGameSession('spider', { suits: 1, drawCount: 1 }, state);
+  assert.equal(gameState.inspectGameSession('spider', saved).status, 'finished');
+});
 
 test('all solitaire deals conserve cards, unique IDs, and the correct exposed layout', () => {
   for (const [kind, count, sizes, stock] of [

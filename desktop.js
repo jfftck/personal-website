@@ -998,7 +998,7 @@ const APP_DEFS = {
   ...Object.fromEntries(GAMES.map(game => [game.type, {
     title: game.title,
     iconSvg: GAME_ICON,
-    build: id => buildGame(game.type, id, appCtx),
+    build: (id, state) => buildGame(game.type, id, appCtx, state),
   }])),
   'doc-viewer': {
     title: 'Document Viewer',

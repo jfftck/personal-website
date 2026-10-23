@@ -131,6 +131,36 @@
 
 .game-status:empty { display: none; }
 
+.game-restore-prompt {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  max-width: 34rem;
+  margin: auto;
+  padding: 1.5rem;
+  border: 1px solid var(--game-line);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--app-bg) 82%, transparent);
+  text-align: center;
+}
+.game-restore-prompt h2,
+.game-restore-prompt p { margin: 0; }
+.game-restore-prompt h2 { color: var(--game-ink); font-size: 1.1rem; }
+.game-restore-prompt p { color: var(--game-muted); }
+.game-restore-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem; }
+.game-restore-actions button {
+  min-height: 2.4rem;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--game-line);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--app-bg) 72%, var(--app-text) 5%);
+  color: var(--game-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.game-restore-actions button:hover { background: var(--btn-hover); }
+.game-restore-actions button:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
+
 .game-rules {
   flex: 0 0 auto;
   margin: 0.55rem 0.8rem 0;

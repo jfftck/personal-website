@@ -1,5 +1,6 @@
 import { createSolitaire, getPile, moveCards, drawCards, isSequence, SUITS, rankLabel, isRed } from './cards.js';
-import { gameShell, button, selectControl, preserveFocus } from './ui.js';
+import { gameShell, button, selectControl, preserveFocus, showRestorePrompt } from './ui.js';
+import { createGameSession, inspectGameSession } from './game-state.js';
 
 const rules = {
   klondike: 'Build the four foundations from Ace to King by suit. Tableau piles descend in alternating colors; only Kings fill empty columns. Click an exposed card or sequence, then a destination. Use Send home to move an eligible card to a foundation. Click the stock to draw or recycle. Choose draw one or draw three for a new deal.',
@@ -7,17 +8,24 @@ const rules = {
   freecell: 'Build foundations from Ace to King by suit. Tableau piles descend in alternating colors; any card may fill an empty column. The four free cells each hold one card. Sequence moves are limited by available free cells and empty columns. Click a card or sequence, then a destination. Use Send home to move an eligible card to a foundation.',
 };
 
-export function buildSolitaire(kind, id, title, ctx) {
+export function buildSolitaire(kind, id, title, ctx, initialState = null) {
   const shell = gameShell(id, title, rules[kind], ctx);
   const { el, toolbar, area, status } = shell;
-  let options = { suits: 1, drawCount: 1 };
+  const restored = inspectGameSession(kind, initialState);
+  let options = restored.status === 'valid' || restored.status === 'finished'
+    ? restored.options : { suits: 1, drawCount: 1 };
   let state = createSolitaire(kind, options), selected = null, history = [];
+  let pendingRestore = initialState != null && restored.status !== 'finished';
+  function persist() {
+    if (!pendingRestore) ctx.saveSession();
+  }
   const undo = button('Undo', () => {
     if (!history.length) return;
-    state = history.pop(); selected = null; render();
+    state = history.pop(); selected = null; render(); persist();
   });
   function restart() {
-    state = createSolitaire(kind, options); history = []; selected = null; render();
+    pendingRestore = false;
+    state = createSolitaire(kind, options); history = []; selected = null; render(); persist();
   }
   toolbar.append(button('New deal', restart), undo);
   if (kind !== 'spider') toolbar.append(button('Send home', () => {
@@ -34,12 +42,12 @@ export function buildSolitaire(kind, id, title, ctx) {
     status.textContent = 'No eligible card can move home. Choose an exposed Ace or the next card of its suit.';
   }));
   if (kind === 'klondike') {
-    toolbar.append(selectControl('Draw', [['1', 'One card'], ['3', 'Three cards']], '1', value => {
+    toolbar.append(selectControl('Draw', [['1', 'One card'], ['3', 'Three cards']], String(options.drawCount), value => {
       options.drawCount = Number(value); restart();
     }));
   }
   if (kind === 'spider') {
-    toolbar.append(selectControl('Suits', [['1', 'One suit'], ['2', 'Two suits'], ['4', 'Four suits']], '1', value => {
+    toolbar.append(selectControl('Suits', [['1', 'One suit'], ['2', 'Two suits'], ['4', 'Four suits']], String(options.suits), value => {
       options.suits = Number(value); restart();
     }));
   }
@@ -48,7 +56,7 @@ export function buildSolitaire(kind, id, title, ctx) {
     if (!fn()) return false;
     history.push(before);
     if (history.length > 150) history.shift();
-    selected = null; render(); return true;
+    selected = null; render(); persist(); return true;
   }
   function clickPile(zone, index, offset) {
     const pile = getPile(state, { zone, index });
@@ -99,6 +107,15 @@ export function buildSolitaire(kind, id, title, ctx) {
     return div;
   }
   function render() {
+    if (pendingRestore) {
+      showRestorePrompt(area, () => {
+        options = restored.options;
+        state = restored.state;
+        pendingRestore = false;
+        render(); persist();
+      }, restart, restored.status === 'invalid');
+      return;
+    }
     undo.disabled = !history.length;
     status.textContent = state.won ? 'You won! Start a new deal to play again.'
       : `${state.moves} moves · ${kind === 'spider' ? `${state.completed} / 8 runs completed` : `${state.foundations.reduce((n, p) => n + p.length, 0)} / 52 cards home`}`;
@@ -134,6 +151,12 @@ export function buildSolitaire(kind, id, title, ctx) {
       table.append(top, columns); area.replaceChildren(table);
     });
   }
+  ctx.appApis[id] = {
+    getSessionState() {
+      return pendingRestore ? initialState : createGameSession(kind, options, state);
+    },
+  };
+  if (restored.status === 'finished') ctx.saveSession();
   render();
   return el;
 }
