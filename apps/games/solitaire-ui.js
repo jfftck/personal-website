@@ -126,7 +126,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     celebrationCleanup = createWinCelebration(effect, kind, state, latestTable, el, showVictoryScreen);
   }
   function showVictoryScreen() {
-    const settings = kind === 'klondike'
+    const newGameOptions = kind === 'klondike'
       ? [{ name: 'drawCount', label: 'Draw', choices: [['1', 'One card'], ['3', 'Three cards']], value: String(options.drawCount) }]
       : kind === 'spider'
         ? [{ name: 'suits', label: 'Suits', choices: [['1', 'One suit'], ['2', 'Two suits'], ['4', 'Four suits']], value: String(options.suits) }]
@@ -137,8 +137,8 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       area,
       id,
       'Victory!',
-      settings.length ? 'Choose settings for your next deal.' : 'Start another game whenever you are ready.',
-      settings,
+      newGameOptions.length ? 'Choose settings for your next deal.' : 'Start another game whenever you are ready.',
+      newGameOptions,
       nextOptions => {
         if (kind === 'klondike') options.drawCount = Number(nextOptions.drawCount);
         if (kind === 'spider') options.suits = Number(nextOptions.suits);

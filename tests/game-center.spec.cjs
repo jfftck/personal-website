@@ -16,6 +16,17 @@ async function openGame(page, game) {
   return page.locator(`.app-window[data-type="${game}"]`).last();
 }
 
+async function openSettings(app) {
+  await app.getByRole('button', { name: 'Settings', exact: true }).click();
+  return app.locator('.game-settings-dialog');
+}
+
+async function setGameOption(app, label, value) {
+  const dialog = await openSettings(app);
+  await dialog.getByLabel(label, { exact: true }).selectOption(value);
+  if (await dialog.isVisible()) await dialog.getByRole('button', { name: 'Close settings' }).click();
+}
+
 function savedKlondike({ columns = [], foundations = {} } = {}) {
   const used = new Set();
   const makeCard = (rank, suit, up = true) => {
@@ -287,14 +298,19 @@ test('all games prevent mouse text selection and expose shared, game-specific vi
 
   const klondike = await openGame(page, 'klondike');
   await checkSelectionDisabled(klondike, '.solitaire-table');
+  await openSettings(klondike);
   const cardThemeGroup = klondike.getByRole('radiogroup', { name: 'Card theme' });
   await expect(cardThemeGroup.getByRole('radio')).toHaveCount(4);
   await expect(cardThemeGroup.locator('.game-theme-preview')).toHaveCount(4);
   await cardThemeGroup.getByRole('radio', { name: 'Card theme: Botanical' }).click();
   await expect(klondike).toHaveAttribute('data-card-theme', 'botanical');
+  await klondike.getByRole('radio', { name: 'Playfield theme: Midnight', exact: true }).click();
+  await klondike.getByRole('button', { name: 'Close settings' }).click();
 
   const spider = await openGame(page, 'spider');
   await checkSelectionDisabled(spider, '.solitaire-table');
+  await openSettings(spider);
+  await expect(spider).toHaveAttribute('data-card-table-theme', 'midnight');
   const spiderCardThemes = spider.getByRole('radiogroup', { name: 'Card theme' });
   await expect(spiderCardThemes.getByRole('radio', { name: 'Card theme: Botanical' }))
     .toHaveAttribute('aria-checked', 'true');
@@ -303,18 +319,23 @@ test('all games prevent mouse text selection and expose shared, game-specific vi
   await expect(spiderCardThemes.getByRole('radio', { name: 'Card theme: Glass' }))
     .toHaveAttribute('aria-checked', 'true');
   await expect(klondike).toHaveAttribute('data-card-theme', 'glass');
+  await expect(spider).toHaveAttribute('data-card-table-theme', 'midnight');
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('game-center-visual-themes-v1')).cards))
     .toBe('glass');
+  await spider.getByRole('button', { name: 'Close settings' }).click();
 
   const freecell = await openGame(page, 'freecell');
   await checkSelectionDisabled(freecell, '.solitaire-table');
+  await openSettings(freecell);
   await expect(freecell.getByRole('radiogroup', { name: 'Card theme' })
     .getByRole('radio', { name: 'Card theme: Glass' })).toHaveAttribute('aria-checked', 'true');
+  await freecell.getByRole('button', { name: 'Close settings' }).click();
 
   const chess = await openGame(page, 'chess');
   await checkSelectionDisabled(chess, '.chess-board');
-  await expect(chess.locator('.chess-piece-svg')).toHaveCount(32);
+  await expect(chess.locator('.chess-board .chess-piece-svg')).toHaveCount(32);
+  await openSettings(chess);
   const chessBoardThemes = chess.getByRole('radiogroup', { name: 'Board theme' });
   const chessPieceThemes = chess.getByRole('radiogroup', { name: 'Piece theme' });
   await expect(chessBoardThemes.locator('.game-theme-preview')).toHaveCount(3);
@@ -323,18 +344,22 @@ test('all games prevent mouse text selection and expose shared, game-specific vi
   await chessPieceThemes.getByRole('radio', { name: 'Piece theme: Glass' }).click();
   await expect(chess).toHaveAttribute('data-chess-board-theme', 'slate');
   await expect(chess).toHaveAttribute('data-chess-pieces-theme', 'glass');
+  await chess.getByRole('button', { name: 'Close settings' }).click();
 
   const reversi = await openGame(page, 'reversi');
   await checkSelectionDisabled(reversi, '.reversi-board');
+  await openSettings(reversi);
   await reversi.getByRole('radiogroup', { name: 'Board theme' })
     .getByRole('radio', { name: 'Board theme: Ocean blue' }).click();
   await reversi.getByRole('radiogroup', { name: 'Piece theme' })
     .getByRole('radio', { name: 'Piece theme: Amber' }).click();
   await expect(reversi).toHaveAttribute('data-reversi-board-theme', 'ocean');
   await expect(reversi).toHaveAttribute('data-reversi-pieces-theme', 'amber');
+  await reversi.getByRole('button', { name: 'Close settings' }).click();
 
   const minesweeper = await openGame(page, 'minesweeper');
   await checkSelectionDisabled(minesweeper, '.mine-board');
+  await openSettings(minesweeper);
   const themePicker = minesweeper.getByRole('radiogroup', { name: 'Theme' });
   await expect(themePicker.locator('.game-theme-preview')).toHaveCount(5);
   for (const theme of ['classic', 'ocean', 'sunset', 'glass', 'colorblind']) {
@@ -344,7 +369,7 @@ test('all games prevent mouse text selection and expose shared, game-specific vi
   }
   await themePicker.getByRole('radio', { name: 'Theme: Glass' }).click();
   const glassColors = await page.evaluate(async () => {
-    const cell = document.querySelector('.app-window[data-type="minesweeper"] .mine-cell');
+    const cell = document.querySelector('.app-window[data-type="minesweeper"] .mine-board');
     document.documentElement.dataset.theme = 'light';
     await new Promise(requestAnimationFrame);
     const light = getComputedStyle(cell).backgroundColor;
@@ -357,7 +382,7 @@ test('all games prevent mouse text selection and expose shared, game-specific vi
 
   await page.setViewportSize({ width: 390, height: 844 });
   const fitsToolbar = await minesweeper.evaluate(app => {
-    const toolbar = app.querySelector('.game-toolbar').getBoundingClientRect();
+    const toolbar = app.querySelector('.game-settings-dialog').getBoundingClientRect();
     return [...app.querySelectorAll('.game-theme-control')].every(control => {
       const rect = control.getBoundingClientRect();
       return rect.left >= toolbar.left - 1 && rect.right <= toolbar.right + 1
@@ -367,11 +392,90 @@ test('all games prevent mouse text selection and expose shared, game-specific vi
   expect(fitsToolbar).toBe(true);
 });
 
+test('game settings dialogs contain options, trap keyboard focus, and return focus on Escape', async ({ page }) => {
+  for (const game of ['klondike', 'spider', 'freecell', 'minesweeper', 'chess', 'reversi']) {
+    const app = await openGame(page, game);
+    await expect(app.locator('.game-toolbar select, .game-toolbar .game-theme-control')).toHaveCount(0);
+    const dialog = await openSettings(app);
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute('aria-modal', 'true');
+    const close = dialog.getByRole('button', { name: 'Close settings' });
+    await expect(close).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press('Tab');
+    await expect(close).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(app.getByRole('button', { name: 'Settings', exact: true })).toBeFocused();
+  }
+});
+
+test('Glass cards, Chess squares and pieces, and Reversi discs retain strong contrast in both appearances', async ({ page }) => {
+  for (const game of ['klondike', 'chess', 'reversi']) {
+    const app = await openGame(page, game);
+    const dialog = await openSettings(app);
+    const labels = game === 'klondike' ? ['Card theme', 'Playfield theme'] : ['Board theme', 'Piece theme'];
+    for (const label of labels) await dialog.getByRole('radio', { name: `${label}: Glass`, exact: true }).click();
+    await dialog.getByRole('button', { name: 'Close settings' }).click();
+    const results = await app.evaluate((element, kind) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 1;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      const luminance = color => {
+        context.fillStyle = '#fff'; context.fillRect(0, 0, 1, 1);
+        context.fillStyle = color; context.fillRect(0, 0, 1, 1);
+        const rgb = [...context.getImageData(0, 0, 1, 1).data].slice(0, 3).map(value => value / 255);
+        const linear = rgb.map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
+        return linear[0] * .2126 + linear[1] * .7152 + linear[2] * .0722;
+      };
+      const ratio = (a, b) => {
+        const x = luminance(a), y = luminance(b);
+        return (Math.max(x, y) + .05) / (Math.min(x, y) + .05);
+      };
+      const values = {};
+      for (const appearance of ['light', 'dark']) {
+        document.documentElement.dataset.theme = appearance;
+        const style = getComputedStyle(element);
+        if (kind === 'klondike') {
+          const face = style.getPropertyValue('--card-face');
+          values[`${appearance}-card-ink`] = ratio(face, style.getPropertyValue('--card-ink'));
+          values[`${appearance}-card-red`] = ratio(face, style.getPropertyValue('--card-red'));
+        } else if (kind === 'chess') {
+          const squares = ['light', 'dark'].map(color => getComputedStyle(element.querySelector(`.board-square.${color}`)).backgroundColor);
+          values[`${appearance}-squares`] = ratio(...squares);
+          for (const side of ['white', 'black']) {
+            const fill = style.getPropertyValue(`--chess-${side}-piece`);
+            const outline = style.getPropertyValue(`--chess-${side}-outline`);
+            for (const [index, square] of squares.entries()) {
+              values[`${appearance}-${side}-${index}`] = Math.max(ratio(fill, square), ratio(outline, square));
+            }
+          }
+        } else {
+          const square = getComputedStyle(element.querySelector('.board-square')).backgroundColor;
+          for (const side of ['black', 'white']) {
+            values[`${appearance}-${side}`] = Math.max(
+              ratio(style.getPropertyValue(`--disc-${side}-fill`), square),
+              ratio(style.getPropertyValue(`--disc-${side}-border`), square),
+            );
+          }
+        }
+      }
+      return values;
+    }, game);
+    for (const [name, value] of Object.entries(results)) {
+      expect(value, `${game}: ${name} ${JSON.stringify(results)}`).toBeGreaterThanOrEqual(game === 'klondike' ? 4.5 : 3);
+    }
+  }
+});
+
 test('Minesweeper color-blind palette keeps every number legible and flags distinct in both desktop themes', async ({ page }) => {
   const app = await restoreGame(page, savedMinesweeper({ finalSafeCell: 10 }), 'minesweeper');
+  await openSettings(app);
   const themePicker = app.getByRole('radiogroup', { name: 'Theme' });
   await themePicker.getByRole('radio', { name: 'Theme: Color-blind friendly' }).click();
   await expect(app).toHaveAttribute('data-minesweeper-theme', 'colorblind');
+  await app.getByRole('button', { name: 'Close settings' }).click();
   const flagged = app.locator('.mine-cell').nth(10);
   await flagged.press('f');
   await expect(flagged).toHaveClass(/flagged/);
@@ -427,8 +531,10 @@ test('Minesweeper color-blind palette keeps every number legible and flags disti
 
 test('Minesweeper Glass number and flag colors remain readable in light and dark appearances', async ({ page }) => {
   const app = await restoreGame(page, savedMinesweeper({ finalSafeCell: 10 }), 'minesweeper');
+  await openSettings(app);
   const themePicker = app.getByRole('radiogroup', { name: 'Theme' });
   await themePicker.getByRole('radio', { name: 'Theme: Glass' }).click();
+  await app.getByRole('button', { name: 'Close settings' }).click();
   await app.locator('.mine-cell').nth(10).press('f');
   const contrast = await app.evaluate(element => {
     const luminance = color => {
@@ -645,12 +751,12 @@ test('all three solitaire games deal, select, draw, undo, configure, and restart
     await app.getByRole('button', { name: 'New deal' }).click();
     await expect(app.locator('.game-status')).toContainText('0 moves');
     if (game === 'klondike') {
-      await app.getByLabel('Draw', { exact: true }).selectOption('3');
+      await setGameOption(app, 'Draw', '3');
       await app.locator('.card-stock button').click();
       await expect(app.getByRole('button', { name: /Stock: 21 cards/ })).toBeVisible();
     }
     if (game === 'spider') {
-      await app.getByLabel('Suits', { exact: true }).selectOption('4');
+      await setGameOption(app, 'Suits', '4');
       await expect(app.locator('.card-columns .playing-card')).toHaveCount(54);
     }
     await page.locator('#close-btn').click();
@@ -1180,14 +1286,16 @@ test('Minesweeper supports reveal, touch flag mode, keyboard flags, and all boar
   await app.locator('.mine-cell').first().click();
   await expect(app.locator('.mine-cell').first()).toHaveClass(/revealed/);
   await app.getByRole('button', { name: 'New game' }).click();
+  await openSettings(app);
   await app.getByRole('button', { name: 'Flag mode' }).click();
+  await app.getByRole('button', { name: 'Close settings' }).click();
   await app.locator('.mine-cell').first().click();
   await expect(app.locator('.mine-cell').first()).toHaveClass(/flagged/);
   await page.keyboard.press('f');
   await expect(app.locator('.mine-cell').first()).not.toHaveClass(/flagged/);
-  await app.getByLabel('Difficulty', { exact: true }).selectOption('intermediate');
+  await setGameOption(app, 'Difficulty', 'intermediate');
   await expect(app.locator('.mine-cell')).toHaveCount(256);
-  await app.getByLabel('Difficulty', { exact: true }).selectOption('expert');
+  await setGameOption(app, 'Difficulty', 'expert');
   await expect(app.locator('.mine-cell')).toHaveCount(480);
   const expertBoardCentering = await app.evaluate(element => {
     const area = element.querySelector('.game-area').getBoundingClientRect();
@@ -1195,7 +1303,7 @@ test('Minesweeper supports reveal, touch flag mode, keyboard flags, and all boar
     return Math.abs((area.left + area.width / 2) - (wrap.left + wrap.width / 2));
   });
   expect(expertBoardCentering).toBeLessThan(2);
-  await expect(app.getByRole('button', { name: 'Flag mode' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(app.getByRole('button', { name: 'Flag mode', includeHidden: true })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('Minesweeper win screen lets users change the next game difficulty', async ({ page }) => {
@@ -1213,7 +1321,7 @@ test('Minesweeper win screen lets users change the next game difficulty', async 
 test('Chess moves animate, and checkmate opens the opponent options for a new game', async ({ page }) => {
   const app = await openGame(page, 'chess');
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await app.getByLabel('Opponent', { exact: true }).selectOption('local');
+  await setGameOption(app, 'Opponent', 'local');
   const moves = [
     ['e2', 'e4'], ['e7', 'e5'], ['d1', 'h5'], ['b8', 'c6'],
     ['f1', 'c4'], ['g8', 'f6'], ['h5', 'f7'],
@@ -1308,7 +1416,7 @@ test('Chess makes computer turns, undoes a round, and supports local two-player'
   await expect(app.locator('.piece-black')).toHaveCount(16);
   await app.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(app.locator('[data-square="e2"]')).toHaveAttribute('aria-label', /White Pawn/);
-  await app.getByLabel('Opponent', { exact: true }).selectOption('local');
+  await setGameOption(app, 'Opponent', 'local');
   await app.locator('[data-square="e2"]').click();
   await app.locator('[data-square="e4"]').click();
   await expect(app.locator('.game-status')).toContainText('Black to move');
@@ -1343,7 +1451,7 @@ test('Reversi flips discs, makes a computer move, undoes and supports local play
   await expect(app.locator('.disc')).toHaveCount(6);
   await app.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(app.locator('.disc')).toHaveCount(4);
-  await app.getByLabel('Opponent', { exact: true }).selectOption('local');
+  await setGameOption(app, 'Opponent', 'local');
   await app.locator('[data-square="d6"]').click();
   await expect(app.locator('[data-square="d6"] .disc')).toHaveClass(/disc-placed/);
   await expect(app.locator('[data-square="d5"] .disc')).toHaveClass(/disc-flipping/);
@@ -1376,7 +1484,7 @@ test('game windows restore and closing a thinking computer does not leave errors
 
 test('unfinished solitaire and chess games offer resume and restore their rules and opponent mode', async ({ page }) => {
   const cards = await openGame(page, 'klondike');
-  await cards.getByLabel('Draw', { exact: true }).selectOption('3');
+  await setGameOption(cards, 'Draw', '3');
   await cards.locator('.card-stock button').click();
   await expect(cards.getByRole('button', { name: /Stock: 21 cards/ })).toBeVisible();
   await page.reload();
@@ -1388,7 +1496,7 @@ test('unfinished solitaire and chess games offer resume and restore their rules 
   await expect(restoredCards.getByRole('button', { name: /Stock: 21 cards/ })).toBeVisible();
 
   const chess = await openGame(page, 'chess');
-  await chess.getByLabel('Opponent', { exact: true }).selectOption('local');
+  await setGameOption(chess, 'Opponent', 'local');
   await chess.locator('[data-square="e2"]').click();
   await chess.locator('[data-square="e4"]').click();
   await page.reload();
@@ -1403,8 +1511,10 @@ test('multiple game windows keep separate saved boards after refresh', async ({ 
   const first = await openGame(page, 'minesweeper');
   await first.locator('.mine-cell').first().click();
   const second = await openGame(page, 'minesweeper');
-  await second.getByLabel('Difficulty', { exact: true }).selectOption('intermediate');
+  await setGameOption(second, 'Difficulty', 'intermediate');
+  await openSettings(second);
   await second.getByRole('button', { name: 'Flag mode' }).click();
+  await second.getByRole('button', { name: 'Close settings' }).click();
   await second.locator('.mine-cell').nth(40).click();
 
   const savedStates = await page.evaluate(() => JSON.parse(localStorage.getItem('desktop-session-v2'))
@@ -1432,7 +1542,7 @@ test('multiple game windows keep separate saved boards after refresh', async ({ 
 
 test('Reversi restores its board, local opponent choice, and available undo', async ({ page }) => {
   const app = await openGame(page, 'reversi');
-  await app.getByLabel('Opponent', { exact: true }).selectOption('local');
+  await setGameOption(app, 'Opponent', 'local');
   await app.locator('[data-square="d6"]').click();
   await expect(app.locator('.disc')).toHaveCount(5);
   await page.reload();

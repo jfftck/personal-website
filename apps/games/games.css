@@ -170,22 +170,22 @@
   --card-back-pattern: rgba(255,255,255,.46);
   --card-back-border: #f8fcff;
 }
-.game-app[data-card-table-theme="ocean"] {
+:root .game-app[data-card-table-theme="ocean"] {
   --felt: #205970;
   --felt-deep: #143d53;
   --felt-edge: #0b2b3c;
 }
-.game-app[data-card-table-theme="midnight"] {
+:root .game-app[data-card-table-theme="midnight"] {
   --felt: #302c4b;
   --felt-deep: #1b1a30;
   --felt-edge: #131222;
 }
-.game-app[data-card-table-theme="botanical"] {
+:root .game-app[data-card-table-theme="botanical"] {
   --felt: #37664e;
   --felt-deep: #254b39;
   --felt-edge: #193727;
 }
-.game-app[data-card-table-theme="glass"] {
+:root .game-app[data-card-table-theme="glass"] {
   --felt: color-mix(in srgb, var(--app-bg) 42%, #0d4242 58%);
   --felt-deep: color-mix(in srgb, var(--app-bg) 32%, #082d34 68%);
   --felt-edge: color-mix(in srgb, var(--app-bg) 22%, #061e27 78%);
@@ -440,19 +440,6 @@
   gap: 0.4rem;
 }
 .game-settings-dialog .game-theme-choices { gap: 0.4rem; }
-.game-settings-dialog button.game-theme-choice {
-  display: grid;
-  flex: 0 0 auto;
-  justify-items: center;
-  gap: 0.18rem;
-  min-width: 4.25rem;
-  min-height: 0;
-  padding: 0.38rem;
-}
-.game-settings-dialog button.game-theme-choice[aria-checked="true"] {
-  border-color: var(--focus-color);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-color) 34%, transparent);
-}
 .game-settings-dialog .game-theme-choice-label {
   max-width: 5rem;
   overflow: hidden;
@@ -484,12 +471,12 @@
   display: grid;
   flex: 0 0 auto;
   justify-items: center;
-  gap: 0.12rem;
-  min-width: 3.05rem;
+  gap: 0.18rem;
+  min-width: 4.25rem;
   min-height: 0;
-  padding: 0.18rem 0.22rem;
+  padding: 0.38rem;
   border-radius: 0.45rem;
-  font-size: 0.59rem;
+  font-size: 0.72rem;
   line-height: 1.05;
 }
 .game-settings-dialog button.game-theme-choice[aria-checked="true"] {
@@ -583,11 +570,14 @@
   background: #37664e;
 }
 .game-theme-preview--cards[data-preview-theme="glass"] {
-  --preview-card-start: #718493;
-  --preview-card-end: #435866;
+  --preview-card-start: #5b7287;
+  --preview-card-end: #263c51;
   --preview-card-pattern: rgb(255 255 255 / 44%);
   --preview-card-border: #c4d1d9;
   background: linear-gradient(145deg, #b5d8d2, #597c7b);
+}
+.game-theme-preview--cards[data-preview-theme] {
+  background: color-mix(in srgb, var(--app-bg) 70%, var(--app-text) 30%);
 }
 .game-theme-preview--chess-board,
 .game-theme-preview--reversi-board {
@@ -616,8 +606,8 @@
   --preview-square-dark: #63758d;
 }
 .game-theme-preview--chess-board[data-preview-theme="glass"] {
-  --preview-square-light: #d1dce5;
-  --preview-square-dark: #8295a1;
+  --preview-square-light: color-mix(in srgb, var(--app-bg) 54%, white 46%);
+  --preview-square-dark: color-mix(in srgb, var(--app-bg) 42%, #101820 58%);
 }
 .game-theme-preview--reversi-board {
   grid-template-columns: repeat(3, 1fr);
@@ -639,8 +629,8 @@
   --preview-reversi-square: #287e9f;
 }
 .game-theme-preview--reversi-board[data-preview-theme="glass"] {
-  --preview-reversi-board: #477f79;
-  --preview-reversi-square: #76a49a;
+  --preview-reversi-board: color-mix(in srgb, var(--app-bg) 48%, #0b594c 52%);
+  --preview-reversi-square: color-mix(in srgb, var(--app-bg) 24%, #216b5d 76%);
 }
 .game-theme-disc {
   width: 0.34rem;
@@ -659,6 +649,12 @@
   background: #73847b;
 }
 .game-theme-chess-piece {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  --chess-piece-outline: #17303c;
+  --chess-piece-detail: #17303c;
   color: var(--preview-piece-light);
   font-family: Georgia, serif;
   font-size: 1.08rem;
@@ -666,6 +662,10 @@
   text-shadow: 0 0 1px var(--preview-piece-outline);
 }
 .game-theme-chess-piece--dark { color: var(--preview-piece-dark); }
+.game-theme-chess-piece--dark {
+  --chess-piece-outline: #f8fcff;
+  --chess-piece-detail: #f8fcff;
+}
 .game-theme-preview--chess-pieces[data-preview-theme="classic"] {
   --preview-piece-light: #fffdf3;
   --preview-piece-dark: #182124;
@@ -678,8 +678,8 @@
   background: #8794a5;
 }
 .game-theme-preview--chess-pieces[data-preview-theme="glass"] {
-  --preview-piece-light: #eef4f6;
-  --preview-piece-dark: #52616b;
+  --preview-piece-light: #fff;
+  --preview-piece-dark: #101820;
   --preview-piece-outline: #fff;
   background: linear-gradient(140deg, #a9c4c1, #647b82);
 }
@@ -700,10 +700,12 @@
   background: linear-gradient(140deg, #9cc5bd, #347562);
 }
 .game-theme-preview--reversi-pieces[data-preview-theme="glass"] .game-theme-disc {
-  background: radial-gradient(circle at 32% 25%, #52625f, #172d30 72%);
+  border: 1px solid #f7fcff;
+  background: radial-gradient(circle at 32% 25%, #3b4b52, #071117 72%);
 }
 .game-theme-preview--reversi-pieces[data-preview-theme="glass"] .game-theme-disc--light {
-  background: radial-gradient(circle at 32% 25%, #f8fff8, #b4cec3 76%);
+  border-color: #102b36;
+  background: #fff;
 }
 .game-theme-preview--minesweeper {
   grid-template-columns: repeat(3, 1fr);
@@ -745,11 +747,13 @@
   --preview-mine-border: #c88c66;
 }
 .game-theme-preview--minesweeper[data-preview-theme="glass"] {
-  --preview-mine-surface: #728b8e;
-  --preview-mine-face: #bccbc8;
-  --preview-mine-open: #e2ece9;
-  --preview-mine-border: #879f9c;
+  --preview-mine-surface: color-mix(in srgb, var(--app-bg) 38%, #102331 62%);
+  --preview-mine-face: rgba(248,252,255,.94);
+  --preview-mine-open: rgba(220,234,243,.96);
+  --preview-mine-border: #526b7c;
 }
+.game-theme-preview--minesweeper[data-preview-theme="glass"] .game-theme-mine-number { color: #006b4f; }
+.game-theme-preview--minesweeper[data-preview-theme="glass"] .game-theme-mine-flag { color: #9b1c1c !important; }
 .game-theme-preview--minesweeper[data-preview-theme="colorblind"] {
   --preview-mine-surface: #425267;
   --preview-mine-face: #dce3ea;
@@ -1641,7 +1645,8 @@
 .card-columns .playing-card.face-down + .playing-card {
   margin-top: calc(.75rem - var(--card-width) / 0.7);
 }
-.game-toolbar select option { background: var(--app-bg); color: var(--game-ink); }
+.game-toolbar select option,
+.game-settings-dialog select option { background: var(--app-bg); color: var(--game-ink); }
 
 @keyframes card-arrive {
   0% { transform: translateY(-9px) scale(1.04); filter: brightness(1.25); }

@@ -1,6 +1,6 @@
 ---
 name: Game Center scope
-description: User's launcher hierarchy and local-only game requirements.
+description: Launcher hierarchy, browser-local gameplay, and settings organization.
 ---
 
 Keep the existing apps and document/picture entries in the app launcher's root menu, with Game Center as an additional root entry. Game Center opens a submenu with a back arrow to return to the root menu; individual games do not belong at the root.
@@ -14,3 +14,9 @@ The initial card rules are Klondike, Spider, and FreeCell. Chess and Reversi mus
 **Why:** The user chose these games and both opponent modes, and the site is intended to remain statically published.
 
 **How to apply:** Keep gameplay and computer opponents browser-local when extending the games.
+
+Keep card/piece appearance separate from board/playfield appearance. Put game configuration and appearance choices in each game's Settings dialog rather than adding option controls to the play toolbar.
+
+**Why:** The user requested independent card and playfield themes and settings dialogs for all game options.
+
+**How to apply:** Follow this separation for future games and settings. Keep immediate play actions such as New game and Undo in the toolbar.

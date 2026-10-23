@@ -1,3 +1,5 @@
+import { chessPieceSvg } from './chess-piece-svg.js';
+
 const STORAGE_KEY = 'game-center-visual-themes-v1';
 
 const config = {
@@ -106,7 +108,9 @@ export function addGameThemeControl(root, container, key) {
         ? '<span></span><span></span><span class="game-theme-disc"></span><span></span><span></span><span class="game-theme-disc game-theme-disc--light"></span><span></span><span></span><span></span>'
         : '<span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>';
     } else if (theme.preview === 'chess-pieces') {
-      sample.innerHTML = '<span class="game-theme-chess-piece">♔</span><span class="game-theme-chess-piece game-theme-chess-piece--dark">♟</span>';
+      sample.innerHTML = `<span class="game-theme-chess-piece">${chessPieceSvg('k')}</span><span class="game-theme-chess-piece game-theme-chess-piece--dark">${chessPieceSvg('p')}</span>`;
+    } else if (theme.preview === 'reversi-pieces') {
+      sample.innerHTML = '<span class="game-theme-disc"></span><span class="game-theme-disc game-theme-disc--light"></span>';
     } else {
       sample.innerHTML = '<span></span><span class="game-theme-mine-number">2</span><span class="game-theme-mine-flag">⚑</span>';
     }
@@ -172,6 +176,7 @@ export function addGameThemeControl(root, container, key) {
     });
   }
   container.append(control);
+  container.hidden = false;
   apply(currentValue(key));
 
   const onThemeChange = event => {

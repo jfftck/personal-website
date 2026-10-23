@@ -12,7 +12,7 @@ const squareName = index => `${'abcdefgh'[index % 8]}${8 - Math.floor(index / 8)
 
 export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSvg) {
   const isChess = kind === 'chess';
-  const { el, toolbar, status, area } = gameShell(id, title, isChess
+  const { el, toolbar, status, area, settings } = gameShell(id, title, isChess
     ? 'White moves first. Select a piece, then a highlighted destination. Checkmate the opposing king to win. Castling, en passant, pawn promotion, stalemate, repetition, insufficient material, and the fifty-move rule are supported. In computer mode you play White. Arrow keys move between squares; Enter or Space selects.'
       : 'Black moves first. Place a disc so it brackets at least one opposing disc between the new disc and one of yours, in any direction. All bracketed discs flip. Legal moves are marked. A player with no move automatically passes; the game ends when neither player can move. Most discs wins. In computer mode you play Black. Arrow keys navigate; Enter or Space plays.', ctx, iconSvg);
   const restored = inspectGameSession(kind, initialState);
@@ -26,18 +26,19 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
   const undo = button('Undo', undoMove);
   const retry = button('Retry computer', () => { aiError = ''; maybeComputer(); render(); });
   retry.hidden = true;
-  toolbar.append(button('New game', restart), undo,
-    selectControl('Opponent', [['computer', 'Computer'], ['local', 'Local two-player']], mode, value => {
+  toolbar.append(button('New game', restart), undo, retry);
+  settings.addGameOption(selectControl('Opponent', [['computer', 'Computer'], ['local', 'Local two-player']], mode, value => {
       mode = value; restart();
-    }), retry);
-  const removeBoardTheme = addGameThemeControl(el, toolbar, isChess ? 'chessBoard' : 'reversiBoard');
-  const removePieceTheme = addGameThemeControl(el, toolbar, isChess ? 'chessPieces' : 'reversiPieces');
+    }));
+  const removeBoardTheme = addGameThemeControl(el, settings.appearanceOptions, isChess ? 'chessBoard' : 'reversiBoard');
+  const removePieceTheme = addGameThemeControl(el, settings.appearanceOptions, isChess ? 'chessPieces' : 'reversiPieces');
 
   function cancelComputer() {
     worker?.terminate(); worker = null;
     clearTimeout(timer); timer = null; thinking = false; aiError = '';
   }
   function restart() {
+    settings.close();
     clearTimeout(endScreenTimer); endScreenTimer = null;
     newGameScreenCleanup?.(); newGameScreenCleanup = null;
     endScreenShown = false;
@@ -128,7 +129,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
       }],
       nextOptions => {
         mode = nextOptions.mode;
-        const toolbarSelect = toolbar.querySelector('select[aria-label="Opponent"]');
+        const toolbarSelect = settings.element.querySelector('select[aria-label="Opponent"]');
         if (toolbarSelect) toolbarSelect.value = mode;
         restart();
       },
@@ -316,6 +317,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
       clearTimeout(endScreenTimer);
       removeBoardTheme();
       removePieceTheme();
+      settings.destroy();
       newGameScreenCleanup?.();
       cancelComputer();
     },

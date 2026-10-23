@@ -25,12 +25,17 @@
   --chess-black-outline: #f4ead6;
   --chess-white-detail: #b7aa91;
   --chess-black-detail: #77817d;
+  --chess-piece-stroke-width: 1.45;
   --reversi-frame: #6c4835;
   --reversi-felt: #176249;
   --reversi-square: #247958;
   --reversi-hover: #2d8d66;
   --disc-black: radial-gradient(circle at 32% 25%, #454b4a, #101718 68%);
   --disc-white: radial-gradient(circle at 32% 25%, #fffef5, #d3d6ca 72%);
+  --disc-black-fill: #101718;
+  --disc-white-fill: #d3d6ca;
+  --disc-black-border: transparent;
+  --disc-white-border: transparent;
   --mine-board-frame: #858585;
   --mine-board-surface: #808080;
   --mine-cell-face: #c0c0c0;
@@ -85,9 +90,9 @@
   --chess-frame: #344258;
 }
 :root .game-app[data-chess-board-theme="glass"] {
-  --tile-light: color-mix(in srgb, var(--app-bg) 72%, white 16%);
-  --tile-dark: color-mix(in srgb, var(--app-bg) 72%, var(--app-text) 17%);
-  --chess-frame: color-mix(in srgb, var(--app-border) 78%, var(--app-bg));
+  --tile-light: color-mix(in srgb, var(--app-bg) 54%, white 46%);
+  --tile-dark: color-mix(in srgb, var(--app-bg) 42%, #101820 58%);
+  --chess-frame: color-mix(in srgb, var(--app-bg) 52%, var(--app-text) 48%);
 }
 .game-app[data-chess-pieces-theme="modern"] {
   --chess-white-piece: #f8fafc;
@@ -98,12 +103,13 @@
   --chess-black-detail: #475569;
 }
 .game-app[data-chess-pieces-theme="glass"] {
-  --chess-white-piece: color-mix(in srgb, var(--app-bg) 36%, white 64%);
-  --chess-black-piece: color-mix(in srgb, var(--app-bg) 68%, var(--app-text) 32%);
-  --chess-white-outline: color-mix(in srgb, var(--app-text) 46%, transparent);
-  --chess-black-outline: color-mix(in srgb, var(--app-text) 46%, transparent);
-  --chess-white-detail: var(--app-text);
-  --chess-black-detail: var(--app-text);
+  --chess-white-piece: #fff;
+  --chess-black-piece: #101820;
+  --chess-white-outline: #102b39;
+  --chess-black-outline: #f8fcff;
+  --chess-white-detail: #102b39;
+  --chess-black-detail: #f8fcff;
+  --chess-piece-stroke-width: 2.3;
 }
 
 .game-app[data-reversi-board-theme="ocean"] {
@@ -113,30 +119,27 @@
   --reversi-hover: #3698ba;
 }
 .game-app[data-reversi-board-theme="glass"] {
-  --reversi-frame: color-mix(in srgb, var(--app-border) 82%, var(--app-bg));
-  --reversi-felt: color-mix(in srgb, var(--app-bg) 76%, #13876e 24%);
-  --reversi-square: color-mix(in srgb, var(--app-bg) 70%, #20a486 30%);
-  --reversi-hover: color-mix(in srgb, var(--app-bg) 54%, #20a486 46%);
+  --reversi-frame: color-mix(in srgb, var(--app-bg) 45%, #102b36 55%);
+  --reversi-felt: color-mix(in srgb, var(--app-bg) 48%, #0b594c 52%);
+  --reversi-square: color-mix(in srgb, var(--app-bg) 24%, #216b5d 76%);
+  --reversi-hover: color-mix(in srgb, var(--app-bg) 12%, #348b76 88%);
 }
 .game-app[data-reversi-pieces-theme="amber"] {
   --disc-black: radial-gradient(circle at 32% 25%, #7d5535, #322015 72%);
   --disc-white: radial-gradient(circle at 32% 25%, #fff0cb, #c9a76e 76%);
 }
 .game-app[data-reversi-pieces-theme="glass"] {
-  --disc-black: radial-gradient(circle at 32% 25%,
-    color-mix(in srgb, var(--app-text) 68%, transparent),
-    color-mix(in srgb, var(--app-bg) 74%, var(--app-text) 26%) 72%);
-  --disc-white: radial-gradient(circle at 32% 25%,
-    color-mix(in srgb, white 72%, var(--app-bg)),
-    color-mix(in srgb, var(--app-bg) 76%, var(--app-text) 24%) 76%);
+  --disc-black-fill: #071117;
+  --disc-white-fill: #fff;
+  --disc-black-border: #f7fcff;
+  --disc-white-border: #102b36;
+  --disc-black: radial-gradient(circle at 32% 25%, #3b4b52, var(--disc-black-fill) 72%);
+  --disc-white: radial-gradient(circle at 32% 25%, #fff, var(--disc-white-fill) 76%);
 }
 
 :root .game-app[data-card-theme="midnight"],
 :root .card-drag-layer[data-card-theme="midnight"],
 :root .solitaire-celebration-layer[data-card-theme="midnight"] {
-  --felt: #2d2b42;
-  --felt-deep: #1c1c2d;
-  --felt-edge: #151522;
   --card-face: #eeeaf4;
   --card-ink: #292437;
   --card-red: #bc3653;
@@ -148,9 +151,6 @@
 :root .game-app[data-card-theme="botanical"],
 :root .card-drag-layer[data-card-theme="botanical"],
 :root .solitaire-celebration-layer[data-card-theme="botanical"] {
-  --felt: #37664e;
-  --felt-deep: #254b39;
-  --felt-edge: #193727;
   --card-face: #fff8e8;
   --card-ink: #25382e;
   --card-red: #b33d42;
@@ -162,20 +162,46 @@
 :root .game-app[data-card-theme="glass"],
 :root .card-drag-layer[data-card-theme="glass"],
 :root .solitaire-celebration-layer[data-card-theme="glass"] {
-  --felt: color-mix(in srgb, var(--app-bg) 76%, #188b77 24%);
-  --felt-deep: color-mix(in srgb, var(--app-bg) 86%, var(--app-text) 14%);
-  --felt-edge: var(--app-border);
-  --card-face: color-mix(in srgb, var(--app-bg) 78%, var(--app-text) 22%);
-  --card-ink: var(--app-text);
-  --card-red: #d64d67;
-  --card-back-start: color-mix(in srgb, var(--app-bg) 58%, var(--app-text) 42%);
-  --card-back-end: var(--app-bg);
-  --card-back-pattern: color-mix(in srgb, var(--app-text) 24%, transparent);
-  --card-back-border: var(--app-border);
+  --card-face: rgba(250,252,255,.96);
+  --card-ink: #13202b;
+  --card-red: #9e1b34;
+  --card-back-start: #5b7287;
+  --card-back-end: #263c51;
+  --card-back-pattern: rgba(255,255,255,.46);
+  --card-back-border: #f8fcff;
 }
-.game-app[data-card-theme="glass"] .solitaire-table {
+:root .game-app[data-card-table-theme="ocean"] {
+  --felt: #205970;
+  --felt-deep: #143d53;
+  --felt-edge: #0b2b3c;
+}
+:root .game-app[data-card-table-theme="midnight"] {
+  --felt: #302c4b;
+  --felt-deep: #1b1a30;
+  --felt-edge: #131222;
+}
+:root .game-app[data-card-table-theme="botanical"] {
+  --felt: #37664e;
+  --felt-deep: #254b39;
+  --felt-edge: #193727;
+}
+:root .game-app[data-card-table-theme="glass"] {
+  --felt: color-mix(in srgb, var(--app-bg) 42%, #0d4242 58%);
+  --felt-deep: color-mix(in srgb, var(--app-bg) 32%, #082d34 68%);
+  --felt-edge: color-mix(in srgb, var(--app-bg) 22%, #061e27 78%);
+}
+.game-app[data-card-theme="glass"] {
+  --card-face: rgba(250,252,255,.96);
+  --card-ink: #13202b;
+  --card-red: #9e1b34;
+  --card-back-start: #5b7287;
+  --card-back-end: #263c51;
+  --card-back-pattern: rgba(255,255,255,.46);
+  --card-back-border: #f8fcff;
+}
+.game-app[data-card-table-theme="glass"] .solitaire-table {
   border-color: var(--app-border);
-  background: color-mix(in srgb, var(--app-bg) 82%, transparent);
+  background: color-mix(in srgb, var(--felt) 92%, transparent);
   -webkit-backdrop-filter: var(--backdrop);
   backdrop-filter: var(--backdrop);
 }
@@ -207,36 +233,26 @@
   --mine-flag-stem: #583a32;
 }
 .game-app[data-minesweeper-theme="glass"] {
-  --mine-board-frame: color-mix(in srgb, var(--app-border) 72%, transparent);
-  --mine-board-surface: color-mix(in srgb, var(--app-bg) 54%, transparent);
-  --mine-cell-face: #dce3ea;
-  --mine-cell-open: #f7fafc;
-  --mine-cell-border: color-mix(in srgb, var(--app-border) 88%, transparent);
-  --mine-cell-text: var(--app-text);
+  --mine-board-frame: color-mix(in srgb, var(--app-border) 70%, transparent);
+  --mine-board-surface: color-mix(in srgb, var(--app-bg) 38%, #102331 62%);
+  --mine-cell-face: rgba(248,252,255,.94);
+  --mine-cell-open: rgba(220,234,243,.96);
+  --mine-cell-border: #526b7c;
+  --mine-cell-text: #172531;
   --mine-cell-highlight: #fff;
-  --mine-cell-shadow: #718096;
-  --mine-cell-hover: color-mix(in srgb, var(--app-bg) 50%, var(--app-text) 15%);
-  --mine-flag-color: #a32924;
-  --mine-flag-stem: #263238;
+  --mine-cell-shadow: #7a91a0;
+  --mine-cell-hover: #fff;
+  --mine-flag-color: #9b1c1c;
+  --mine-flag-stem: #172531;
 }
-:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] {
-  --mine-cell-face: #334155;
-  --mine-cell-open: #1f2937;
-  --mine-cell-border: #64748b;
-  --mine-cell-highlight: #64748b;
-  --mine-cell-shadow: #0f172a;
-  --mine-cell-hover: #475569;
-  --mine-flag-color: #ff8a80;
-  --mine-flag-stem: #f8fafc;
-}
-:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="1"] { color: #92bcff; }
-:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="2"] { color: #8de0a8; }
-:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="3"] { color: #ff9494; }
-:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="4"] { color: #c5a9ff; }
-:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="5"] { color: #ffb38f; }
-:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="6"] { color: #8fe6e8; }
-:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="7"] { color: #f3f4f6; }
-:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="8"] { color: #cbd5e1; }
+.game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="1"] { color: #005a9c; }
+.game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="2"] { color: #006b4f; }
+.game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="3"] { color: #a33b00; }
+.game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="4"] { color: #704080; }
+.game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="5"] { color: #775500; }
+.game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="6"] { color: #006d77; }
+.game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="7"] { color: #252525; }
+.game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="8"] { color: #565656; }
 
 .game-app[data-minesweeper-theme="colorblind"] {
   --mine-board-frame: #263445;
@@ -311,6 +327,8 @@
 
 .game-toolbar button,
 .game-toolbar select,
+.game-settings-dialog button,
+.game-settings-dialog select,
 .game-options select,
 .game-promotion button {
   min-height: 2.1rem;
@@ -323,14 +341,18 @@
 }
 
 .game-toolbar button,
+.game-settings-dialog button,
 .game-promotion button { cursor: pointer; }
 .game-toolbar button:hover,
+.game-settings-dialog button:hover,
 .game-promotion button:hover { background: var(--btn-hover); }
 .game-toolbar button:active,
+.game-settings-dialog button:active,
 .game-promotion button:active { background: var(--btn-active); }
 .game-toolbar button:disabled { cursor: not-allowed; opacity: 0.42; }
 
 .game-toolbar select,
+.game-settings-dialog select,
 .game-options select {
   cursor: pointer;
   accent-color: var(--accent);
@@ -338,12 +360,91 @@
 
 .game-toolbar button:focus-visible,
 .game-toolbar select:focus-visible,
+.game-settings-dialog button:focus-visible,
+.game-settings-dialog select:focus-visible,
 .game-options select:focus-visible,
 .game-promotion button:focus-visible,
 .game-area button:focus-visible,
 .game-instructions button:focus-visible {
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
+}
+
+.game-settings-overlay {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0.75rem;
+  background: rgba(5, 13, 19, .48);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.game-settings-overlay[hidden] { display: none; }
+.game-settings-dialog {
+  display: grid;
+  gap: 0.85rem;
+  width: min(36rem, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background: var(--overlay-bg);
+  box-shadow: 0 1.2rem 3rem rgba(0,0,0,.32);
+  color: var(--app-text);
+}
+.game-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.game-settings-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.25;
+}
+.game-settings-dialog fieldset {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+}
+.game-settings-dialog fieldset[hidden] { display: none; }
+.game-settings-dialog legend {
+  padding-inline: 0.35rem;
+  color: var(--game-muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.game-settings-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+  color: var(--game-ink);
+  font-weight: 650;
+}
+.game-settings-option select { min-width: min(12rem, 52%); }
+.game-settings-dialog .game-theme-control {
+  display: grid;
+  justify-items: start;
+  gap: 0.4rem;
+}
+.game-settings-dialog .game-theme-choices { gap: 0.4rem; }
+.game-settings-dialog .game-theme-choice-label {
+  max-width: 5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .game-theme-control {
@@ -366,19 +467,19 @@
   gap: 0.2rem;
   min-width: 0;
 }
-.game-toolbar button.game-theme-choice {
+.game-settings-dialog button.game-theme-choice {
   display: grid;
   flex: 0 0 auto;
   justify-items: center;
-  gap: 0.12rem;
-  min-width: 3.05rem;
+  gap: 0.18rem;
+  min-width: 4.25rem;
   min-height: 0;
-  padding: 0.18rem 0.22rem;
+  padding: 0.38rem;
   border-radius: 0.45rem;
-  font-size: 0.59rem;
+  font-size: 0.72rem;
   line-height: 1.05;
 }
-.game-toolbar button.game-theme-choice[aria-checked="true"] {
+.game-settings-dialog button.game-theme-choice[aria-checked="true"] {
   border-color: color-mix(in srgb, var(--focus-color) 78%, var(--game-line));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--focus-color) 56%, transparent);
   background: color-mix(in srgb, var(--accent) 19%, var(--app-bg));
@@ -402,6 +503,40 @@
 .game-theme-preview--cards {
   place-items: center;
   background: #174c52;
+}
+.game-theme-preview--card-table { background: var(--preview-felt, #27666b); }
+.game-theme-felt-sample {
+  width: 80%;
+  height: 70%;
+  border: 1px solid color-mix(in srgb, white 44%, transparent);
+  border-radius: 0.25rem;
+  background: linear-gradient(145deg, var(--preview-felt-light), var(--preview-felt-dark));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
+}
+.game-theme-preview--card-table[data-preview-theme="classic"] {
+  --preview-felt: #27666b;
+  --preview-felt-light: #3f8586;
+  --preview-felt-dark: #1d5058;
+}
+.game-theme-preview--card-table[data-preview-theme="ocean"] {
+  --preview-felt: #174b65;
+  --preview-felt-light: #287b95;
+  --preview-felt-dark: #103448;
+}
+.game-theme-preview--card-table[data-preview-theme="midnight"] {
+  --preview-felt: #29273c;
+  --preview-felt-light: #514b74;
+  --preview-felt-dark: #171725;
+}
+.game-theme-preview--card-table[data-preview-theme="botanical"] {
+  --preview-felt: #335b42;
+  --preview-felt-light: #4d7852;
+  --preview-felt-dark: #1e3829;
+}
+.game-theme-preview--card-table[data-preview-theme="glass"] {
+  --preview-felt: #345d61;
+  --preview-felt-light: #779da0;
+  --preview-felt-dark: #18383d;
 }
 .game-theme-card-back {
   display: block;
@@ -435,11 +570,14 @@
   background: #37664e;
 }
 .game-theme-preview--cards[data-preview-theme="glass"] {
-  --preview-card-start: #718493;
-  --preview-card-end: #435866;
+  --preview-card-start: #5b7287;
+  --preview-card-end: #263c51;
   --preview-card-pattern: rgb(255 255 255 / 44%);
   --preview-card-border: #c4d1d9;
   background: linear-gradient(145deg, #b5d8d2, #597c7b);
+}
+.game-theme-preview--cards[data-preview-theme] {
+  background: color-mix(in srgb, var(--app-bg) 70%, var(--app-text) 30%);
 }
 .game-theme-preview--chess-board,
 .game-theme-preview--reversi-board {
@@ -468,8 +606,8 @@
   --preview-square-dark: #63758d;
 }
 .game-theme-preview--chess-board[data-preview-theme="glass"] {
-  --preview-square-light: #d1dce5;
-  --preview-square-dark: #8295a1;
+  --preview-square-light: color-mix(in srgb, var(--app-bg) 54%, white 46%);
+  --preview-square-dark: color-mix(in srgb, var(--app-bg) 42%, #101820 58%);
 }
 .game-theme-preview--reversi-board {
   grid-template-columns: repeat(3, 1fr);
@@ -491,8 +629,8 @@
   --preview-reversi-square: #287e9f;
 }
 .game-theme-preview--reversi-board[data-preview-theme="glass"] {
-  --preview-reversi-board: #477f79;
-  --preview-reversi-square: #76a49a;
+  --preview-reversi-board: color-mix(in srgb, var(--app-bg) 48%, #0b594c 52%);
+  --preview-reversi-square: color-mix(in srgb, var(--app-bg) 24%, #216b5d 76%);
 }
 .game-theme-disc {
   width: 0.34rem;
@@ -511,6 +649,12 @@
   background: #73847b;
 }
 .game-theme-chess-piece {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  --chess-piece-outline: #17303c;
+  --chess-piece-detail: #17303c;
   color: var(--preview-piece-light);
   font-family: Georgia, serif;
   font-size: 1.08rem;
@@ -518,6 +662,10 @@
   text-shadow: 0 0 1px var(--preview-piece-outline);
 }
 .game-theme-chess-piece--dark { color: var(--preview-piece-dark); }
+.game-theme-chess-piece--dark {
+  --chess-piece-outline: #f8fcff;
+  --chess-piece-detail: #f8fcff;
+}
 .game-theme-preview--chess-pieces[data-preview-theme="classic"] {
   --preview-piece-light: #fffdf3;
   --preview-piece-dark: #182124;
@@ -530,8 +678,8 @@
   background: #8794a5;
 }
 .game-theme-preview--chess-pieces[data-preview-theme="glass"] {
-  --preview-piece-light: #eef4f6;
-  --preview-piece-dark: #52616b;
+  --preview-piece-light: #fff;
+  --preview-piece-dark: #101820;
   --preview-piece-outline: #fff;
   background: linear-gradient(140deg, #a9c4c1, #647b82);
 }
@@ -552,10 +700,12 @@
   background: linear-gradient(140deg, #9cc5bd, #347562);
 }
 .game-theme-preview--reversi-pieces[data-preview-theme="glass"] .game-theme-disc {
-  background: radial-gradient(circle at 32% 25%, #52625f, #172d30 72%);
+  border: 1px solid #f7fcff;
+  background: radial-gradient(circle at 32% 25%, #3b4b52, #071117 72%);
 }
 .game-theme-preview--reversi-pieces[data-preview-theme="glass"] .game-theme-disc--light {
-  background: radial-gradient(circle at 32% 25%, #f8fff8, #b4cec3 76%);
+  border-color: #102b36;
+  background: #fff;
 }
 .game-theme-preview--minesweeper {
   grid-template-columns: repeat(3, 1fr);
@@ -597,11 +747,13 @@
   --preview-mine-border: #c88c66;
 }
 .game-theme-preview--minesweeper[data-preview-theme="glass"] {
-  --preview-mine-surface: #728b8e;
-  --preview-mine-face: #bccbc8;
-  --preview-mine-open: #e2ece9;
-  --preview-mine-border: #879f9c;
+  --preview-mine-surface: color-mix(in srgb, var(--app-bg) 38%, #102331 62%);
+  --preview-mine-face: rgba(248,252,255,.94);
+  --preview-mine-open: rgba(220,234,243,.96);
+  --preview-mine-border: #526b7c;
 }
+.game-theme-preview--minesweeper[data-preview-theme="glass"] .game-theme-mine-number { color: #006b4f; }
+.game-theme-preview--minesweeper[data-preview-theme="glass"] .game-theme-mine-flag { color: #9b1c1c !important; }
 .game-theme-preview--minesweeper[data-preview-theme="colorblind"] {
   --preview-mine-surface: #425267;
   --preview-mine-face: #dce3ea;
@@ -1237,7 +1389,7 @@
 .piece-body {
   fill: currentColor;
   stroke: var(--chess-piece-outline);
-  stroke-width: 1.45;
+  stroke-width: var(--chess-piece-stroke-width);
   stroke-linejoin: round;
 }
 .piece-detail {
@@ -1276,8 +1428,14 @@
   border-radius: 50%;
   box-shadow: 0 2px 4px rgba(0,0,0,.45), inset 0 1px 2px rgba(255,255,255,.45);
 }
-.disc.black { background: var(--disc-black); }
-.disc.white { background: var(--disc-white); }
+.disc.black {
+  border: 1px solid var(--disc-black-border);
+  background: var(--disc-black);
+}
+.disc.white {
+  border: 1px solid var(--disc-white-border);
+  background: var(--disc-white);
+}
 .disc.disc-placed { animation: reversi-disc-place 320ms cubic-bezier(.16,.74,.28,1) both; }
 .disc.disc-flipping {
   background: transparent;
@@ -1487,7 +1645,8 @@
 .card-columns .playing-card.face-down + .playing-card {
   margin-top: calc(.75rem - var(--card-width) / 0.7);
 }
-.game-toolbar select option { background: var(--app-bg); color: var(--game-ink); }
+.game-toolbar select option,
+.game-settings-dialog select option { background: var(--app-bg); color: var(--game-ink); }
 
 @keyframes card-arrive {
   0% { transform: translateY(-9px) scale(1.04); filter: brightness(1.25); }
