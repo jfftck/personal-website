@@ -38,3 +38,9 @@ The scrollable card playfield needs 2rem of padding on all four sides. Chess, Re
 **Why:** The user requested all-sided padding rather than top-only padding, and fit-to-space boards for the other games.
 
 **How to apply:** Size boards using the remaining width and height inside each window, not viewport dimensions. Preserve square cells, centered boards, and scaling across Minesweeper difficulties.
+
+In Chess and Reversi, white pieces always have a dark 10%-opacity outline and black pieces a white 10%-opacity outline, regardless of the chosen piece theme.
+
+**Why:** The user requested consistent, faint 10% outlines so both sides remain gently defined across piece styles.
+
+**How to apply:** Keep the outline colors and opacity consistent across themes, Glass styles, and Settings previews.

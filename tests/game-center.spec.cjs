@@ -392,6 +392,44 @@ test('all games prevent mouse text selection and expose shared, game-specific vi
   expect(fitsToolbar).toBe(true);
 });
 
+test('Chess and Reversi piece outlines stay at 10% with dark outlines on white and white outlines on black', async ({ page }) => {
+  const chess = await openGame(page, 'chess');
+  let dialog = await openSettings(chess);
+  for (const theme of ['Classic', 'Modern', 'Glass']) {
+    await dialog.getByRole('radio', { name: `Piece theme: ${theme}`, exact: true }).click();
+    const outlines = await chess.evaluate(element => {
+      const outline = side => getComputedStyle(element.querySelector(`.piece-${side} .piece-body`)).stroke;
+      return { white: outline('white'), black: outline('black') };
+    });
+    expect(outlines.white).toBe('rgba(0, 0, 0, 0.1)');
+    expect(outlines.black).toBe('rgba(255, 255, 255, 0.1)');
+    const preview = dialog.locator(`.game-theme-preview--chess-pieces[data-preview-theme="${theme.toLowerCase()}"]`);
+    const previewOutlines = await preview.locator('.game-theme-chess-piece').evaluateAll(pieces =>
+      pieces.map(piece => getComputedStyle(piece).textShadow));
+    expect(previewOutlines[0]).toContain('rgba(0, 0, 0, 0.1)');
+    expect(previewOutlines[1]).toContain('rgba(255, 255, 255, 0.1)');
+  }
+  await dialog.getByRole('button', { name: 'Close settings' }).click();
+  await page.locator('#close-btn').click();
+
+  const reversi = await openGame(page, 'reversi');
+  dialog = await openSettings(reversi);
+  for (const theme of ['Classic', 'Amber', 'Glass']) {
+    await dialog.getByRole('radio', { name: `Piece theme: ${theme}`, exact: true }).click();
+    const outlines = await reversi.evaluate(element => ({
+      white: getComputedStyle(element.querySelector('.disc.white')).borderTopColor,
+      black: getComputedStyle(element.querySelector('.disc.black')).borderTopColor,
+    }));
+    expect(outlines.white).toBe('rgba(0, 0, 0, 0.1)');
+    expect(outlines.black).toBe('rgba(255, 255, 255, 0.1)');
+    const preview = dialog.locator(`.game-theme-preview--reversi-pieces[data-preview-theme="${theme.toLowerCase()}"]`);
+    expect(await preview.locator('.game-theme-disc--light').evaluate(piece =>
+      getComputedStyle(piece).borderTopColor)).toBe('rgba(0, 0, 0, 0.1)');
+    expect(await preview.locator('.game-theme-disc:not(.game-theme-disc--light)').evaluate(piece =>
+      getComputedStyle(piece).borderTopColor)).toBe('rgba(255, 255, 255, 0.1)');
+  }
+});
+
 test('Glass theme previews adapt to both desktop appearances and stay distinct from neighboring themes', async ({ page }) => {
   const previewGroups = [
     { game: 'klondike', types: [['cards', 'botanical'], ['card-table', 'botanical']] },

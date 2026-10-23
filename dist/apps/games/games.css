@@ -21,8 +21,8 @@
   --chess-frame: #493b2c;
   --chess-white-piece: #fffdf3;
   --chess-black-piece: #182124;
-  --chess-white-outline: #514b40;
-  --chess-black-outline: #f4ead6;
+  --chess-white-outline: rgba(0,0,0,.1);
+  --chess-black-outline: rgba(255,255,255,.1);
   --chess-white-detail: #b7aa91;
   --chess-black-detail: #77817d;
   --chess-piece-stroke-width: 1.45;
@@ -34,8 +34,8 @@
   --disc-white: radial-gradient(circle at 32% 25%, #fffef5, #d3d6ca 72%);
   --disc-black-fill: #101718;
   --disc-white-fill: #d3d6ca;
-  --disc-black-border: transparent;
-  --disc-white-border: transparent;
+  --disc-black-border: rgba(255,255,255,.1);
+  --disc-white-border: rgba(0,0,0,.1);
   --mine-board-frame: #858585;
   --mine-board-surface: #808080;
   --mine-cell-face: #c0c0c0;
@@ -97,16 +97,16 @@
 .game-app[data-chess-pieces-theme="modern"] {
   --chess-white-piece: #f8fafc;
   --chess-black-piece: #172033;
-  --chess-white-outline: #64748b;
-  --chess-black-outline: #eef2ff;
+  --chess-white-outline: rgba(0,0,0,.1);
+  --chess-black-outline: rgba(255,255,255,.1);
   --chess-white-detail: #94a3b8;
   --chess-black-detail: #475569;
 }
 .game-app[data-chess-pieces-theme="glass"] {
   --chess-white-piece: #fff;
   --chess-black-piece: #101820;
-  --chess-white-outline: #102b39;
-  --chess-black-outline: #f8fcff;
+  --chess-white-outline: rgba(0,0,0,.1);
+  --chess-black-outline: rgba(255,255,255,.1);
   --chess-white-detail: #102b39;
   --chess-black-detail: #f8fcff;
   --chess-piece-stroke-width: 2.3;
@@ -131,8 +131,8 @@
 .game-app[data-reversi-pieces-theme="glass"] {
   --disc-black-fill: #071117;
   --disc-white-fill: #fff;
-  --disc-black-border: #f7fcff;
-  --disc-white-border: #102b36;
+  --disc-black-border: rgba(255,255,255,.1);
+  --disc-white-border: rgba(0,0,0,.1);
   --disc-black: radial-gradient(circle at 32% 25%, #3b4b52, var(--disc-black-fill) 72%);
   --disc-white: radial-gradient(circle at 32% 25%, #fff, var(--disc-white-fill) 76%);
 }
@@ -663,11 +663,14 @@
 .game-theme-disc {
   width: 0.34rem;
   height: 0.34rem;
+  border: 1px solid rgba(255,255,255,.1);
   border-radius: 50%;
+  box-sizing: border-box;
   background: radial-gradient(circle at 32% 25%, #454b4a, #101718 68%);
   box-shadow: 0 0 1px rgb(0 0 0 / 70%);
 }
 .game-theme-disc--light {
+  border-color: rgba(0,0,0,.1);
   background: radial-gradient(circle at 32% 25%, #fffef5, #d3d6ca 72%);
 }
 .game-theme-preview--chess-pieces {
@@ -681,34 +684,36 @@
   place-items: center;
   width: 100%;
   height: 100%;
-  --chess-piece-outline: #17303c;
   --chess-piece-detail: #17303c;
   color: var(--preview-piece-light);
   font-family: Georgia, serif;
   font-size: 1.08rem;
   line-height: 1;
-  text-shadow: 0 0 1px var(--preview-piece-outline);
+  text-shadow: 0 0 1px var(--preview-piece-light-outline, rgba(0,0,0,.1));
 }
-.game-theme-chess-piece--dark { color: var(--preview-piece-dark); }
 .game-theme-chess-piece--dark {
-  --chess-piece-outline: #f8fcff;
+  color: var(--preview-piece-dark);
+  text-shadow: 0 0 1px var(--preview-piece-dark-outline, rgba(255,255,255,.1));
+}
+.game-theme-chess-piece--dark {
   --chess-piece-detail: #f8fcff;
+}
+.game-theme-preview--chess-pieces {
+  --preview-piece-light-outline: rgba(0,0,0,.1);
+  --preview-piece-dark-outline: rgba(255,255,255,.1);
 }
 .game-theme-preview--chess-pieces[data-preview-theme="classic"] {
   --preview-piece-light: #fffdf3;
   --preview-piece-dark: #182124;
-  --preview-piece-outline: #fff;
 }
 .game-theme-preview--chess-pieces[data-preview-theme="modern"] {
   --preview-piece-light: #f8fafc;
   --preview-piece-dark: #172033;
-  --preview-piece-outline: #e2e8f0;
   background: #8794a5;
 }
 .game-theme-preview--chess-pieces[data-preview-theme="glass"] {
   --preview-piece-light: #fff;
   --preview-piece-dark: #101820;
-  --preview-piece-outline: #fff;
   background: linear-gradient(
     140deg,
     color-mix(in srgb, var(--app-bg) 34%, #a9c4c1 66%),

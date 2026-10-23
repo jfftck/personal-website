@@ -164,8 +164,8 @@
 :root .game-app[data-chess-pieces-theme="glass"] {
   --chess-white-piece: rgba(250, 254, 255, .7);
   --chess-black-piece: rgba(22, 45, 58, .76);
-  --chess-white-outline: rgba(37, 64, 78, .92);
-  --chess-black-outline: rgba(242, 250, 255, .94);
+  --chess-white-outline: rgba(0,0,0,.1);
+  --chess-black-outline: rgba(255,255,255,.1);
   --chess-white-detail: rgba(37, 64, 78, .76);
   --chess-black-detail: rgba(242, 250, 255, .78);
   --chess-piece-stroke-width: 2.15;
@@ -173,8 +173,8 @@
 :root[data-theme="dark"] .game-app[data-chess-pieces-theme="glass"] {
   --chess-white-piece: rgba(245, 251, 255, .62);
   --chess-black-piece: rgba(8, 23, 34, .8);
-  --chess-white-outline: rgba(248, 253, 255, .96);
-  --chess-black-outline: rgba(241, 250, 255, .92);
+  --chess-white-outline: rgba(0,0,0,.1);
+  --chess-black-outline: rgba(255,255,255,.1);
   --chess-white-detail: rgba(248,253,255,.8);
   --chess-black-detail: rgba(230,242,250,.76);
 }
@@ -182,8 +182,8 @@
   :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-chess-pieces-theme="glass"] {
     --chess-white-piece: rgba(245,251,255,.62);
     --chess-black-piece: rgba(8,23,34,.8);
-    --chess-white-outline: rgba(248,253,255,.96);
-    --chess-black-outline: rgba(241,250,255,.92);
+    --chess-white-outline: rgba(0,0,0,.1);
+    --chess-black-outline: rgba(255,255,255,.1);
     --chess-white-detail: rgba(248,253,255,.8);
     --chess-black-detail: rgba(230,242,250,.76);
   }
@@ -227,16 +227,16 @@
 :root .game-app[data-reversi-pieces-theme="glass"] {
   --disc-black-fill: rgba(12, 30, 40, .83);
   --disc-white-fill: rgba(248, 253, 255, .67);
-  --disc-black-border: rgba(244, 251, 255, .92);
-  --disc-white-border: rgba(39, 64, 76, .9);
+  --disc-black-border: rgba(255,255,255,.1);
+  --disc-white-border: rgba(0,0,0,.1);
   --disc-black: radial-gradient(circle at 30% 22%, rgba(101,128,143,.72), rgba(16,38,51,.68) 53%, rgba(7,23,34,.84) 100%);
   --disc-white: radial-gradient(circle at 30% 22%, rgba(255,255,255,.82), rgba(222,240,248,.48) 56%, rgba(133,166,183,.57) 100%);
 }
 :root[data-theme="dark"] .game-app[data-reversi-pieces-theme="glass"] {
   --disc-black-fill: rgba(9, 23, 33, .86);
   --disc-white-fill: rgba(246, 252, 255, .66);
-  --disc-black-border: rgba(240, 249, 255, .95);
-  --disc-white-border: rgba(243, 250, 255, .78);
+  --disc-black-border: rgba(255,255,255,.1);
+  --disc-white-border: rgba(0,0,0,.1);
   --disc-black: radial-gradient(circle at 30% 22%, rgba(92,119,135,.62), rgba(11,29,42,.72) 56%, rgba(4,16,27,.88));
   --disc-white: radial-gradient(circle at 30% 22%, rgba(255,255,255,.8), rgba(207,228,240,.47) 56%, rgba(100,132,151,.58));
 }
@@ -244,8 +244,8 @@
   :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-reversi-pieces-theme="glass"] {
     --disc-black-fill: rgba(9,23,33,.86);
     --disc-white-fill: rgba(246,252,255,.66);
-    --disc-black-border: rgba(240,249,255,.95);
-    --disc-white-border: rgba(243,250,255,.78);
+    --disc-black-border: rgba(255,255,255,.1);
+    --disc-white-border: rgba(0,0,0,.1);
     --disc-black: radial-gradient(circle at 30% 22%, rgba(92,119,135,.62), rgba(11,29,42,.72) 56%, rgba(4,16,27,.88));
     --disc-white: radial-gradient(circle at 30% 22%, rgba(255,255,255,.8), rgba(207,228,240,.47) 56%, rgba(100,132,151,.58));
   }
@@ -447,17 +447,16 @@
 .game-theme-preview--chess-pieces[data-preview-theme="glass"] {
   --preview-piece-light: rgba(250,254,255,.72);
   --preview-piece-dark: rgba(22,45,58,.8);
-  --preview-piece-outline: rgba(42,68,82,.94);
+  --preview-piece-light-outline: rgba(0,0,0,.1);
+  --preview-piece-dark-outline: rgba(255,255,255,.1);
   background: linear-gradient(145deg, rgba(245,251,255,.3), rgba(61,96,109,.28));
   -webkit-backdrop-filter: blur(5px) saturate(1.16);
   backdrop-filter: blur(5px) saturate(1.16);
 }
 .game-theme-preview--chess-pieces[data-preview-theme="glass"] .game-theme-chess-piece {
-  --chess-piece-outline: rgba(42,68,82,.94);
   --chess-piece-detail: rgba(42,68,82,.76);
 }
 .game-theme-preview--chess-pieces[data-preview-theme="glass"] .game-theme-chess-piece--dark {
-  --chess-piece-outline: rgba(243,250,255,.96);
   --chess-piece-detail: rgba(243,250,255,.8);
 }
 .game-theme-preview--reversi-pieces[data-preview-theme="glass"] {
@@ -466,12 +465,12 @@
   backdrop-filter: blur(5px) saturate(1.16);
 }
 .game-theme-preview--reversi-pieces[data-preview-theme="glass"] .game-theme-disc {
-  border: 1px solid rgba(244,251,255,.94);
+  border: 1px solid rgba(255,255,255,.1);
   background: radial-gradient(circle at 30% 22%, rgba(101,128,143,.72), rgba(16,38,51,.68) 53%, rgba(7,23,34,.84));
   box-shadow: 0 1px 2px rgba(8,25,35,.25), inset 0 1px 2px rgba(255,255,255,.48);
 }
 .game-theme-preview--reversi-pieces[data-preview-theme="glass"] .game-theme-disc--light {
-  border-color: rgba(39,64,76,.9);
+  border-color: rgba(0,0,0,.1);
   background: radial-gradient(circle at 30% 22%, rgba(255,255,255,.82), rgba(222,240,248,.48) 56%, rgba(133,166,183,.57));
 }
 :root[data-theme="dark"] .game-theme-preview--cards[data-preview-theme="glass"] {
@@ -480,7 +479,8 @@
 :root[data-theme="dark"] .game-theme-preview--chess-pieces[data-preview-theme="glass"] {
   --preview-piece-light: rgba(245,251,255,.68);
   --preview-piece-dark: rgba(8,23,34,.84);
-  --preview-piece-outline: rgba(242,250,255,.94);
+  --preview-piece-light-outline: rgba(0,0,0,.1);
+  --preview-piece-dark-outline: rgba(255,255,255,.1);
 }
 :root[data-theme="dark"] .game-theme-preview--reversi-pieces[data-preview-theme="glass"] {
   background: linear-gradient(145deg, rgba(135,193,188,.28), rgba(12,48,53,.34));
@@ -500,7 +500,8 @@
   :root:not([data-theme="light"]):not([data-theme="dark"]) .game-theme-preview--chess-pieces[data-preview-theme="glass"] {
     --preview-piece-light: rgba(245,251,255,.68);
     --preview-piece-dark: rgba(8,23,34,.84);
-    --preview-piece-outline: rgba(242,250,255,.94);
+    --preview-piece-light-outline: rgba(0,0,0,.1);
+    --preview-piece-dark-outline: rgba(255,255,255,.1);
   }
   :root:not([data-theme="light"]):not([data-theme="dark"]) .game-theme-preview--reversi-pieces[data-preview-theme="glass"] {
     background: linear-gradient(145deg, rgba(135,193,188,.28), rgba(12,48,53,.34));
