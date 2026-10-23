@@ -33,6 +33,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     }));
   const removeBoardTheme = addGameThemeControl(el, settings.appearanceOptions, isChess ? 'chessBoard' : 'reversiBoard');
   const removePieceTheme = addGameThemeControl(el, settings.appearanceOptions, isChess ? 'chessPieces' : 'reversiPieces');
+  const removePieceStyle = isChess ? addGameThemeControl(el, settings.appearanceOptions, 'chessArtwork') : null;
   const removeThemeResetControl = addGameThemeResetControl(settings.appearanceOptions);
 
   function cancelComputer() {
@@ -319,6 +320,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
       clearTimeout(endScreenTimer);
       removeBoardTheme();
       removePieceTheme();
+      removePieceStyle?.();
       removeThemeResetControl();
       settings.destroy();
       newGameScreenCleanup?.();

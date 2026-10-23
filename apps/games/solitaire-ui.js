@@ -3,6 +3,7 @@ import {
   chooseWinCelebration, SUITS, rankLabel, isRed,
 } from './cards.js';
 import { createWinCelebration } from './celebrations.js';
+import { paintCardFace } from './card-artwork.js';
 import {
   gameShell, button, selectControl, preserveFocus, showRestorePrompt, showNewGameScreen,
 } from './ui.js';
@@ -78,6 +79,8 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
   }
   const removeThemeControl = addGameThemeControl(el, settings.appearanceOptions, 'cards');
   const removeTableThemeControl = addGameThemeControl(el, settings.appearanceOptions, 'cardTable');
+  const removeFaceStyle = addGameThemeControl(el, settings.appearanceOptions, 'cardFaces');
+  const removeBackStyle = addGameThemeControl(el, settings.appearanceOptions, 'cardBacks');
   const removeThemeResetControl = addGameThemeResetControl(settings.appearanceOptions);
   function action(fn, animateIds = []) {
     const before = structuredClone(state);
@@ -243,6 +246,8 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     const layer = document.createElement('div');
     layer.className = 'card-drag-layer';
     layer.dataset.cardTheme = el.dataset.cardTheme;
+    layer.dataset.cardFaceStyle = el.dataset.cardFaceStyle;
+    layer.dataset.cardBackStyle = el.dataset.cardBackStyle;
     layer.setAttribute('aria-hidden', 'true');
     for (const property of [
       '--card-face', '--card-ink', '--card-red',
@@ -260,7 +265,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       for (const className of ['red', 'face-down']) {
         clone.classList.toggle(className, source.classList.contains(className));
       }
-      clone.textContent = source.textContent;
+      clone.innerHTML = source.innerHTML;
       clone.style.left = `${rect.left - firstRect.left}px`;
       clone.style.top = `${rect.top - firstRect.top}px`;
       clone.style.width = `${rect.width}px`;
@@ -372,6 +377,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
         if (!all && offset !== pile.length - 1) return;
         const face = `${rankLabel(card.rank)}${SUITS[card.suit]}`;
         const btn = button(card.up ? face : '', () => clickPile(zone, index, offset), 'playing-card');
+        if (card.up) paintCardFace(btn, card);
         btn.classList.toggle('face-down', !card.up);
         btn.classList.toggle('red', isRed(card));
         btn.classList.toggle('selected', selected?.zone === zone && selected.index === index && selected.offset === offset);
@@ -502,6 +508,8 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       dragAbort.abort();
       removeThemeControl();
       removeTableThemeControl();
+      removeFaceStyle();
+      removeBackStyle();
       removeThemeResetControl();
       settings.destroy();
       clearTimeout(suppressClickTimer);

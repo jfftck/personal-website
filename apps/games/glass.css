@@ -1,0 +1,496 @@
+/* Glass is a material, not a replacement game theme. These overrides only
+   participate when a game or preview explicitly selects Glass. */
+
+.game-app[data-minesweeper-theme="glass"],
+.game-app[data-chess-board-theme="glass"],
+.game-app[data-reversi-board-theme="glass"],
+.game-app[data-chess-pieces-theme="glass"],
+.game-app[data-reversi-pieces-theme="glass"],
+.game-app[data-card-theme="glass"],
+.game-app[data-card-table-theme="glass"],
+.card-drag-layer[data-card-theme="glass"],
+.solitaire-celebration-layer[data-card-theme="glass"] {
+  --glass-edge: rgba(40, 63, 76, .44);
+  --glass-edge-soft: rgba(40, 63, 76, .24);
+  --glass-bright: rgba(245, 251, 255, .58);
+  --glass-dim: rgba(67, 93, 109, .28);
+  --glass-ink: rgba(24, 43, 54, .82);
+  --glass-refraction: blur(9px) saturate(1.18);
+  --glass-table-edge: rgba(24, 59, 71, .32);
+  --glass-table-center: rgba(174, 218, 218, .3);
+}
+
+:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"],
+:root[data-theme="dark"] .game-app[data-chess-board-theme="glass"],
+:root[data-theme="dark"] .game-app[data-reversi-board-theme="glass"],
+:root[data-theme="dark"] .game-app[data-chess-pieces-theme="glass"],
+:root[data-theme="dark"] .game-app[data-reversi-pieces-theme="glass"],
+:root[data-theme="dark"] .game-app[data-card-theme="glass"],
+:root[data-theme="dark"] .game-app[data-card-table-theme="glass"],
+:root[data-theme="dark"] .card-drag-layer[data-card-theme="glass"],
+:root[data-theme="dark"] .solitaire-celebration-layer[data-card-theme="glass"] {
+  --glass-edge: rgba(239, 248, 255, .66);
+  --glass-edge-soft: rgba(229, 241, 250, .36);
+  --glass-bright: rgba(215, 233, 246, .43);
+  --glass-dim: rgba(10, 24, 35, .48);
+  --glass-ink: rgba(12, 25, 34, .9);
+  --glass-table-edge: rgba(5, 19, 29, .48);
+  --glass-table-center: rgba(83, 139, 148, .3);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-minesweeper-theme="glass"],
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-chess-board-theme="glass"],
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-reversi-board-theme="glass"],
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-chess-pieces-theme="glass"],
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-reversi-pieces-theme="glass"],
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-card-theme="glass"],
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-card-table-theme="glass"],
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .card-drag-layer[data-card-theme="glass"],
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .solitaire-celebration-layer[data-card-theme="glass"] {
+    --glass-edge: rgba(239, 248, 255, .66);
+    --glass-edge-soft: rgba(229, 241, 250, .36);
+    --glass-bright: rgba(215, 233, 246, .43);
+    --glass-dim: rgba(10, 24, 35, .48);
+    --glass-ink: rgba(12, 25, 34, .9);
+    --glass-table-edge: rgba(5, 19, 29, .48);
+    --glass-table-center: rgba(83, 139, 148, .3);
+  }
+}
+
+/* Minesweeper: preserve its bevels and compact board geometry, but make the
+   tile faces translucent rather than solid glass-colored slabs. */
+:root .game-app[data-minesweeper-theme="glass"] {
+  --mine-board-frame: rgba(61, 87, 101, .24);
+  --mine-board-surface: rgba(87, 115, 132, .2);
+  --mine-cell-face: linear-gradient(155deg,
+    rgba(113,145,163,.3) 0%,
+    rgba(255,255,255,.5) 52%,
+    rgba(113,145,163,.3) 100%);
+  --mine-cell-open: linear-gradient(155deg,
+    rgba(59,83,99,.36) 0%,
+    rgba(117,146,163,.38) 52%,
+    rgba(38,61,76,.36) 100%);
+  --mine-cell-border: rgba(58, 79, 93, .62);
+  --mine-cell-text: rgba(25, 45, 58, .9);
+  --mine-cell-highlight: rgba(255,255,255,.62);
+  --mine-cell-shadow: rgba(34,55,69,.38);
+  --mine-cell-hover: linear-gradient(155deg,
+    rgba(137,169,185,.3) 0%,
+    rgba(255,255,255,.62) 52%,
+    rgba(137,169,185,.3) 100%);
+}
+:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] {
+  --mine-board-frame: rgba(12, 27, 39, .26);
+  --mine-board-surface: rgba(14, 33, 46, .25);
+  --mine-cell-face: linear-gradient(155deg,
+    rgba(115,143,162,.34) 0%,
+    rgba(224,237,246,.5) 52%,
+    rgba(115,143,162,.34) 100%);
+  --mine-cell-open: linear-gradient(155deg,
+    rgba(15,29,41,.48) 0%,
+    rgba(39,58,72,.46) 52%,
+    rgba(10,22,33,.52) 100%);
+  --mine-cell-border: rgba(240, 248, 255, .68);
+  --mine-cell-text: rgba(10, 23, 32, .92);
+  --mine-cell-highlight: rgba(255,255,255,.44);
+  --mine-cell-shadow: rgba(4,14,23,.58);
+  --mine-cell-hover: linear-gradient(155deg,
+    rgba(139,167,184,.34) 0%,
+    rgba(240,248,252,.58) 52%,
+    rgba(139,167,184,.34) 100%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-minesweeper-theme="glass"] {
+    --mine-board-frame: rgba(12, 27, 39, .26);
+    --mine-board-surface: rgba(14, 33, 46, .25);
+    --mine-cell-face: linear-gradient(155deg, rgba(115,143,162,.34), rgba(224,237,246,.5) 52%, rgba(115,143,162,.34));
+    --mine-cell-open: linear-gradient(155deg, rgba(15,29,41,.48), rgba(39,58,72,.46) 52%, rgba(10,22,33,.52));
+    --mine-cell-border: rgba(240,248,255,.68);
+    --mine-cell-text: rgba(10,23,32,.92);
+    --mine-cell-highlight: rgba(255,255,255,.44);
+    --mine-cell-shadow: rgba(4,14,23,.58);
+    --mine-cell-hover: linear-gradient(155deg, rgba(139,167,184,.34), rgba(240,248,252,.58) 52%, rgba(139,167,184,.34));
+  }
+}
+.game-app[data-minesweeper-theme="glass"] .mine-board-wrap,
+.game-app[data-minesweeper-theme="glass"] .mine-board {
+  -webkit-backdrop-filter: var(--glass-refraction);
+  backdrop-filter: var(--glass-refraction);
+}
+.game-app[data-minesweeper-theme="glass"] .mine-board-wrap {
+  border-color: var(--glass-edge);
+  background: var(--mine-board-frame);
+}
+.game-app[data-minesweeper-theme="glass"] .mine-board {
+  background: var(--mine-board-surface);
+}
+.game-app[data-minesweeper-theme="glass"] .mine-cell {
+  -webkit-backdrop-filter: blur(7px) saturate(1.15);
+  backdrop-filter: blur(7px) saturate(1.15);
+}
+.game-app[data-minesweeper-theme="glass"] .mine-cell.exploded {
+  background: linear-gradient(155deg, rgba(226,102,91,.76), rgba(153,48,47,.62));
+}
+
+/* Chess: the alternating transparent panes retain an obvious warm/cool split.
+   SVG piece silhouettes use translucent fills and crisp, theme-opposed strokes. */
+:root .game-app[data-chess-board-theme="glass"] {
+  --chess-frame: rgba(78, 106, 120, .42);
+  --tile-light: linear-gradient(145deg, rgba(128,166,184,.28), rgba(255,255,255,.5) 54%, rgba(128,166,184,.28));
+  --tile-dark: linear-gradient(145deg, rgba(34,70,89,.38), rgba(132,170,186,.42) 54%, rgba(34,70,89,.38));
+}
+:root[data-theme="dark"] .game-app[data-chess-board-theme="glass"] {
+  --chess-frame: rgba(13, 29, 42, .38);
+  --tile-light: linear-gradient(145deg, rgba(92,130,151,.3), rgba(216,236,248,.46) 54%, rgba(92,130,151,.3));
+  --tile-dark: linear-gradient(145deg, rgba(9,24,37,.5), rgba(51,81,99,.4) 54%, rgba(9,24,37,.5));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-chess-board-theme="glass"] {
+    --chess-frame: rgba(13,29,42,.38);
+    --tile-light: linear-gradient(145deg, rgba(92,130,151,.3), rgba(216,236,248,.46) 54%, rgba(92,130,151,.3));
+    --tile-dark: linear-gradient(145deg, rgba(9,24,37,.5), rgba(51,81,99,.4) 54%, rgba(9,24,37,.5));
+  }
+}
+.game-app[data-chess-board-theme="glass"] .chess-board {
+  -webkit-backdrop-filter: var(--glass-refraction);
+  backdrop-filter: var(--glass-refraction);
+  box-shadow: 0 10px 28px rgba(12,31,42,.18), inset 0 1px rgba(255,255,255,.42);
+}
+.game-app[data-chess-board-theme="glass"] .chess-board .board-square {
+  -webkit-backdrop-filter: blur(8px) saturate(1.18);
+  backdrop-filter: blur(8px) saturate(1.18);
+}
+:root .game-app[data-chess-pieces-theme="glass"] {
+  --chess-white-piece: rgba(250, 254, 255, .7);
+  --chess-black-piece: rgba(22, 45, 58, .76);
+  --chess-white-outline: rgba(37, 64, 78, .92);
+  --chess-black-outline: rgba(242, 250, 255, .94);
+  --chess-white-detail: rgba(37, 64, 78, .76);
+  --chess-black-detail: rgba(242, 250, 255, .78);
+  --chess-piece-stroke-width: 2.15;
+}
+:root[data-theme="dark"] .game-app[data-chess-pieces-theme="glass"] {
+  --chess-white-piece: rgba(245, 251, 255, .62);
+  --chess-black-piece: rgba(8, 23, 34, .8);
+  --chess-white-outline: rgba(248, 253, 255, .96);
+  --chess-black-outline: rgba(241, 250, 255, .92);
+  --chess-white-detail: rgba(248,253,255,.8);
+  --chess-black-detail: rgba(230,242,250,.76);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-chess-pieces-theme="glass"] {
+    --chess-white-piece: rgba(245,251,255,.62);
+    --chess-black-piece: rgba(8,23,34,.8);
+    --chess-white-outline: rgba(248,253,255,.96);
+    --chess-black-outline: rgba(241,250,255,.92);
+    --chess-white-detail: rgba(248,253,255,.8);
+    --chess-black-detail: rgba(230,242,250,.76);
+  }
+}
+.game-app[data-chess-pieces-theme="glass"] .chess-piece-svg {
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  filter: drop-shadow(0 1px 2px rgba(16,39,51,.28));
+}
+
+/* Reversi: a softly tinted pane under glassy, beveled discs. */
+:root .game-app[data-reversi-board-theme="glass"] {
+  --reversi-frame: rgba(40, 69, 82, .4);
+  --reversi-felt: rgba(74, 128, 133, .24);
+  --reversi-square: linear-gradient(145deg, rgba(49,112,108,.3), rgba(226,248,243,.42) 54%, rgba(49,112,108,.3));
+  --reversi-hover: linear-gradient(145deg, rgba(72,147,134,.3), rgba(255,255,255,.58) 54%, rgba(72,147,134,.3));
+}
+:root[data-theme="dark"] .game-app[data-reversi-board-theme="glass"] {
+  --reversi-frame: rgba(12, 30, 41, .42);
+  --reversi-felt: rgba(14, 66, 68, .28);
+  --reversi-square: linear-gradient(145deg, rgba(16,66,70,.38), rgba(135,193,188,.38) 54%, rgba(16,66,70,.38));
+  --reversi-hover: linear-gradient(145deg, rgba(24,91,91,.34), rgba(194,231,224,.5) 54%, rgba(24,91,91,.34));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-reversi-board-theme="glass"] {
+    --reversi-frame: rgba(12,30,41,.42);
+    --reversi-felt: rgba(14,66,68,.28);
+    --reversi-square: linear-gradient(145deg, rgba(16,66,70,.38), rgba(135,193,188,.38) 54%, rgba(16,66,70,.38));
+    --reversi-hover: linear-gradient(145deg, rgba(24,91,91,.34), rgba(194,231,224,.5) 54%, rgba(24,91,91,.34));
+  }
+}
+.game-app[data-reversi-board-theme="glass"] .reversi-board {
+  -webkit-backdrop-filter: var(--glass-refraction);
+  backdrop-filter: var(--glass-refraction);
+  box-shadow: 0 10px 28px rgba(12,31,42,.18), inset 0 1px rgba(255,255,255,.4);
+}
+.game-app[data-reversi-board-theme="glass"] .reversi-board .board-square {
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  backdrop-filter: blur(8px) saturate(1.2);
+}
+:root .game-app[data-reversi-pieces-theme="glass"] {
+  --disc-black-fill: rgba(12, 30, 40, .83);
+  --disc-white-fill: rgba(248, 253, 255, .67);
+  --disc-black-border: rgba(244, 251, 255, .92);
+  --disc-white-border: rgba(39, 64, 76, .9);
+  --disc-black: radial-gradient(circle at 30% 22%, rgba(101,128,143,.72), rgba(16,38,51,.68) 53%, rgba(7,23,34,.84) 100%);
+  --disc-white: radial-gradient(circle at 30% 22%, rgba(255,255,255,.82), rgba(222,240,248,.48) 56%, rgba(133,166,183,.57) 100%);
+}
+:root[data-theme="dark"] .game-app[data-reversi-pieces-theme="glass"] {
+  --disc-black-fill: rgba(9, 23, 33, .86);
+  --disc-white-fill: rgba(246, 252, 255, .66);
+  --disc-black-border: rgba(240, 249, 255, .95);
+  --disc-white-border: rgba(243, 250, 255, .78);
+  --disc-black: radial-gradient(circle at 30% 22%, rgba(92,119,135,.62), rgba(11,29,42,.72) 56%, rgba(4,16,27,.88));
+  --disc-white: radial-gradient(circle at 30% 22%, rgba(255,255,255,.8), rgba(207,228,240,.47) 56%, rgba(100,132,151,.58));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-reversi-pieces-theme="glass"] {
+    --disc-black-fill: rgba(9,23,33,.86);
+    --disc-white-fill: rgba(246,252,255,.66);
+    --disc-black-border: rgba(240,249,255,.95);
+    --disc-white-border: rgba(243,250,255,.78);
+    --disc-black: radial-gradient(circle at 30% 22%, rgba(92,119,135,.62), rgba(11,29,42,.72) 56%, rgba(4,16,27,.88));
+    --disc-white: radial-gradient(circle at 30% 22%, rgba(255,255,255,.8), rgba(207,228,240,.47) 56%, rgba(100,132,151,.58));
+  }
+}
+.game-app[data-reversi-pieces-theme="glass"] .disc {
+  -webkit-backdrop-filter: blur(5px) saturate(1.2);
+  backdrop-filter: blur(5px) saturate(1.2);
+  box-shadow: 0 2px 4px rgba(8,25,35,.24), inset 0 1px 2px rgba(255,255,255,.48);
+}
+
+/* Playing cards: only adjust the face material variables and edges, leaving
+   any independently selected face/back artwork overlays intact. */
+:root .game-app[data-card-theme="glass"],
+:root .card-drag-layer[data-card-theme="glass"],
+:root .solitaire-celebration-layer[data-card-theme="glass"] {
+  --card-face: rgba(248, 253, 255, .58);
+  --card-ink: rgba(24, 42, 53, .9);
+  --card-red: rgba(157, 48, 62, .94);
+  --card-back-start: rgba(118, 160, 179, .44);
+  --card-back-end: rgba(37, 78, 99, .62);
+  --card-back-pattern: rgba(247, 253, 255, .34);
+  --card-back-border: rgba(53, 77, 91, .68);
+}
+:root[data-theme="dark"] .game-app[data-card-theme="glass"],
+:root[data-theme="dark"] .card-drag-layer[data-card-theme="glass"],
+:root[data-theme="dark"] .solitaire-celebration-layer[data-card-theme="glass"] {
+  --card-face: rgba(226, 241, 250, .52);
+  --card-ink: rgba(17, 32, 43, .94);
+  --card-red: rgba(145, 35, 54, .96);
+  --card-back-start: rgba(153, 185, 204, .43);
+  --card-back-end: rgba(28, 54, 73, .62);
+  --card-back-pattern: rgba(255,255,255,.38);
+  --card-back-border: rgba(242, 249, 255, .75);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-card-theme="glass"],
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .card-drag-layer[data-card-theme="glass"],
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .solitaire-celebration-layer[data-card-theme="glass"] {
+    --card-face: rgba(226,241,250,.52);
+    --card-ink: rgba(17,32,43,.94);
+    --card-red: rgba(145,35,54,.96);
+    --card-back-start: rgba(153,185,204,.43);
+    --card-back-end: rgba(28,54,73,.62);
+    --card-back-pattern: rgba(255,255,255,.38);
+    --card-back-border: rgba(242,249,255,.75);
+  }
+}
+.game-app[data-card-theme="glass"] .playing-card,
+.card-drag-layer[data-card-theme="glass"] .playing-card,
+.solitaire-celebration-layer[data-card-theme="glass"] .playing-card {
+  -webkit-backdrop-filter: blur(8px) saturate(1.17);
+  backdrop-filter: blur(8px) saturate(1.17);
+  border-color: var(--glass-edge);
+  box-shadow: 0 2px 5px rgba(15,35,47,.18), inset 0 0 0 1px rgba(255,255,255,.4);
+}
+.game-app[data-card-theme="glass"] .playing-card.face-down,
+.card-drag-layer[data-card-theme="glass"] .playing-card.face-down,
+.solitaire-celebration-layer[data-card-theme="glass"] .playing-card.face-down {
+  border-color: var(--card-back-border);
+  background-image:
+    repeating-linear-gradient(45deg, transparent 0 4px, var(--card-back-pattern) 4px 5px),
+    radial-gradient(circle at 50% 42%, rgba(226, 246, 255, .4) 0%, rgba(126, 166, 185, .2) 48%, rgba(20, 48, 64, .42) 100%);
+  box-shadow: 0 2px 5px rgba(15,35,47,.2), inset 0 0 0 2px rgba(255,255,255,.35), inset 0 0 0 5px rgba(255,255,255,.08);
+}
+.game-app[data-card-theme="glass"] .card-stock button {
+  -webkit-backdrop-filter: blur(8px) saturate(1.17);
+  backdrop-filter: blur(8px) saturate(1.17);
+  background-image:
+    repeating-linear-gradient(45deg, transparent 0 4px, var(--card-back-pattern) 4px 5px),
+    radial-gradient(circle at 50% 42%, rgba(226,246,255,.4) 0%, rgba(126,166,185,.2) 48%, rgba(20,48,64,.42) 100%);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.35), inset 0 0 0 5px rgba(255,255,255,.08), 0 2px 5px rgba(15,35,47,.2);
+}
+.card-drag-layer[data-card-theme="glass"],
+.solitaire-celebration-layer[data-card-theme="glass"] {
+  -webkit-backdrop-filter: var(--glass-refraction);
+  backdrop-filter: var(--glass-refraction);
+}
+
+/* The table selector is independent of the card-face palette, so the playfield
+   keeps its glass material when users pair it with another card theme. */
+:root .game-app[data-card-table-theme="glass"] .solitaire-table {
+  border-color: var(--glass-edge);
+  background:
+    linear-gradient(145deg,
+      var(--glass-table-edge) 0%,
+      var(--glass-table-center) 52%,
+      var(--glass-table-edge) 100%);
+  -webkit-backdrop-filter: var(--glass-refraction);
+  backdrop-filter: var(--glass-refraction);
+}
+:root .game-app[data-card-table-theme="glass"] .card-field-group,
+:root .game-app[data-card-table-theme="glass"] .card-pile {
+  border-color: var(--glass-edge-soft);
+}
+.game-app[data-card-theme="glass"] .playing-card:not(.face-down)::before,
+.card-drag-layer[data-card-theme="glass"] .playing-card:not(.face-down)::before,
+.solitaire-celebration-layer[data-card-theme="glass"] .playing-card:not(.face-down)::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  background-image: linear-gradient(155deg,
+    rgba(60, 91, 108, .12) 0%,
+    rgba(255, 255, 255, .22) 52%,
+    rgba(46, 76, 91, .12) 100%);
+  content: "";
+  pointer-events: none;
+}
+
+/* Settings swatches mirror the transparent surfaces without changing their
+   geometry or the preview samples supplied by themes.js. */
+.game-theme-preview--minesweeper[data-preview-theme="glass"] {
+  --preview-mine-surface: rgba(87,115,132,.2);
+  --preview-mine-face: linear-gradient(155deg, rgba(113,145,163,.3), rgba(255,255,255,.5) 52%, rgba(113,145,163,.3));
+  --preview-mine-open: linear-gradient(155deg, rgba(59,83,99,.36), rgba(117,146,163,.38) 52%, rgba(38,61,76,.36));
+  --preview-mine-border: rgba(58,79,93,.68);
+  -webkit-backdrop-filter: blur(5px) saturate(1.15);
+  backdrop-filter: blur(5px) saturate(1.15);
+}
+:root[data-theme="dark"] .game-theme-preview--minesweeper[data-preview-theme="glass"] {
+  --preview-mine-surface: rgba(14,33,46,.25);
+  --preview-mine-face: linear-gradient(155deg, rgba(115,143,162,.34), rgba(224,237,246,.5) 52%, rgba(115,143,162,.34));
+  --preview-mine-open: linear-gradient(155deg, rgba(15,29,41,.48), rgba(39,58,72,.46) 52%, rgba(10,22,33,.52));
+  --preview-mine-border: rgba(240,248,255,.7);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-theme-preview--minesweeper[data-preview-theme="glass"] {
+    --preview-mine-surface: rgba(14,33,46,.25);
+    --preview-mine-face: linear-gradient(155deg, rgba(191,213,228,.48), rgba(224,237,246,.28) 52%, rgba(115,143,162,.38));
+    --preview-mine-open: linear-gradient(155deg, rgba(15,29,41,.48), rgba(39,58,72,.31) 52%, rgba(10,22,33,.52));
+    --preview-mine-border: rgba(240,248,255,.7);
+  }
+}
+.game-theme-preview--chess-board[data-preview-theme="glass"] {
+  --preview-square-light: linear-gradient(145deg, rgba(128,166,184,.28), rgba(255,255,255,.5) 54%, rgba(128,166,184,.28));
+  --preview-square-dark: linear-gradient(145deg, rgba(34,70,89,.38), rgba(132,170,186,.42) 54%, rgba(34,70,89,.38));
+  -webkit-backdrop-filter: blur(5px) saturate(1.18);
+  backdrop-filter: blur(5px) saturate(1.18);
+}
+:root[data-theme="dark"] .game-theme-preview--chess-board[data-preview-theme="glass"] {
+  --preview-square-light: linear-gradient(145deg, rgba(92,130,151,.3), rgba(216,236,248,.46) 54%, rgba(92,130,151,.3));
+  --preview-square-dark: linear-gradient(145deg, rgba(9,24,37,.5), rgba(51,81,99,.4) 54%, rgba(9,24,37,.5));
+}
+.game-theme-preview--reversi-board[data-preview-theme="glass"] {
+  --preview-reversi-board: rgba(74,128,133,.24);
+  --preview-reversi-square: linear-gradient(145deg, rgba(49,112,108,.3), rgba(226,248,243,.42) 54%, rgba(49,112,108,.3));
+  -webkit-backdrop-filter: blur(5px) saturate(1.18);
+  backdrop-filter: blur(5px) saturate(1.18);
+}
+:root[data-theme="dark"] .game-theme-preview--reversi-board[data-preview-theme="glass"] {
+  --preview-reversi-board: rgba(14,66,68,.28);
+  --preview-reversi-square: linear-gradient(145deg, rgba(16,66,70,.38), rgba(135,193,188,.38) 54%, rgba(16,66,70,.38));
+}
+.game-theme-preview--cards[data-preview-theme="glass"] {
+  background: linear-gradient(145deg, rgba(245,251,255,.3), rgba(40,79,96,.3));
+  -webkit-backdrop-filter: blur(5px) saturate(1.16);
+  backdrop-filter: blur(5px) saturate(1.16);
+}
+.game-theme-preview--cards[data-preview-theme="glass"] .game-theme-card-back {
+  --preview-card-start: rgba(118,160,179,.44);
+  --preview-card-end: rgba(37,78,99,.62);
+  --preview-card-pattern: rgba(247,253,255,.34);
+  --preview-card-border: rgba(53,77,91,.68);
+  background:
+    repeating-linear-gradient(45deg, transparent 0 3px, var(--preview-card-pattern) 3px 4px),
+    radial-gradient(circle at 50% 42%, rgba(226,246,255,.4), rgba(126,166,185,.2) 48%, rgba(20,48,64,.42));
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.game-theme-preview--card-table[data-preview-theme="glass"] {
+  --preview-felt: rgba(74, 128, 133, .24);
+  --preview-felt-light: rgba(174, 218, 218, .32);
+  --preview-felt-dark: rgba(24, 59, 71, .32);
+  background: linear-gradient(145deg,
+    rgba(24,59,71,.28),
+    rgba(174,218,218,.28) 52%,
+    rgba(24,59,71,.28));
+  -webkit-backdrop-filter: blur(5px) saturate(1.16);
+  backdrop-filter: blur(5px) saturate(1.16);
+}
+.game-theme-preview--card-table[data-preview-theme="glass"] .game-theme-felt-sample {
+  background: linear-gradient(145deg,
+    rgba(62,111,120,.28),
+    rgba(205,239,233,.42) 52%,
+    rgba(62,111,120,.28));
+}
+.game-theme-preview--chess-pieces[data-preview-theme="glass"] {
+  --preview-piece-light: rgba(250,254,255,.72);
+  --preview-piece-dark: rgba(22,45,58,.8);
+  --preview-piece-outline: rgba(42,68,82,.94);
+  background: linear-gradient(145deg, rgba(245,251,255,.3), rgba(61,96,109,.28));
+  -webkit-backdrop-filter: blur(5px) saturate(1.16);
+  backdrop-filter: blur(5px) saturate(1.16);
+}
+.game-theme-preview--chess-pieces[data-preview-theme="glass"] .game-theme-chess-piece {
+  --chess-piece-outline: rgba(42,68,82,.94);
+  --chess-piece-detail: rgba(42,68,82,.76);
+}
+.game-theme-preview--chess-pieces[data-preview-theme="glass"] .game-theme-chess-piece--dark {
+  --chess-piece-outline: rgba(243,250,255,.96);
+  --chess-piece-detail: rgba(243,250,255,.8);
+}
+.game-theme-preview--reversi-pieces[data-preview-theme="glass"] {
+  background: linear-gradient(145deg, rgba(226,248,243,.3), rgba(44,103,101,.27));
+  -webkit-backdrop-filter: blur(5px) saturate(1.16);
+  backdrop-filter: blur(5px) saturate(1.16);
+}
+.game-theme-preview--reversi-pieces[data-preview-theme="glass"] .game-theme-disc {
+  border: 1px solid rgba(244,251,255,.94);
+  background: radial-gradient(circle at 30% 22%, rgba(101,128,143,.72), rgba(16,38,51,.68) 53%, rgba(7,23,34,.84));
+  box-shadow: 0 1px 2px rgba(8,25,35,.25), inset 0 1px 2px rgba(255,255,255,.48);
+}
+.game-theme-preview--reversi-pieces[data-preview-theme="glass"] .game-theme-disc--light {
+  border-color: rgba(39,64,76,.9);
+  background: radial-gradient(circle at 30% 22%, rgba(255,255,255,.82), rgba(222,240,248,.48) 56%, rgba(133,166,183,.57));
+}
+:root[data-theme="dark"] .game-theme-preview--cards[data-preview-theme="glass"] {
+  background: linear-gradient(145deg, rgba(224,240,249,.26), rgba(20,42,57,.34));
+}
+:root[data-theme="dark"] .game-theme-preview--chess-pieces[data-preview-theme="glass"] {
+  --preview-piece-light: rgba(245,251,255,.68);
+  --preview-piece-dark: rgba(8,23,34,.84);
+  --preview-piece-outline: rgba(242,250,255,.94);
+}
+:root[data-theme="dark"] .game-theme-preview--reversi-pieces[data-preview-theme="glass"] {
+  background: linear-gradient(145deg, rgba(135,193,188,.28), rgba(12,48,53,.34));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-theme-preview--chess-board[data-preview-theme="glass"] {
+    --preview-square-light: linear-gradient(145deg, rgba(216,236,248,.43), rgba(174,207,225,.21) 58%, rgba(92,130,151,.33));
+    --preview-square-dark: linear-gradient(145deg, rgba(15,34,48,.52), rgba(51,81,99,.28) 54%, rgba(9,24,37,.54));
+  }
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-theme-preview--reversi-board[data-preview-theme="glass"] {
+    --preview-reversi-board: rgba(14,66,68,.28);
+    --preview-reversi-square: linear-gradient(145deg, rgba(135,193,188,.32), rgba(65,132,131,.2) 58%, rgba(16,66,70,.4));
+  }
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-theme-preview--cards[data-preview-theme="glass"] {
+    background: linear-gradient(145deg, rgba(224,240,249,.26), rgba(20,42,57,.34));
+  }
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-theme-preview--chess-pieces[data-preview-theme="glass"] {
+    --preview-piece-light: rgba(245,251,255,.68);
+    --preview-piece-dark: rgba(8,23,34,.84);
+    --preview-piece-outline: rgba(242,250,255,.94);
+  }
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .game-theme-preview--reversi-pieces[data-preview-theme="glass"] {
+    background: linear-gradient(145deg, rgba(135,193,188,.28), rgba(12,48,53,.34));
+  }
+}

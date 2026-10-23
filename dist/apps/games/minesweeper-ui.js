@@ -6,7 +6,7 @@ import { createGameSession, inspectGameSession } from './game-state.js';
 import { addGameThemeControl, addGameThemeResetControl } from './themes.js';
 
 export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
-  const { el, toolbarCenter, status, area, settings } = gameShell(id, 'Minesweeper',
+  const { el, toolbarLeft, toolbarCenter, status, area, settings } = gameShell(id, 'Minesweeper',
     'Reveal every safe square without hitting a mine. Numbers count neighboring mines. The first reveal and its neighbors are safe. Right-click or press F on a square to flag it; on touch, turn on Flag mode. Click an open number to reveal its neighbors when the neighboring flag count matches. Use arrow keys to move and Enter or Space to reveal.', ctx, iconSvg);
   const restored = inspectGameSession('minesweeper', initialState);
   let level = restored.status === 'valid' || restored.status === 'finished'
@@ -52,15 +52,20 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
   }
   const flag = button('Flag mode', () => {
     flagMode = !flagMode;
-    flag.setAttribute('aria-pressed', String(flagMode));
+    flag.setAttribute('aria-checked', String(flagMode));
     render(); persist();
-  });
-  flag.setAttribute('aria-pressed', 'false');
+  }, 'game-flag-toggle');
+  flag.setAttribute('role', 'switch');
+  flag.setAttribute('aria-checked', String(flagMode));
+  const flagTrack = document.createElement('span');
+  flagTrack.className = 'game-flag-track';
+  flagTrack.setAttribute('aria-hidden', 'true');
+  flag.prepend(flagTrack);
+  toolbarLeft.append(flag);
   toolbarCenter.append(button('New game', restart));
   settings.addGameOption(selectControl('Difficulty', [['beginner', 'Beginner'], ['intermediate', 'Intermediate'], ['expert', 'Expert']], level, value => {
       level = value; restart();
     }));
-  settings.addGameOption(flag);
   const removeThemeControl = addGameThemeControl(el, settings.appearanceOptions, 'minesweeper');
   const removeThemeResetControl = addGameThemeResetControl(settings.appearanceOptions);
   function act(index, mark = flagMode) {
@@ -75,7 +80,7 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
         flagMode = Boolean(restored.options.flagMode);
         state = restored.state;
         pendingRestore = false;
-        flag.setAttribute('aria-pressed', String(flagMode));
+        flag.setAttribute('aria-checked', String(flagMode));
         render(); persist();
       }, restart, restored.status === 'invalid');
       return;

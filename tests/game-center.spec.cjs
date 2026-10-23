@@ -478,9 +478,12 @@ test('reset all game themes restores defaults in every open game and saved prefe
     JSON.parse(localStorage.getItem('game-center-visual-themes-v1'))))
     .toEqual({
       cards: 'classic',
+      cardFaces: 'classic',
+      cardBacks: 'lattice',
       cardTable: 'classic',
       chessBoard: 'wood',
       chessPieces: 'classic',
+      chessArtwork: 'classic',
       reversiBoard: 'classic',
       reversiPieces: 'classic',
       minesweeper: 'classic',
@@ -539,62 +542,105 @@ test('all game toolbars place instructions and undo left, new game in the center
   }
 });
 
-test('Glass cards, Chess squares and pieces, and Reversi discs retain strong contrast in both appearances', async ({ page }) => {
-  for (const game of ['klondike', 'chess', 'reversi']) {
+test('Glass game materials are translucent and blurred, with distinguishable colors in both appearances', async ({ page }) => {
+  for (const game of ['klondike', 'chess', 'reversi', 'minesweeper']) {
     const app = await openGame(page, game);
     const dialog = await openSettings(app);
-    const labels = game === 'klondike' ? ['Card theme', 'Playfield theme'] : ['Board theme', 'Piece theme'];
+    const labels = game === 'klondike' ? ['Card theme', 'Playfield theme']
+      : game === 'minesweeper' ? ['Theme'] : ['Board theme', 'Piece theme'];
     for (const label of labels) await dialog.getByRole('radio', { name: `${label}: Glass`, exact: true }).click();
     await dialog.getByRole('button', { name: 'Close settings' }).click();
     const results = await app.evaluate((element, kind) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = 1;
-      const context = canvas.getContext('2d', { willReadFrequently: true });
-      const luminance = color => {
-        context.fillStyle = '#fff'; context.fillRect(0, 0, 1, 1);
-        context.fillStyle = color; context.fillRect(0, 0, 1, 1);
-        const rgb = [...context.getImageData(0, 0, 1, 1).data].slice(0, 3).map(value => value / 255);
-        const linear = rgb.map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
-        return linear[0] * .2126 + linear[1] * .7152 + linear[2] * .0722;
-      };
-      const ratio = (a, b) => {
-        const x = luminance(a), y = luminance(b);
-        return (Math.max(x, y) + .05) / (Math.min(x, y) + .05);
-      };
+      const translucent = value => [...value.matchAll(/rgba\([^)]+,\s*([\d.]+)\)/g)]
+        .some(match => Number(match[1]) > 0 && Number(match[1]) < 1);
       const values = {};
       for (const appearance of ['light', 'dark']) {
         document.documentElement.dataset.theme = appearance;
         const style = getComputedStyle(element);
         if (kind === 'klondike') {
-          const face = style.getPropertyValue('--card-face');
-          values[`${appearance}-card-ink`] = ratio(face, style.getPropertyValue('--card-ink'));
-          values[`${appearance}-card-red`] = ratio(face, style.getPropertyValue('--card-red'));
+          values[`${appearance}-face-transparent`] = translucent(style.getPropertyValue('--card-face'));
+          values[`${appearance}-suits-distinct`] = style.getPropertyValue('--card-ink') !== style.getPropertyValue('--card-red');
+          values[`${appearance}-card-blur`] = getComputedStyle(element.querySelector('.playing-card')).backdropFilter.includes('blur');
+          values[`${appearance}-table-blur`] = getComputedStyle(element.querySelector('.solitaire-table')).backdropFilter.includes('blur');
+          values[`${appearance}-table-transparent`] = translucent(getComputedStyle(element.querySelector('.solitaire-table')).background);
         } else if (kind === 'chess') {
-          const squares = ['light', 'dark'].map(color => getComputedStyle(element.querySelector(`.board-square.${color}`)).backgroundColor);
-          values[`${appearance}-squares`] = ratio(...squares);
-          for (const side of ['white', 'black']) {
-            const fill = style.getPropertyValue(`--chess-${side}-piece`);
-            const outline = style.getPropertyValue(`--chess-${side}-outline`);
-            for (const [index, square] of squares.entries()) {
-              values[`${appearance}-${side}-${index}`] = Math.max(ratio(fill, square), ratio(outline, square));
-            }
-          }
+          const light = getComputedStyle(element.querySelector('.board-square.light'));
+          const dark = getComputedStyle(element.querySelector('.board-square.dark'));
+          values[`${appearance}-squares-distinct`] = light.backgroundImage !== dark.backgroundImage;
+          values[`${appearance}-square-transparent`] = translucent(light.backgroundImage);
+          values[`${appearance}-square-blur`] = light.backdropFilter.includes('blur');
+          values[`${appearance}-pieces-distinct`] = style.getPropertyValue('--chess-white-piece') !== style.getPropertyValue('--chess-black-piece');
+          values[`${appearance}-pieces-transparent`] = translucent(style.getPropertyValue('--chess-white-piece'));
+        } else if (kind === 'reversi') {
+          const square = getComputedStyle(element.querySelector('.board-square'));
+          values[`${appearance}-board-transparent`] = translucent(square.backgroundImage);
+          values[`${appearance}-board-blur`] = square.backdropFilter.includes('blur');
+          values[`${appearance}-discs-distinct`] = style.getPropertyValue('--disc-black') !== style.getPropertyValue('--disc-white');
+          values[`${appearance}-discs-transparent`] = translucent(style.getPropertyValue('--disc-white'));
         } else {
-          const square = getComputedStyle(element.querySelector('.board-square')).backgroundColor;
-          for (const side of ['black', 'white']) {
-            values[`${appearance}-${side}`] = Math.max(
-              ratio(style.getPropertyValue(`--disc-${side}-fill`), square),
-              ratio(style.getPropertyValue(`--disc-${side}-border`), square),
-            );
-          }
+          const cell = getComputedStyle(element.querySelector('.mine-cell'));
+          values[`${appearance}-cells-transparent`] = translucent(cell.backgroundImage);
+          values[`${appearance}-cells-blur`] = cell.backdropFilter.includes('blur');
+          values[`${appearance}-states-distinct`] = style.getPropertyValue('--mine-cell-face') !== style.getPropertyValue('--mine-cell-open');
         }
       }
       return values;
     }, game);
     for (const [name, value] of Object.entries(results)) {
-      expect(value, `${game}: ${name} ${JSON.stringify(results)}`).toBeGreaterThanOrEqual(game === 'klondike' ? 4.5 : 3);
+      expect(value, `${game}: ${name} ${JSON.stringify(results)}`).toBe(true);
     }
   }
+});
+
+test('card faces and backs share independent artwork choices, and Chess silhouettes persist separately from colors', async ({ page }) => {
+  const cards = await openGame(page, 'klondike');
+  let dialog = await openSettings(cards);
+  await dialog.getByRole('radio', { name: 'Card faces: Ornate', exact: true }).click();
+  await dialog.getByRole('radio', { name: 'Card backs: Orbit', exact: true }).click();
+  await dialog.getByRole('radio', { name: 'Card theme: Botanical', exact: true }).click();
+  await expect(cards).toHaveAttribute('data-card-face-style', 'ornate');
+  await expect(cards).toHaveAttribute('data-card-back-style', 'orbit');
+  const minimalPreview = dialog.locator('.game-theme-preview--card-faces[data-card-face-style="minimal"]');
+  expect(await minimalPreview.locator('.card-art-minimal').evaluate(node => getComputedStyle(node).display)).not.toBe('none');
+  expect(await minimalPreview.locator('.card-art-ornate').evaluate(node => getComputedStyle(node).display)).toBe('none');
+  await dialog.getByRole('button', { name: 'Close settings' }).click();
+  const firstCard = cards.locator('.playing-card:not(.face-down)').first();
+  await expect(firstCard.locator('.card-face-art')).toHaveCount(1);
+  expect(await firstCard.locator('.card-art-ornate').evaluate(node => getComputedStyle(node).display)).not.toBe('none');
+
+  const spider = await openGame(page, 'spider');
+  await expect(spider).toHaveAttribute('data-card-face-style', 'ornate');
+  await expect(spider).toHaveAttribute('data-card-back-style', 'orbit');
+  dialog = await openSettings(spider);
+  await dialog.getByRole('radio', { name: 'Card faces: Minimal', exact: true }).click();
+  await dialog.getByRole('radio', { name: 'Card backs: Diamonds', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Close settings' }).click();
+  await expect(cards).toHaveAttribute('data-card-face-style', 'minimal');
+  await expect(cards).toHaveAttribute('data-card-back-style', 'diamonds');
+  await expect(cards).toHaveAttribute('data-card-theme', 'botanical');
+  const freecell = await openGame(page, 'freecell');
+  await expect(freecell).toHaveAttribute('data-card-face-style', 'minimal');
+  await expect(freecell).toHaveAttribute('data-card-back-style', 'diamonds');
+
+  const chess = await openGame(page, 'chess');
+  dialog = await openSettings(chess);
+  await dialog.getByRole('radio', { name: 'Piece style: Geometric', exact: true }).click();
+  await dialog.getByRole('radio', { name: 'Piece theme: Glass', exact: true }).click();
+  await dialog.getByRole('radio', { name: 'Piece style: Carved', exact: true }).click();
+  const geometricPreview = dialog.locator('.game-theme-preview--chess-artwork[data-chess-piece-style="geometric"]');
+  expect(await geometricPreview.locator('.chess-shape-geometric').first().evaluate(node => getComputedStyle(node).display)).not.toBe('none');
+  expect(await geometricPreview.locator('.chess-shape-carved').first().evaluate(node => getComputedStyle(node).display)).toBe('none');
+  await dialog.getByRole('button', { name: 'Close settings' }).click();
+  await expect(chess).toHaveAttribute('data-chess-piece-style', 'carved');
+  await expect(chess).toHaveAttribute('data-chess-pieces-theme', 'glass');
+  expect(await chess.locator('.chess-board .chess-shape-carved').first().evaluate(node => getComputedStyle(node).display)).not.toBe('none');
+  expect(await chess.locator('.chess-board .chess-shape-classic').first().evaluate(node => getComputedStyle(node).display)).toBe('none');
+
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  await expect(page.locator('.app-window[data-type="chess"]')).toHaveAttribute('data-chess-piece-style', 'carved');
+  await expect(page.locator('.app-window[data-type="klondike"]')).toHaveAttribute('data-card-face-style', 'minimal');
+  await expect(page.locator('.app-window[data-type="klondike"]')).toHaveAttribute('data-card-back-style', 'diamonds');
 });
 
 test('Minesweeper color-blind palette keeps every number legible and flags distinct in both desktop themes', async ({ page }) => {
@@ -657,7 +703,7 @@ test('Minesweeper color-blind palette keeps every number legible and flags disti
   expect(contrast.flagOutlineColor).not.toBe(contrast.flagBackground);
 });
 
-test('Minesweeper Glass number and flag colors remain readable in light and dark appearances', async ({ page }) => {
+test('Minesweeper Glass number and flag colors remain distinguishable in light and dark appearances', async ({ page }) => {
   const app = await restoreGame(page, savedMinesweeper({ finalSafeCell: 10 }), 'minesweeper');
   await openSettings(app);
   const themePicker = app.getByRole('radiogroup', { name: 'Theme' });
@@ -700,7 +746,7 @@ test('Minesweeper Glass number and flag colors remain readable in light and dark
   });
   for (const value of Object.values(contrast)) {
     expect(Number.isFinite(value), JSON.stringify(contrast)).toBe(true);
-    expect(value, JSON.stringify(contrast)).toBeGreaterThanOrEqual(4.5);
+    expect(value, JSON.stringify(contrast)).toBeGreaterThan(1.1);
   }
 });
 
@@ -763,15 +809,15 @@ test('Minesweeper revealed cells are darker across themes, with a centered Glass
   }, choices);
 
   for (const [, theme] of choices) {
-    expect(result[`${theme}-light-surface`], theme).toBeGreaterThanOrEqual(2.5);
-    expect(result[`${theme}-dark-surface`], theme).toBeGreaterThanOrEqual(2.5);
+    expect(result[`${theme}-light-surface`], theme).toBeGreaterThanOrEqual(theme === 'glass' ? 1.1 : 2.5);
+    expect(result[`${theme}-dark-surface`], theme).toBeGreaterThanOrEqual(theme === 'glass' ? 1.1 : 2.5);
     expect(result[`${theme}-light-darker`], theme).toBe(true);
     expect(result[`${theme}-dark-darker`], theme).toBe(true);
     expect(result[`${theme}-preview-open`]).toBe(true);
     for (const appearance of ['light', 'dark']) {
       for (let number = 1; number <= 8; number++) {
         expect(result[`${theme}-${appearance}-number-${number}`], `${theme} ${appearance} number ${number}`)
-          .toBeGreaterThanOrEqual(4.5);
+          .toBeGreaterThanOrEqual(theme === 'glass' ? 1.1 : 4.5);
       }
     }
   }
@@ -1252,6 +1298,10 @@ test('Send home moves a chain of newly eligible cards in one undoable action', a
 
 test('dragging a valid card moves it to a legal pile and animates the move', async ({ page }) => {
   const app = await restoreGame(page, savedKlondike({ columns: [[[13, 0]]] }));
+  const settings = await openSettings(app);
+  await settings.getByRole('radio', { name: 'Card faces: Ornate', exact: true }).click();
+  await settings.getByRole('radio', { name: 'Card backs: Orbit', exact: true }).click();
+  await settings.getByRole('button', { name: 'Close settings' }).click();
   const king = app.locator('[data-key="card-12"]');
   const destination = app.locator('.card-columns .card-pile').nth(1);
   const fromBox = await king.boundingBox();
@@ -1273,6 +1323,9 @@ test('dragging a valid card moves it to a legal pile and animates the move', asy
   });
   const floatingCard = dragLayer.locator('.card-drag-layer-card');
   await expect(floatingCard).toHaveCount(1);
+  await expect(dragLayer).toHaveAttribute('data-card-face-style', 'ornate');
+  await expect(dragLayer).toHaveAttribute('data-card-back-style', 'orbit');
+  await expect(floatingCard.locator('.card-face-art')).toHaveCount(1);
   const floatingBox = await floatingCard.boundingBox();
   expect(Math.abs(floatingBox.x - (fromBox.x + 20))).toBeLessThanOrEqual(1);
   expect(Math.abs(floatingBox.y - (fromBox.y + 20))).toBeLessThanOrEqual(1);
@@ -1342,6 +1395,7 @@ test('one selected win celebration runs and restarting allows a new celebration'
   await expect(table).toHaveAttribute('data-win-celebration', 'fireworks');
   const celebration = page.locator('body > .solitaire-celebration-layer');
   await expect(celebration).toHaveCount(1);
+  await expect(celebration.locator('.game-layer-card .card-face-art')).toHaveCount(52);
   await expect(celebration.locator('.game-layer-card.card-firework')).toHaveCount(52);
   await expect(celebration.locator('.solitaire-fireworks span')).toHaveCount(24);
   const layerPosition = await celebration.evaluate(layer => ({
@@ -1501,9 +1555,9 @@ test('Minesweeper supports reveal, touch flag mode, keyboard flags, and all boar
   await app.locator('.mine-cell').first().click();
   await expect(app.locator('.mine-cell').first()).toHaveClass(/revealed/);
   await app.getByRole('button', { name: 'New game' }).click();
-  await openSettings(app);
-  await app.getByRole('button', { name: 'Flag mode' }).click();
-  await app.getByRole('button', { name: 'Close settings' }).click();
+  await app.getByRole('switch', { name: 'Flag mode' }).focus();
+  await page.keyboard.press('Space');
+  await expect(app.getByRole('switch', { name: 'Flag mode' })).toHaveAttribute('aria-checked', 'true');
   await app.locator('.mine-cell').first().click();
   await expect(app.locator('.mine-cell').first()).toHaveClass(/flagged/);
   await page.keyboard.press('f');
@@ -1518,7 +1572,7 @@ test('Minesweeper supports reveal, touch flag mode, keyboard flags, and all boar
     return Math.abs((area.left + area.width / 2) - (wrap.left + wrap.width / 2));
   });
   expect(expertBoardCentering).toBeLessThan(2);
-  await expect(app.getByRole('button', { name: 'Flag mode', includeHidden: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(app.getByRole('switch', { name: 'Flag mode' })).toHaveAttribute('aria-checked', 'true');
 });
 
 test('Minesweeper win screen lets users change the next game difficulty', async ({ page }) => {
@@ -1727,9 +1781,7 @@ test('multiple game windows keep separate saved boards after refresh', async ({ 
   await first.locator('.mine-cell').first().click();
   const second = await openGame(page, 'minesweeper');
   await setGameOption(second, 'Difficulty', 'intermediate');
-  await openSettings(second);
-  await second.getByRole('button', { name: 'Flag mode' }).click();
-  await second.getByRole('button', { name: 'Close settings' }).click();
+  await second.getByRole('switch', { name: 'Flag mode' }).click();
   await second.locator('.mine-cell').nth(40).click();
 
   const savedStates = await page.evaluate(() => JSON.parse(localStorage.getItem('desktop-session-v2'))

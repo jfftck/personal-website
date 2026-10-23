@@ -1,4 +1,5 @@
 import { chessPieceSvg } from './chess-piece-svg.js';
+import { cardFaceMarkup } from './card-artwork.js';
 
 const STORAGE_KEY = 'game-center-visual-themes-v1';
 
@@ -8,6 +9,18 @@ const config = {
     label: 'Card theme',
     preview: 'cards',
     choices: [['classic', 'Classic'], ['midnight', 'Midnight'], ['botanical', 'Botanical'], ['glass', 'Glass']],
+  },
+  cardFaces: {
+    dataset: 'cardFaceStyle',
+    label: 'Card faces',
+    preview: 'card-faces',
+    choices: [['classic', 'Classic pips'], ['ornate', 'Ornate'], ['minimal', 'Minimal']],
+  },
+  cardBacks: {
+    dataset: 'cardBackStyle',
+    label: 'Card backs',
+    preview: 'card-backs',
+    choices: [['lattice', 'Lattice'], ['diamonds', 'Diamonds'], ['orbit', 'Orbit']],
   },
   cardTable: {
     dataset: 'cardTableTheme',
@@ -32,6 +45,12 @@ const config = {
     label: 'Piece theme',
     preview: 'chess-pieces',
     choices: [['classic', 'Classic'], ['modern', 'Modern'], ['glass', 'Glass']],
+  },
+  chessArtwork: {
+    dataset: 'chessPieceStyle',
+    label: 'Piece style',
+    preview: 'chess-artwork',
+    choices: [['classic', 'Classic'], ['geometric', 'Geometric'], ['carved', 'Carved']],
   },
   reversiBoard: {
     dataset: 'reversiBoardTheme',
@@ -99,7 +118,13 @@ export function addGameThemeControl(root, container, key) {
     sample.className = `game-theme-preview game-theme-preview--${theme.preview}`;
     sample.dataset.previewTheme = value;
     sample.setAttribute('aria-hidden', 'true');
-    if (theme.preview === 'cards') {
+    if (theme.preview === 'card-faces') {
+      sample.dataset.cardFaceStyle = value;
+      sample.innerHTML = `<span class="game-theme-card-sample">${cardFaceMarkup({ rank: 12, suit: 0 })}</span>`;
+    } else if (theme.preview === 'card-backs') {
+      sample.dataset.cardBackStyle = value;
+      sample.innerHTML = '<span class="game-theme-card-sample face-down"></span>';
+    } else if (theme.preview === 'cards') {
       sample.innerHTML = '<span class="game-theme-card-back"></span>';
     } else if (theme.preview === 'card-table') {
       sample.innerHTML = '<span class="game-theme-felt-sample"></span>';
@@ -107,7 +132,8 @@ export function addGameThemeControl(root, container, key) {
       sample.innerHTML = theme.preview === 'reversi-board'
         ? '<span></span><span></span><span class="game-theme-disc"></span><span></span><span></span><span class="game-theme-disc game-theme-disc--light"></span><span></span><span></span><span></span>'
         : '<span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>';
-    } else if (theme.preview === 'chess-pieces') {
+    } else if (theme.preview === 'chess-pieces' || theme.preview === 'chess-artwork') {
+      if (theme.preview === 'chess-artwork') sample.dataset.chessPieceStyle = value;
       sample.innerHTML = `<span class="game-theme-chess-piece">${chessPieceSvg('k')}</span><span class="game-theme-chess-piece game-theme-chess-piece--dark">${chessPieceSvg('p')}</span>`;
     } else if (theme.preview === 'reversi-pieces') {
       sample.innerHTML = '<span class="game-theme-disc"></span><span class="game-theme-disc game-theme-disc--light"></span>';

@@ -3,4 +3,5 @@
 - [Reminder delivery scope](reminder-delivery-scope.md) — reminders intentionally run only while the page is open so production can remain static.
 - [Game Center scope](game-center-scope.md) — preserve root entries, browser-local games, independent board/piece themes, and Settings dialogs.
 - [Game contrast verification](game-contrast-verification.md) — test numbers on revealed cells, flags on untouched cells, and every gradient stop with finite ratios.
+- [Game preview isolation](game-preview-isolation.md) — appearance samples must not share live-game classes used for card counts or event delegation.
 - [Viewer restoration](viewer-restoration.md) — pending selections must survive session saves before asynchronous manifests finish loading.

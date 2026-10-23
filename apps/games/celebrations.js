@@ -1,4 +1,5 @@
-import { isRed, rankLabel, SUITS } from './cards.js';
+import { isRed, SUITS } from './cards.js';
+import { paintCardFace } from './card-artwork.js';
 
 const unit = (index, salt = 0) => {
   const value = Math.sin((index + 1) * 127.1 + (salt + 1) * 311.7) * 43758.5453;
@@ -11,7 +12,7 @@ const transform = (x, y, scale = 1, rotate = 0) =>
 function createSprite(card, rect, tableRect) {
   const element = document.createElement('div');
   element.className = `playing-card game-layer-card${isRed(card) ? ' red' : ''}`;
-  element.textContent = `${rankLabel(card.rank)}${SUITS[card.suit]}`;
+  paintCardFace(element, card);
   const x = rect.left - tableRect.left;
   const y = rect.top - tableRect.top;
   element.style.left = `${x}px`;
@@ -209,7 +210,8 @@ function animateRain(sprites, bounds) {
     cards.forEach((card, index) => {
       const rank = ((index * 7 + phase * 3) % 13) + 1;
       const suit = (index + phase) % SUITS.length;
-      card.textContent = `${rankLabel(rank)}${SUITS[suit]}`;
+      paintCardFace(card, { rank, suit });
+      card.classList.toggle('red', isRed({ suit }));
     });
   }, 80);
 }
@@ -294,6 +296,8 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
   const layer = document.createElement('div');
   layer.className = `solitaire-celebration-layer celebration-${effect}`;
   layer.dataset.cardTheme = gameElement.dataset.cardTheme || 'classic';
+  layer.dataset.cardFaceStyle = gameElement.dataset.cardFaceStyle || 'classic';
+  layer.dataset.cardBackStyle = gameElement.dataset.cardBackStyle || 'lattice';
   layer.setAttribute('aria-hidden', 'true');
   Object.assign(layer.style, {
     left: `${bounds.left}px`,

@@ -15,14 +15,14 @@ The initial card rules are Klondike, Spider, and FreeCell. Chess and Reversi mus
 
 **How to apply:** Keep gameplay and computer opponents browser-local when extending the games.
 
-Keep card/piece appearance separate from board/playfield appearance. Put game configuration and appearance choices in each game's Settings dialog rather than adding option controls to the play toolbar.
+Keep card/piece appearance separate from board/playfield appearance. Put configuration and appearance choices in Settings dialogs. Minesweeper's Flag mode is an immediate-play exception: use a switch on the left toolbar where other games have Undo.
 
-**Why:** The user requested independent card and playfield themes and settings dialogs for all game options.
+**Why:** The user requested independent card/playfield themes and Settings dialogs, then explicitly moved Flag mode back to the toolbar as a toggle.
 
 **How to apply:** Follow this separation for future games and settings. Keep immediate play actions such as New game and Undo in the toolbar.
 
-Minesweeper's revealed and untouched cells must be strongly distinct. When untouched cells are light, make revealed cells darker. Glass cells should have darker edges, brighter centers, and borders that are lighter in dark appearance and darker in light appearance.
+Minesweeper's revealed and untouched cells must be distinct. When untouched cells are light, make revealed cells darker. All games' Glass themes should be transparent with blur, darker edges, brighter centers, and borders lighter in dark appearance and darker in light appearance. Glass is not a high-contrast theme: formal contrast standards are optional, but colors must remain distinguishable.
 
-**Why:** The user requested stronger cell-state contrast and this Glass treatment.
+**Why:** The user requested this treatment across games and explicitly approved Glass falling below formal contrast standards in favor of transparency.
 
-**How to apply:** Preserve these distinctions when adding or changing Minesweeper themes, including their settings previews.
+**How to apply:** Preserve cell-state and side/suit distinctions in games and their previews, without making Glass opaque to satisfy numeric contrast targets. Keep artwork choices independent of material/color themes.
