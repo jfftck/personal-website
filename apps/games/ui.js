@@ -33,28 +33,61 @@ export function gameShell(id, title, rules, ctx) {
     ctx.openGameMenu();
   });
   toolbar.append(back);
+  const instructionsId = `game-instructions-${String(id).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const instructionsButton = button('Instructions', () => setInstructionsOpen(!instructionsOpen));
+  instructionsButton.setAttribute('aria-expanded', 'false');
+  instructionsButton.setAttribute('aria-controls', instructionsId);
+  toolbar.append(instructionsButton);
   const status = document.createElement('div');
   status.className = 'game-status';
   status.setAttribute('role', 'status');
-  const instructions = document.createElement('details');
-  instructions.className = 'game-rules';
-  const summary = document.createElement('summary');
-  summary.textContent = `How to play ${title}`;
+  const stage = document.createElement('div');
+  stage.className = 'game-stage';
+  const instructions = document.createElement('aside');
+  instructions.className = 'game-instructions';
+  instructions.id = instructionsId;
+  instructions.hidden = true;
+  instructions.setAttribute('aria-labelledby', `${instructionsId}-title`);
+  instructions.setAttribute('aria-describedby', `${instructionsId}-copy`);
+  const heading = document.createElement('h2');
+  heading.id = `${instructionsId}-title`;
+  heading.textContent = `How to play ${title}`;
+  const closeInstructions = button('Close instructions', () => setInstructionsOpen(false));
+  const panelHeader = document.createElement('div');
+  panelHeader.className = 'game-instructions-header';
+  panelHeader.append(heading, closeInstructions);
   const copy = document.createElement('p');
+  copy.id = `${instructionsId}-copy`;
+  copy.className = 'game-instructions-copy';
   copy.textContent = rules;
-  instructions.append(summary, copy);
+  instructions.append(panelHeader, copy);
   const area = document.createElement('div');
   area.className = 'app-content game-area';
   area.setAttribute('aria-label', `${title} play area`);
-  el.append(toolbar, status, instructions, area);
+  stage.append(area, instructions);
+  el.append(toolbar, status, stage);
+  let instructionsOpen = false;
+  function setInstructionsOpen(open) {
+    instructionsOpen = Boolean(open);
+    instructions.hidden = !instructionsOpen;
+    instructionsButton.setAttribute('aria-expanded', String(instructionsOpen));
+    if (instructionsOpen) closeInstructions.focus();
+    else instructionsButton.focus();
+  }
   // Game controls retain normal Tab/arrow navigation instead of desktop shortcuts.
   el.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && instructionsOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      setInstructionsOpen(false);
+      return;
+    }
     if (!event.ctrlKey && !event.metaKey && event.key !== 'Escape' && event.key !== '?') {
       event.stopPropagation();
     }
   });
   ctx.setAppTitle(id, title);
-  return { el, toolbar, status, area };
+  return { el, toolbar, status, area, instructions, instructionsButton };
 }
 
 export function showRestorePrompt(area, onResume, onNew, invalid = false) {

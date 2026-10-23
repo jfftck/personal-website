@@ -16,6 +16,80 @@ async function openGame(page, game) {
   return page.locator(`.app-window[data-type="${game}"]`).last();
 }
 
+function savedKlondike({ columns = [], foundations = {} } = {}) {
+  const used = new Set();
+  const makeCard = (rank, suit, up = true) => {
+    const id = suit * 13 + rank - 1;
+    used.add(id);
+    return { id, rank, suit, up };
+  };
+  const columnPiles = Array.from({ length: 7 }, (_, index) =>
+    (columns[index] || []).map(([rank, suit = 0]) => makeCard(rank, suit)));
+  const foundationPiles = Array.from({ length: 4 }, (_, suit) =>
+    (foundations[suit] || []).map(rank => makeCard(rank, suit)));
+  const stock = Array.from({ length: 52 }, (_, id) => id)
+    .filter(id => !used.has(id))
+    .map(id => ({ id, rank: id % 13 + 1, suit: Math.floor(id / 13), up: false }));
+  const state = {
+    kind: 'klondike', suits: 1, drawCount: 1, columns: columnPiles, stock, waste: [],
+    foundations: foundationPiles, cells: Array.from({ length: 4 }, () => []),
+    completed: 0, moves: 0, won: false,
+  };
+  return {
+    v: 2,
+    columns: [{
+      widthPreset: 'full',
+      apps: [{
+        type: 'klondike',
+        state: { version: 1, kind: 'klondike', options: { suits: 1, drawCount: 1 }, state },
+      }],
+    }],
+  };
+}
+
+function savedFreecell({ columnCards = [], foundations = {} } = {}) {
+  const used = new Set();
+  const makeCard = (rank, suit) => {
+    const id = suit * 13 + rank - 1;
+    used.add(id);
+    return { id, rank, suit, up: true };
+  };
+  const columns = Array.from({ length: 8 }, (_, index) =>
+    (columnCards[index] || []).map(([rank, suit = 0]) => makeCard(rank, suit)));
+  const foundationPiles = Array.from({ length: 4 }, (_, suit) =>
+    (foundations[suit] || []).map(rank => makeCard(rank, suit)));
+  for (let id = 0; id < 52; id++) {
+    if (used.has(id)) continue;
+    const card = { id, rank: id % 13 + 1, suit: Math.floor(id / 13), up: true };
+    used.add(id);
+    columns[7].push(card);
+  }
+  const state = {
+    kind: 'freecell', suits: 1, drawCount: 1, columns, stock: [], waste: [],
+    foundations: foundationPiles, cells: Array.from({ length: 4 }, () => []),
+    completed: 0, moves: 0, won: false,
+  };
+  return {
+    v: 2,
+    columns: [{
+      widthPreset: 'full',
+      apps: [{
+        type: 'freecell',
+        state: { version: 1, kind: 'freecell', options: { suits: 1, drawCount: 1 }, state },
+      }],
+    }],
+  };
+}
+
+async function restoreGame(page, session, game = 'klondike') {
+  await page.evaluate(value => localStorage.setItem('desktop-session-v2', JSON.stringify(value)), session);
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  const app = page.locator(`.app-window[data-type="${game}"]`).last();
+  await app.getByRole('button', { name: 'Resume saved game' }).click();
+  return app;
+}
+
 test('root menu restores app and file entries; the six game tiles stay nested with back/Escape navigation', async ({ page }) => {
   await page.locator('#app-menu-btn').click();
   await expect(page.locator('#app-list .app-launcher')).toHaveCount(6);
@@ -233,6 +307,166 @@ test('all three solitaire games deal, select, draw, undo, configure, and restart
   }
 });
 
+test('all six games share a keyboard-operable instructions side panel', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const game of ['klondike', 'spider', 'freecell', 'minesweeper', 'chess', 'reversi']) {
+    const app = await openGame(page, game);
+    const toggle = app.getByRole('button', { name: 'Instructions', exact: true });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.click();
+    const panel = app.locator('.game-instructions');
+    await expect(panel).toBeVisible();
+    const appBox = await app.boundingBox();
+    const panelBox = await panel.boundingBox();
+    expect(panelBox.x).toBeGreaterThanOrEqual(appBox.x);
+    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(appBox.x + appBox.width + 1);
+    await expect(panel.getByRole('heading', { level: 2 })).toHaveText(`How to play ${
+      game === 'minesweeper' ? 'Minesweeper'
+        : game === 'freecell' ? 'FreeCell'
+          : game[0].toUpperCase() + game.slice(1)
+    }`);
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(panel.getByRole('button', { name: 'Close instructions' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(toggle).toBeFocused();
+    await toggle.click();
+    await panel.getByRole('button', { name: 'Close instructions' }).click();
+    await page.locator('#close-btn').click();
+  }
+});
+
+test('double-click auto-home moves eligible Klondike and FreeCell cards and explains ineligible cards', async ({ page }) => {
+  const eligible = await restoreGame(page, savedKlondike({
+    columns: [[], [[2, 0]]], foundations: { 0: [1] },
+  }));
+  await eligible.locator('[data-key="card-1"]').dblclick();
+  await expect(eligible.locator('[aria-label="Home 1"] .playing-card')).toHaveText('2♠');
+  await expect(eligible.locator('.game-status')).toContainText('1 moves');
+  await page.locator('#close-btn').click();
+
+  const freecell = await restoreGame(page, savedFreecell({
+    columnCards: [[[2, 0]]], foundations: { 0: [1] },
+  }), 'freecell');
+  await freecell.locator('[data-key="card-1"]').dblclick();
+  await expect(freecell.locator('[aria-label="Home 1"] .playing-card')).toHaveText('2♠');
+  await expect(freecell.locator('.game-status')).toContainText('1 moves');
+  await page.locator('#close-btn').click();
+
+  const blocked = await restoreGame(page, savedKlondike({
+    columns: [[[3, 0]]], foundations: { 0: [1] },
+  }));
+  await blocked.locator('[data-key="card-2"]').dblclick();
+  await expect(blocked.locator('.game-status'))
+    .toContainText('This card cannot move home yet');
+  await expect(blocked.locator('[data-key="card-2"]')).toBeVisible();
+});
+
+test('Send home moves a chain of newly eligible cards in one undoable action', async ({ page }) => {
+  const app = await restoreGame(page, savedKlondike({
+    columns: [[[3, 0]], [[2, 0]]], foundations: { 0: [1] },
+  }));
+  await app.getByRole('button', { name: 'Send home', exact: true }).click();
+  await expect(app.locator('[aria-label="Home 1"] .playing-card')).toHaveText('3♠');
+  await expect(app.locator('.game-status')).toContainText('Moved 2 cards home');
+  await app.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(app.locator('[aria-label="Home 1"] .playing-card')).toHaveText('A♠');
+});
+
+test('dragging a valid card moves it to a legal pile and animates the move', async ({ page }) => {
+  const app = await restoreGame(page, savedKlondike({ columns: [[[13, 0]]] }));
+  const king = app.locator('[data-key="card-12"]');
+  const destination = app.locator('.card-columns .card-pile').nth(1);
+  const fromBox = await king.boundingBox();
+  const toBox = await destination.boundingBox();
+  await page.mouse.move(fromBox.x + fromBox.width / 2, fromBox.y + fromBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(toBox.x + toBox.width / 2, toBox.y + toBox.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await expect(destination.locator('[data-key="card-12"]')).toHaveClass(/card-moved/);
+  await expect(app.locator('.game-status')).toContainText('1 moves');
+
+  const touchSource = app.locator('[data-key="card-12"]');
+  const touchDestination = app.locator('.card-columns .card-pile').nth(2);
+  await page.evaluate(({ sourceKey, targetIndex }) => {
+    const source = document.querySelector(`[data-key="${sourceKey}"]`);
+    const target = document.querySelectorAll('.card-columns .card-pile')[targetIndex];
+    const sourceBox = source.getBoundingClientRect();
+    const targetBox = target.getBoundingClientRect();
+    const start = { clientX: sourceBox.x + sourceBox.width / 2, clientY: sourceBox.y + sourceBox.height / 2 };
+    const end = { clientX: targetBox.x + targetBox.width / 2, clientY: targetBox.y + targetBox.height / 2 };
+    source.dispatchEvent(new PointerEvent('pointerdown', {
+      ...start, bubbles: true, cancelable: true, pointerId: 9, pointerType: 'touch', isPrimary: true,
+      button: 0, buttons: 1,
+    }));
+    document.dispatchEvent(new PointerEvent('pointermove', {
+      ...end, bubbles: true, cancelable: true, pointerId: 9, pointerType: 'touch', isPrimary: true,
+      button: 0, buttons: 1,
+    }));
+    document.dispatchEvent(new PointerEvent('pointerup', {
+      ...end, bubbles: true, cancelable: true, pointerId: 9, pointerType: 'touch', isPrimary: true,
+      button: 0, buttons: 0,
+    }));
+  }, { sourceKey: 'card-12', targetIndex: 2 });
+  await expect(touchDestination.locator('[data-key="card-12"]')).toHaveClass(/card-moved/);
+  await expect(app.locator('.game-status')).toContainText('2 moves');
+});
+
+test('one selected win celebration runs and restarting allows a new celebration', async ({ page }) => {
+  const app = await restoreGame(page, savedKlondike({
+    columns: [[[13, 0]]],
+    foundations: { 0: Array.from({ length: 12 }, (_, index) => index + 1),
+      1: Array.from({ length: 13 }, (_, index) => index + 1),
+      2: Array.from({ length: 13 }, (_, index) => index + 1),
+      3: Array.from({ length: 13 }, (_, index) => index + 1) },
+  }));
+  await page.evaluate(() => {
+    window.celebrationRandomCalls = 0;
+    Math.random = () => { window.celebrationRandomCalls++; return 0.01; };
+  });
+  await app.locator('[data-key="card-12"]').dblclick();
+  const table = app.locator('.solitaire-table');
+  await expect(table).toHaveAttribute('data-win-celebration', 'fireworks');
+  await expect(table.locator('.solitaire-fireworks span')).toHaveCount(18);
+  await expect.poll(() => page.evaluate(() => window.celebrationRandomCalls)).toBe(1);
+  await app.getByRole('button', { name: 'Undo', exact: true }).click();
+  await app.locator('[data-key="card-12"]').dblclick();
+  await expect(table).toHaveAttribute('data-win-celebration', 'fireworks');
+  await expect.poll(() => page.evaluate(() => window.celebrationRandomCalls)).toBe(2);
+  await app.getByRole('button', { name: 'New deal' }).click();
+  await expect(app.locator('.solitaire-table')).not.toHaveAttribute('data-win-celebration', /.+/);
+});
+
+test('solitaire tableau scrolls independently and reduced motion suppresses celebration animation', async ({ page }) => {
+  const longColumn = Array.from({ length: 52 }, (_, id) => [id % 13 + 1, Math.floor(id / 13)]);
+  const app = await restoreGame(page, savedKlondike({ columns: [longColumn] }));
+  const scroll = app.locator('.card-tableau-scroll');
+  const before = await app.locator('.card-top-row').boundingBox();
+  const dimensions = await scroll.evaluate(element => ({
+    height: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+  }));
+  expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.height);
+  await scroll.evaluate(element => { element.scrollTop = 180; });
+  const after = await app.locator('.card-top-row').boundingBox();
+  expect(Math.abs(after.y - before.y)).toBeLessThan(2);
+  await page.locator('#close-btn').click();
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const winningApp = await restoreGame(page, savedKlondike({
+    columns: [[[13, 0]]],
+    foundations: { 0: Array.from({ length: 12 }, (_, index) => index + 1),
+      1: Array.from({ length: 13 }, (_, index) => index + 1),
+      2: Array.from({ length: 13 }, (_, index) => index + 1),
+      3: Array.from({ length: 13 }, (_, index) => index + 1) },
+  }));
+  await page.evaluate(() => { Math.random = () => 0.01; });
+  await winningApp.locator('[data-key="card-12"]').dblclick();
+  await expect(winningApp.locator('.solitaire-table')).toHaveAttribute('data-win-celebration', 'fireworks');
+  await expect(winningApp.locator('.solitaire-fireworks')).toHaveCount(0);
+});
+
 test('Minesweeper supports reveal, touch flag mode, keyboard flags, and all board sizes', async ({ page }) => {
   const app = await openGame(page, 'minesweeper');
   await expect(app.locator('.mine-cell')).toHaveCount(81);
@@ -423,6 +657,18 @@ test('phone-sized layouts keep menu, boards and controls accessible in both them
       expect(board.x).toBeGreaterThanOrEqual(0);
       await app.locator('[data-square="e2"]').click();
       await expect(app.locator('[data-square="e4"]')).toHaveClass(/legal/);
+    }
+    if (game === 'spider') {
+      const tableau = app.locator('.card-tableau-scroll');
+      const widths = await tableau.evaluate(element => ({
+        width: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+      }));
+      expect(widths.scrollWidth).toBeGreaterThan(widths.width);
+      await tableau.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+      const lastColumn = await app.locator('.card-columns .card-pile').last().boundingBox();
+      const areaBounds = await tableau.boundingBox();
+      expect(lastColumn.x + lastColumn.width).toBeLessThanOrEqual(areaBounds.x + areaBounds.width + 1);
     }
     await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
     await page.locator('#close-btn').click();

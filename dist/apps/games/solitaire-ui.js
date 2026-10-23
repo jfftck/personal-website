@@ -1,4 +1,7 @@
-import { createSolitaire, getPile, moveCards, drawCards, isSequence, SUITS, rankLabel, isRed } from './cards.js';
+import {
+  createSolitaire, getPile, moveCards, drawCards, isSequence, sendEligibleCardsHome,
+  chooseWinCelebration, SUITS, rankLabel, isRed,
+} from './cards.js';
 import { gameShell, button, selectControl, preserveFocus, showRestorePrompt } from './ui.js';
 import { createGameSession, inspectGameSession } from './game-state.js';
 
@@ -11,10 +14,15 @@ const rules = {
 export function buildSolitaire(kind, id, title, ctx, initialState = null) {
   const shell = gameShell(id, title, rules[kind], ctx);
   const { el, toolbar, area, status } = shell;
+  area.classList.add('solitaire-game-area');
   const restored = inspectGameSession(kind, initialState);
   let options = restored.status === 'valid' || restored.status === 'finished'
     ? restored.options : { suits: 1, drawCount: 1 };
   let state = createSolitaire(kind, options), selected = null, history = [];
+  let latestTable = null;
+  let suppressClick = false, suppressClickTimer = null;
+  let pointerDrag = null, activeDropTarget = null;
+  const dragAbort = new AbortController();
   let pendingRestore = initialState != null && restored.status !== 'finished';
   function persist() {
     if (!pendingRestore) ctx.saveSession();
@@ -29,17 +37,13 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
   }
   toolbar.append(button('New deal', restart), undo);
   if (kind !== 'spider') toolbar.append(button('Send home', () => {
-    const sources = selected ? [selected] : [
-      ...state.columns.map((pile, index) => ({ zone: 'columns', index, offset: pile.length - 1 })),
-      ...state.cells.map((pile, index) => ({ zone: 'cells', index, offset: pile.length - 1 })),
-      { zone: 'waste', index: 0, offset: state.waste.length - 1 },
-    ];
-    for (const source of sources) {
-      for (let index = 0; index < 4; index++) {
-        if (action(() => moveCards(state, source, { zone: 'foundations', index }))) return;
-      }
+    const alreadyHome = new Set(state.foundations.flat().map(card => card.id));
+    const moved = action(() => sendEligibleCardsHome(state));
+    if (!moved) status.textContent = 'No card can move home yet. An Ace starts a home pile; the next card must match its suit.';
+    else {
+      status.textContent = `Moved ${moved} ${moved === 1 ? 'card' : 'cards'} home.`;
+      animateCards(state.foundations.flat().map(card => card.id).filter(id => !alreadyHome.has(id)));
     }
-    status.textContent = 'No eligible card can move home. Choose an exposed Ace or the next card of its suit.';
   }));
   if (kind === 'klondike') {
     toolbar.append(selectControl('Draw', [['1', 'One card'], ['3', 'Three cards']], String(options.drawCount), value => {
@@ -51,17 +55,68 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
       options.suits = Number(value); restart();
     }));
   }
-  function action(fn) {
+  function action(fn, animateIds = []) {
     const before = structuredClone(state);
-    if (!fn()) return false;
+    const result = fn();
+    if (!result) return false;
     history.push(before);
     if (history.length > 150) history.shift();
-    selected = null; render(); persist(); return true;
+    selected = null;
+    render();
+    animateCards(animateIds);
+    if (!before.won && state.won) celebrate(chooseWinCelebration());
+    persist();
+    return result;
+  }
+  function animateCards(ids) {
+    for (const id of ids) {
+      const card = latestTable?.querySelector(`[data-key="card-${CSS.escape(String(id))}"]`);
+      if (!card) continue;
+      card.classList.remove('card-moved');
+      void card.offsetWidth;
+      card.classList.add('card-moved');
+    }
+  }
+  function celebrate(effect) {
+    if (!latestTable) return;
+    latestTable.dataset.winCelebration = effect;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (effect === 'bounce' || effect === 'spiral') {
+      latestTable.querySelectorAll('.playing-card').forEach((card, index) => {
+        card.style.setProperty('--celebration-delay', `${index * (effect === 'bounce' ? 24 : 12)}ms`);
+        card.style.setProperty('--spiral-x', `${(index - 26) * 5}px`);
+        card.classList.add(effect === 'bounce' ? 'win-bounce' : 'win-spiral');
+      });
+      return;
+    }
+    const sparks = document.createElement('div');
+    sparks.className = 'solitaire-fireworks';
+    sparks.setAttribute('aria-hidden', 'true');
+    for (let index = 0; index < 18; index++) {
+      const spark = document.createElement('span');
+      spark.style.setProperty('--spark-angle', `${index * 20}deg`);
+      spark.style.setProperty('--spark-delay', `${(index % 6) * 55}ms`);
+      sparks.append(spark);
+    }
+    latestTable.append(sparks);
+  }
+  function autoHome(source) {
+    if (kind === 'spider') return;
+    const card = getPile(state, source)?.[source.offset];
+    const moved = card && action(() => {
+      for (let index = 0; index < state.foundations.length; index++) {
+        if (moveCards(state, source, { zone: 'foundations', index })) return true;
+      }
+      return false;
+    }, card ? [card.id] : []);
+    if (!moved) status.textContent = 'This card cannot move home yet. It must be an Ace or the next rank in its suit.';
   }
   function clickPile(zone, index, offset) {
+    if (suppressClick) return;
     const pile = getPile(state, { zone, index });
     if (selected) {
-      if (action(() => moveCards(state, selected, { zone, index }))) return;
+      const movingIds = getPile(state, selected)?.slice(selected.offset).map(card => card.id) || [];
+      if (action(() => moveCards(state, selected, { zone, index }), movingIds)) return;
       if (selected.zone === zone && selected.index === index && selected.offset === offset) {
         selected = null; render(); return;
       }
@@ -75,12 +130,87 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
       status.textContent += ' That move is not allowed.';
     }
   }
+  area.addEventListener('click', event => {
+    if (!suppressClick) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    suppressClick = false;
+    clearTimeout(suppressClickTimer);
+  }, true);
+  area.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || event.target.closest('button')?.disabled) return;
+    const card = event.target.closest('.playing-card');
+    if (!card) return;
+    pointerDrag = {
+      pointerId: event.pointerId,
+      card,
+      from: {
+        zone: card.dataset.zone,
+        index: Number(card.dataset.pileIndex),
+        offset: Number(card.dataset.offset),
+      },
+      x: event.clientX,
+      y: event.clientY,
+      dragging: false,
+    };
+  });
+  document.addEventListener('pointermove', event => {
+    if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
+    if (!pointerDrag.dragging && Math.hypot(event.clientX - pointerDrag.x, event.clientY - pointerDrag.y) > 8) {
+      pointerDrag.dragging = true;
+      pointerDrag.card.classList.add('dragging');
+    }
+    if (!pointerDrag.dragging) return;
+    event.preventDefault();
+    pointerDrag.card.style.setProperty('--drag-x', `${event.clientX - pointerDrag.x}px`);
+    pointerDrag.card.style.setProperty('--drag-y', `${event.clientY - pointerDrag.y}px`);
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-drop-zone]');
+    if (target === activeDropTarget) return;
+    activeDropTarget?.classList.remove('drag-over');
+    activeDropTarget = target;
+    activeDropTarget?.classList.add('drag-over');
+  }, { signal: dragAbort.signal, passive: false });
+  document.addEventListener('pointerup', event => {
+    if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
+    const drag = pointerDrag;
+    pointerDrag = null;
+    drag.card.classList.remove('dragging');
+    drag.card.style.removeProperty('--drag-x');
+    drag.card.style.removeProperty('--drag-y');
+    activeDropTarget?.classList.remove('drag-over');
+    activeDropTarget = null;
+    if (!drag.dragging) return;
+    suppressClick = true;
+    clearTimeout(suppressClickTimer);
+    suppressClickTimer = setTimeout(() => { suppressClick = false; }, 250);
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-drop-zone]');
+    const destination = target && { zone: target.dataset.dropZone, index: Number(target.dataset.dropIndex) };
+    const movingIds = getPile(state, drag.from)?.slice(drag.from.offset).map(card => card.id) || [];
+    if (!destination || !action(() => moveCards(state, drag.from, destination), movingIds)) {
+      status.textContent = 'That card or sequence cannot move to this pile.';
+    }
+  }, { signal: dragAbort.signal });
+  document.addEventListener('pointercancel', event => {
+    if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
+    pointerDrag.card.classList.remove('dragging');
+    pointerDrag.card.style.removeProperty('--drag-x');
+    pointerDrag.card.style.removeProperty('--drag-y');
+    pointerDrag = null;
+    activeDropTarget?.classList.remove('drag-over');
+    activeDropTarget = null;
+  }, { signal: dragAbort.signal });
   function pileView(zone, index, label, all = false) {
     const pile = getPile(state, { zone, index });
     const div = document.createElement('div');
     div.className = 'card-pile';
     div.setAttribute('role', 'group');
     div.setAttribute('aria-label', label);
+    div.dataset.zone = zone;
+    div.dataset.pileIndex = index;
+    if (zone === 'columns' || zone === 'cells' || zone === 'foundations') {
+      div.dataset.dropZone = zone;
+      div.dataset.dropIndex = index;
+    }
     const heading = document.createElement('span');
     heading.className = 'pile-label'; heading.textContent = label;
     div.append(heading);
@@ -99,8 +229,17 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
         btn.classList.toggle('selected', selected?.zone === zone && selected.index === index && selected.offset === offset);
         btn.disabled = !card.up;
         btn.dataset.key = `card-${card.id}`;
+        btn.dataset.cardId = card.id;
+        btn.dataset.offset = offset;
+        btn.dataset.zone = zone;
+        btn.dataset.pileIndex = index;
         btn.setAttribute('aria-label', card.up ? `${face}, ${label}, card ${offset + 1}` : `Face down, ${label}`);
         btn.setAttribute('aria-pressed', String(selected?.zone === zone && selected.index === index && selected.offset === offset));
+        btn.addEventListener('dblclick', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          autoHome({ zone, index, offset });
+        });
         div.append(btn);
       });
     }
@@ -148,12 +287,21 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
       const columns = document.createElement('div'); columns.className = 'card-columns';
       columns.style.setProperty('--columns', state.columns.length);
       for (let i = 0; i < state.columns.length; i++) columns.append(pileView('columns', i, `Pile ${i + 1}`, true));
-      table.append(top, columns); area.replaceChildren(table);
+      const tableau = document.createElement('div');
+      tableau.className = 'card-tableau-scroll';
+      tableau.append(columns);
+      table.append(top, tableau);
+      latestTable = table;
+      area.replaceChildren(table);
     });
   }
   ctx.appApis[id] = {
     getSessionState() {
       return pendingRestore ? initialState : createGameSession(kind, options, state);
+    },
+    destroy() {
+      dragAbort.abort();
+      clearTimeout(suppressClickTimer);
     },
   };
   if (restored.status === 'finished') ctx.saveSession();

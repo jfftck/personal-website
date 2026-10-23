@@ -106,7 +106,7 @@
 .game-options select:focus-visible,
 .game-promotion button:focus-visible,
 .game-area button:focus-visible,
-.game-rules summary:focus-visible {
+.game-instructions button:focus-visible {
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
 }
@@ -161,28 +161,45 @@
 .game-restore-actions button:hover { background: var(--btn-hover); }
 .game-restore-actions button:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 
-.game-rules {
-  flex: 0 0 auto;
-  margin: 0.55rem 0.8rem 0;
-  border: 1px solid var(--game-line);
-  border-radius: 0.7rem;
-  background: color-mix(in srgb, var(--app-bg) 76%, transparent);
-  color: var(--game-muted);
-  font-size: 0.76rem;
+.game-stage {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
 }
 
-.game-rules summary {
-  padding: 0.45rem 0.65rem;
+.game-instructions {
+  z-index: 3;
+  display: flex;
+  flex: 0 0 min(21rem, 34%);
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 15rem;
+  padding: 1rem;
+  border-inline-start: 1px solid var(--game-line);
+  background: color-mix(in srgb, var(--app-bg) 94%, var(--felt) 6%);
+  color: var(--game-muted);
+  box-shadow: -8px 0 24px rgba(0,0,0,.12);
+  overflow: auto;
+}
+
+.game-instructions[hidden] { display: none; }
+.game-instructions-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }
+.game-instructions h2 { margin: 0; color: var(--game-ink); font-size: 1.05rem; line-height: 1.3; }
+.game-instructions-copy { margin: 0; font-size: 0.82rem; line-height: 1.6; }
+.game-instructions button {
+  flex: 0 0 auto;
+  min-height: 2.1rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--game-line);
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--app-bg) 72%, var(--app-text) 5%);
   color: var(--game-ink);
-  font-weight: 650;
+  font: inherit;
   cursor: pointer;
 }
-
-.game-rules p {
-  margin: 0;
-  padding: 0 0.7rem 0.65rem;
-  line-height: 1.55;
-}
+.game-instructions button:hover { background: var(--btn-hover); }
 
 .game-area {
   position: relative;
@@ -199,6 +216,8 @@
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   scrollbar-width: thin;
 }
+
+.game-stage > .game-area { flex: 1 1 0; }
 
 .game-area::-webkit-scrollbar { width: 0.65rem; height: 0.65rem; }
 .game-area::-webkit-scrollbar-thumb {
@@ -314,6 +333,7 @@
   font: 700 clamp(0.8rem, 2vw, 1.2rem)/1.02 Georgia, "Times New Roman", serif;
   text-align: left;
   cursor: pointer;
+  touch-action: none;
   transition: transform 130ms ease, box-shadow 130ms ease;
 }
 
@@ -328,6 +348,40 @@
   outline: 3px solid #f1c85b;
   outline-offset: 1px;
   transform: translateY(-4px);
+}
+.playing-card.dragging {
+  z-index: 8;
+  opacity: .76;
+  pointer-events: none;
+  transform: translate(var(--drag-x, 0px), var(--drag-y, 0px)) scale(1.04) rotate(2deg);
+}
+.card-pile.drag-over {
+  border-radius: .75rem;
+  outline: 2px solid #f1c85b;
+  outline-offset: 3px;
+  background-color: rgba(255,255,255,.12);
+}
+.playing-card.card-moved { animation: card-arrive 220ms ease-out both; }
+.playing-card.win-bounce { animation: card-win-bounce 680ms ease-in-out var(--celebration-delay, 0ms) both; }
+.playing-card.win-spiral { animation: card-win-spiral 1.1s ease-in var(--celebration-delay, 0ms) both; }
+
+.solitaire-fireworks {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.solitaire-fireworks span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: .42rem;
+  height: .42rem;
+  border-radius: 50%;
+  background: hsl(calc(var(--spark-angle) + 35deg) 88% 67%);
+  box-shadow: 0 0 .6rem currentColor;
+  animation: solitaire-firework 850ms cubic-bezier(.16,.72,.3,1) var(--spark-delay) both;
 }
 .playing-card.face-down {
   border-color: #f0e9d9;
@@ -586,6 +640,10 @@
   .game-toolbar button,
   .game-promotion button,
   .card-stock button { transition: none; }
+  .playing-card.card-moved,
+  .playing-card.win-bounce,
+  .playing-card.win-spiral,
+  .solitaire-fireworks span { animation: none; }
 }
 
 /* Use explicit table geometry so inline-size containment cannot collapse its
@@ -598,6 +656,44 @@
   min-width: calc(var(--pile-count, 7) * 3rem + 2rem);
   max-width: 68rem;
   margin-inline: auto;
+}
+.solitaire-game-area {
+  align-items: stretch;
+  overflow: hidden;
+  padding: clamp(.45rem, 1.5vw, .9rem);
+}
+.solitaire-game-area > .solitaire-table {
+  flex: 1 1 0;
+  align-self: stretch;
+  min-height: 0;
+  max-height: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  min-width: 100%;
+  max-width: 100%;
+}
+.card-top-row { flex: 0 0 auto; }
+.card-tableau-scroll {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(255,255,255,.44) rgba(0,0,0,.12);
+  scrollbar-width: thin;
+}
+.card-tableau-scroll::-webkit-scrollbar { width: .6rem; height: .6rem; }
+.card-tableau-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 1rem;
+  background: rgba(255,255,255,.44);
+  background-clip: padding-box;
+}
+.card-tableau-scroll .card-columns {
+  width: max-content;
+  min-width: 100%;
+  min-height: max-content;
+  grid-template-columns: repeat(var(--columns, 7), minmax(2.5rem, var(--card-width)));
 }
 .card-columns {
   grid-template-columns: repeat(var(--columns, 7), minmax(2.5rem, 1fr));
@@ -621,3 +717,36 @@
   margin-top: calc(.75rem - var(--card-width) / 0.7);
 }
 .game-toolbar select option { background: var(--app-bg); color: var(--game-ink); }
+
+@keyframes card-arrive {
+  0% { transform: translateY(-9px) scale(1.04); filter: brightness(1.25); }
+  100% { transform: translateY(0) scale(1); filter: none; }
+}
+@keyframes card-win-bounce {
+  0%, 100% { translate: 0 0; }
+  36% { translate: 0 -1.35rem; rotate: -5deg; }
+  68% { translate: 0 .25rem; rotate: 4deg; }
+}
+@keyframes card-win-spiral {
+  0% { transform: translate(0, 0) rotate(0) scale(1); opacity: 1; }
+  100% {
+    transform: translate(var(--spiral-x, 0px), -48vh) rotate(540deg) scale(.18);
+    opacity: 0;
+  }
+}
+@keyframes solitaire-firework {
+  0% { transform: rotate(var(--spark-angle)) translateY(0) scale(.3); opacity: 1; }
+  100% { transform: rotate(var(--spark-angle)) translateY(-10rem) scale(0); opacity: 0; }
+}
+
+@media (max-width: 640px) {
+  .game-instructions {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: min(92%, 24rem);
+    min-width: 0;
+    flex-basis: auto;
+    border-inline-start: 1px solid var(--game-line);
+  }
+  .solitaire-game-area > .solitaire-table { min-width: 100%; }
+}

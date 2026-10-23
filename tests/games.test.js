@@ -169,6 +169,24 @@ test('finishing all solitaire foundations wins and blocks further play', () => {
   assert.equal(s.won, true); assert.equal(cards.drawCards(s), false);
 });
 
+test('Send home repeats until cards exposed by earlier home moves are no longer eligible', () => {
+  const s = blank('klondike');
+  s.foundations[0] = [card(1, 0)];
+  s.columns[0] = [card(3, 0)];
+  s.columns[1] = [card(2, 0)];
+  assert.equal(cards.sendEligibleCardsHome(s), 2);
+  assert.deepEqual(s.foundations[0].map(item => item.rank), [1, 2, 3]);
+  assert.deepEqual(s.columns.slice(0, 2), [[], []]);
+  assert.equal(s.moves, 2);
+  assert.equal(cards.sendEligibleCardsHome(blank('spider')), 0);
+});
+
+test('solitaire win celebrations select one of three effects from the supplied random source', () => {
+  assert.equal(cards.chooseWinCelebration(() => 0), 'fireworks');
+  assert.equal(cards.chooseWinCelebration(() => 0.34), 'bounce');
+  assert.equal(cards.chooseWinCelebration(() => 0.99), 'spiral');
+});
+
 test('Minesweeper difficulty sizes, mine counts, and safe-first-reveal hold', () => {
   for (const level of Object.keys(mines.MINE_LEVELS)) {
     const s = mines.createMinesweeper(level);

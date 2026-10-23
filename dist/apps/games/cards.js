@@ -2,6 +2,8 @@
 export const SUITS = ['♠', '♥', '♣', '♦'];
 export const rankLabel = rank => ({ 1: 'A', 11: 'J', 12: 'Q', 13: 'K' }[rank] || String(rank));
 export const isRed = card => card.suit === 1 || card.suit === 3;
+export const chooseWinCelebration = (random = Math.random) =>
+  ['fireworks', 'bounce', 'spiral'][Math.max(0, Math.min(2, Math.floor(random() * 3)))];
 
 export function shuffle(cards, random = Math.random) {
   for (let i = cards.length - 1; i > 0; i--) {
@@ -99,6 +101,32 @@ export function moveCards(state, from, to) {
   state.moves++;
   finish(state);
   return true;
+}
+
+export function sendEligibleCardsHome(state) {
+  if (state.kind === 'spider' || state.won) return 0;
+  let moved = 0;
+  while (true) {
+    const sources = [
+      ...state.columns.map((pile, index) => ({ zone: 'columns', index, offset: pile.length - 1 })),
+      ...state.cells.map((pile, index) => ({ zone: 'cells', index, offset: pile.length - 1 })),
+      { zone: 'waste', index: 0, offset: state.waste.length - 1 },
+    ];
+    let foundMove = false;
+    for (const source of sources) {
+      const card = getPile(state, source)?.[source.offset];
+      if (!card?.up) continue;
+      for (let index = 0; index < state.foundations.length; index++) {
+        if (moveCards(state, source, { zone: 'foundations', index })) {
+          moved++;
+          foundMove = true;
+          break;
+        }
+      }
+      if (foundMove) break;
+    }
+    if (!foundMove) return moved;
+  }
 }
 
 export function drawCards(state) {
