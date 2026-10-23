@@ -316,7 +316,7 @@ test('all three solitaire games deal, select, draw, undo, configure, and restart
       await expect(app.locator('.game-status')).toContainText('0 moves');
     } else {
       await app.getByRole('button', { name: 'Empty Cell 1', exact: true }).click();
-      await expect(app.locator('.game-status')).toContainText('1 moves');
+      await expect(app.locator('.game-status')).toHaveText(/^Moved .+ to Cell 1\.$/);
       await app.getByRole('button', { name: 'Undo', exact: true }).click();
     }
     await app.getByRole('button', { name: 'New deal' }).click();
@@ -471,6 +471,23 @@ test('FreeCell double-click highlights Home and an open cell, or sends the card 
   await expect(noOpenCell.locator('.game-status')).toHaveText('Moved 2♠ to Home 1.');
 });
 
+test('manual click moves announce the card and destination', async ({ page }) => {
+  const tableau = await restoreGame(page, savedKlondike({
+    columns: [[[5, 0]], [[6, 1]]],
+  }));
+  await tableau.locator('[data-key="card-4"]').click();
+  await tableau.locator('[aria-label="Pile 2"] [data-key="card-18"]').click();
+  await expect(tableau.locator('.game-status')).toHaveText('Moved 5♠ to Pile 2.');
+  await page.locator('#close-btn').click();
+
+  const home = await restoreGame(page, savedKlondike({
+    columns: [[[2, 0]]], foundations: { 0: [1] },
+  }));
+  await home.locator('[data-key="card-1"]').click();
+  await home.locator('[aria-label="Home 1"] [data-key="card-0"]').click();
+  await expect(home.locator('.game-status')).toHaveText('Moved 2♠ to Home 1.');
+});
+
 test('card-game fields use grouped Home and Cells labels without individual pile captions', async ({ page }) => {
   const klondike = await openGame(page, 'klondike');
   await expect(klondike.locator('.home-group')).toHaveAttribute('aria-label', 'Home');
@@ -526,7 +543,7 @@ test('cards and valid sequences drop in blank tableau space while invalid drops 
   const cardTarget = cardApp.locator('.card-columns .card-pile').nth(1);
   await dragToBlankPileArea(page, cardApp.locator('[data-key="card-4"]'), cardTarget);
   await expect(cardTarget.locator('[data-key="card-4"]')).toBeVisible();
-  await expect(cardApp.locator('.game-status')).toContainText('1 moves');
+  await expect(cardApp.locator('.game-status')).toHaveText('Moved 5♠ to Pile 2.');
   await page.locator('#close-btn').click();
 
   const sequenceApp = await restoreGame(page, savedKlondike({
@@ -536,7 +553,8 @@ test('cards and valid sequences drop in blank tableau space while invalid drops 
   await dragToBlankPileArea(page, sequenceApp.locator('[data-key="card-6"]'), sequenceTarget);
   await expect(sequenceTarget.locator('[data-key="card-6"]')).toBeVisible();
   await expect(sequenceTarget.locator('[data-key="card-18"]')).toBeVisible();
-  await expect(sequenceApp.locator('.game-status')).toContainText('1 moves');
+  await expect(sequenceApp.locator('.game-status'))
+    .toHaveText('Moved 7♠ and 1 more card to Pile 2.');
   await page.locator('#close-btn').click();
 
   const invalidApp = await restoreGame(page, savedKlondike({
@@ -591,7 +609,7 @@ test('dragging a valid card moves it to a legal pile and animates the move', asy
   await page.mouse.up();
   await expect(dragLayer).toHaveCount(0);
   await expect(destination.locator('[data-key="card-12"]')).toHaveClass(/card-moved/);
-  await expect(app.locator('.game-status')).toContainText('1 moves');
+  await expect(app.locator('.game-status')).toHaveText('Moved K♠ to Pile 2.');
 
   const touchSource = app.locator('[data-key="card-12"]');
   const touchDestination = app.locator('.card-columns .card-pile').nth(2);
@@ -616,7 +634,24 @@ test('dragging a valid card moves it to a legal pile and animates the move', asy
     }));
   }, { sourceKey: 'card-12', targetIndex: 2 });
   await expect(touchDestination.locator('[data-key="card-12"]')).toHaveClass(/card-moved/);
-  await expect(app.locator('.game-status')).toContainText('2 moves');
+  await expect(app.locator('.game-status')).toHaveText('Moved K♠ to Pile 3.');
+});
+
+test('dragging a card home announces its card and foundation', async ({ page }) => {
+  const app = await restoreGame(page, savedKlondike({
+    columns: [[[2, 0]]], foundations: { 0: [1] },
+  }));
+  const card = app.locator('[data-key="card-1"]');
+  const home = app.locator('[aria-label="Home 1"] .playing-card');
+  const from = await card.boundingBox();
+  const to = await home.boundingBox();
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2 + 20, from.y + from.height / 2 + 20);
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await expect(app.locator('[aria-label="Home 1"] .playing-card')).toHaveText('2♠');
+  await expect(app.locator('.game-status')).toHaveText('Moved 2♠ to Home 1.');
 });
 
 test('one selected win celebration runs and restarting allows a new celebration', async ({ page }) => {

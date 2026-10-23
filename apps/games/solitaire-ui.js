@@ -88,6 +88,21 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       card.classList.add('card-moved');
     }
   }
+  function moveAnnouncement(from, destination) {
+    const cards = getPile(state, from)?.slice(from.offset) || [];
+    const first = cards[0];
+    if (!first) return '';
+    const cardName = `${rankLabel(first.rank)}${SUITS[first.suit]}`;
+    const extraCards = cards.length - 1;
+    const cardDescription = extraCards > 0
+      ? `${cardName} and ${extraCards} more ${extraCards === 1 ? 'card' : 'cards'}`
+      : cardName;
+    const destinationName = destination.zone === 'foundations' ? `Home ${destination.index + 1}`
+      : destination.zone === 'columns' ? `Pile ${destination.index + 1}`
+        : destination.zone === 'cells' ? `Cell ${destination.index + 1}`
+          : destination.zone;
+    return `Moved ${cardDescription} to ${destinationName}.`;
+  }
   function makeLayerCard(source, sourceRect, baseRect) {
     const clone = document.createElement('div');
     clone.className = 'playing-card game-layer-card';
@@ -215,8 +230,14 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     if (suppressClick) return;
     const pile = getPile(state, { zone, index });
     if (selected) {
+      const from = { ...selected };
+      const destination = { zone, index };
       const movingIds = getPile(state, selected)?.slice(selected.offset).map(card => card.id) || [];
-      if (action(() => moveCards(state, selected, { zone, index }), movingIds)) return;
+      const announcement = moveAnnouncement(from, destination);
+      if (action(() => moveCards(state, from, destination), movingIds)) {
+        status.textContent = announcement;
+        return;
+      }
       if (selected.zone === zone && selected.index === index && selected.offset === offset) {
         selected = null; render(); return;
       }
@@ -324,8 +345,11 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     const target = resolveDropTarget(event.clientX, event.clientY);
     const destination = target && { zone: target.dataset.dropZone, index: Number(target.dataset.dropIndex) };
     const movingIds = getPile(state, drag.from)?.slice(drag.from.offset).map(card => card.id) || [];
+    const announcement = destination && moveAnnouncement(drag.from, destination);
     if (!destination || !action(() => moveCards(state, drag.from, destination), movingIds)) {
       status.textContent = 'That card or sequence cannot move to this pile.';
+    } else {
+      status.textContent = announcement;
     }
   }, { signal: dragAbort.signal });
   document.addEventListener('pointercancel', event => {
