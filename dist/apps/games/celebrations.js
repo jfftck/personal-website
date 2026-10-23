@@ -1,5 +1,6 @@
 import { isRed, SUITS } from './cards.js';
 import { paintCardFace } from './card-artwork.js';
+import { createParticleAnimation } from './particle-effects.js';
 
 const unit = (index, salt = 0) => {
   const value = Math.sin((index + 1) * 127.1 + (salt + 1) * 311.7) * 43758.5453;
@@ -164,35 +165,26 @@ function animateFireworks(sprites, bounds, layer) {
     const gatherX = bounds.width / 2 - startX;
     const gatherY = bounds.height * 0.88 - startY;
     const angle = -Math.PI * 0.92 + (index / Math.max(1, sprites.length - 1)) * Math.PI * 0.84;
-    const distance = Math.max(bounds.width, bounds.height) * (0.58 + unit(index, 5) * 0.32);
+    const distance = Math.max(bounds.width, bounds.height) * (0.72 + unit(index, 5) * 0.4);
     const launchX = gatherX + Math.cos(angle) * distance;
     const launchY = gatherY + Math.sin(angle) * distance;
     sprite.element.classList.add('card-firework');
     sprite.element.animate([
-      { transform: transform(0, 0, 0.78), opacity: 1, offset: 0 },
-      { transform: transform(gatherX, gatherY, 0.82), opacity: 1, offset: 0.25 },
-      { transform: transform(gatherX + (launchX - gatherX) * 0.58, gatherY + (launchY - gatherY) * 0.58, 1.28, (index % 2 ? 1 : -1) * 110), opacity: 1, offset: 0.52 },
-      { transform: transform(launchX, launchY, 1.9, (index % 2 ? 1 : -1) * 220), opacity: 0.96, offset: 0.7 },
-      { transform: transform(launchX, launchY, 2.8, (index % 2 ? 1 : -1) * 270), opacity: 0.7, offset: 0.82 },
-      { transform: transform(launchX, launchY, 4.2, (index % 2 ? 1 : -1) * 360), opacity: 0, offset: 1 },
+      { transform: transform(0, 0, 0.72), opacity: 1, offset: 0 },
+      { transform: transform(gatherX, gatherY, 0.84), opacity: 1, offset: 0.25 },
+      { transform: transform(gatherX + (launchX - gatherX) * 0.58, gatherY + (launchY - gatherY) * 0.58, 1.38, (index % 2 ? 1 : -1) * 110), opacity: 1, offset: 0.52 },
+      { transform: transform(launchX, launchY, 2.05, (index % 2 ? 1 : -1) * 220), opacity: 0.96, offset: 0.7 },
+      { transform: transform(launchX, launchY, 3.1, (index % 2 ? 1 : -1) * 270), opacity: 0.7, offset: 0.82 },
+      { transform: transform(launchX, launchY, 4.6, (index % 2 ? 1 : -1) * 360), opacity: 0, offset: 1 },
     ], {
-      duration: 2050,
+      duration: 3500,
       delay: index * 4,
       easing: 'ease-out',
       fill: 'both',
     });
   });
 
-  const sparks = document.createElement('div');
-  sparks.className = 'solitaire-fireworks at-bottom';
-  for (let index = 0; index < 24; index++) {
-    const spark = document.createElement('span');
-    spark.style.setProperty('--spark-angle', `${index * 15}deg`);
-    spark.style.setProperty('--spark-delay', `${1450 + index * 12}ms`);
-    spark.style.setProperty('--spark-length', `${Math.max(bounds.width, bounds.height) * 0.42}px`);
-    sparks.append(spark);
-  }
-  layer.append(sparks);
+  return createParticleAnimation(layer, 'fireworks', bounds, { burstCount: 8 });
 }
 
 function animateRain(sprites, bounds) {
@@ -240,7 +232,7 @@ function animateRain(sprites, bounds) {
   return { interval, duration: animationEnd };
 }
 
-function animateWave(sprites, bounds) {
+function animateWave(sprites, bounds, layer) {
   const across = Math.ceil(sprites.length / 2);
   sprites.forEach((sprite, index) => {
     const row = Math.floor(index / across);
@@ -276,9 +268,10 @@ function animateWave(sprites, bounds) {
       fill: 'both',
     });
   });
+  return createParticleAnimation(layer, 'splash', bounds, { burstCount: 7 });
 }
 
-function animateTornado(sprites, bounds) {
+function animateTornado(sprites, bounds, layer) {
   sprites.forEach((sprite, index) => {
     const leftSide = index % 2 === 0;
     const direction = index % 3 === 0 ? -1 : 1;
@@ -313,6 +306,7 @@ function animateTornado(sprites, bounds) {
       fill: 'both',
     });
   });
+  return createParticleAnimation(layer, 'streaks', bounds);
 }
 
 export function createWinCelebration(effect, kind, state, table, gameElement, onComplete = () => {}) {
@@ -342,24 +336,25 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
 
   let interval = null;
   let rainDuration = 0;
+  let particleAnimation = null;
   switch (effect) {
     case 'bounce': animateBounce(sprites, bounds); break;
     case 'spiral': animateSpiral(sprites, bounds); break;
-    case 'fireworks': animateFireworks(sprites, bounds, layer); break;
+    case 'fireworks': particleAnimation = animateFireworks(sprites, bounds, layer); break;
     case 'rain': {
       const rain = animateRain(sprites, bounds);
       interval = rain.interval;
       rainDuration = rain.duration;
       break;
     }
-    case 'wave': animateWave(sprites, bounds); break;
-    case 'tornado': animateTornado(sprites, bounds); break;
+    case 'wave': particleAnimation = animateWave(sprites, bounds, layer); break;
+    case 'tornado': particleAnimation = animateTornado(sprites, bounds, layer); break;
   }
 
   const stagger = {
     bounce: sprites.length * 7,
     spiral: sprites.length * 6,
-    fireworks: sprites.length * 4 + 24 * 12,
+    fireworks: sprites.length * 4,
     rain: 1350,
     wave: sprites.length * 3,
     tornado: sprites.length * 4,
@@ -367,12 +362,15 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
   const duration = {
     bounce: 2100,
     spiral: 3400,
-    fireworks: 2050,
+    fireworks: 3500,
     rain: 2400,
     wave: 2700,
     tornado: 2450,
   }[effect] || 2500;
-  const animationEnd = effect === 'rain' ? rainDuration : duration + stagger;
+  const animationEnd = Math.max(
+    effect === 'rain' ? rainDuration : duration + stagger,
+    particleAnimation?.duration || 0,
+  );
 
   let cleaned = false;
   let timer = null;
@@ -381,6 +379,7 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
     cleaned = true;
     clearTimeout(timer);
     clearInterval(interval);
+    particleAnimation?.cleanup();
     layer.remove();
     sources.forEach(source => source.classList.remove('celebration-source-hidden'));
   };

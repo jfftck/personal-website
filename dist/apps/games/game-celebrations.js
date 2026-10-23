@@ -1,3 +1,5 @@
+import { createParticleAnimation } from './particle-effects.js';
+
 const effects = ['pulse', 'fade', 'fireworks', 'knock'];
 
 const unit = (index, salt = 0) => {
@@ -39,45 +41,8 @@ function createLayer(anchor, className, game, effect) {
   return { layer, bounds };
 }
 
-function addBurst(layer, x, y, { color = '#ffe68b', delay = 0, duration = 1100, sparks = 12 } = {}) {
-  const ring = document.createElement('span');
-  ring.className = 'game-celebration-ring';
-  ring.style.left = `${x}px`;
-  ring.style.top = `${y}px`;
-  ring.style.borderColor = color;
-  layer.append(ring);
-  ring.animate([
-    { transform: 'translate(-50%, -50%) scale(.12)', opacity: 1 },
-    { transform: 'translate(-50%, -50%) scale(3.8)', opacity: 0 },
-  ], { duration, delay, easing: 'cubic-bezier(.12,.68,.28,1)', fill: 'both' });
-
-  for (let index = 0; index < sparks; index++) {
-    const spark = document.createElement('span');
-    spark.className = 'game-celebration-spark';
-    spark.style.left = `${x}px`;
-    spark.style.top = `${y}px`;
-    spark.style.background = index % 3 === 0 ? '#fff' : color;
-    spark.style.boxShadow = `0 0 .45rem ${color}`;
-    layer.append(spark);
-    const angle = index / sparks * Math.PI * 2;
-    const distance = 24 + unit(index, delay) * 55;
-    spark.animate([
-      { transform: 'translate3d(0, 0, 0) scale(.25)', opacity: 1 },
-      {
-        transform: `translate3d(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px, 0) scale(1.1)`,
-        opacity: 1,
-        offset: 0.55,
-      },
-      {
-        transform: `translate3d(${Math.cos(angle) * distance * 1.28}px, ${Math.sin(angle) * distance * 1.28}px, 0) scale(.15)`,
-        opacity: 0,
-      },
-    ], { duration, delay, easing: 'ease-out', fill: 'both' });
-  }
-  return delay + duration;
-}
-
-function clearLayer(layer, sources = []) {
+function clearLayer(layer, sources = [], particleAnimation = null) {
+  particleAnimation?.cleanup();
   layer.querySelectorAll('*').forEach(element => {
     element.getAnimations().forEach(animation => animation.cancel());
   });
@@ -117,6 +82,7 @@ function animatePieces(kind, board, winner, effect, onComplete) {
   });
 
   let endTime = 0;
+  let particleAnimation = null;
   if (effect === 'knock' && winner) {
     const centerX = bounds.width / 2;
     const centerY = bounds.height / 2;
@@ -143,6 +109,7 @@ function animatePieces(kind, board, winner, effect, onComplete) {
       endTime = Math.max(endTime, delay + duration);
     }
   } else if (effect === 'fireworks') {
+    particleAnimation = createParticleAnimation(layer, 'fireworks', bounds, { burstCount: 8 });
     for (const piece of pieces) {
       const delay = piece.index * 5;
       const duration = 1100 + unit(piece.index, 6) * 250;
@@ -151,13 +118,9 @@ function animatePieces(kind, board, winner, effect, onComplete) {
         { transform: 'scale(1.5)', opacity: 1, offset: 0.35 },
         { transform: 'scale(2.8) rotate(24deg)', opacity: 0 },
       ], { duration, delay, easing: 'ease-out', fill: 'both' });
-      endTime = Math.max(endTime, addBurst(layer, piece.x, piece.y, {
-        color: piece.side === 'white' ? '#fff2ad' : '#8be7ff',
-        delay: delay + 180,
-        duration: 1000,
-        sparks: 6,
-      }));
+      endTime = Math.max(endTime, delay + duration);
     }
+    endTime = Math.max(endTime, particleAnimation.duration);
   } else {
     const fade = effect === 'fade';
     for (const piece of pieces) {
@@ -183,7 +146,7 @@ function animatePieces(kind, board, winner, effect, onComplete) {
     if (cleaned) return;
     cleaned = true;
     clearTimeout(timer);
-    clearLayer(layer, sources);
+    clearLayer(layer, sources, particleAnimation);
   };
   timer = setTimeout(() => {
     cleanup();
@@ -208,8 +171,8 @@ export function createMinesweeperCelebration(board, state, onComplete = () => {}
   const targets = [];
   if (state.status === 'won') {
     const safe = state.cells.map((cell, index) => cell.open && !cell.mine ? index : -1).filter(index => index >= 0);
-    for (let index = 0; index < 3 && safe.length; index++) {
-      targets.push({ index: safe[Math.floor((index + 0.5) * safe.length / 3)] ?? safe.at(-1), delay: index * 260 });
+    for (let index = 0; index < 5 && safe.length; index++) {
+      targets.push({ index: safe[Math.floor((index + 0.5) * safe.length / 5)] ?? safe.at(-1), delay: index * 460 });
     }
   } else {
     const mines = state.cells.map((cell, index) => cell.mine ? index : -1).filter(index => index >= 0);
@@ -225,22 +188,29 @@ export function createMinesweeperCelebration(board, state, onComplete = () => {}
   }
 
   let endTime = 0;
+  const events = [];
   for (const target of targets) {
     const cell = cells[target.index];
     if (!cell) continue;
     const rect = cell.getBoundingClientRect();
     const isMine = state.status === 'lost';
-    endTime = Math.max(endTime, addBurst(layer,
-      rect.left + rect.width / 2 - bounds.left,
-      rect.top + rect.height / 2 - bounds.top,
-      {
-        color: isMine ? '#ff624f' : '#ffd66f',
-        delay: target.delay,
-        duration: isMine ? 820 + unit(target.index, 2) * 220 : 1400,
-        sparks: isMine ? 8 : 12,
-      },
-    ));
+    events.push({
+      x: rect.left + rect.width / 2 - bounds.left,
+      y: rect.top + rect.height / 2 - bounds.top,
+      delay: target.delay,
+      life: isMine ? 1050 + unit(target.index, 2) * 350 : 1900 + unit(target.index, 4) * 500,
+      count: isMine ? 58 : 125,
+      radius: Math.min(bounds.width, bounds.height) * (isMine ? 0.12 : 0.23),
+      palette: isMine ? ['#ff503b', '#ff9d42', '#ffdc70', '#fff4d5', '#ff6a4d'] : undefined,
+    });
   }
+  const particleAnimation = createParticleAnimation(
+    layer,
+    state.status === 'won' ? 'fireworks' : 'explosions',
+    bounds,
+    { events },
+  );
+  endTime = Math.max(endTime, particleAnimation.duration);
 
   let cleaned = false;
   let timer;
@@ -248,7 +218,7 @@ export function createMinesweeperCelebration(board, state, onComplete = () => {}
     if (cleaned) return;
     cleaned = true;
     clearTimeout(timer);
-    clearLayer(layer);
+    clearLayer(layer, [], particleAnimation);
   };
   timer = setTimeout(() => {
     cleanup();

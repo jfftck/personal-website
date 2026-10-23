@@ -1709,7 +1709,10 @@ test('one selected win celebration runs and restarting allows a new celebration'
   await expect(celebration).toHaveCount(1);
   await expect(celebration.locator('.game-layer-card .card-face-art')).toHaveCount(52);
   await expect(celebration.locator('.game-layer-card.card-firework')).toHaveCount(52);
-  await expect(celebration.locator('.solitaire-fireworks span')).toHaveCount(24);
+  const particles = celebration.locator('canvas.celebration-particle-canvas');
+  await expect(particles).toHaveAttribute('data-particle-effect', 'fireworks');
+  await expect(particles).toHaveAttribute('data-particle-bursts', '8');
+  expect(Number(await particles.getAttribute('data-particle-duration'))).toBeGreaterThan(6000);
   const layerPosition = await celebration.evaluate(layer => ({
     position: getComputedStyle(layer).position,
     zIndex: getComputedStyle(layer).zIndex,
@@ -1805,6 +1808,14 @@ test('rain, wave, and tornado celebrations animate changing cards on the fixed l
     const cards = layer.locator(`.game-layer-card.card-${effect}`);
     await expect(cards).toHaveCount(52);
     expect(await cards.first().evaluate(card => card.getAnimations().length)).toBeGreaterThan(0);
+    if (effect === 'wave') {
+      const particles = layer.locator('canvas[data-particle-effect="splash"]');
+      await expect(particles).toHaveAttribute('data-particle-bursts', '7');
+    }
+    if (effect === 'tornado') {
+      const particles = layer.locator('canvas[data-particle-effect="streaks"]');
+      expect(Number(await particles.getAttribute('data-particle-duration'))).toBeGreaterThan(4000);
+    }
     if (effect === 'rain') {
       const before = await cards.first().textContent();
       await page.waitForTimeout(120);
@@ -1970,7 +1981,7 @@ test('solitaire tableau scrolls independently and reduced motion suppresses cele
   await page.evaluate(() => { Math.random = () => 0.01; });
   await winningApp.locator('[data-key="card-12"]').dblclick();
   await expect(winningApp.locator('.solitaire-table')).toHaveAttribute('data-win-celebration', 'fireworks');
-  await expect(winningApp.locator('.solitaire-fireworks')).toHaveCount(0);
+  await expect(winningApp.locator('.celebration-particle-canvas')).toHaveCount(0);
   await expect(winningApp.locator('.solitaire-celebration-layer')).toHaveCount(0);
   await expect(winningApp.locator('.game-new-game-screen')).toBeVisible();
   await expect(winningApp.locator('.game-new-game-screen').getByLabel('Draw', { exact: true })).toHaveValue('1');
@@ -2031,7 +2042,7 @@ test('Minesweeper shows the exploded board during its mine-burst celebration', a
   await expect(app.locator('.mine-cell.exploded')).toHaveCount(1);
   const layer = page.locator('body > .game-celebration-layer[data-game="minesweeper"]');
   await expect(layer).toHaveAttribute('data-effect', 'explosions');
-  await expect(layer.locator('.game-celebration-spark')).not.toHaveCount(0);
+  await expect(layer.locator('canvas[data-particle-effect="explosions"]')).toHaveCount(1);
   await expect(app.locator('.game-new-game-screen')).toBeVisible();
   await expect(layer).toHaveCount(0);
 });

@@ -1317,8 +1317,8 @@
 .game-layer-card.card-firework,
 .game-layer-card.card-rain,
 .game-layer-card.card-wave,
-.game-layer-card.card-tornado,
-.solitaire-fireworks span { will-change: transform; }
+.game-layer-card.card-tornado { will-change: transform; }
+.celebration-particle-canvas { display: block; }
 .game-layer-card.card-firework {
   border-color: rgba(255,255,255,.9);
   box-shadow: 0 0 1rem rgba(255,214,122,.62), 0 4px 12px rgba(0,0,0,.35);
@@ -1347,33 +1347,6 @@
 }
 .playing-card.card-moved { animation: card-arrive 220ms ease-out both; }
 
-.solitaire-fireworks {
-  position: absolute;
-  z-index: 10;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-.solitaire-fireworks.at-bottom {
-  top: auto;
-  right: auto;
-  bottom: 12%;
-  left: 50%;
-  width: 1px;
-  height: 1px;
-}
-.solitaire-fireworks.at-bottom span { top: 0; left: 0; }
-.solitaire-fireworks span {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: .42rem;
-  height: .42rem;
-  border-radius: 50%;
-  background: hsl(calc(var(--spark-angle) + 35deg) 88% 67%);
-  box-shadow: 0 0 .6rem currentColor;
-  animation: solitaire-firework 850ms cubic-bezier(.16,.72,.3,1) var(--spark-delay) both;
-}
 .playing-card.face-down {
   border-color: var(--card-back-border);
   background:
@@ -1606,31 +1579,6 @@
   will-change: transform, opacity;
 }
 .game-celebration-source-hidden { visibility: hidden !important; }
-.game-celebration-ring,
-.game-celebration-spark {
-  position: absolute;
-  z-index: 3;
-  display: block;
-  pointer-events: none;
-}
-.game-celebration-ring {
-  width: 1.1rem;
-  aspect-ratio: 1;
-  border: 2px solid #ffe68b;
-  border-radius: 50%;
-  will-change: transform, opacity;
-}
-.game-celebration-spark {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  will-change: transform, opacity;
-}
-.mine-celebration--lost .game-celebration-ring {
-  border-width: 3px;
-  box-shadow: 0 0 1rem #ff624f;
-}
-
 /* Cells and their graphics scale together to fit every difficulty in the
    available board slot, including narrow and short game windows. */
 .mine-board-wrap {
@@ -1741,7 +1689,6 @@
   .game-promotion button,
   .card-stock button { transition: none; }
   .playing-card.card-moved,
-  .solitaire-fireworks span { animation: none; }
   .disc.disc-placed,
   .disc.disc-flipping { animation: none; }
 }
@@ -1824,12 +1771,6 @@
 @keyframes card-arrive {
   0% { transform: translateY(-9px) scale(1.04); filter: brightness(1.25); }
   100% { transform: translateY(0) scale(1); filter: none; }
-}
-@keyframes solitaire-firework {
-  0% { transform: rotate(var(--spark-angle)) translateY(0) scale(.12); opacity: 1; }
-  48% { transform: rotate(var(--spark-angle)) translateY(calc(0px - var(--spark-length, 10rem))) scale(1); opacity: 1; }
-  68% { transform: rotate(var(--spark-angle)) translateY(calc(0px - var(--spark-length, 10rem))) scale(1.65); opacity: .9; }
-  100% { transform: rotate(var(--spark-angle)) translateY(calc(0px - var(--spark-length, 10rem))) scale(3.4); opacity: 0; }
 }
 @keyframes reversi-disc-place {
   0% { opacity: 0; transform: scale(.12); }
