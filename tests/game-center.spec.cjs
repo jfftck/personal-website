@@ -671,10 +671,12 @@ test('Minesweeper Glass number and flag colors remain readable in light and dark
         ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
       return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
     };
-    const ratio = (foreground, background) => {
-      const fg = luminance(foreground), bg = luminance(background);
+    const contrastRatio = (foreground, background) => {
+      const fg = typeof foreground === 'number' ? foreground : luminance(foreground);
+      const bg = typeof background === 'number' ? background : luminance(background);
       return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
     };
+    const colors = value => [...value.matchAll(/rgba?\([^)]*\)|#[\da-f]{6}/gi)].map(match => match[0]);
     const results = {};
     [...element.querySelectorAll('.mine-cell.revealed')].slice(0, 8)
       .forEach((cell, index) => { cell.dataset.number = String(index + 1); });
@@ -683,17 +685,93 @@ test('Minesweeper Glass number and flag colors remain readable in light and dark
       for (let number = 1; number <= 8; number++) {
         const cell = element.querySelector(`.mine-cell[data-number="${number}"]`);
         const style = getComputedStyle(cell);
-        results[`${theme}-${number}`] = ratio(style.color, style.backgroundColor);
+        const stops = colors(getComputedStyle(element).getPropertyValue('--mine-cell-open'));
+        results[`${theme}-${number}`] = Math.min(...stops.map(stop => contrastRatio(style.color, stop)));
       }
       const flag = element.querySelector('.mine-cell.flagged');
       const flagColor = getComputedStyle(flag, '::after').borderTopColor;
-      results[`${theme}-flag`] = ratio(flagColor, getComputedStyle(flag).backgroundColor);
+      const stops = colors(getComputedStyle(element).getPropertyValue('--mine-cell-open'));
+      results[`${theme}-flag`] = Math.min(...stops.map(stop => contrastRatio(flagColor, stop)));
     }
     return results;
   });
   for (const value of Object.values(contrast)) {
     expect(value, JSON.stringify(contrast)).toBeGreaterThanOrEqual(4.5);
   }
+});
+
+test('Minesweeper revealed cells are darker across themes, with a centered Glass gradient and adaptive border', async ({ page }) => {
+  const app = await restoreGame(page, savedMinesweeper({ finalSafeCell: 10 }), 'minesweeper');
+  const settings = await openSettings(app);
+  const picker = app.getByRole('radiogroup', { name: 'Theme' });
+  const choices = [
+    ['Classic grey', 'classic'],
+    ['Ocean', 'ocean'],
+    ['Sunset', 'sunset'],
+    ['Glass', 'glass'],
+    ['Color-blind friendly', 'colorblind'],
+  ];
+  const result = await app.evaluate(async (element, themeChoices) => {
+    const getStops = value => [...value.matchAll(/rgba?\([^)]*\)|#[\da-f]{6}/gi)].map(match => match[0]);
+    const luminance = color => {
+      const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map(value => value / 255);
+      const linear = channels.map(value => value <= 0.04045
+        ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+      return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+    };
+    const ratio = (first, second) => (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+    const values = {};
+    for (const [label, theme] of themeChoices) {
+      element.dataset.minesweeperTheme = theme;
+      for (const appearance of ['light', 'dark']) {
+        document.documentElement.dataset.theme = appearance;
+        const appStyle = getComputedStyle(element);
+        const faceStops = getStops(appStyle.getPropertyValue('--mine-cell-face')).map(luminance);
+        const openStops = getStops(appStyle.getPropertyValue('--mine-cell-open')).map(luminance);
+        const faceMean = faceStops.reduce((sum, value) => sum + value, 0) / faceStops.length;
+        const openMean = openStops.reduce((sum, value) => sum + value, 0) / openStops.length;
+        values[`${theme}-${appearance}-surface`] = ratio(faceMean, openMean);
+
+        const cells = [...element.querySelectorAll('.mine-cell.revealed')].slice(0, 8);
+        cells.forEach((cell, index) => { cell.dataset.number = String(index + 1); });
+        for (const cell of cells) {
+          const foreground = luminance(getComputedStyle(cell).color);
+          values[`${theme}-${appearance}-number-${cell.dataset.number}`] =
+            Math.min(...openStops.map(stop => ratio(foreground, stop)));
+        }
+
+        if (theme === 'glass') {
+          const border = luminance(getComputedStyle(element.querySelector('.mine-cell')).borderTopColor);
+          values[`${appearance}-glass-border`] = border;
+          values[`${appearance}-glass-face-center-brighter`] =
+            faceStops[1] > faceStops[0] && faceStops[1] > faceStops.at(-1);
+          values[`${appearance}-glass-open-center-brighter`] =
+            openStops[1] > openStops[0] && openStops[1] > openStops.at(-1);
+        }
+      }
+      const radio = document.querySelector(`.game-theme-preview--minesweeper[data-preview-theme="${theme}"]`);
+      values[`${theme}-preview-open`] = getStops(getComputedStyle(radio).getPropertyValue('--preview-mine-open')).length > 0;
+    }
+    return values;
+  }, choices);
+
+  for (const [theme] of choices) {
+    expect(result[`${theme}-light-surface`], theme).toBeGreaterThanOrEqual(2.5);
+    expect(result[`${theme}-dark-surface`], theme).toBeGreaterThanOrEqual(2.5);
+    expect(result[`${theme}-preview-open`]).toBe(true);
+    for (const appearance of ['light', 'dark']) {
+      for (let number = 1; number <= 8; number++) {
+        expect(result[`${theme}-${appearance}-number-${number}`], `${theme} ${appearance} number ${number}`)
+          .toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  }
+  expect(result['light-glass-border']).toBeLessThan(result['dark-glass-border']);
+  expect(result['light-glass-face-center-brighter']).toBe(true);
+  expect(result['light-glass-open-center-brighter']).toBe(true);
+  expect(result['dark-glass-face-center-brighter']).toBe(true);
+  expect(result['dark-glass-open-center-brighter']).toBe(true);
+  await settings.getByRole('button', { name: 'Close settings' }).click();
 });
 
 test('all previous app shortcuts still launch and manifest files open in the document viewer', async ({ page }) => {
