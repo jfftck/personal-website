@@ -194,6 +194,35 @@ test('Pyramid, TriPeaks, and Golf use shared card settings and their own playabl
       }
     }
   };
+  const findUncoveredLowerHalf = table => table.evaluate(element => {
+    const rows = [...element.querySelectorAll('.card-triangle-row')];
+    const cards = [...element.querySelectorAll('.card-triangle-position .playing-card')];
+    const rects = new Map(cards.map(card => [card, card.getBoundingClientRect()]));
+    for (let rowIndex = 0; rowIndex < rows.length - 1; rowIndex++) {
+      for (const card of rows[rowIndex].querySelectorAll('.playing-card')) {
+        const rect = rects.get(card);
+        for (const yFraction of [.6, .75, .9]) {
+          for (const xFraction of [.1, .3, .5, .7, .9]) {
+            const x = rect.left + rect.width * xFraction;
+            const y = rect.top + rect.height * yFraction;
+            const covered = cards.some(other => {
+              if (other === card) return false;
+              const otherRect = rects.get(other);
+              return x >= otherRect.left && x <= otherRect.right
+                && y >= otherRect.top && y <= otherRect.bottom;
+            });
+            if (covered) continue;
+            return {
+              x, y,
+              cardId: card.dataset.cardId,
+              hitId: document.elementFromPoint(x, y)?.closest('.playing-card')?.dataset.cardId || null,
+            };
+          }
+        }
+      }
+    }
+    return null;
+  });
 
   for (const game of [
     { type: 'pyramid', title: 'Pyramid', cardCount: 28, stock: 24, rule: 'pairs that total 13' },
@@ -222,6 +251,11 @@ test('Pyramid, TriPeaks, and Golf use shared card settings and their own playabl
       const exposedBounds = await exposedCard.boundingBox();
       await exposedCard.click({ position: { x: exposedBounds.width / 2, y: exposedBounds.height * 0.8 } });
       await expect(app.locator('.game-status')).not.toContainText('covered');
+      const uncovered = await findUncoveredLowerHalf(table);
+      expect(uncovered).not.toBeNull();
+      expect(uncovered.hitId).toBe(uncovered.cardId);
+      await page.mouse.click(uncovered.x, uncovered.y);
+      await expect(app.locator('.game-status')).toContainText('covered');
       await page.setViewportSize({ width: 402, height: 874 });
       await expectStagger(table, game.type);
       await page.setViewportSize({ width: 1280, height: 720 });
