@@ -513,11 +513,12 @@ body {
 }
 
 .app-files-search {
+  margin-top: 1.75rem;
   width: 100%;
   margin-bottom: 0.5rem;
   padding: 0.625rem 0.75rem;
   border: 1px solid var(--app-border);
-  border-radius: 0.625rem;
+  border-radius: 999px;
   background: var(--overlay-card);
   color: var(--topbar-text);
   font: inherit;

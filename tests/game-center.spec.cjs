@@ -163,9 +163,11 @@ test('app launcher is anchored under its button with aligned search and an inset
     const menu = document.querySelector('#app-menu');
     const menuBox = menu.getBoundingClientRect();
     const search = document.querySelector('#launcher-file-search').getBoundingClientRect();
+    const appList = document.querySelector('#app-list').getBoundingClientRect();
     const heading = document.querySelector('#doc-files-heading').getBoundingClientRect();
     const label = getComputedStyle(document.querySelector('.app-files-search-label'));
     const style = getComputedStyle(menu);
+    const searchStyle = getComputedStyle(document.querySelector('#launcher-file-search'));
     return {
       buttonLeft: button.left,
       topbarBottom: topbar.bottom,
@@ -175,6 +177,10 @@ test('app launcher is anchored under its button with aligned search and an inset
       viewportWidth: innerWidth,
       menuRight: innerWidth - menuBox.right,
       searchLeft: search.left,
+      searchTop: search.top,
+      searchRadius: parseFloat(searchStyle.borderRadius),
+      searchMarginTop: parseFloat(searchStyle.marginTop),
+      appListBottom: appList.bottom,
       headingLeft: heading.left,
       labelPosition: label.position,
       labelWidth: parseFloat(label.width),
@@ -189,6 +195,9 @@ test('app launcher is anchored under its button with aligned search and an inset
   expect(layout.menuWidth).toBeLessThanOrEqual(560);
   expect(layout.menuWidth).toBeLessThan(layout.viewportWidth);
   expect(Math.abs(layout.searchLeft - layout.headingLeft)).toBeLessThan(1);
+  expect(layout.searchTop - layout.appListBottom).toBeGreaterThanOrEqual(28);
+  expect(layout.searchMarginTop).toBe(28);
+  expect(layout.searchRadius).toBe(999);
   expect(layout.labelPosition).toBe('absolute');
   expect(layout.labelWidth).toBe(1);
   expect(layout.overflowY).toBe('auto');
