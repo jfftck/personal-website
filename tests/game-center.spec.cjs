@@ -392,6 +392,48 @@ test('all games prevent mouse text selection and expose shared, game-specific vi
   expect(fitsToolbar).toBe(true);
 });
 
+test('Glass theme previews adapt to both desktop appearances and stay distinct from neighboring themes', async ({ page }) => {
+  const previewGroups = [
+    { game: 'klondike', types: [['cards', 'botanical'], ['card-table', 'botanical']] },
+    { game: 'chess', types: [['chess-board', 'slate'], ['chess-pieces', 'modern']] },
+    { game: 'reversi', types: [['reversi-board', 'ocean'], ['reversi-pieces', 'amber']] },
+  ];
+  const appearanceSignatures = new Map();
+
+  for (const { game, types } of previewGroups) {
+    const app = await openGame(page, game);
+    const dialog = await openSettings(app);
+    for (const [type, neighbor] of types) {
+      const glass = dialog.locator(`.game-theme-preview--${type}[data-preview-theme="glass"]`);
+      const adjacent = dialog.locator(`.game-theme-preview--${type}[data-preview-theme="${neighbor}"]`);
+      for (const appearance of ['light', 'dark']) {
+        await page.evaluate(value => { document.documentElement.dataset.theme = value; }, appearance);
+        const signature = async sample => sample.evaluate(element => {
+          const visualParts = [element, ...element.querySelectorAll('span')];
+          return visualParts.map(part => {
+            const style = getComputedStyle(part);
+            return [
+              style.backgroundColor,
+              style.backgroundImage,
+              style.color,
+              style.borderColor,
+            ].join('/');
+          }).join('|');
+        });
+        const glassAppearance = await signature(glass);
+        const neighborAppearance = await signature(adjacent);
+        expect(glassAppearance, `${game} ${type} Glass should change in ${appearance}`).not.toBe(
+          appearanceSignatures.get(`${game}-${type}`),
+        );
+        expect(glassAppearance, `${game} ${type} Glass should differ from ${neighbor} in ${appearance}`)
+          .not.toBe(neighborAppearance);
+        appearanceSignatures.set(`${game}-${type}`, glassAppearance);
+      }
+    }
+    await dialog.getByRole('button', { name: 'Close settings' }).click();
+  }
+});
+
 test('reset all game themes restores defaults in every open game and saved preferences', async ({ page }) => {
   const klondike = await openGame(page, 'klondike');
   await openSettings(klondike);

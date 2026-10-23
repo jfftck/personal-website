@@ -546,9 +546,9 @@
   --preview-felt-dark: #1e3829;
 }
 .game-theme-preview--card-table[data-preview-theme="glass"] {
-  --preview-felt: #345d61;
-  --preview-felt-light: #779da0;
-  --preview-felt-dark: #18383d;
+  --preview-felt: color-mix(in srgb, var(--app-bg) 42%, #0d4242 58%);
+  --preview-felt-light: color-mix(in srgb, var(--app-bg) 32%, #779da0 68%);
+  --preview-felt-dark: color-mix(in srgb, var(--app-bg) 22%, #18383d 78%);
 }
 .game-theme-card-back {
   display: block;
@@ -582,11 +582,15 @@
   background: #37664e;
 }
 .game-theme-preview--cards[data-preview-theme="glass"] {
-  --preview-card-start: #5b7287;
-  --preview-card-end: #263c51;
+  --preview-card-start: color-mix(in srgb, var(--app-bg) 18%, #5b7287 82%);
+  --preview-card-end: color-mix(in srgb, var(--app-bg) 20%, #263c51 80%);
   --preview-card-pattern: rgb(255 255 255 / 44%);
-  --preview-card-border: #c4d1d9;
-  background: linear-gradient(145deg, #b5d8d2, #597c7b);
+  --preview-card-border: color-mix(in srgb, var(--app-bg) 12%, #f8fcff 88%);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--app-bg) 34%, #b5d8d2 66%),
+    color-mix(in srgb, var(--app-bg) 30%, #597c7b 70%)
+  );
 }
 .game-theme-preview--cards[data-preview-theme] {
   background: color-mix(in srgb, var(--app-bg) 70%, var(--app-text) 30%);
@@ -693,7 +697,11 @@
   --preview-piece-light: #fff;
   --preview-piece-dark: #101820;
   --preview-piece-outline: #fff;
-  background: linear-gradient(140deg, #a9c4c1, #647b82);
+  background: linear-gradient(
+    140deg,
+    color-mix(in srgb, var(--app-bg) 34%, #a9c4c1 66%),
+    color-mix(in srgb, var(--app-bg) 30%, #647b82 70%)
+  );
 }
 .game-theme-preview--reversi-pieces {
   grid-template-columns: 1fr 1fr;
@@ -709,7 +717,11 @@
   background: radial-gradient(circle at 32% 25%, #fff0cb, #c9a76e 76%);
 }
 .game-theme-preview--reversi-pieces[data-preview-theme="glass"] {
-  background: linear-gradient(140deg, #9cc5bd, #347562);
+  background: linear-gradient(
+    140deg,
+    color-mix(in srgb, var(--app-bg) 34%, #9cc5bd 66%),
+    color-mix(in srgb, var(--app-bg) 30%, #347562 70%)
+  );
 }
 .game-theme-preview--reversi-pieces[data-preview-theme="glass"] .game-theme-disc {
   border: 1px solid #f7fcff;
