@@ -497,6 +497,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.game-settings-dialog button.game-theme-reset {
+  justify-self: start;
+  margin-top: 0.15rem;
+  font-weight: 650;
+}
 .game-theme-preview {
   position: relative;
   display: grid;

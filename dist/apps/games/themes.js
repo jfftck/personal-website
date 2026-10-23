@@ -175,12 +175,17 @@ export function addGameThemeControl(root, container, key) {
       choose(next);
     });
   }
+  container.hidden = false;
   container.append(control);
   container.hidden = false;
   apply(currentValue(key));
 
   const onThemeChange = event => {
-    if (event.detail?.key === key) apply(event.detail.value);
+    if (event.detail?.reset) {
+      apply(event.detail.preferences?.[key]);
+    } else if (event.detail?.key === key) {
+      apply(event.detail.value);
+    }
   };
   const onStorage = event => {
     if (event.key === STORAGE_KEY) apply(readPreferences()[key]);
@@ -192,5 +197,32 @@ export function addGameThemeControl(root, container, key) {
     window.removeEventListener('game-center-theme-change', onThemeChange);
     window.removeEventListener('storage', onStorage);
     control.remove();
+  };
+}
+
+export function addGameThemeResetControl(container) {
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.className = 'game-theme-reset';
+  reset.textContent = 'Reset all game themes';
+  const onClick = () => {
+    const preferences = Object.fromEntries(
+      Object.entries(config).map(([key, theme]) => [key, theme.choices[0][0]]),
+    );
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+    } catch {
+      // Apply the reset to open games even if browser storage is unavailable.
+    }
+    window.dispatchEvent(new CustomEvent('game-center-theme-change', {
+      detail: { reset: true, preferences },
+    }));
+  };
+  reset.addEventListener('click', onClick);
+  container.hidden = false;
+  container.append(reset);
+  return () => {
+    reset.removeEventListener('click', onClick);
+    reset.remove();
   };
 }

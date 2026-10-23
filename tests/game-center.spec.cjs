@@ -392,6 +392,59 @@ test('all games prevent mouse text selection and expose shared, game-specific vi
   expect(fitsToolbar).toBe(true);
 });
 
+test('reset all game themes restores defaults in every open game and saved preferences', async ({ page }) => {
+  const klondike = await openGame(page, 'klondike');
+  await openSettings(klondike);
+  await klondike.getByRole('radio', { name: 'Card theme: Botanical' }).click();
+  await klondike.getByRole('radio', { name: 'Playfield theme: Ocean' }).click();
+  await klondike.getByRole('button', { name: 'Close settings' }).click();
+
+  const spider = await openGame(page, 'spider');
+  const freecell = await openGame(page, 'freecell');
+
+  const chess = await openGame(page, 'chess');
+  await openSettings(chess);
+  await chess.getByRole('radio', { name: 'Board theme: Slate' }).click();
+  await chess.getByRole('radio', { name: 'Piece theme: Glass' }).click();
+  await chess.getByRole('button', { name: 'Close settings' }).click();
+
+  const reversi = await openGame(page, 'reversi');
+  await openSettings(reversi);
+  await reversi.getByRole('radio', { name: 'Board theme: Ocean blue' }).click();
+  await reversi.getByRole('radio', { name: 'Piece theme: Amber' }).click();
+  await reversi.getByRole('button', { name: 'Close settings' }).click();
+
+  const minesweeper = await openGame(page, 'minesweeper');
+  const settings = await openSettings(minesweeper);
+  await minesweeper.getByRole('radio', { name: 'Theme: Color-blind friendly' }).click();
+  await expect(settings.getByRole('button', { name: 'Reset all game themes' })).toBeVisible();
+  await settings.getByRole('button', { name: 'Reset all game themes' }).click();
+
+  for (const app of [klondike, spider, freecell]) {
+    await expect(app).toHaveAttribute('data-card-theme', 'classic');
+    await expect(app).toHaveAttribute('data-card-table-theme', 'classic');
+    await expect(app.locator('[aria-label="Card theme: Classic"]')).toHaveAttribute('aria-checked', 'true');
+    await expect(app.locator('[aria-label="Playfield theme: Classic green"]')).toHaveAttribute('aria-checked', 'true');
+  }
+  await expect(chess).toHaveAttribute('data-chess-board-theme', 'wood');
+  await expect(chess).toHaveAttribute('data-chess-pieces-theme', 'classic');
+  await expect(reversi).toHaveAttribute('data-reversi-board-theme', 'classic');
+  await expect(reversi).toHaveAttribute('data-reversi-pieces-theme', 'classic');
+  await expect(minesweeper).toHaveAttribute('data-minesweeper-theme', 'classic');
+
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('game-center-visual-themes-v1'))))
+    .toEqual({
+      cards: 'classic',
+      cardTable: 'classic',
+      chessBoard: 'wood',
+      chessPieces: 'classic',
+      reversiBoard: 'classic',
+      reversiPieces: 'classic',
+      minesweeper: 'classic',
+    });
+});
+
 test('game settings dialogs contain options, trap keyboard focus, and return focus on Escape', async ({ page }) => {
   for (const game of ['klondike', 'spider', 'freecell', 'minesweeper', 'chess', 'reversi']) {
     const app = await openGame(page, game);

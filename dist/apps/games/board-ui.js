@@ -4,7 +4,7 @@ import {
   gameShell, button, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt, showNewGameScreen,
 } from './ui.js';
 import { createGameSession, inspectGameSession, restoreChess } from './game-state.js';
-import { addGameThemeControl } from './themes.js';
+import { addGameThemeControl, addGameThemeResetControl } from './themes.js';
 import { chessPieceSvg } from './chess-piece-svg.js';
 
 const names = { k: 'King', q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight', p: 'Pawn' };
@@ -33,6 +33,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     }));
   const removeBoardTheme = addGameThemeControl(el, settings.appearanceOptions, isChess ? 'chessBoard' : 'reversiBoard');
   const removePieceTheme = addGameThemeControl(el, settings.appearanceOptions, isChess ? 'chessPieces' : 'reversiPieces');
+  const removeThemeResetControl = addGameThemeResetControl(settings.appearanceOptions);
 
   function cancelComputer() {
     worker?.terminate(); worker = null;
@@ -318,6 +319,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
       clearTimeout(endScreenTimer);
       removeBoardTheme();
       removePieceTheme();
+      removeThemeResetControl();
       settings.destroy();
       newGameScreenCleanup?.();
       cancelComputer();
