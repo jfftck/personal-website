@@ -2,9 +2,9 @@ import { createMinesweeper, revealMineCell, flagMineCell } from './minesweeper.j
 import { gameShell, button, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt } from './ui.js';
 import { createGameSession, inspectGameSession } from './game-state.js';
 
-export function buildMinesweeper(id, ctx, initialState = null) {
+export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
   const { el, toolbar, status, area } = gameShell(id, 'Minesweeper',
-    'Reveal every safe square without hitting a mine. Numbers count neighboring mines. The first reveal and its neighbors are safe. Right-click or press F on a square to flag it; on touch, turn on Flag mode. Click an open number to reveal its neighbors when the neighboring flag count matches. Use arrow keys to move and Enter or Space to reveal.', ctx);
+    'Reveal every safe square without hitting a mine. Numbers count neighboring mines. The first reveal and its neighbors are safe. Right-click or press F on a square to flag it; on touch, turn on Flag mode. Click an open number to reveal its neighbors when the neighboring flag count matches. Use arrow keys to move and Enter or Space to reveal.', ctx, iconSvg);
   const restored = inspectGameSession('minesweeper', initialState);
   let level = restored.status === 'valid' || restored.status === 'finished'
     ? restored.options.level : 'beginner';

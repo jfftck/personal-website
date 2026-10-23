@@ -328,6 +328,10 @@ test('all six games share a keyboard-operable instructions side panel', async ({
       await expect(panel).toBeVisible();
       await expect(toggle.locator('.game-instructions-icon')).toBeVisible();
       await expect(toggle.locator('.game-instructions-icon')).toHaveAttribute('aria-hidden', 'true');
+      const tabIcon = page.locator(`.app-tab-btn[aria-label="${game === 'minesweeper'
+        ? 'Minesweeper' : game === 'freecell' ? 'FreeCell' : game[0].toUpperCase() + game.slice(1)}"] svg path`);
+      await expect(toggle.locator('.game-instructions-icon svg path'))
+        .toHaveAttribute('d', await tabIcon.getAttribute('d'));
       const appBox = await app.boundingBox();
       const panelBox = await panel.boundingBox();
       const toggleBox = await toggle.boundingBox();
@@ -415,6 +419,57 @@ test('double-click keeps Klondike auto-home and moves FreeCell cards by their so
   await expect(blocked.locator('[data-key="card-2"]')).toBeVisible();
 });
 
+test('FreeCell double-click highlights Home and an open cell, or sends the card home when full', async ({ page }) => {
+  const withOpenCell = await restoreGame(page, savedFreecell({
+    columnCards: [[[2, 0]]],
+    foundations: { 0: [1] },
+  }), 'freecell');
+  await withOpenCell.locator('[data-key="card-1"]').dblclick();
+  await expect(withOpenCell.locator('[data-key="card-1"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(withOpenCell.locator('[aria-label="Cell 1"]')).toHaveClass(/available-move/);
+  await expect(withOpenCell.locator('[aria-label="Home 1"]')).toHaveClass(/available-move/);
+  await expect(withOpenCell.locator('.game-status')).toContainText('Choose the highlighted cell or Home');
+  await withOpenCell.locator('[aria-label="Home 1"] [data-key="card-0"]').click();
+  await expect(withOpenCell.locator('[aria-label="Home 1"] .playing-card')).toHaveText('2♠');
+  await page.locator('#close-btn').click();
+
+  const noOpenCell = await restoreGame(page, savedFreecell({
+    columnCards: [[[2, 0]]],
+    foundations: { 0: [1] },
+    cellCards: [[[2, 1]], [[3, 1]], [[4, 1]], [[5, 1]]],
+  }), 'freecell');
+  await noOpenCell.locator('[data-key="card-1"]').dblclick();
+  await expect(noOpenCell.locator('[aria-label="Home 1"] .playing-card')).toHaveText('2♠');
+  await expect(noOpenCell.locator('.game-status')).toContainText('1 moves');
+});
+
+test('card-game fields use grouped Home and Cells labels without individual pile captions', async ({ page }) => {
+  const klondike = await openGame(page, 'klondike');
+  await expect(klondike.locator('.home-group')).toHaveAttribute('aria-label', 'Home');
+  await expect(klondike.locator('.home-group .card-pile')).toHaveCount(4);
+  await expect(klondike.locator('.pile-label')).toHaveCount(0);
+  await page.locator('#close-btn').click();
+
+  const freecell = await openGame(page, 'freecell');
+  await expect(freecell.locator('.cell-group')).toHaveAttribute('aria-label', 'Cells');
+  await expect(freecell.locator('.cell-group .card-pile')).toHaveCount(4);
+  await expect(freecell.locator('.home-group')).toHaveAttribute('aria-label', 'Home');
+  const cellStyles = await freecell.locator('.cell-group').evaluate(element => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, borderTop: style.borderTopWidth,
+      borderBottom: style.borderBottomWidth };
+  });
+  expect(cellStyles.background).toBe('rgba(0, 0, 0, 0)');
+  expect(cellStyles.borderTop).not.toBe('0px');
+  expect(cellStyles.borderBottom).toBe('0px');
+  await page.locator('#close-btn').click();
+
+  const spider = await openGame(page, 'spider');
+  await expect(spider.locator('.home-group')).toHaveAttribute('aria-label', 'Home');
+  await expect(spider.locator('.spider-home-space')).toHaveCount(8);
+  await expect(spider.locator('.card-top-row')).not.toContainText('complete runs');
+});
+
 async function dragToBlankPileArea(page, source, destination) {
   const from = await source.boundingBox();
   const point = await destination.evaluate(element => {
@@ -486,8 +541,27 @@ test('dragging a valid card moves it to a legal pile and animates the move', asy
   const toBox = await destination.boundingBox();
   await page.mouse.move(fromBox.x + fromBox.width / 2, fromBox.y + fromBox.height / 2);
   await page.mouse.down();
+  await page.mouse.move(fromBox.x + fromBox.width / 2 + 20, fromBox.y + fromBox.height / 2 + 20);
+  const dragLayer = page.locator('body > .card-drag-layer');
+  await expect(dragLayer).toHaveCount(1);
+  await expect(king).toHaveClass(/drag-source-hidden/);
+  const layerPosition = await dragLayer.evaluate(layer => ({
+    position: getComputedStyle(layer).position,
+    zIndex: getComputedStyle(layer).zIndex,
+    pointerEvents: getComputedStyle(layer).pointerEvents,
+    parent: layer.parentElement.tagName,
+  }));
+  expect(layerPosition).toEqual({
+    position: 'fixed', zIndex: '2147483647', pointerEvents: 'none', parent: 'BODY',
+  });
+  const floatingCard = dragLayer.locator('.card-drag-layer-card');
+  await expect(floatingCard).toHaveCount(1);
+  const floatingBox = await floatingCard.boundingBox();
+  expect(Math.abs(floatingBox.x - (fromBox.x + 20))).toBeLessThanOrEqual(1);
+  expect(Math.abs(floatingBox.y - (fromBox.y + 20))).toBeLessThanOrEqual(1);
   await page.mouse.move(toBox.x + toBox.width / 2, toBox.y + toBox.height / 2, { steps: 5 });
   await page.mouse.up();
+  await expect(dragLayer).toHaveCount(0);
   await expect(destination.locator('[data-key="card-12"]')).toHaveClass(/card-moved/);
   await expect(app.locator('.game-status')).toContainText('1 moves');
 

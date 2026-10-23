@@ -11,15 +11,15 @@ const rules = {
   freecell: 'Build foundations from Ace to King by suit. Tableau piles descend in alternating colors; any card may fill an empty column. The four free cells each hold one card. Sequence moves are limited by available free cells and empty columns. Click a card or sequence, then a destination. Use Send home to move an eligible card to a foundation.',
 };
 
-export function buildSolitaire(kind, id, title, ctx, initialState = null) {
-  const shell = gameShell(id, title, rules[kind], ctx);
+export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSvg) {
+  const shell = gameShell(id, title, rules[kind], ctx, iconSvg);
   const { el, toolbar, area, status } = shell;
   area.classList.add('solitaire-game-area');
   const restored = inspectGameSession(kind, initialState);
   let options = restored.status === 'valid' || restored.status === 'finished'
     ? restored.options : { suits: 1, drawCount: 1 };
   let state = createSolitaire(kind, options), selected = null, history = [];
-  let latestTable = null;
+  let latestTable = null, targetHints = [];
   let suppressClick = false, suppressClickTimer = null;
   let pointerDrag = null, activeDropTarget = null;
   const dragAbort = new AbortController();
@@ -62,6 +62,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
     history.push(before);
     if (history.length > 150) history.shift();
     selected = null;
+    targetHints = [];
     render();
     animateCards(animateIds);
     if (!before.won && state.won) celebrate(chooseWinCelebration());
@@ -103,6 +104,28 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
   function autoMove(source) {
     const card = getPile(state, source)?.[source.offset];
     if (kind === 'freecell') {
+      const sourcePile = getPile(state, source);
+      const foundation = card && sourcePile?.at(-1)?.id === card.id
+        && (state.foundations[card.suit].at(-1)?.rank || 0) + 1 === card.rank
+        ? card.suit : -1;
+      if (foundation !== -1) {
+        const emptyCell = state.cells.findIndex(cell => !cell.length);
+        if (emptyCell !== -1) {
+          selected = { ...source };
+          targetHints = [
+            { zone: 'cells', index: emptyCell },
+            { zone: 'foundations', index: foundation },
+          ];
+          render();
+          status.textContent = 'Choose the highlighted cell or Home space.';
+          return;
+        }
+        const movedHome = action(
+          () => moveCards(state, source, { zone: 'foundations', index: foundation }),
+          [card.id],
+        );
+        if (movedHome) return;
+      }
       if (source.zone === 'columns') {
         const emptyCell = state.cells.findIndex(cell => !cell.length);
         const moved = emptyCell !== -1 && card && action(
@@ -147,12 +170,53 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
     }
     if (pile?.[offset]?.up && isSequence(pile.slice(offset), kind)) {
       selected = { zone, index, offset };
+      targetHints = [];
       render();
       status.textContent += ' Selected — choose a destination.';
     } else {
       selected = null; render();
       status.textContent += ' That move is not allowed.';
     }
+  }
+  function createDragLayer(drag) {
+    const firstRect = drag.card.getBoundingClientRect();
+    const cards = [...drag.card.parentElement.querySelectorAll(':scope > .playing-card')]
+      .filter(card => Number(card.dataset.offset) >= drag.from.offset);
+    const layer = document.createElement('div');
+    layer.className = 'card-drag-layer';
+    layer.setAttribute('aria-hidden', 'true');
+    for (const property of ['--card-face', '--card-ink', '--card-red']) {
+      layer.style.setProperty(property, getComputedStyle(el).getPropertyValue(property));
+    }
+    drag.originX = firstRect.left;
+    drag.originY = firstRect.top;
+    drag.sourceCards = cards;
+    for (const source of cards) {
+      const rect = source.getBoundingClientRect();
+      const clone = document.createElement('div');
+      clone.className = 'playing-card card-drag-layer-card';
+      for (const className of ['red', 'face-down']) {
+        clone.classList.toggle(className, source.classList.contains(className));
+      }
+      clone.textContent = source.textContent;
+      clone.style.left = `${rect.left - firstRect.left}px`;
+      clone.style.top = `${rect.top - firstRect.top}px`;
+      clone.style.width = `${rect.width}px`;
+      clone.style.height = `${rect.height}px`;
+      layer.append(clone);
+    }
+    document.body.append(layer);
+    drag.layer = layer;
+    drag.sourceCards.forEach(card => card.classList.add('drag-source-hidden'));
+  }
+  function updateDragLayer(drag, clientX, clientY) {
+    if (!drag.layer) return;
+    drag.layer.style.transform = `translate3d(${drag.originX + clientX - drag.x}px, ${drag.originY + clientY - drag.y}px, 0)`;
+  }
+  function clearDragLayer(drag) {
+    drag.sourceCards?.forEach(card => card.classList.remove('drag-source-hidden'));
+    drag.layer?.remove();
+    drag.layer = null;
   }
   area.addEventListener('click', event => {
     if (!suppressClick) return;
@@ -182,12 +246,11 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
     if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
     if (!pointerDrag.dragging && Math.hypot(event.clientX - pointerDrag.x, event.clientY - pointerDrag.y) > 8) {
       pointerDrag.dragging = true;
-      pointerDrag.card.classList.add('dragging');
+      createDragLayer(pointerDrag);
     }
     if (!pointerDrag.dragging) return;
     event.preventDefault();
-    pointerDrag.card.style.setProperty('--drag-x', `${event.clientX - pointerDrag.x}px`);
-    pointerDrag.card.style.setProperty('--drag-y', `${event.clientY - pointerDrag.y}px`);
+    updateDragLayer(pointerDrag, event.clientX, event.clientY);
     const target = resolveDropTarget(event.clientX, event.clientY);
     if (target === activeDropTarget) return;
     activeDropTarget?.classList.remove('drag-over');
@@ -198,9 +261,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
     if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
     const drag = pointerDrag;
     pointerDrag = null;
-    drag.card.classList.remove('dragging');
-    drag.card.style.removeProperty('--drag-x');
-    drag.card.style.removeProperty('--drag-y');
+    clearDragLayer(drag);
     activeDropTarget?.classList.remove('drag-over');
     activeDropTarget = null;
     if (!drag.dragging) return;
@@ -216,9 +277,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
   }, { signal: dragAbort.signal });
   document.addEventListener('pointercancel', event => {
     if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
-    pointerDrag.card.classList.remove('dragging');
-    pointerDrag.card.style.removeProperty('--drag-x');
-    pointerDrag.card.style.removeProperty('--drag-y');
+    clearDragLayer(pointerDrag);
     pointerDrag = null;
     activeDropTarget?.classList.remove('drag-over');
     activeDropTarget = null;
@@ -235,9 +294,9 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
       div.dataset.dropZone = zone;
       div.dataset.dropIndex = index;
     }
-    const heading = document.createElement('span');
-    heading.className = 'pile-label'; heading.textContent = label;
-    div.append(heading);
+    if (targetHints.some(target => target.zone === zone && target.index === index)) {
+      div.classList.add('available-move');
+    }
     if (!pile.length) {
       const empty = button('', () => clickPile(zone, index, -1), 'empty-pile');
       empty.setAttribute('aria-label', `Empty ${label}`);
@@ -306,8 +365,26 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
       table.className = `solitaire-table ${kind}`;
       table.style.setProperty('--pile-count', state.columns.length);
       const top = document.createElement('div'); top.className = 'card-top-row';
+      const fieldGroup = (label, className) => {
+        const group = document.createElement('div');
+        group.className = `card-field-group ${className}`;
+        group.setAttribute('role', 'group');
+        group.setAttribute('aria-label', label);
+        const heading = document.createElement('span');
+        heading.className = 'card-field-group-label';
+        heading.textContent = label;
+        const contents = document.createElement('div');
+        contents.className = 'card-field-group-content';
+        group.append(heading, contents);
+        group.pileContainer = contents;
+        return group;
+      };
       if (kind === 'freecell') {
-        for (let i = 0; i < 4; i++) top.append(pileView('cells', i, `Cell ${i + 1}`));
+        const cells = fieldGroup('Cells', 'cell-group');
+        for (let i = 0; i < 4; i++) {
+          cells.pileContainer.append(pileView('cells', i, `Cell ${i + 1}`));
+        }
+        top.append(cells);
       } else {
         const stock = document.createElement('div');
         stock.className = 'card-pile card-stock';
@@ -320,13 +397,27 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
         stock.append(draw); top.append(stock);
         if (kind === 'klondike') top.append(pileView('waste', 0, 'Waste'));
       }
+      const home = fieldGroup('Home', 'home-group');
       if (kind !== 'spider') {
-        for (let i = 0; i < 4; i++) top.append(pileView('foundations', i, `Home ${i + 1}`));
+        for (let i = 0; i < 4; i++) {
+          home.pileContainer.append(pileView('foundations', i, `Home ${i + 1}`));
+        }
       } else {
-        const completed = document.createElement('span');
-        completed.className = 'pile-label'; completed.textContent = `${state.completed} / 8 complete runs`;
-        top.append(completed);
+        const completedHomes = document.createElement('div');
+        completedHomes.className = 'spider-home-spaces';
+        completedHomes.setAttribute('role', 'group');
+        completedHomes.setAttribute('aria-label', `${state.completed} of 8 completed runs`);
+        for (let i = 0; i < 8; i++) {
+          const space = document.createElement('span');
+          const completed = i < state.completed;
+          space.className = `spider-home-space${completed ? ' completed' : ''}`;
+          space.setAttribute('aria-label', completed ? `Completed home run ${i + 1}` : `Empty home space ${i + 1}`);
+          space.textContent = completed ? '✓' : '';
+          completedHomes.append(space);
+        }
+        home.pileContainer.append(completedHomes);
       }
+      top.append(home);
       const columns = document.createElement('div'); columns.className = 'card-columns';
       columns.style.setProperty('--columns', state.columns.length);
       for (let i = 0; i < state.columns.length; i++) columns.append(pileView('columns', i, `Pile ${i + 1}`, true));
@@ -345,6 +436,10 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null) {
     destroy() {
       dragAbort.abort();
       clearTimeout(suppressClickTimer);
+      if (pointerDrag) clearDragLayer(pointerDrag);
+      activeDropTarget?.classList.remove('drag-over');
+      pointerDrag = null;
+      activeDropTarget = null;
     },
   };
   if (restored.status === 'finished') ctx.saveSession();

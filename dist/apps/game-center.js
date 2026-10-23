@@ -30,10 +30,13 @@ export const GAMES = [
 ];
 
 export function buildGame(type, id, ctx, initialState = null) {
-  const title = GAMES.find(game => game.type === type).title;
-  if (['klondike', 'spider', 'freecell'].includes(type)) return buildSolitaire(type, id, title, ctx, initialState);
-  if (type === 'minesweeper') return buildMinesweeper(id, ctx, initialState);
-  return buildBoardGame(type, id, title, ctx, initialState);
+  const game = GAMES.find(item => item.type === type);
+  const { title, iconSvg } = game;
+  if (['klondike', 'spider', 'freecell'].includes(type)) {
+    return buildSolitaire(type, id, title, ctx, initialState, iconSvg);
+  }
+  if (type === 'minesweeper') return buildMinesweeper(id, ctx, initialState, iconSvg);
+  return buildBoardGame(type, id, title, ctx, initialState, iconSvg);
 }
 
 export function initGameMenu(menu, openGame) {

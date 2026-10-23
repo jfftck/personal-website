@@ -309,9 +309,32 @@
   min-width: 0;
 }
 
-.pile-label {
+.card-field-group {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  padding: 0.4rem;
+}
+
+.card-field-group-content {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(2.45rem, 1fr));
+  align-items: start;
+  gap: clamp(0.18rem, 0.5vw, 0.38rem);
+  width: max-content;
+  max-width: 100%;
+}
+
+.card-field-group-content > .card-pile {
+  flex: none;
+  width: 100%;
+}
+
+.card-field-group-label {
   align-self: stretch;
-  margin: 0 0 0.35rem;
   color: rgba(255,255,255,.75);
   font-size: 0.62rem;
   font-weight: 750;
@@ -319,6 +342,47 @@
   line-height: 1.2;
   text-align: center;
   text-transform: uppercase;
+}
+
+.home-group {
+  border-radius: 0.7rem;
+  background: rgba(0,0,0,.16);
+}
+
+.cell-group {
+  border-top: 1px solid rgba(255,255,255,.32);
+  border-radius: 0.7rem 0.7rem 0 0;
+}
+
+.home-group .card-pile,
+.cell-group .card-pile { min-width: 0; }
+
+.spider-home-spaces {
+  display: grid;
+  grid-template-columns: repeat(4, clamp(1.4rem, 3.1vw, 2.2rem));
+  gap: 0.28rem;
+}
+
+.spider-home-space {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 0.7;
+  border: 1px dashed rgba(255,255,255,.44);
+  border-radius: 0.28rem;
+  color: #f4d77c;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+.spider-home-space.completed {
+  border-style: solid;
+  background: rgba(255,255,255,.15);
+}
+
+.card-pile.available-move {
+  outline: 2px solid #f2d36c;
+  outline-offset: 3px;
+  border-radius: 0.6rem;
+  box-shadow: 0 0 0.8rem rgba(242,211,108,.65);
 }
 
 .card-columns {
@@ -372,11 +436,29 @@
   outline-offset: 1px;
   transform: translateY(-4px);
 }
-.playing-card.dragging {
-  z-index: 8;
-  opacity: .76;
+.playing-card.drag-source-hidden {
+  visibility: hidden;
+}
+
+.card-drag-layer {
+  position: fixed;
+  z-index: 2147483647;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
   pointer-events: none;
-  transform: translate(var(--drag-x, 0px), var(--drag-y, 0px)) scale(1.04) rotate(2deg);
+  will-change: transform;
+}
+
+.card-drag-layer-card {
+  position: absolute;
+  z-index: 1;
+  margin: 0;
+  box-sizing: border-box;
+  pointer-events: none;
+  transition: none !important;
 }
 .card-pile.drag-over {
   border-radius: .75rem;
@@ -644,7 +726,7 @@
 @container (max-width: 520px) {
   .solitaire-table { gap: 1.1rem; }
   .card-top-row { gap: 0.3rem; }
-  .pile-label { font-size: 0.53rem; letter-spacing: 0.06em; }
+  .card-field-group-label { font-size: 0.53rem; letter-spacing: 0.06em; }
 }
 
 @media (max-width: 520px) {

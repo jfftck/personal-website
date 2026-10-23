@@ -23,7 +23,7 @@ export function selectControl(text, options, value, onChange) {
   return label;
 }
 
-export function gameShell(id, title, rules, ctx) {
+export function gameShell(id, title, rules, ctx, iconSvg) {
   const el = document.createElement('div');
   el.className = 'game-app';
   const toolbar = document.createElement('div');
@@ -34,7 +34,7 @@ export function gameShell(id, title, rules, ctx) {
   const instructionsIcon = document.createElement('span');
   instructionsIcon.className = 'game-instructions-icon';
   instructionsIcon.setAttribute('aria-hidden', 'true');
-  instructionsIcon.innerHTML = '<svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.8"/><path d="M10 9v5m0-8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  instructionsIcon.innerHTML = iconSvg;
   const instructionsLabel = document.createElement('span');
   instructionsLabel.textContent = 'Instructions';
   instructionsButton.replaceChildren(instructionsIcon, instructionsLabel);

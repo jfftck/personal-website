@@ -8,11 +8,11 @@ const pieces = { w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙'
 const names = { k: 'King', q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight', p: 'Pawn' };
 const squareName = index => `${'abcdefgh'[index % 8]}${8 - Math.floor(index / 8)}`;
 
-export function buildBoardGame(kind, id, title, ctx, initialState = null) {
+export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSvg) {
   const isChess = kind === 'chess';
   const { el, toolbar, status, area } = gameShell(id, title, isChess
     ? 'White moves first. Select a piece, then a highlighted destination. Checkmate the opposing king to win. Castling, en passant, pawn promotion, stalemate, repetition, insufficient material, and the fifty-move rule are supported. In computer mode you play White. Arrow keys move between squares; Enter or Space selects.'
-    : 'Black moves first. Place a disc so it brackets at least one opposing disc between the new disc and one of yours, in any direction. All bracketed discs flip. Legal moves are marked. A player with no move automatically passes; the game ends when neither player can move. Most discs wins. In computer mode you play Black. Arrow keys navigate; Enter or Space plays.', ctx);
+      : 'Black moves first. Place a disc so it brackets at least one opposing disc between the new disc and one of yours, in any direction. All bracketed discs flip. Legal moves are marked. A player with no move automatically passes; the game ends when neither player can move. Most discs wins. In computer mode you play Black. Arrow keys navigate; Enter or Space plays.', ctx, iconSvg);
   const restored = inspectGameSession(kind, initialState);
   let game = isChess ? new Chess() : createReversi();
   let mode = restored.status === 'valid' || restored.status === 'finished'
