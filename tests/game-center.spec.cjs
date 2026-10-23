@@ -1437,7 +1437,8 @@ test.describe('touch stack peeking', () => {
     await expect(stack.locator('.card-peeking')).toHaveCount(0);
   });
 
-  test('a peeked valid sequence can become a drag after a half-card sideways swipe', async ({ page }) => {
+  for (const direction of [1, -1]) {
+  test(`a peeked valid sequence can become a drag after a half-card ${direction > 0 ? 'right' : 'left'} swipe`, async ({ page }) => {
     const app = await restoreGame(page, savedKlondike({
       columns: [[[7, 3], [6, 0], [5, 1]], [[7, 1]]],
     }));
@@ -1462,7 +1463,10 @@ test.describe('touch stack peeking', () => {
     await touch(peekPoint);
     await expect(peekedCard).toHaveClass(/card-peeking/);
     const cardWidth = await peekedCard.evaluate(card => card.getBoundingClientRect().width);
-    await touch({ x: peekPoint.x + cardWidth / 2 + 2, y: peekPoint.y });
+    await touch({ x: peekPoint.x + direction * cardWidth * 0.4, y: peekPoint.y });
+    await expect(page.locator('body > .card-drag-layer')).toHaveCount(0);
+    await expect(peekedCard).toHaveClass(/card-peeking/);
+    await touch({ x: peekPoint.x + direction * (cardWidth / 2 + 2), y: peekPoint.y });
     await expect(page.locator('body > .card-drag-layer')).toHaveCount(1);
     await expect(peekedCard).not.toHaveClass(/card-peeking/);
 
@@ -1471,11 +1475,14 @@ test.describe('touch stack peeking', () => {
       x: targetBounds.x + targetBounds.width / 2,
       y: targetBounds.y + targetBounds.height / 3,
     });
+    await expect(app.locator('.card-peeking')).toHaveCount(0);
     await touch(null);
-    await expect(target).toHaveClass(/card-moved/);
+    await expect(app.locator('[aria-label="Pile 2"] [data-key="card-5"]')).toHaveClass(/card-moved/);
+    await expect(app.locator('[aria-label="Pile 2"] [data-key="card-17"]')).toHaveClass(/card-moved/);
     await expect(source.locator('[data-key="card-5"]')).toHaveCount(0);
     await expect(app.locator('.game-status')).toContainText('Moved 6♠ and 1 more card');
   });
+  }
 });
 
 test('dragging a valid card moves it to a legal pile and animates the move', async ({ page }) => {
@@ -1616,6 +1623,43 @@ test('bounce and spiral win celebrations use floating card layers too', async ({
     await expect(layer).toHaveCount(1);
     await expect(layer.locator(`.game-layer-card.win-${effect}`)).toHaveCount(52);
     await expect(app.locator('.solitaire-table .win-bounce, .solitaire-table .win-spiral')).toHaveCount(0);
+    if (effect === 'spiral') {
+      const details = await layer.locator('.win-spiral').evaluateAll(elements => elements.slice(0, 4).map(card => {
+        const frames = card.getAnimations()[0].effect.getKeyframes();
+        const layer = card.closest('.solitaire-celebration-layer');
+        const width = parseFloat(card.style.width);
+        const height = parseFloat(card.style.height);
+        const startX = parseFloat(card.style.left) + width / 2;
+        const startY = parseFloat(card.style.top) + height / 2;
+        const centerX = parseFloat(layer.style.width) / 2;
+        const centerY = parseFloat(layer.style.height) / 2;
+        const positions = frames.slice(1).map(frame => {
+          const matrix = new DOMMatrixReadOnly(frame.transform);
+          return { x: startX + matrix.m41 - centerX, y: startY + matrix.m42 - centerY };
+        });
+        const angles = positions.map(point => Math.atan2(point.y, point.x));
+        const deltas = angles.slice(1).map((angle, index) => {
+          const delta = angle - angles[index];
+          return Math.atan2(Math.sin(delta), Math.cos(delta));
+        });
+        return {
+          direction: card.dataset.spiralFirstTurn,
+          firstRotation: deltas.slice(0, 32).reduce((sum, delta) => sum + delta, 0),
+          secondRotation: deltas.slice(32).reduce((sum, delta) => sum + delta, 0),
+          finalOpacity: Number(frames.at(-1).opacity),
+          finalRadius: Math.hypot(positions.at(-1).x, positions.at(-1).y),
+          exitRadius: Math.hypot(centerX, centerY) + Math.hypot(width, height) / 2,
+        };
+      }));
+      expect(new Set(details.map(card => card.direction)).size).toBe(1);
+      for (const card of details) {
+        const sign = card.direction === 'clockwise' ? 1 : -1;
+        expect(card.firstRotation).toBeCloseTo(sign * Math.PI * 2, 3);
+        expect(card.secondRotation).toBeCloseTo(-sign * Math.PI * 2, 3);
+        expect(card.finalOpacity).toBeCloseTo(0, 8);
+        expect(card.finalRadius).toBeGreaterThan(card.exitRadius);
+      }
+    }
     await page.locator('#close-btn').click();
     await expect(layer).toHaveCount(0);
   }
@@ -1639,11 +1683,14 @@ test('rain, wave, and tornado celebrations animate changing cards on the fixed l
     await expect(cards).toHaveCount(52);
     expect(await cards.first().evaluate(card => card.getAnimations().length)).toBeGreaterThan(0);
     if (effect === 'rain') {
+      const before = await cards.first().textContent();
+      await page.waitForTimeout(120);
+      await expect.poll(() => cards.first().textContent()).not.toBe(before);
       const latestAnimationEnd = await cards.evaluateAll(elements =>
         Math.max(...elements.map(card => {
           const animation = card.getAnimations()[0];
           const schedule = animation.effect.getTiming();
-          return Number(schedule.delay || 0) + Number(schedule.duration);
+          return Number(schedule.delay || 0) + Number(schedule.duration) - Number(animation.currentTime || 0);
         })));
       await page.waitForTimeout(latestAnimationEnd + 50);
       await expect(layer).toHaveCount(1);
@@ -1656,38 +1703,6 @@ test('rain, wave, and tornado celebrations animate changing cards on the fixed l
       await app.getByRole('button', { name: 'Start new game' }).click();
       await page.locator('#close-btn').click();
       continue;
-    }
-    if (effect === 'spiral') {
-      const details = await cards.evaluateAll(elements => elements.slice(0, 4).map(card => {
-        const frames = card.getAnimations()[0].effect.getKeyframes();
-        const layer = card.closest('.solitaire-celebration-layer');
-        const width = parseFloat(card.style.width);
-        const height = parseFloat(card.style.height);
-        const left = parseFloat(card.style.left);
-        const top = parseFloat(card.style.top);
-        const boundsWidth = parseFloat(layer.style.width);
-        const boundsHeight = parseFloat(layer.style.height);
-        const finalMatrix = new DOMMatrixReadOnly(frames.at(-1).transform);
-        return {
-          direction: card.dataset.spiralFirstTurn,
-          frameCount: frames.length,
-          finalOpacity: Number(frames.at(-1).opacity),
-          finalRadius: Math.hypot(
-            left + width / 2 + finalMatrix.m41 - boundsWidth / 2,
-            top + height / 2 + finalMatrix.m42 - boundsHeight / 2,
-          ),
-          exitRadius: Math.hypot(boundsWidth / 2, boundsHeight / 2)
-            + Math.hypot(width, height) / 2,
-        };
-      }));
-      expect(details.map(card => card.direction)).toEqual([
-        'clockwise', 'counterclockwise', 'clockwise', 'counterclockwise',
-      ]);
-      for (const card of details) {
-        expect(card.frameCount).toBe(65);
-        expect(card.finalOpacity).toBe(0);
-        expect(card.finalRadius).toBeGreaterThan(card.exitRadius);
-      }
     }
     await page.locator('#close-btn').click();
     await expect(layer).toHaveCount(0);

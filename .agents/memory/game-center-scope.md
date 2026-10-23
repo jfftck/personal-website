@@ -31,7 +31,13 @@ Card stack peeking must follow vertical finger movement on touchscreens; mouse u
 
 **Why:** The user requested sliding up and down through stack layers instead of remaining on the initially touched card, and right-click peeking for mice.
 
-**How to apply:** Keep peeking temporary and separate from moves. Distinguish vertical touch inspection from sideways card dragging, and restore the stack on release or cancellation.
+**How to apply:** Keep peeking temporary and separate from moves. From a touch peek, a half-card-width slide left or right starts dragging the currently peeked card or valid sequence; invalid stacks must not start dragging. Disable peeking once dragging begins, and restore the stack on release or cancellation.
+
+Matrix rain must keep falling until every card has exited the board. Spiral cards fly outward, alternating a full clockwise rotation with a full counterclockwise rotation; either direction may come first.
+
+**Why:** The user requested complete off-board exits rather than rain disappearing mid-fall or spirals finishing in the center.
+
+**How to apply:** Complete the exit paths before showing the next-game screen, while preserving reduced-motion skipping.
 
 The scrollable card playfield needs 2rem of padding on all four sides. Chess, Reversi, and Minesweeper must scale to fit their available game-window play space.
 

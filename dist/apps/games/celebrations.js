@@ -108,34 +108,29 @@ function animateBounce(sprites, bounds) {
 function animateSpiral(sprites, bounds) {
   const centerX = bounds.width / 2;
   const centerY = bounds.height / 2;
+  const firstDirection = 1;
   sprites.forEach((sprite, index) => {
     const startX = sprite.x + sprite.width / 2;
     const startY = sprite.y + sprite.height / 2;
-    const startAngle = Math.atan2(startY - centerY, startX - centerX);
-    const startRadius = Math.hypot(startX - centerX, startY - centerY);
-    const firstDirection = index % 2 === 0 ? 1 : -1;
-    const exitRadius = Math.max(
-      Math.hypot(bounds.width / 2, bounds.height / 2)
-        + Math.hypot(sprite.width, sprite.height) / 2 + 24,
-      startRadius + Math.max(bounds.width, bounds.height),
-    );
-    const frames = [];
+    const startAngle = index / Math.max(1, sprites.length) * Math.PI * 2;
+    const startRadius = 6 + index % 7;
+    const exitRadius = Math.hypot(bounds.width / 2, bounds.height / 2)
+      + Math.hypot(sprite.width, sprite.height) / 2 + 24;
+    const frames = [{ transform: transform(0, 0), opacity: 1, offset: 0 }];
     for (let step = 0; step <= 64; step++) {
       const progress = step / 64;
       const turnProgress = progress <= 0.5
         ? progress * 2
         : 1 - (progress - 0.5) * 2;
       const angle = startAngle + firstDirection * turnProgress * Math.PI * 2;
-      const radius = startRadius + (exitRadius - startRadius) * progress;
+      const radius = startRadius + (exitRadius - startRadius) * progress ** 1.5;
       const x = centerX + Math.cos(angle) * radius - startX;
       const y = centerY + Math.sin(angle) * radius - startY;
-      const rotation = firstDirection * (progress <= 0.5
-        ? progress * 720
-        : 720 - (progress - 0.5) * 1440);
+      const rotation = firstDirection * turnProgress * 360;
       frames.push({
-        transform: transform(x, y, 1 - progress * 0.25, rotation),
+        transform: transform(x, y, 0.9 - progress * 0.15, rotation),
         opacity: Math.max(0, 1 - Math.max(0, progress - 0.78) / 0.22),
-        offset: progress,
+        offset: 0.16 + progress * 0.84,
       });
     }
     sprite.element.classList.add('win-spiral');
@@ -208,7 +203,7 @@ function animateRain(sprites, bounds) {
       {
         transform: transform((unit(index, 8) - 0.5) * 14, bounds.height + sprite.height * 2 - y,
           0.75 + unit(index, 9) * 0.5, (unit(index, 10) - 0.5) * 24),
-        opacity: 0.08,
+        opacity: 0.92,
       },
     ], {
       duration,
@@ -220,7 +215,7 @@ function animateRain(sprites, bounds) {
   });
 
   let phase = 0;
-  return setInterval(() => {
+  const interval = setInterval(() => {
     phase++;
     cards.forEach((card, index) => {
       const rank = ((index * 7 + phase * 3) % 13) + 1;

@@ -18,7 +18,7 @@ const rules = {
 
 export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSvg) {
   const shell = gameShell(id, title,
-    `${rules[kind]} Slide a finger vertically through a tableau stack to peek at its layers; drag sideways to move cards. With a mouse, hold the right button and move up or down to peek. Release to restore the stack.`, ctx, iconSvg);
+    `${rules[kind]} Slide a finger vertically through a tableau stack to peek at its layers. While peeking, slide left or right by half a card's width to drag that card or a valid sequence. Peeking stops once dragging starts. With a mouse, hold the right button and move up or down to peek. Release to restore the stack.`, ctx, iconSvg);
   const { el, toolbarLeft, toolbarCenter, area, status, settings } = shell;
   area.classList.add('solitaire-game-area');
   const restored = inspectGameSession(kind, initialState);
@@ -294,16 +294,8 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
   function canStartDrag(from) {
     const source = getPile(state, from);
     const cards = source?.slice(from.offset);
-    if (!isSequence(cards || [], kind)) return false;
-    const destinations = [
-      ...state.columns.map((_, index) => ({ zone: 'columns', index })),
-      ...state.cells.map((_, index) => ({ zone: 'cells', index })),
-      ...state.foundations.map((_, index) => ({ zone: 'foundations', index })),
-    ];
-    return destinations.some(destination => {
-      const candidate = structuredClone(state);
-      return moveCards(candidate, from, destination);
-    });
+    return !state.won && (from.zone === 'columns' || cards?.length === 1)
+      && isSequence(cards || [], kind);
   }
   function updatePeek(gesture, clientY, clientX = gesture.x) {
     // Use the original stack positions: a raised card must not hide the
@@ -389,6 +381,8 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
           pointerDrag.peekCard = null;
           pointerDrag.card = card;
           pointerDrag.from = from;
+          pointerDrag.x = pointerDrag.peekStartX;
+          pointerDrag.y = event.clientY;
           pointerDrag.canDrag = true;
           pointerDrag.peeking = false;
           pointerDrag.dragging = true;
