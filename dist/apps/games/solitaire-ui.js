@@ -529,14 +529,18 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     btn.classList.toggle('face-down', !card.up);
     btn.classList.toggle('red', isRed(card));
     btn.classList.toggle('selected', selected?.zone === zone && selected.index === index && selected.offset === offset);
-    btn.disabled = !card.up || !canSelectCard(zone, index, offset);
+    const canSelect = canSelectCard(zone, index, offset);
+    const consumesCoveredClick = ['pyramid', 'tripeaks'].includes(kind);
+    btn.disabled = !card.up || (!canSelect && !consumesCoveredClick);
     btn.dataset.key = `card-${card.id}`;
     btn.dataset.cardId = card.id;
     btn.dataset.gameCardId = card.id;
     btn.dataset.offset = offset;
     btn.dataset.zone = zone;
     btn.dataset.pileIndex = index;
-    btn.setAttribute('aria-label', card.up ? `${face}, ${label}, card ${offset + 1}` : `Face down, ${label}`);
+    btn.setAttribute('aria-label', card.up
+      ? `${face}, ${label}, card ${offset + 1}${consumesCoveredClick && !canSelect ? ', covered by other cards' : ''}`
+      : `Face down, ${label}`);
     btn.setAttribute('aria-pressed', String(selected?.zone === zone && selected.index === index && selected.offset === offset));
     if (['klondike', 'freecell'].includes(kind)) {
       btn.addEventListener('dblclick', event => {

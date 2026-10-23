@@ -210,6 +210,18 @@ test('Pyramid, TriPeaks, and Golf use shared card settings and their own playabl
     } else {
       await expect(table.locator('.card-triangle-position:not(.removed)')).toHaveCount(game.cardCount);
       await expectStagger(table, game.type);
+      const coveredCard = table.locator('.card-triangle-row').first().locator('.playing-card').first();
+      await expect(coveredCard).toBeEnabled();
+      await expect(coveredCard).toHaveAttribute('aria-label', /covered by other cards/);
+      const coveredBounds = await coveredCard.boundingBox();
+      await coveredCard.click({ position: { x: coveredBounds.width / 2, y: coveredBounds.height * 0.2 } });
+      await expect(app.locator('.game-status')).toHaveText(game.type === 'pyramid'
+        ? 'That card is still covered.' : 'That card is still covered by the cards below it.');
+      const exposedCard = table.locator('.card-triangle-row').last().locator('.playing-card').first();
+      await expect(exposedCard).toBeEnabled();
+      const exposedBounds = await exposedCard.boundingBox();
+      await exposedCard.click({ position: { x: exposedBounds.width / 2, y: exposedBounds.height * 0.8 } });
+      await expect(app.locator('.game-status')).not.toContainText('covered');
       await page.setViewportSize({ width: 402, height: 874 });
       await expectStagger(table, game.type);
       await page.setViewportSize({ width: 1280, height: 720 });
