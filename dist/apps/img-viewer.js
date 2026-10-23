@@ -84,6 +84,14 @@ export function buildImgViewer(id, ctx, initialState = null) {
   const img = document.createElement('img');
   img.alt = 'Image';
 
+  const stage = document.createElement('div');
+  stage.className = 'img-stage';
+
+  const thumbnails = document.createElement('nav');
+  thumbnails.className = 'img-thumbnails';
+  thumbnails.setAttribute('aria-label', 'Photo thumbnails');
+  thumbnails.hidden = true;
+
   // ── Transform helpers ─────────────────────────────────────────
   function applyTransform() {
     transform.style.transform =
@@ -105,6 +113,43 @@ export function buildImgViewer(id, ctx, initialState = null) {
   function updateSidebarActive() {
     sidebarList.querySelectorAll('.doc-sidebar-item').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.url === currentFile?.url);
+    });
+    thumbnails.querySelectorAll('.img-thumbnail').forEach(btn => {
+      const active = btn.dataset.url === currentFile?.url;
+      btn.classList.toggle('active', active);
+      if (active) {
+        btn.setAttribute('aria-current', 'true');
+        // Scroll only the strip, not the surrounding desktop or window.
+        if (btn.offsetLeft < thumbnails.scrollLeft) {
+          thumbnails.scrollLeft = btn.offsetLeft;
+        } else if (btn.offsetLeft + btn.offsetWidth > thumbnails.scrollLeft + thumbnails.clientWidth) {
+          thumbnails.scrollLeft = btn.offsetLeft + btn.offsetWidth - thumbnails.clientWidth;
+        }
+      } else {
+        btn.removeAttribute('aria-current');
+      }
+    });
+  }
+
+  function renderThumbnails() {
+    thumbnails.replaceChildren();
+    thumbnails.hidden = gallery.length <= 1;
+    if (thumbnails.hidden) return;
+    gallery.forEach((pic, idx) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'img-thumbnail';
+      btn.dataset.url = pic.url;
+      btn.title = pic.displayName;
+      btn.setAttribute('aria-label', `View ${pic.displayName}`);
+      const preview = document.createElement('img');
+      preview.src = pic.url;
+      preview.alt = '';
+      preview.loading = 'lazy';
+      preview.decoding = 'async';
+      btn.appendChild(preview);
+      btn.addEventListener('click', () => showGalleryItem(idx));
+      thumbnails.appendChild(btn);
     });
   }
 
@@ -160,6 +205,7 @@ export function buildImgViewer(id, ctx, initialState = null) {
     gallery = await fetchPicturesManifest();
     updateNavButtons();
     renderSidebar(gallery);
+    renderThumbnails();
     if (gallery.length > 0 && !currentFile) {
       // Prefer file identity so a reordered manifest still opens the same photo.
       const idx = pendingState?.url
@@ -278,7 +324,9 @@ export function buildImgViewer(id, ctx, initialState = null) {
   transform.appendChild(img);
   viewport.appendChild(transform);
   content.appendChild(sidebar);
-  content.appendChild(viewport);
+  stage.appendChild(viewport);
+  stage.appendChild(thumbnails);
+  content.appendChild(stage);
   el.appendChild(toolbar);
   el.appendChild(content);
 

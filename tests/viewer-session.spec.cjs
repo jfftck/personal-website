@@ -107,8 +107,8 @@ test('valid index-only state restores, while invalid state falls back safely', a
     { type: 'doc-viewer', state: { url: 123 } },
   ]);
   const viewers = page.locator('.app-window[data-type="img-viewer"]');
-  await expect(viewers.nth(0).locator('img')).toHaveAttribute('src', pictures[2].url);
-  await expect(viewers.nth(1).locator('img')).toHaveAttribute('src', pictures[0].url);
+  await expect(viewers.nth(0).locator('.img-viewport img')).toHaveAttribute('src', pictures[2].url);
+  await expect(viewers.nth(1).locator('.img-viewport img')).toHaveAttribute('src', pictures[0].url);
   await expect(page.locator('.app-window .doc-body')).toContainText('First document');
 });
 
