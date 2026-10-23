@@ -289,7 +289,7 @@ function animateTornado(sprites, bounds) {
   });
 }
 
-export function createWinCelebration(effect, kind, state, table, gameElement) {
+export function createWinCelebration(effect, kind, state, table, gameElement, onComplete = () => {}) {
   const bounds = table.getBoundingClientRect();
   const layer = document.createElement('div');
   layer.className = `solitaire-celebration-layer celebration-${effect}`;
@@ -345,6 +345,9 @@ export function createWinCelebration(effect, kind, state, table, gameElement) {
     layer.remove();
     sources.forEach(source => source.classList.remove('celebration-source-hidden'));
   };
-  timer = setTimeout(cleanup, duration + stagger + 350);
+  timer = setTimeout(() => {
+    cleanup();
+    onComplete();
+  }, duration + stagger + 350);
   return cleanup;
 }

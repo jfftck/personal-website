@@ -1,5 +1,7 @@
 import { createMinesweeper, revealMineCell, flagMineCell } from './minesweeper.js';
-import { gameShell, button, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt } from './ui.js';
+import {
+  gameShell, button, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt, showNewGameScreen,
+} from './ui.js';
 import { createGameSession, inspectGameSession } from './game-state.js';
 
 export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
@@ -11,12 +13,40 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
   let state = createMinesweeper(level);
   let flagMode = Boolean(restored.options?.flagMode);
   let pendingRestore = initialState != null && restored.status !== 'finished';
+  let newGameScreenCleanup = null;
+  let promptedStatus = null;
   function persist() {
     if (!pendingRestore) ctx.saveSession();
   }
   function restart() {
+    newGameScreenCleanup?.();
+    newGameScreenCleanup = null;
+    promptedStatus = null;
     pendingRestore = false;
     state = createMinesweeper(level); render(); persist();
+  }
+  function showGameEndScreen() {
+    if (promptedStatus === state.status) return;
+    promptedStatus = state.status;
+    newGameScreenCleanup?.();
+    newGameScreenCleanup = showNewGameScreen(
+      area,
+      id,
+      state.status === 'won' ? 'Minefield cleared!' : 'Mine hit.',
+      state.status === 'won' ? 'Choose a difficulty for your next game.' : 'Choose a difficulty to try again.',
+      [{
+        name: 'level',
+        label: 'Difficulty',
+        choices: [['beginner', 'Beginner'], ['intermediate', 'Intermediate'], ['expert', 'Expert']],
+        value: level,
+      }],
+      nextOptions => {
+        level = nextOptions.level;
+        const toolbarSelect = toolbar.querySelector('select[aria-label="Difficulty"]');
+        if (toolbarSelect) toolbarSelect.value = level;
+        restart();
+      },
+    );
   }
   const flag = button('Flag mode', () => {
     flagMode = !flagMode;
@@ -73,6 +103,7 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
       wireBoardKeys(board, state.width);
       wrap.append(board); area.replaceChildren(wrap);
     });
+    if (state.status !== 'playing') showGameEndScreen();
   }
   ctx.appApis[id] = {
     getSessionState() {

@@ -3,7 +3,9 @@ import {
   chooseWinCelebration, SUITS, rankLabel, isRed,
 } from './cards.js';
 import { createWinCelebration } from './celebrations.js';
-import { gameShell, button, selectControl, preserveFocus, showRestorePrompt } from './ui.js';
+import {
+  gameShell, button, selectControl, preserveFocus, showRestorePrompt, showNewGameScreen,
+} from './ui.js';
 import { createGameSession, inspectGameSession } from './game-state.js';
 
 const rules = {
@@ -24,6 +26,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
   let suppressClick = false, suppressClickTimer = null;
   let pointerDrag = null, activeDropTarget = null;
   let celebrationCleanup = null;
+  let newGameScreenCleanup = null;
   const dragAbort = new AbortController();
   let pendingRestore = initialState != null && restored.status !== 'finished';
   function persist() {
@@ -34,13 +37,19 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     celebrationCleanup = null;
     latestTable?.removeAttribute('data-win-celebration');
   }
+  function clearNewGameScreen() {
+    newGameScreenCleanup?.();
+    newGameScreenCleanup = null;
+  }
   const undo = button('Undo', () => {
     if (!history.length) return;
     clearCelebration();
+    clearNewGameScreen();
     state = history.pop(); selected = null; render(); persist();
   });
   function restart() {
     clearCelebration();
+    clearNewGameScreen();
     pendingRestore = false;
     state = createSolitaire(kind, options); history = []; selected = null; render(); persist();
   }
@@ -106,8 +115,34 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     if (!latestTable) return;
     clearCelebration();
     latestTable.dataset.winCelebration = effect;
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    celebrationCleanup = createWinCelebration(effect, kind, state, latestTable, el);
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      showVictoryScreen();
+      return;
+    }
+    celebrationCleanup = createWinCelebration(effect, kind, state, latestTable, el, showVictoryScreen);
+  }
+  function showVictoryScreen() {
+    const settings = kind === 'klondike'
+      ? [{ name: 'drawCount', label: 'Draw', choices: [['1', 'One card'], ['3', 'Three cards']], value: String(options.drawCount) }]
+      : kind === 'spider'
+        ? [{ name: 'suits', label: 'Suits', choices: [['1', 'One suit'], ['2', 'Two suits'], ['4', 'Four suits']], value: String(options.suits) }]
+        : [];
+    const settingLabel = kind === 'klondike' ? 'Draw' : kind === 'spider' ? 'Suits' : null;
+    newGameScreenCleanup?.();
+    newGameScreenCleanup = showNewGameScreen(
+      area,
+      id,
+      'Victory!',
+      settings.length ? 'Choose settings for your next deal.' : 'Start another game whenever you are ready.',
+      settings,
+      nextOptions => {
+        if (kind === 'klondike') options.drawCount = Number(nextOptions.drawCount);
+        if (kind === 'spider') options.suits = Number(nextOptions.suits);
+        const toolbarSelect = settingLabel && toolbar.querySelector(`select[aria-label="${settingLabel}"]`);
+        if (toolbarSelect) toolbarSelect.value = String(nextOptions[kind === 'klondike' ? 'drawCount' : 'suits']);
+        restart();
+      },
+    );
   }
   function autoMove(source) {
     const card = getPile(state, source)?.[source.offset];
@@ -457,6 +492,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       dragAbort.abort();
       clearTimeout(suppressClickTimer);
       clearCelebration();
+      clearNewGameScreen();
       if (pointerDrag) clearDragLayer(pointerDrag);
       activeDropTarget?.classList.remove('drag-over');
       pointerDrag = null;

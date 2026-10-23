@@ -83,6 +83,36 @@ function savedFreecell({ columnCards = [], foundations = {}, cellCards = [] } = 
   };
 }
 
+function savedMinesweeper({ level = 'beginner', finalSafeCell = 10 } = {}) {
+  const [width, height, mines] = { beginner: [9, 9, 10], intermediate: [16, 16, 40], expert: [30, 16, 99] }[level];
+  const mineIndices = new Set(Array.from({ length: mines }, (_, index) => index));
+  const cells = Array.from({ length: width * height }, (_, index) => {
+    const x = index % width, y = Math.floor(index / width);
+    let count = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if ((dx || dy) && mineIndices.has((y + dy) * width + x + dx)
+        && x + dx >= 0 && x + dx < width && y + dy >= 0 && y + dy < height) count++;
+    }
+    const mine = mineIndices.has(index);
+    return { mine, open: !mine && index !== finalSafeCell, flag: false, count };
+  });
+  return {
+    v: 2,
+    columns: [{
+      widthPreset: 'full',
+      apps: [{
+        type: 'minesweeper',
+        state: {
+          version: 1,
+          kind: 'minesweeper',
+          options: { level, flagMode: false },
+          state: { width, height, mines, planted: true, status: 'playing', cells },
+        },
+      }],
+    }],
+  };
+}
+
 async function restoreGame(page, session, game = 'klondike') {
   await page.evaluate(value => localStorage.setItem('desktop-session-v2', JSON.stringify(value)), session);
   await page.reload();
@@ -536,6 +566,9 @@ test('card-game fields use grouped Home and Cells labels without individual pile
   const spider = await openGame(page, 'spider');
   await expect(spider.locator('.home-group')).toHaveAttribute('aria-label', 'Home');
   await expect(spider.locator('.spider-home-space')).toHaveCount(8);
+  const homeRows = await spider.locator('.spider-home-space').evaluateAll(spaces =>
+    spaces.map(space => space.getBoundingClientRect().y));
+  expect(Math.max(...homeRows) - Math.min(...homeRows)).toBeLessThan(1);
   await expect(spider.locator('.card-top-row')).not.toContainText('complete runs');
 });
 
@@ -765,6 +798,26 @@ test('rain, wave, and tornado celebrations animate changing cards on the fixed l
   }
 });
 
+test('the win screen appears after the celebration and lets Klondike choose the next deal options', async ({ page }) => {
+  const app = await restoreGame(page, savedKlondike({
+    columns: [[[13, 0]]],
+    foundations: { 0: Array.from({ length: 12 }, (_, index) => index + 1),
+      1: Array.from({ length: 13 }, (_, index) => index + 1),
+      2: Array.from({ length: 13 }, (_, index) => index + 1),
+      3: Array.from({ length: 13 }, (_, index) => index + 1) },
+  }));
+  await page.evaluate(() => { Math.random = () => 0.01; });
+  await app.locator('[data-key="card-12"]').dblclick();
+  const screen = app.locator('.game-new-game-screen');
+  await expect(screen).toBeVisible({ timeout: 6000 });
+  await expect(screen.getByRole('heading', { name: 'Victory!' })).toBeVisible();
+  await screen.getByLabel('Draw', { exact: true }).selectOption('3');
+  await screen.getByRole('button', { name: 'Start new game' }).click();
+  await expect(screen).toHaveCount(0);
+  await expect(app.getByLabel('Draw', { exact: true })).toHaveValue('3');
+  await expect(app.locator('.solitaire-table')).toBeVisible();
+});
+
 test('Spider celebrations include cards from all eight completed Home runs', async ({ page }) => {
   await openGame(page, 'spider');
   const cardCount = await page.evaluate(async () => {
@@ -811,11 +864,19 @@ test('solitaire tableau scrolls independently and reduced motion suppresses cele
   await expect(winningApp.locator('.solitaire-table')).toHaveAttribute('data-win-celebration', 'fireworks');
   await expect(winningApp.locator('.solitaire-fireworks')).toHaveCount(0);
   await expect(winningApp.locator('.solitaire-celebration-layer')).toHaveCount(0);
+  await expect(winningApp.locator('.game-new-game-screen')).toBeVisible();
+  await expect(winningApp.locator('.game-new-game-screen').getByLabel('Draw', { exact: true })).toHaveValue('1');
 });
 
 test('Minesweeper supports reveal, touch flag mode, keyboard flags, and all board sizes', async ({ page }) => {
   const app = await openGame(page, 'minesweeper');
   await expect(app.locator('.mine-cell')).toHaveCount(81);
+  const boardCentering = await app.evaluate(element => {
+    const area = element.querySelector('.game-area').getBoundingClientRect();
+    const wrap = element.querySelector('.mine-board-wrap').getBoundingClientRect();
+    return Math.abs((area.left + area.width / 2) - (wrap.left + wrap.width / 2));
+  });
+  expect(boardCentering).toBeLessThan(2);
   await app.locator('.mine-cell').first().click();
   await expect(app.locator('.mine-cell').first()).toHaveClass(/revealed/);
   await app.getByRole('button', { name: 'New game' }).click();
@@ -828,14 +889,121 @@ test('Minesweeper supports reveal, touch flag mode, keyboard flags, and all boar
   await expect(app.locator('.mine-cell')).toHaveCount(256);
   await app.getByLabel('Difficulty', { exact: true }).selectOption('expert');
   await expect(app.locator('.mine-cell')).toHaveCount(480);
+  const expertBoardCentering = await app.evaluate(element => {
+    const area = element.querySelector('.game-area').getBoundingClientRect();
+    const wrap = element.querySelector('.mine-board-wrap').getBoundingClientRect();
+    return Math.abs((area.left + area.width / 2) - (wrap.left + wrap.width / 2));
+  });
+  expect(expertBoardCentering).toBeLessThan(2);
   await expect(app.getByRole('button', { name: 'Flag mode' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('Minesweeper win screen lets users change the next game difficulty', async ({ page }) => {
+  const app = await restoreGame(page, savedMinesweeper(), 'minesweeper');
+  await app.locator('[data-key="mine-10"]').click();
+  const screen = app.locator('.game-new-game-screen');
+  await expect(screen).toBeVisible();
+  await expect(screen.getByRole('heading', { name: 'Minefield cleared!' })).toBeVisible();
+  await screen.getByLabel('Difficulty', { exact: true }).selectOption('intermediate');
+  await screen.getByRole('button', { name: 'Start new game' }).click();
+  await expect(app.locator('.mine-cell')).toHaveCount(256);
+  await expect(app.getByLabel('Difficulty', { exact: true })).toHaveValue('intermediate');
+});
+
+test('Chess moves animate, and checkmate opens the opponent options for a new game', async ({ page }) => {
+  const app = await openGame(page, 'chess');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await app.getByLabel('Opponent', { exact: true }).selectOption('local');
+  const moves = [
+    ['e2', 'e4'], ['e7', 'e5'], ['d1', 'h5'], ['b8', 'c6'],
+    ['f1', 'c4'], ['g8', 'f6'], ['h5', 'f7'],
+  ];
+  for (const [from, to] of moves) {
+    await app.locator(`[data-square="${from}"]`).click();
+    await app.locator(`[data-square="${to}"]`).click();
+    if (from === 'e2') {
+      expect(await app.locator('[data-square="e4"] .chess-piece').evaluate(piece => piece.getAnimations().length))
+        .toBeGreaterThan(0);
+    }
+  }
+  const screen = app.locator('.game-new-game-screen');
+  await expect(screen).toBeVisible({ timeout: 3000 });
+  await expect(screen).toContainText('Checkmate');
+  await screen.getByLabel('Opponent', { exact: true }).selectOption('computer');
+  await screen.getByRole('button', { name: 'Start new game' }).click();
+  await expect(screen).toHaveCount(0);
+  await expect(app.locator('.chess-piece')).toHaveCount(32);
+  await expect(app.getByLabel('Opponent', { exact: true })).toHaveValue('computer');
+});
+
+test('Reversi terminal screen offers opponent options before starting again', async ({ page }) => {
+  const { finalMove, finalBefore } = await page.evaluate(async () => {
+    const { createReversi, playReversi, reversiMoves } = await import('/apps/games/reversi.js');
+    const game = createReversi();
+    let moveToFinish = null, positionBeforeFinish = null, seed = 17;
+    while (game.status === 'playing') {
+      const moves = reversiMoves(game.board, game.turn);
+      const index = moves[(seed * 7) % moves.length];
+      const before = structuredClone(game);
+      playReversi(game, index);
+      if (game.status === 'finished') {
+        moveToFinish = index;
+        positionBeforeFinish = before;
+        break;
+      }
+      seed = (seed * 17 + 13) % 997;
+    }
+    return { finalMove: moveToFinish, finalBefore: positionBeforeFinish };
+  });
+  expect(finalMove).not.toBeNull();
+  const session = {
+    v: 2,
+    columns: [{
+      widthPreset: 'full',
+      apps: [{
+        type: 'reversi',
+        state: {
+          version: 1,
+          kind: 'reversi',
+          options: { mode: 'local' },
+          state: finalBefore,
+        },
+      }],
+    }],
+  };
+  const app = await restoreGame(page, session, 'reversi');
+  const file = 'abcdefgh'[finalMove % 8];
+  const rank = 8 - Math.floor(finalMove / 8);
+  await app.locator(`[data-square="${file}${rank}"]`).click();
+  const screen = app.locator('.game-new-game-screen');
+  await expect(screen).toBeVisible({ timeout: 3000 });
+  await expect(screen.getByLabel('Opponent', { exact: true })).toHaveValue('local');
+  await screen.getByLabel('Opponent', { exact: true }).selectOption('computer');
+  await screen.getByRole('button', { name: 'Start new game' }).click();
+  await expect(app.locator('.disc')).toHaveCount(4);
+  await expect(app.getByLabel('Opponent', { exact: true })).toHaveValue('computer');
 });
 
 test('Chess makes computer turns, undoes a round, and supports local two-player', async ({ page }) => {
   const app = await openGame(page, 'chess');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const beforeSize = await app.locator('.chess-board').evaluate(board => {
+    const boardWidth = board.getBoundingClientRect().width;
+    const cells = [...board.querySelectorAll('.board-square')].map(cell => cell.getBoundingClientRect());
+    return { boardWidth, width: cells[0].width, height: cells[0].height,
+      widthRange: Math.max(...cells.map(cell => cell.width)) - Math.min(...cells.map(cell => cell.width)),
+      heightRange: Math.max(...cells.map(cell => cell.height)) - Math.min(...cells.map(cell => cell.height)) };
+  });
+  expect(beforeSize.widthRange).toBeLessThan(0.5);
+  expect(beforeSize.heightRange).toBeLessThan(0.5);
+  expect(Math.abs(beforeSize.width - beforeSize.height)).toBeLessThan(0.5);
   await app.locator('[data-square="e2"]').click();
   await expect(app.locator('[data-square="e4"]')).toHaveClass(/legal/);
   await app.locator('[data-square="e4"]').click();
+  expect(await app.locator('[data-square="e4"] .chess-piece').evaluate(piece => piece.getAnimations().length))
+    .toBeGreaterThan(0);
+  expect(Math.abs(await app.locator('.chess-board').evaluate(board => board.getBoundingClientRect().width)
+    - beforeSize.boardWidth)).toBeLessThan(0.5);
   await expect(app.locator('.game-status')).toContainText('White to move', { timeout: 10000 });
   await expect(app.locator('.piece-black')).toHaveCount(16);
   await app.getByRole('button', { name: 'Undo', exact: true }).click();
@@ -856,14 +1024,33 @@ test('Chess makes computer turns, undoes a round, and supports local two-player'
 
 test('Reversi flips discs, makes a computer move, undoes and supports local play', async ({ page }) => {
   const app = await openGame(page, 'reversi');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await expect(app.locator('.legal')).toHaveCount(4);
+  const boardSize = await app.locator('.reversi-board').evaluate(board => {
+    const rect = board.getBoundingClientRect();
+    const cells = [...board.querySelectorAll('.board-square')].map(cell => cell.getBoundingClientRect());
+    return { board: [rect.width, rect.height],
+      widthRange: Math.max(...cells.map(cell => cell.width)) - Math.min(...cells.map(cell => cell.width)),
+      heightRange: Math.max(...cells.map(cell => cell.height)) - Math.min(...cells.map(cell => cell.height)) };
+  });
+  expect(Math.abs(boardSize.board[0] - boardSize.board[1])).toBeLessThan(1);
+  expect(boardSize.widthRange).toBeLessThan(0.5);
+  expect(boardSize.heightRange).toBeLessThan(0.5);
   await app.locator('[data-square="d6"]').click();
+  expect(Math.abs(await app.locator('.reversi-board').evaluate(board => board.getBoundingClientRect().width)
+    - boardSize.board[0])).toBeLessThan(0.5);
   await expect(app.locator('.game-status')).toContainText('Black to move');
   await expect(app.locator('.disc')).toHaveCount(6);
   await app.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(app.locator('.disc')).toHaveCount(4);
   await app.getByLabel('Opponent', { exact: true }).selectOption('local');
   await app.locator('[data-square="d6"]').click();
+  await expect(app.locator('[data-square="d6"] .disc')).toHaveClass(/disc-placed/);
+  await expect(app.locator('[data-square="d5"] .disc')).toHaveClass(/disc-flipping/);
+  expect(await app.locator('[data-square="d6"] .disc').evaluate(disc => disc.getAnimations().length))
+    .toBeGreaterThan(0);
+  expect(await app.locator('[data-square="d5"] .disc').evaluate(disc => disc.getAnimations().length))
+    .toBeGreaterThan(0);
   await expect(app.locator('.game-status')).toContainText('White to move');
   await expect(app.locator('.disc.black')).toHaveCount(4);
   await page.locator('#app-menu-btn').click();

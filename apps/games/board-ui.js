@@ -1,6 +1,8 @@
 import { Chess, chessStatus } from './chess.js';
 import { createReversi, reversiMoves, playReversi, reversiScore, chooseReversiMove } from './reversi.js';
-import { gameShell, button, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt } from './ui.js';
+import {
+  gameShell, button, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt, showNewGameScreen,
+} from './ui.js';
 import { createGameSession, inspectGameSession, restoreChess } from './game-state.js';
 
 const pieces = { w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' },
@@ -20,6 +22,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
   let pendingRestore = initialState != null && restored.status !== 'finished';
   let selected = null, promotion = null, snapshots = [];
   let worker = null, timer = null, thinking = false, disposed = false, aiError = '';
+  let endScreenTimer = null, newGameScreenCleanup = null, endScreenShown = false;
   const undo = button('Undo', undoMove);
   const retry = button('Retry computer', () => { aiError = ''; maybeComputer(); render(); });
   retry.hidden = true;
@@ -33,30 +36,101 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     clearTimeout(timer); timer = null; thinking = false; aiError = '';
   }
   function restart() {
+    clearTimeout(endScreenTimer); endScreenTimer = null;
+    newGameScreenCleanup?.(); newGameScreenCleanup = null;
+    endScreenShown = false;
     cancelComputer();
     pendingRestore = false;
     game = isChess ? new Chess() : createReversi();
     selected = null; promotion = null; snapshots = []; render(); persist();
   }
+  function chessMoveSegments(move, reverse = false) {
+    if (!move) return [];
+    const segments = [{ from: move.from, to: move.to }];
+    const rank = move.from[1];
+    if (move.flags.includes('k')) segments.push({ from: `h${rank}`, to: `f${rank}` });
+    else if (move.flags.includes('q')) segments.push({ from: `a${rank}`, to: `d${rank}` });
+    return reverse
+      ? segments.map(segment => ({ from: segment.to, to: segment.from }))
+      : segments;
+  }
   function undoMove() {
+    clearTimeout(endScreenTimer); endScreenTimer = null;
+    newGameScreenCleanup?.(); newGameScreenCleanup = null;
+    endScreenShown = false;
     cancelComputer(); selected = null; promotion = null;
+    let transition = null;
     if (isChess) {
-      game.undo();
-      if (mode === 'computer' && game.turn() === 'b') game.undo();
+      const moves = [...chessMoveSegments(game.undo(), true)];
+      if (mode === 'computer' && game.turn() === 'b') moves.push(...chessMoveSegments(game.undo(), true));
+      transition = { type: 'chess', moves };
     } else if (snapshots.length) {
+      const previous = game.board.slice();
       game = snapshots.pop();
       while (mode === 'computer' && game.turn === -1 && snapshots.length) game = snapshots.pop();
+      transition = {
+        type: 'reversi',
+        placed: -1,
+        flipped: game.board.flatMap((piece, index) =>
+          piece && previous[index] && piece !== previous[index]
+            ? [{ index, from: previous[index] }]
+            : []),
+      };
     }
-    render(); persist();
+    render(transition); persist();
     maybeComputer();
   }
   function ended() { return isChess ? game.isGameOver() : game.status !== 'playing'; }
   function computerTurn() { return mode === 'computer' && (isChess ? game.turn() === 'b' : game.turn === -1) && !ended(); }
   function commit(move) {
-    if (isChess) game.move(move);
-    else { snapshots.push(structuredClone(game)); playReversi(game, move); }
+    clearTimeout(endScreenTimer); endScreenTimer = null;
+    let transition = null;
+    if (isChess) {
+      const played = game.move(move);
+      transition = { type: 'chess', moves: chessMoveSegments(played) };
+    } else {
+      const before = game.board.slice();
+      snapshots.push(structuredClone(game));
+      playReversi(game, move);
+      transition = {
+        type: 'reversi',
+        placed: move,
+        flipped: game.board.flatMap((piece, index) =>
+          before[index] && before[index] !== piece ? [{ index, from: before[index] }] : []),
+      };
+    }
     selected = null; promotion = null;
-    render(); persist(); maybeComputer();
+    render(transition); persist(); maybeComputer();
+    if (ended()) {
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) showEndScreen();
+      else {
+        endScreenTimer = setTimeout(showEndScreen, isChess ? 380 : 560);
+      }
+    }
+  }
+  function showEndScreen() {
+    if (!ended() || endScreenShown) return;
+    endScreenShown = true;
+    const message = isChess ? chessStatus(game) : status.textContent;
+    newGameScreenCleanup?.();
+    newGameScreenCleanup = showNewGameScreen(
+      area,
+      id,
+      'Game over',
+      message,
+      [{
+        name: 'mode',
+        label: 'Opponent',
+        choices: [['computer', 'Computer'], ['local', 'Local two-player']],
+        value: mode,
+      }],
+      nextOptions => {
+        mode = nextOptions.mode;
+        const toolbarSelect = toolbar.querySelector('select[aria-label="Opponent"]');
+        if (toolbarSelect) toolbarSelect.value = mode;
+        restart();
+      },
+    );
   }
   function persist() {
     if (!pendingRestore) ctx.saveSession();
@@ -67,7 +141,8 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
   }
   function maybeComputer() {
     if (disposed || thinking || !computerTurn()) return;
-    thinking = true; render();
+    thinking = true;
+    status.textContent += ' Computer is thinking…';
     if (isChess) {
       try {
         worker = new Worker(new URL('./chess-worker.js', import.meta.url), { type: 'module' });
@@ -113,7 +188,34 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     selected = piece?.color === game.turn() && selected !== square ? square : null;
     render();
   }
-  function render() {
+  function animateChessMoves(board, moves) {
+    if (!moves?.length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const cellSize = board.clientWidth / 8;
+    for (const move of moves) {
+      const piece = board.querySelector(`[data-square="${move.to}"] .chess-piece`);
+      if (!piece) continue;
+      const fromFile = move.from.charCodeAt(0) - 97;
+      const toFile = move.to.charCodeAt(0) - 97;
+      const fromRow = 8 - Number(move.from[1]);
+      const toRow = 8 - Number(move.to[1]);
+      piece.classList.add('chess-piece-moving');
+      const animation = piece.animate([
+        {
+          transform: `translate3d(${(fromFile - toFile) * cellSize}px, ${(fromRow - toRow) * cellSize}px, 0) scale(.88)`,
+        },
+        { transform: 'translate3d(0, 0, 0) scale(1)' },
+      ], {
+        duration: 340,
+        easing: 'cubic-bezier(.2,.72,.28,1)',
+        fill: 'both',
+      });
+      animation.onfinish = () => {
+        piece.classList.remove('chess-piece-moving');
+        animation.cancel();
+      };
+    }
+  }
+  function render(transition = null) {
     if (pendingRestore) {
       showRestorePrompt(area, () => {
         mode = restored.options.mode;
@@ -161,7 +263,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
           const piece = game.get(square);
           if (piece) {
             const span = document.createElement('span');
-            span.className = piece.color === 'w' ? 'piece-white' : 'piece-black';
+            span.className = `chess-piece ${piece.color === 'w' ? 'piece-white' : 'piece-black'}`;
             span.textContent = pieces[piece.color][piece.type];
             span.setAttribute('aria-hidden', 'true'); btn.append(span);
             description = `${piece.color === 'w' ? 'White' : 'Black'} ${names[piece.type]}`;
@@ -169,6 +271,17 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
         } else if (game.board[index]) {
           const span = document.createElement('span');
           span.className = `disc ${game.board[index] === 1 ? 'black' : 'white'}`;
+          if (transition?.type === 'reversi' && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            if (transition.placed === index) span.classList.add('disc-placed');
+            const flip = transition.flipped.find(item => item.index === index);
+            if (flip) {
+              span.classList.add(
+                'disc-flipping',
+                `flip-from-${flip.from === 1 ? 'black' : 'white'}`,
+                `flip-to-${game.board[index] === 1 ? 'black' : 'white'}`,
+              );
+            }
+          }
           span.setAttribute('aria-hidden', 'true'); btn.append(span);
           description = game.board[index] === 1 ? 'Black disc' : 'White disc';
         }
@@ -177,6 +290,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
         board.append(btn);
       }
       wireBoardKeys(board, 8); area.replaceChildren(board);
+      if (transition?.type === 'chess') animateChessMoves(board, transition.moves);
       if (promotion) {
         const picker = document.createElement('div'); picker.className = 'game-promotion';
         picker.setAttribute('role', 'group'); picker.setAttribute('aria-label', 'Promote pawn');
@@ -195,7 +309,12 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
         : { ...structuredClone(game), snapshots: structuredClone(snapshots) };
       return createGameSession(kind, { mode }, state);
     },
-    destroy() { disposed = true; cancelComputer(); },
+    destroy() {
+      disposed = true;
+      clearTimeout(endScreenTimer);
+      newGameScreenCleanup?.();
+      cancelComputer();
+    },
   };
   if (restored.status === 'finished') ctx.saveSession();
   render();

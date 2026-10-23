@@ -116,6 +116,95 @@ export function showRestorePrompt(area, onResume, onNew, invalid = false) {
   area.replaceChildren(panel);
 }
 
+export function showNewGameScreen(area, id, headingText, messageText, options, onStart) {
+  const game = area.closest('.game-app');
+  const screen = document.createElement('section');
+  const title = document.createElement('h2');
+  const message = document.createElement('p');
+  const actions = document.createElement('div');
+  const settings = {};
+  const savedInert = [];
+  const screenId = `new-game-${String(id).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  let active = true;
+  const priorFocus = document.activeElement;
+  let fieldset = null;
+
+  screen.className = 'game-new-game-screen';
+  screen.setAttribute('role', 'dialog');
+  screen.setAttribute('aria-modal', 'true');
+  screen.setAttribute('aria-labelledby', `${screenId}-title`);
+  screen.setAttribute('aria-describedby', `${screenId}-message`);
+  title.id = `${screenId}-title`;
+  title.textContent = headingText;
+  message.id = `${screenId}-message`;
+  message.textContent = messageText;
+  actions.className = 'game-new-game-actions';
+
+  if (options.length) {
+    fieldset = document.createElement('fieldset');
+    const legend = document.createElement('legend');
+    fieldset.className = 'game-new-game-options';
+    legend.textContent = 'New game options';
+    fieldset.append(legend);
+    for (const option of options) {
+      settings[option.name] = option.value;
+      const control = selectControl(
+        option.label,
+        option.choices,
+        String(option.value),
+        value => { settings[option.name] = value; },
+      );
+      control.classList.add('game-new-game-option');
+      fieldset.append(control);
+    }
+  }
+
+  const start = button('Start new game', () => {
+    dismiss(false);
+    onStart({ ...settings });
+  }, 'game-new-game-primary');
+  actions.append(start);
+  screen.append(title, message);
+  if (fieldset) screen.append(fieldset);
+  screen.append(actions);
+
+  const siblings = [...(game?.children || [])].filter(child => !child.contains(area));
+  for (const node of [...siblings, ...area.children]) {
+    savedInert.push({ node, inert: node.inert });
+    node.inert = true;
+  }
+  area.style.position = 'relative';
+  area.append(screen);
+
+  function dismiss(restoreFocus = true) {
+    if (!active) return;
+    active = false;
+    screen.remove();
+    savedInert.forEach(({ node, inert }) => { node.inert = inert; });
+    if (restoreFocus && priorFocus?.isConnected) priorFocus.focus({ preventScroll: true });
+  }
+
+  screen.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = [...screen.querySelectorAll('select, button')].filter(node => !node.disabled);
+    if (!focusable.length) return;
+    if (event.shiftKey && document.activeElement === focusable[0]) {
+      event.preventDefault();
+      focusable.at(-1).focus();
+    } else if (!event.shiftKey && document.activeElement === focusable.at(-1)) {
+      event.preventDefault();
+      focusable[0].focus();
+    }
+  });
+  screen.querySelector('select, button')?.focus({ preventScroll: true });
+  return dismiss;
+}
+
 export function preserveFocus(container, render) {
   const active = container.contains(document.activeElement) ? document.activeElement.dataset.key : null;
   render();
