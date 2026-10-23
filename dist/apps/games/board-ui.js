@@ -6,6 +6,7 @@ import {
 import { createGameSession, inspectGameSession, restoreChess } from './game-state.js';
 import { addGameThemeControl, addGameThemeResetControl } from './themes.js';
 import { chessPieceSvg } from './chess-piece-svg.js';
+import { createBoardCelebration, chooseBoardCelebration } from './game-celebrations.js';
 
 const names = { k: 'King', q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight', p: 'Pawn' };
 const squareName = index => `${'abcdefgh'[index % 8]}${8 - Math.floor(index / 8)}`;
@@ -13,24 +14,43 @@ const squareName = index => `${'abcdefgh'[index % 8]}${8 - Math.floor(index / 8)
 export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSvg) {
   const isChess = kind === 'chess';
   const { el, toolbarLeft, toolbarCenter, status, area, settings } = gameShell(id, title, isChess
-    ? 'White moves first. Select a piece, then a highlighted destination. Checkmate the opposing king to win. Castling, en passant, pawn promotion, stalemate, repetition, insufficient material, and the fifty-move rule are supported. In computer mode you play White. Arrow keys move between squares; Enter or Space selects.'
-      : 'Black moves first. Place a disc so it brackets at least one opposing disc between the new disc and one of yours, in any direction. All bracketed discs flip. Legal moves are marked. A player with no move automatically passes; the game ends when neither player can move. Most discs wins. In computer mode you play Black. Arrow keys navigate; Enter or Space plays.', ctx, iconSvg);
+    ? 'White moves first. Select a piece, then a highlighted destination. Checkmate the opposing king to win. Castling, en passant, pawn promotion, stalemate, repetition, insufficient material, and the fifty-move rule are supported. In computer mode, choose your color in Settings. Arrow keys move between squares; Enter or Space selects.'
+      : 'Black moves first. Place a disc so it brackets at least one opposing disc between the new disc and one of yours, in any direction. All bracketed discs flip. Legal moves are marked. A player with no move automatically passes; the game ends when neither player can move. Most discs wins. In computer mode, choose your color in Settings. Arrow keys navigate; Enter or Space plays.', ctx, iconSvg);
   const restored = inspectGameSession(kind, initialState);
   let game = isChess ? new Chess() : createReversi();
   let mode = restored.status === 'valid' || restored.status === 'finished'
     ? restored.options.mode : 'computer';
+  let playerColor = restored.status === 'valid' || restored.status === 'finished'
+    ? restored.options.playerColor || (isChess ? 'white' : 'black')
+    : isChess ? 'white' : 'black';
   let pendingRestore = initialState != null && restored.status !== 'finished';
   let selected = null, promotion = null, snapshots = [];
+  if (restored.status === 'finished') {
+    if (isChess) game = restoreChess(restored.state.history);
+    else {
+      const { snapshots: savedSnapshots = [], ...savedGame } = restored.state;
+      game = savedGame;
+      snapshots = savedSnapshots;
+    }
+  }
   let worker = null, timer = null, thinking = false, disposed = false, aiError = '';
   let endScreenTimer = null, newGameScreenCleanup = null, endScreenShown = false;
+  let celebrationCleanup = null;
   const undo = button('Undo', undoMove);
   const retry = button('Retry computer', () => { aiError = ''; maybeComputer(); render(); });
   retry.hidden = true;
   toolbarLeft.append(undo, retry);
   toolbarCenter.append(button('New game', restart));
+  const colorControl = selectControl('Play as', [['white', 'White'], ['black', 'Black']], playerColor, value => {
+    playerColor = value; restart();
+  });
+  colorControl.hidden = mode !== 'computer';
   settings.addGameOption(selectControl('Opponent', [['computer', 'Computer'], ['local', 'Local two-player']], mode, value => {
-      mode = value; restart();
-    }));
+    mode = value;
+    colorControl.hidden = mode !== 'computer';
+    restart();
+  }));
+  settings.addGameOption(colorControl);
   const removeBoardTheme = addGameThemeControl(el, settings.appearanceOptions, isChess ? 'chessBoard' : 'reversiBoard');
   const removePieceTheme = addGameThemeControl(el, settings.appearanceOptions, isChess ? 'chessPieces' : 'reversiPieces');
   const removePieceStyle = isChess ? addGameThemeControl(el, settings.appearanceOptions, 'chessArtwork') : null;
@@ -40,15 +60,19 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     worker?.terminate(); worker = null;
     clearTimeout(timer); timer = null; thinking = false; aiError = '';
   }
+  function clearEndSequence() {
+    clearTimeout(endScreenTimer); endScreenTimer = null;
+    celebrationCleanup?.(); celebrationCleanup = null;
+  }
   function restart() {
     settings.close();
-    clearTimeout(endScreenTimer); endScreenTimer = null;
+    clearEndSequence();
     newGameScreenCleanup?.(); newGameScreenCleanup = null;
     endScreenShown = false;
     cancelComputer();
     pendingRestore = false;
     game = isChess ? new Chess() : createReversi();
-    selected = null; promotion = null; snapshots = []; render(); persist();
+    selected = null; promotion = null; snapshots = []; render(); persist(); maybeComputer();
   }
   function chessMoveSegments(move, reverse = false) {
     if (!move) return [];
@@ -61,19 +85,21 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
       : segments;
   }
   function undoMove() {
-    clearTimeout(endScreenTimer); endScreenTimer = null;
+    clearEndSequence();
     newGameScreenCleanup?.(); newGameScreenCleanup = null;
     endScreenShown = false;
     cancelComputer(); selected = null; promotion = null;
     let transition = null;
     if (isChess) {
       const moves = [...chessMoveSegments(game.undo(), true)];
-      if (mode === 'computer' && game.turn() === 'b') moves.push(...chessMoveSegments(game.undo(), true));
+      if (mode === 'computer' && computerTurn() && game.history().length) {
+        moves.push(...chessMoveSegments(game.undo(), true));
+      }
       transition = { type: 'chess', moves };
     } else if (snapshots.length) {
       const previous = game.board.slice();
       game = snapshots.pop();
-      while (mode === 'computer' && game.turn === -1 && snapshots.length) game = snapshots.pop();
+      while (computerTurn() && snapshots.length) game = snapshots.pop();
       transition = {
         type: 'reversi',
         placed: -1,
@@ -87,7 +113,11 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     maybeComputer();
   }
   function ended() { return isChess ? game.isGameOver() : game.status !== 'playing'; }
-  function computerTurn() { return mode === 'computer' && (isChess ? game.turn() === 'b' : game.turn === -1) && !ended(); }
+  function computerTurn() {
+    const computerColor = playerColor === 'white' ? 'b' : 'w';
+    const computerDisc = playerColor === 'white' ? 1 : -1;
+    return mode === 'computer' && (isChess ? game.turn() === computerColor : game.turn === computerDisc) && !ended();
+  }
   function commit(move) {
     clearTimeout(endScreenTimer); endScreenTimer = null;
     let transition = null;
@@ -110,7 +140,22 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     if (ended()) {
       if (matchMedia('(prefers-reduced-motion: reduce)').matches) showEndScreen();
       else {
-        endScreenTimer = setTimeout(showEndScreen, isChess ? 380 : 560);
+        endScreenTimer = setTimeout(() => {
+          endScreenTimer = null;
+          if (disposed || !ended() || endScreenShown) return;
+          const board = area.querySelector('.game-board');
+          const winner = isChess
+            ? game.isCheckmate() ? game.turn() === 'w' ? 'black' : 'white' : null
+            : (() => {
+              const score = reversiScore(game.board);
+              return score.black === score.white ? null : score.black > score.white ? 'black' : 'white';
+            })();
+          const effect = chooseBoardCelebration();
+          celebrationCleanup = createBoardCelebration(kind, board, winner, effect, () => {
+            celebrationCleanup = null;
+            showEndScreen();
+          });
+        }, isChess ? 380 : 560);
       }
     }
   }
@@ -129,11 +174,20 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
         label: 'Opponent',
         choices: [['computer', 'Computer'], ['local', 'Local two-player']],
         value: mode,
+      }, {
+        name: 'playerColor',
+        label: 'Play as',
+        choices: [['white', 'White'], ['black', 'Black']],
+        value: playerColor,
+        visibleWhen: nextOptions => nextOptions.mode === 'computer',
       }],
       nextOptions => {
         mode = nextOptions.mode;
+        if (nextOptions.playerColor) playerColor = nextOptions.playerColor;
         const toolbarSelect = settings.element.querySelector('select[aria-label="Opponent"]');
         if (toolbarSelect) toolbarSelect.value = mode;
+        colorControl.querySelector('select').value = playerColor;
+        colorControl.hidden = mode !== 'computer';
         restart();
       },
     );
@@ -316,11 +370,11 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
       if (pendingRestore) return initialState;
       const state = isChess ? { history: game.history() }
         : { ...structuredClone(game), snapshots: structuredClone(snapshots) };
-      return createGameSession(kind, { mode }, state);
+      return createGameSession(kind, { mode, playerColor }, state);
     },
     destroy() {
       disposed = true;
-      clearTimeout(endScreenTimer);
+      clearEndSequence();
       removeBoardTheme();
       removePieceTheme();
       removePieceStyle?.();
@@ -332,5 +386,6 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
   };
   if (restored.status === 'finished') ctx.saveSession();
   render();
+  if (restored.status === 'finished') showEndScreen();
   return el;
 }

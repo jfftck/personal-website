@@ -452,6 +452,8 @@
   color: var(--game-ink);
   font-weight: 650;
 }
+.game-settings-option[hidden],
+.game-new-game-option[hidden] { display: none; }
 .game-settings-option select { min-width: min(12rem, 52%); }
 .game-settings-dialog .game-theme-control {
   display: grid;
@@ -1545,6 +1547,45 @@
   background: var(--overlay-card);
 }
 .game-promotion button { min-width: 3rem; font-size: 1.3rem; }
+
+.game-celebration-layer {
+  position: fixed;
+  z-index: 2147483646;
+  overflow: visible;
+  pointer-events: none;
+  isolation: isolate;
+}
+.game-celebration-piece {
+  z-index: 2 !important;
+  margin: 0;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+.game-celebration-source-hidden { visibility: hidden !important; }
+.game-celebration-ring,
+.game-celebration-spark {
+  position: absolute;
+  z-index: 3;
+  display: block;
+  pointer-events: none;
+}
+.game-celebration-ring {
+  width: 1.1rem;
+  aspect-ratio: 1;
+  border: 2px solid #ffe68b;
+  border-radius: 50%;
+  will-change: transform, opacity;
+}
+.game-celebration-spark {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  will-change: transform, opacity;
+}
+.mine-celebration--lost .game-celebration-ring {
+  border-width: 3px;
+  box-shadow: 0 0 1rem #ff624f;
+}
 
 /* Cells and their graphics scale together to fit every difficulty in the
    available board slot, including narrow and short game windows. */

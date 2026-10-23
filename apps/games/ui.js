@@ -250,11 +250,18 @@ export function showNewGameScreen(area, id, headingText, messageText, options, o
   const message = document.createElement('p');
   const actions = document.createElement('div');
   const settings = {};
+  const optionControls = new Map();
   const savedInert = [];
   const screenId = `new-game-${String(id).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   let active = true;
   const priorFocus = document.activeElement;
   let fieldset = null;
+  function refreshOptionVisibility() {
+    for (const option of options) {
+      const control = optionControls.get(option.name);
+      if (control) control.hidden = option.visibleWhen ? !option.visibleWhen(settings) : false;
+    }
+  }
 
   screen.className = 'game-new-game-screen';
   screen.setAttribute('role', 'dialog');
@@ -279,11 +286,16 @@ export function showNewGameScreen(area, id, headingText, messageText, options, o
         option.label,
         option.choices,
         String(option.value),
-        value => { settings[option.name] = value; },
+        value => {
+          settings[option.name] = value;
+          refreshOptionVisibility();
+        },
       );
       control.classList.add('game-new-game-option');
+      optionControls.set(option.name, control);
       fieldset.append(control);
     }
+    refreshOptionVisibility();
   }
 
   const start = button('Start new game', () => {

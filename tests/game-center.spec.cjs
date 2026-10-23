@@ -1888,13 +1888,29 @@ test('Minesweeper supports reveal, touch flag mode, keyboard flags, and all boar
 test('Minesweeper win screen lets users change the next game difficulty', async ({ page }) => {
   const app = await restoreGame(page, savedMinesweeper(), 'minesweeper');
   await app.locator('[data-key="mine-10"]').click();
+  const layer = page.locator('body > .game-celebration-layer[data-game="minesweeper"]');
+  await expect(layer).toHaveAttribute('data-effect', 'fireworks');
+  await expect(app.locator('.mine-cell.revealed')).toHaveCount(71);
   const screen = app.locator('.game-new-game-screen');
+  await expect(screen).toBeHidden();
   await expect(screen).toBeVisible();
+  await expect(layer).toHaveCount(0);
   await expect(screen.getByRole('heading', { name: 'Minefield cleared!' })).toBeVisible();
   await screen.getByLabel('Difficulty', { exact: true }).selectOption('intermediate');
   await screen.getByRole('button', { name: 'Start new game' }).click();
   await expect(app.locator('.mine-cell')).toHaveCount(256);
   await expect(app.getByLabel('Difficulty', { exact: true })).toHaveValue('intermediate');
+});
+
+test('Minesweeper shows the exploded board during its mine-burst celebration', async ({ page }) => {
+  const app = await restoreGame(page, savedMinesweeper(), 'minesweeper');
+  await app.locator('[data-key="mine-0"]').click();
+  await expect(app.locator('.mine-cell.exploded')).toHaveCount(1);
+  const layer = page.locator('body > .game-celebration-layer[data-game="minesweeper"]');
+  await expect(layer).toHaveAttribute('data-effect', 'explosions');
+  await expect(layer.locator('.game-celebration-spark')).not.toHaveCount(0);
+  await expect(app.locator('.game-new-game-screen')).toBeVisible();
+  await expect(layer).toHaveCount(0);
 });
 
 test('Chess moves animate, and checkmate opens the opponent options for a new game', async ({ page }) => {
@@ -1914,13 +1930,16 @@ test('Chess moves animate, and checkmate opens the opponent options for a new ga
     }
   }
   const screen = app.locator('.game-new-game-screen');
-  await expect(screen).toBeVisible({ timeout: 3000 });
+  await expect(screen).toBeVisible({ timeout: 5000 });
   await expect(screen).toContainText('Checkmate');
   await screen.getByLabel('Opponent', { exact: true }).selectOption('computer');
+  await expect(screen.getByLabel('Play as', { exact: true })).toBeVisible();
+  await screen.getByLabel('Play as', { exact: true }).selectOption('black');
   await screen.getByRole('button', { name: 'Start new game' }).click();
   await expect(screen).toHaveCount(0);
   await expect(app.locator('.chess-piece')).toHaveCount(32);
   await expect(app.getByLabel('Opponent', { exact: true })).toHaveValue('computer');
+  await expect(app.locator('.game-status')).toContainText('Black to move', { timeout: 10000 });
 });
 
 test('Reversi terminal screen offers opponent options before starting again', async ({ page }) => {
@@ -1963,12 +1982,80 @@ test('Reversi terminal screen offers opponent options before starting again', as
   const rank = 8 - Math.floor(finalMove / 8);
   await app.locator(`[data-square="${file}${rank}"]`).click();
   const screen = app.locator('.game-new-game-screen');
-  await expect(screen).toBeVisible({ timeout: 3000 });
+  await expect(screen).toBeVisible({ timeout: 5000 });
   await expect(screen.getByLabel('Opponent', { exact: true })).toHaveValue('local');
   await screen.getByLabel('Opponent', { exact: true }).selectOption('computer');
+  await expect(screen.getByLabel('Play as', { exact: true })).toBeVisible();
+  await screen.getByLabel('Play as', { exact: true }).selectOption('white');
   await screen.getByRole('button', { name: 'Start new game' }).click();
-  await expect(app.locator('.disc')).toHaveCount(4);
+  await expect(app.locator('.disc')).toHaveCount(5);
   await expect(app.getByLabel('Opponent', { exact: true })).toHaveValue('computer');
+  await expect(app.locator('.game-status')).toContainText('White to move', { timeout: 5000 });
+});
+
+test('Chess and Reversi let computer players choose either color and save the choice', async ({ page }) => {
+  const chess = await openGame(page, 'chess');
+  let settings = await openSettings(chess);
+  await expect(settings.getByLabel('Play as', { exact: true })).toHaveValue('white');
+  await settings.getByLabel('Play as', { exact: true }).selectOption('black');
+  await expect(chess.locator('.game-status')).toContainText('Black to move', { timeout: 10000 });
+  let savedColor = await page.evaluate(() => {
+    const session = JSON.parse(localStorage.getItem('desktop-session-v2'));
+    return session.columns.flatMap(column => column.apps).find(app => app.type === 'chess')
+      ?.state?.options?.playerColor;
+  });
+  expect(savedColor).toBe('black');
+
+  settings = await openSettings(chess);
+  await settings.getByLabel('Opponent', { exact: true }).selectOption('local');
+  settings = await openSettings(chess);
+  await expect(settings.getByLabel('Play as', { exact: true })).toBeHidden();
+  await settings.getByRole('button', { name: 'Close settings' }).click();
+  await page.locator('#close-btn').click();
+
+  const reversi = await openGame(page, 'reversi');
+  settings = await openSettings(reversi);
+  await settings.getByLabel('Play as', { exact: true }).selectOption('white');
+  await expect(reversi.locator('.game-status')).toContainText('White to move', { timeout: 5000 });
+  await expect(reversi.locator('.disc')).toHaveCount(5);
+  savedColor = await page.evaluate(() => {
+    const session = JSON.parse(localStorage.getItem('desktop-session-v2'));
+    return session.columns.flatMap(column => column.apps).find(app => app.type === 'reversi')
+      ?.state?.options?.playerColor;
+  });
+  expect(savedColor).toBe('white');
+});
+
+test('Chess and Reversi support each board-piece celebration style', async ({ page }) => {
+  for (const game of ['chess', 'reversi']) {
+    const app = await openGame(page, game);
+    for (const effect of ['pulse', 'fade', 'fireworks', 'knock']) {
+      const result = await app.evaluate(async (root, selectedEffect) => {
+        const { createBoardCelebration } = await import('/apps/games/game-celebrations.js');
+        const kind = root.dataset.type;
+        const themeAttribute = kind === 'chess' ? 'chessPiecesTheme' : 'reversiPiecesTheme';
+        root.dataset[themeAttribute] = 'glass';
+        const board = root.querySelector('.game-board');
+        const cleanup = createBoardCelebration(kind, board, 'white', selectedEffect);
+        const layer = document.querySelector('.game-celebration-layer[data-game="' + kind + '"]');
+        const sources = [...board.querySelectorAll(kind === 'chess' ? '.chess-piece' : '.disc')];
+        const active = [...layer.querySelectorAll('.game-celebration-piece')];
+        const count = active.length;
+        const animations = active.reduce((total, piece) => total + piece.getAnimations().length, 0);
+        const hiddenSources = sources.every(piece => piece.classList.contains('game-celebration-source-hidden'));
+        const themeCopied = layer.classList.contains('game-app')
+          && layer.dataset[themeAttribute] === 'glass';
+        cleanup();
+        return { effect: layer.dataset.effect, count, animations, hiddenSources, themeCopied, removed: !layer.isConnected };
+      }, effect);
+      expect(result).toEqual({
+        effect, count: game === 'chess' ? 32 : 4, animations: expect.any(Number),
+        hiddenSources: true, themeCopied: true, removed: true,
+      });
+      expect(result.animations).toBeGreaterThan(0);
+    }
+    await page.locator('#close-btn').click();
+  }
 });
 
 test('Chess makes computer turns, undoes a round, and supports local two-player', async ({ page }) => {

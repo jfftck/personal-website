@@ -4,6 +4,7 @@ import {
 } from './ui.js';
 import { createGameSession, inspectGameSession } from './game-state.js';
 import { addGameThemeControl, addGameThemeResetControl } from './themes.js';
+import { createMinesweeperCelebration } from './game-celebrations.js';
 
 export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
   const { el, toolbarLeft, toolbarCenter, status, area, settings } = gameShell(id, 'Minesweeper',
@@ -11,16 +12,22 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
   const restored = inspectGameSession('minesweeper', initialState);
   let level = restored.status === 'valid' || restored.status === 'finished'
     ? restored.options.level : 'beginner';
-  let state = createMinesweeper(level);
+  let state = restored.status === 'finished' ? restored.state : createMinesweeper(level);
   let flagMode = Boolean(restored.options?.flagMode);
   let pendingRestore = initialState != null && restored.status !== 'finished';
   let newGameScreenCleanup = null;
+  let celebrationTimer = null, celebrationCleanup = null;
   let promptedStatus = null;
+  function clearCelebration() {
+    clearTimeout(celebrationTimer); celebrationTimer = null;
+    celebrationCleanup?.(); celebrationCleanup = null;
+  }
   function persist() {
     if (!pendingRestore) ctx.saveSession();
   }
   function restart() {
     settings.close();
+    clearCelebration();
     newGameScreenCleanup?.();
     newGameScreenCleanup = null;
     promptedStatus = null;
@@ -28,8 +35,7 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
     state = createMinesweeper(level); render(); persist();
   }
   function showGameEndScreen() {
-    if (promptedStatus === state.status) return;
-    promptedStatus = state.status;
+    if (state.status === 'playing' || newGameScreenCleanup) return;
     newGameScreenCleanup?.();
     newGameScreenCleanup = showNewGameScreen(
       area,
@@ -50,6 +56,22 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
       },
     );
   }
+  function celebrateGameEnd() {
+    if (promptedStatus === state.status) return;
+    promptedStatus = state.status;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      showGameEndScreen();
+      return;
+    }
+    celebrationTimer = setTimeout(() => {
+      celebrationTimer = null;
+      const board = area.querySelector('.mine-board-wrap');
+      celebrationCleanup = createMinesweeperCelebration(board, state, () => {
+        celebrationCleanup = null;
+        showGameEndScreen();
+      });
+    }, 450);
+  }
   const flag = button('Flag mode', () => {
     flagMode = !flagMode;
     flag.setAttribute('aria-checked', String(flagMode));
@@ -69,9 +91,13 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
   const removeThemeControl = addGameThemeControl(el, settings.appearanceOptions, 'minesweeper');
   const removeThemeResetControl = addGameThemeResetControl(settings.appearanceOptions);
   function act(index, mark = flagMode) {
+    const previousStatus = state.status;
     const changed = mark ? flagMineCell(state, index) : revealMineCell(state, index);
     render();
-    if (changed) persist();
+    if (changed) {
+      if (previousStatus === 'playing' && state.status !== 'playing') celebrateGameEnd();
+      persist();
+    }
   }
   function render() {
     if (pendingRestore) {
@@ -117,7 +143,6 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
       fit.className = 'game-board-fit';
       wrap.append(board); fit.append(wrap); area.replaceChildren(fit);
     });
-    if (state.status !== 'playing') showGameEndScreen();
   }
   ctx.appApis[id] = {
     getSessionState() {
@@ -125,6 +150,7 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
         : createGameSession('minesweeper', { level, flagMode }, state);
     },
     destroy() {
+      clearCelebration();
       newGameScreenCleanup?.();
       removeThemeControl();
       removeThemeResetControl();
@@ -133,5 +159,6 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
   };
   if (restored.status === 'finished') ctx.saveSession();
   render();
+  if (restored.status === 'finished') showGameEndScreen();
   return el;
 }

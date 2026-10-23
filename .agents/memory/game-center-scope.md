@@ -50,3 +50,9 @@ In Chess and Reversi, white pieces always have a dark 10%-opacity outline and bl
 **Why:** The user requested consistent, faint 10% outlines so both sides remain gently defined across piece styles.
 
 **How to apply:** Keep the outline colors and opacity consistent across themes, Glass styles, and Settings previews.
+
+At game end, keep the finished board visible through its celebration before showing the next-game screen. Minesweeper uses fireworks on a win and mine bursts on a loss; Chess and Reversi celebrate with piece animations. Computer opponents must let players choose White or Black, preserving each game's existing default.
+
+**Why:** The user asked for clear end-of-game celebrations and color choice against the computer without changing the current default sides.
+
+**How to apply:** Respect reduced-motion settings, clean up celebration overlays when a game is reset or closed, and keep the final board visible underneath.
