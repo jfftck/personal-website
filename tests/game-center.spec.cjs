@@ -1325,6 +1325,66 @@ test('Send home moves a chain of newly eligible cards in one undoable action', a
   await expect(app.locator('[aria-label="Home 1"] .playing-card')).toHaveText('A♠');
 });
 
+test('holding the right mouse button peeks through original stack layers without moving or selecting cards', async ({ page }) => {
+  const app = await restoreGame(page, savedKlondike({
+    columns: [[[13, 0], [12, 1], [11, 0], [10, 1]]],
+  }));
+  const stack = app.locator('.card-columns .card-pile').first();
+  const slots = await stack.locator('.playing-card').evaluateAll(cards => cards.map(card => {
+    const rect = card.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + 8 };
+  }));
+  await page.mouse.move(slots[0].x, slots[0].y);
+  await page.mouse.down({ button: 'right' });
+  await expect(stack.locator('.card-peeking')).toHaveAttribute('data-offset', '0');
+  for (const offset of [2, 1, 3, 0]) {
+    await page.mouse.move(slots[offset].x, slots[offset].y);
+    await expect(stack.locator('.card-peeking')).toHaveAttribute('data-offset', String(offset));
+  }
+  await expect(page.locator('.card-drag-layer')).toHaveCount(0);
+  await expect(app.locator('.playing-card.selected')).toHaveCount(0);
+  await page.screenshot({ path: 'generated-artifacts/card-stack-peek.jpg' });
+  await page.mouse.up({ button: 'right' });
+  await expect(stack.locator('.card-peeking')).toHaveCount(0);
+  await expect(stack.locator('.playing-card')).toHaveCount(4);
+  await expect(app.locator('.game-status')).toContainText('0 moves');
+  expect(await stack.locator('.playing-card').first().evaluate(card =>
+    !card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })))).toBe(true);
+});
+
+test.describe('touch stack peeking', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+  test('vertical finger movement follows layers in both directions and cleans up on release or cancellation', async ({ page }) => {
+    const app = await restoreGame(page, savedFreecell({
+      columnCards: [[[13, 0], [12, 1], [11, 0], [10, 1]]],
+    }), 'freecell');
+    const stack = app.locator('.card-columns .card-pile').first();
+    const slots = await stack.locator('.playing-card').evaluateAll(cards => cards.map(card => {
+      const rect = card.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + 8 };
+    }));
+    const client = await page.context().newCDPSession(page);
+    const touch = (type, offset) => client.send('Input.dispatchTouchEvent', {
+      type, touchPoints: offset == null ? [] : [{ ...slots[offset], id: 0 }],
+    });
+    await touch('touchStart', 0);
+    for (const offset of [2, 1, 3, 0]) {
+      await touch('touchMove', offset);
+      await expect(stack.locator('.card-peeking')).toHaveAttribute('data-offset', String(offset));
+      await expect(page.locator('.card-drag-layer')).toHaveCount(0);
+    }
+    await touch('touchEnd');
+    await expect(app.locator('.card-peeking, .playing-card.selected')).toHaveCount(0);
+    await expect(stack.locator('.playing-card')).toHaveCount(4);
+    await expect(app.locator('.game-status')).toContainText('0 moves');
+    await touch('touchStart', 0);
+    await touch('touchMove', 2);
+    await expect(stack.locator('.card-peeking')).toHaveCount(1);
+    await touch('touchCancel');
+    await expect(stack.locator('.card-peeking')).toHaveCount(0);
+  });
+});
+
 test('dragging a valid card moves it to a legal pile and animates the move', async ({ page }) => {
   const app = await restoreGame(page, savedKlondike({ columns: [[[13, 0]]] }));
   const settings = await openSettings(app);

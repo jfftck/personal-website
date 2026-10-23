@@ -1190,10 +1190,11 @@
   transition: transform 130ms ease, box-shadow 130ms ease;
 }
 
-.playing-card:hover {
-  z-index: 3;
-  transform: translateY(-2px);
-  box-shadow: 0 5px 10px rgba(0,0,0,.28), inset 0 0 0 1px rgba(255,255,255,.8);
+@media (hover: hover) and (pointer: fine) {
+  .playing-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 10px rgba(0,0,0,.28), inset 0 0 0 1px rgba(255,255,255,.8);
+  }
 }
 .playing-card.red { color: var(--card-red); }
 .playing-card.selected {
@@ -1204,6 +1205,12 @@
 }
 .playing-card.drag-source-hidden {
   visibility: hidden;
+}
+.playing-card.card-peeking {
+  z-index: 6;
+  transform: none;
+  transition: none;
+  box-shadow: 0 6px 14px rgba(0,0,0,.38);
 }
 
 .card-drag-layer {

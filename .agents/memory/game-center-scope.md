@@ -26,3 +26,9 @@ Minesweeper's revealed and untouched cells must be distinct. When untouched cell
 **Why:** The user requested this treatment across games and explicitly approved Glass falling below formal contrast standards in favor of transparency.
 
 **How to apply:** Preserve cell-state and side/suit distinctions in games and their previews, without making Glass opaque to satisfy numeric contrast targets. Keep artwork choices independent of material/color themes.
+
+Card stack peeking must follow vertical finger movement on touchscreens; mouse users peek with the right button rather than ordinary hovering.
+
+**Why:** The user requested sliding up and down through stack layers instead of remaining on the initially touched card, and right-click peeking for mice.
+
+**How to apply:** Keep peeking temporary and separate from moves. Distinguish vertical touch inspection from sideways card dragging, and restore the stack on release or cancellation.

@@ -17,7 +17,8 @@ const rules = {
 };
 
 export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSvg) {
-  const shell = gameShell(id, title, rules[kind], ctx, iconSvg);
+  const shell = gameShell(id, title,
+    `${rules[kind]} Slide a finger vertically through a tableau stack to peek at its layers; drag sideways to move cards. With a mouse, hold the right button and move up or down to peek. Release to restore the stack.`, ctx, iconSvg);
   const { el, toolbarLeft, toolbarCenter, area, status, settings } = shell;
   area.classList.add('solitaire-game-area');
   const restored = inspectGameSession(kind, initialState);
@@ -285,6 +286,32 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     drag.layer?.remove();
     drag.layer = null;
   }
+  function suppressPointerClick() {
+    suppressClick = true;
+    clearTimeout(suppressClickTimer);
+    suppressClickTimer = setTimeout(() => { suppressClick = false; }, 250);
+  }
+  function updatePeek(gesture, clientY) {
+    // Use the original stack positions: a raised card must not hide the
+    // hit regions of the other cards while the finger moves through them.
+    const slots = gesture.peekSlots;
+    let slot = null;
+    if (clientY >= slots[0].top && clientY <= slots.at(-1).bottom) {
+      slot = slots.findLast(candidate => clientY >= candidate.top);
+    }
+    gesture.peekCard?.classList.remove('card-peeking');
+    gesture.peekCard = slot?.card || null;
+    gesture.peekCard?.classList.add('card-peeking');
+  }
+  function clearPointerGesture() {
+    if (pointerDrag) {
+      pointerDrag.peekCard?.classList.remove('card-peeking');
+      clearDragLayer(pointerDrag);
+    }
+    pointerDrag = null;
+    activeDropTarget?.classList.remove('drag-over');
+    activeDropTarget = null;
+  }
   area.addEventListener('click', event => {
     if (!suppressClick) return;
     event.preventDefault();
@@ -293,12 +320,20 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     clearTimeout(suppressClickTimer);
   }, true);
   area.addEventListener('pointerdown', event => {
-    if (event.button !== 0 || event.target.closest('button')?.disabled) return;
+    if (![0, 2].includes(event.button) || event.target.closest('button')?.disabled || pointerDrag) return;
     const card = event.target.closest('.playing-card');
     if (!card) return;
+    const inStack = !!card.closest('.card-columns');
+    if (event.button === 2 && !inStack) return;
     pointerDrag = {
       pointerId: event.pointerId,
+      pointerType: event.pointerType,
       card,
+      peeking: event.button === 2,
+      peekSlots: inStack ? [...card.parentElement.querySelectorAll(':scope > .playing-card')].map(card => {
+        const { top, bottom } = card.getBoundingClientRect();
+        return { card, top, bottom };
+      }) : null,
       from: {
         zone: card.dataset.zone,
         index: Number(card.dataset.pileIndex),
@@ -308,10 +343,29 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       y: event.clientY,
       dragging: false,
     };
+    if (pointerDrag.peeking) {
+      event.preventDefault();
+      updatePeek(pointerDrag, event.clientY);
+    }
+  });
+  area.addEventListener('contextmenu', event => {
+    if (event.target.closest('.card-columns .playing-card')) event.preventDefault();
   });
   document.addEventListener('pointermove', event => {
     if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
+    if (pointerDrag.peeking) {
+      event.preventDefault();
+      updatePeek(pointerDrag, event.clientY);
+      return;
+    }
     if (!pointerDrag.dragging && Math.hypot(event.clientX - pointerDrag.x, event.clientY - pointerDrag.y) > 8) {
+      const verticalSwipe = Math.abs(event.clientY - pointerDrag.y) > Math.abs(event.clientX - pointerDrag.x) * 1.2;
+      if (pointerDrag.pointerType === 'touch' && pointerDrag.peekSlots && verticalSwipe) {
+        pointerDrag.peeking = true;
+        event.preventDefault();
+        updatePeek(pointerDrag, event.clientY);
+        return;
+      }
       pointerDrag.dragging = true;
       createDragLayer(pointerDrag);
     }
@@ -327,14 +381,13 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
   document.addEventListener('pointerup', event => {
     if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
     const drag = pointerDrag;
-    pointerDrag = null;
-    clearDragLayer(drag);
-    activeDropTarget?.classList.remove('drag-over');
-    activeDropTarget = null;
+    clearPointerGesture();
+    if (drag.peeking) {
+      if (drag.pointerType === 'touch') suppressPointerClick();
+      return;
+    }
     if (!drag.dragging) return;
-    suppressClick = true;
-    clearTimeout(suppressClickTimer);
-    suppressClickTimer = setTimeout(() => { suppressClick = false; }, 250);
+    suppressPointerClick();
     const target = resolveDropTarget(event.clientX, event.clientY);
     const destination = target && { zone: target.dataset.dropZone, index: Number(target.dataset.dropIndex) };
     const movingIds = getPile(state, drag.from)?.slice(drag.from.offset).map(card => card.id) || [];
@@ -347,11 +400,9 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
   }, { signal: dragAbort.signal });
   document.addEventListener('pointercancel', event => {
     if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
-    clearDragLayer(pointerDrag);
-    pointerDrag = null;
-    activeDropTarget?.classList.remove('drag-over');
-    activeDropTarget = null;
+    clearPointerGesture();
   }, { signal: dragAbort.signal });
+  window.addEventListener('blur', clearPointerGesture, { signal: dragAbort.signal });
   function pileView(zone, index, label, all = false) {
     const pile = getPile(state, { zone, index });
     const div = document.createElement('div');
@@ -419,6 +470,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       })[0] || null;
   }
   function render() {
+    clearPointerGesture();
     if (pendingRestore) {
       showRestorePrompt(area, () => {
         options = restored.options;
@@ -515,10 +567,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       clearTimeout(suppressClickTimer);
       clearCelebration();
       clearNewGameScreen();
-      if (pointerDrag) clearDragLayer(pointerDrag);
-      activeDropTarget?.classList.remove('drag-over');
-      pointerDrag = null;
-      activeDropTarget = null;
+      clearPointerGesture();
     },
   };
   if (restored.status === 'finished') ctx.saveSession();
