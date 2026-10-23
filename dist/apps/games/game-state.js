@@ -16,7 +16,50 @@ function isInteger(value, min, max) {
   return Number.isInteger(value) && value >= min && value <= max;
 }
 
+function validOpenTableauCards(kind, options, state) {
+  if (!options || !state || state.kind !== kind
+    || (options.suits !== undefined && options.suits !== 1)
+    || (options.drawCount !== undefined && options.drawCount !== 1)
+    || state.suits !== 1 || state.drawCount !== 1
+    || !Array.isArray(state.stock) || !Array.isArray(state.waste)
+    || !Array.isArray(state.foundations) || state.foundations.length !== 4
+    || state.foundations.some(pile => !Array.isArray(pile) || pile.length)
+    || !Array.isArray(state.cells) || state.cells.length !== 4
+    || state.cells.some(pile => !Array.isArray(pile) || pile.length)
+    || !isInteger(state.moves, 0, Number.MAX_SAFE_INTEGER) || typeof state.won !== 'boolean') return false;
+  const rowSizes = kind === 'pyramid' ? [1, 2, 3, 4, 5, 6, 7]
+    : kind === 'tripeaks' ? [3, 6, 9, 10] : null;
+  if (rowSizes) {
+    if (!Array.isArray(state.columns) || state.columns.length !== rowSizes.length
+      || state.columns.some((row, index) => !Array.isArray(row) || row.length !== rowSizes[index])
+      || state.columns.flat().some(card => kind === 'tripeaks' && card?.removed === true
+        ? Object.keys(card).length !== 1
+        : !card || card.up !== true || typeof card.removed !== 'boolean'
+          || (kind === 'tripeaks' && card.removed !== false))
+      || (kind === 'pyramid' && !isInteger(state.recyclesLeft, 0, 1))) return false;
+  } else if (kind === 'golf') {
+    if (!Array.isArray(state.columns) || state.columns.length !== 7
+      || state.columns.some(column => !Array.isArray(column) || column.length > 5
+        || column.some(card => !card || card.up !== true || card.removed !== undefined))) return false;
+  } else return false;
+  const piles = [...state.columns, state.stock, state.waste, ...state.foundations, ...state.cells];
+  if (piles.some(pile => !Array.isArray(pile))) return false;
+  const cards = piles.flat().filter(card => !(kind === 'tripeaks' && card?.removed === true));
+  if (cards.some(card => !card || !isInteger(card.id, 0, 51)
+    || !isInteger(card.rank, 1, 13) || !isInteger(card.suit, 0, 3)
+    || typeof card.up !== 'boolean'
+    || card.rank !== card.id % 13 + 1 || card.suit !== Math.floor(card.id / 13))
+    || new Set(cards.map(card => card.id)).size !== cards.length || cards.length !== 52
+    || state.stock.some(card => card.up) || state.waste.some(card => !card.up)) return false;
+  const won = kind === 'golf' ? state.columns.every(column => column.length === 0)
+    : state.columns.flat().every(card => card.removed);
+  return state.won === won;
+}
+
 function validCards(kind, options, state) {
+  if (['pyramid', 'tripeaks', 'golf'].includes(kind)) {
+    return validOpenTableauCards(kind, options, state);
+  }
   if (!options || !state || state.kind !== kind) return false;
   const spider = kind === 'spider';
   const suits = options.suits;
@@ -128,7 +171,7 @@ export function inspectGameSession(kind, saved) {
     || !saved.options || !saved.state) return { status: 'invalid' };
 
   let valid = false, finished = false;
-  if (['klondike', 'spider', 'freecell'].includes(kind)) {
+  if (['klondike', 'spider', 'freecell', 'pyramid', 'tripeaks', 'golf'].includes(kind)) {
     valid = validCards(kind, saved.options, saved.state);
     finished = valid && saved.state.won;
   } else if (kind === 'minesweeper') {

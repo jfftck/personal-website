@@ -16,7 +16,9 @@ export function shuffle(cards, random = Math.random) {
 }
 
 export function createSolitaire(kind, options = {}, random = Math.random) {
-  if (!['klondike', 'spider', 'freecell'].includes(kind)) throw new Error('Unknown card rules');
+  if (!['klondike', 'spider', 'freecell', 'pyramid', 'tripeaks', 'golf'].includes(kind)) {
+    throw new Error('Unknown card rules');
+  }
   const suits = Number(options.suits) || 1;
   const deck = Array.from({ length: kind === 'spider' ? 104 : 52 }, (_, id) => ({
     id, rank: id % 13 + 1,
@@ -24,12 +26,49 @@ export function createSolitaire(kind, options = {}, random = Math.random) {
     up: kind === 'freecell',
   }));
   shuffle(deck, random);
+  const specialColumns = kind === 'pyramid' ? 7
+    : kind === 'tripeaks' ? 4 : kind === 'golf' ? 7 : null;
   const state = {
     kind, suits, drawCount: Number(options.drawCount) || 1,
-    columns: Array.from({ length: kind === 'spider' ? 10 : kind === 'freecell' ? 8 : 7 }, () => []),
+    columns: Array.from({ length: specialColumns
+      ?? (kind === 'spider' ? 10 : kind === 'freecell' ? 8 : 7) }, () => []),
     stock: [], waste: [], foundations: Array.from({ length: 4 }, () => []),
     cells: Array.from({ length: 4 }, () => []), completed: 0, moves: 0, won: false,
   };
+  if (kind === 'pyramid') {
+    state.columns.forEach((row, rowIndex) => {
+      for (let column = 0; column <= rowIndex; column++) {
+        row.push({ ...deck.pop(), up: true, removed: false });
+      }
+    });
+    state.stock = deck;
+    state.recyclesLeft = 1;
+    return state;
+  }
+  if (kind === 'tripeaks') {
+    [3, 6, 9, 10].forEach((count, rowIndex) => {
+      for (let column = 0; column < count; column++) {
+        state.columns[rowIndex].push({ ...deck.pop(), up: true, removed: false });
+      }
+    });
+    state.stock = deck;
+    const firstWaste = state.stock.pop();
+    firstWaste.up = true;
+    state.waste.push(firstWaste);
+    return state;
+  }
+  if (kind === 'golf') {
+    state.columns.forEach(column => {
+      for (let row = 0; row < 5; row++) {
+        column.push({ ...deck.pop(), up: true });
+      }
+    });
+    state.stock = deck;
+    const firstWaste = state.stock.pop();
+    firstWaste.up = true;
+    state.waste.push(firstWaste);
+    return state;
+  }
   if (kind === 'freecell') {
     deck.forEach((card, index) => state.columns[index % 8].push(card));
   } else {
@@ -55,6 +94,14 @@ export function isSequence(cards, kind) {
 }
 
 function finish(state) {
+  if (state.kind === 'pyramid' || state.kind === 'tripeaks') {
+    state.won = state.columns.flat().every(card => card.removed);
+    return;
+  }
+  if (state.kind === 'golf') {
+    state.won = state.columns.every(column => column.length === 0);
+    return;
+  }
   if (state.kind === 'spider') {
     for (const column of state.columns) {
       while (column.length >= 13) {
@@ -73,6 +120,23 @@ function finish(state) {
 
 export function moveCards(state, from, to) {
   if (state.won || (from.zone === to.zone && from.index === to.index)) return false;
+  if (state.kind === 'tripeaks' || state.kind === 'golf') {
+    if (from.zone !== 'columns' || to.zone !== 'waste') return false;
+    const column = state.columns[from.index];
+    const card = column?.[from.offset];
+    const top = state.waste.at(-1);
+    if (!card || !top || (state.kind === 'golf' && from.offset !== column.length - 1)
+      || (state.kind === 'tripeaks' && !isTriPeaksExposed(state, from.index, from.offset))
+      || !areAdjacentRanks(card.rank, top.rank, state.kind === 'tripeaks')) return false;
+    if (state.kind === 'tripeaks') column[from.offset] = { removed: true };
+    else column.splice(from.offset, 1);
+    delete card.removed;
+    state.waste.push(card);
+    state.moves++;
+    finish(state);
+    return true;
+  }
+  if (state.kind === 'pyramid') return false;
   const source = getPile(state, from);
   const target = getPile(state, to);
   if (!source || !target) return false;
@@ -105,8 +169,62 @@ export function moveCards(state, from, to) {
   return true;
 }
 
+function areAdjacentRanks(first, second, wrap = false) {
+  const difference = Math.abs(first - second);
+  return difference === 1 || (wrap && difference === 12);
+}
+
+export function isPyramidExposed(state, row, column) {
+  const card = state.columns?.[row]?.[column];
+  if (!card || card.removed) return false;
+  if (row === 6) return true;
+  return state.columns[row + 1][column]?.removed
+    && state.columns[row + 1][column + 1]?.removed;
+}
+
+export function isTriPeaksExposed(state, row, column) {
+  const card = state.columns?.[row]?.[column];
+  if (!card || card.removed) return false;
+  if (row === 3) return true;
+  let children;
+  if (row === 0) children = [column * 2, column * 2 + 1];
+  else if (row === 1) {
+    const peak = Math.floor(column / 2);
+    const first = peak * 3 + column % 2;
+    children = [first, first + 1];
+  } else children = [column, column + 1];
+  return children.every(index => state.columns[row + 1][index]?.removed);
+}
+
+export function removePyramidCards(state, first, second = null) {
+  if (state.kind !== 'pyramid' || state.won) return false;
+  const sources = second ? [first, second] : [first];
+  const cards = [];
+  for (const source of sources) {
+    if (source.zone === 'waste') {
+      if (source.offset !== state.waste.length - 1) return false;
+      cards.push(state.waste[source.offset]);
+    } else if (source.zone === 'columns') {
+      const card = state.columns[source.index]?.[source.offset];
+      if (!card || !isPyramidExposed(state, source.index, source.offset)) return false;
+      cards.push(card);
+    } else return false;
+  }
+  if (new Set(sources.map(source => `${source.zone}:${source.index}:${source.offset}`)).size !== sources.length) {
+    return false;
+  }
+  if (cards.length === 1 ? cards[0].rank !== 13 : cards[0].rank + cards[1].rank !== 13) return false;
+  for (const source of sources) {
+    if (source.zone === 'waste') state.waste.pop();
+    else state.columns[source.index][source.offset].removed = true;
+  }
+  state.moves++;
+  finish(state);
+  return true;
+}
+
 export function sendEligibleCardsHome(state) {
-  if (state.kind === 'spider' || state.won) return 0;
+  if (!['klondike', 'freecell'].includes(state.kind) || state.won) return 0;
   let moved = 0;
   while (true) {
     const sources = [
@@ -133,6 +251,28 @@ export function sendEligibleCardsHome(state) {
 
 export function drawCards(state) {
   if (state.won || state.kind === 'freecell') return false;
+  if (state.kind === 'pyramid') {
+    if (state.stock.length) {
+      const card = state.stock.pop();
+      card.up = true;
+      state.waste.push(card);
+    } else if (state.recyclesLeft > 0 && state.waste.length) {
+      state.stock = state.waste.reverse();
+      state.stock.forEach(card => { card.up = false; });
+      state.waste = [];
+      state.recyclesLeft--;
+    } else return false;
+    state.moves++;
+    return true;
+  }
+  if (state.kind === 'tripeaks' || state.kind === 'golf') {
+    if (!state.stock.length) return false;
+    const card = state.stock.pop();
+    card.up = true;
+    state.waste.push(card);
+    state.moves++;
+    return true;
+  }
   if (state.kind === 'spider') {
     if (!state.stock.length || state.columns.some(column => !column.length)) return false;
     state.columns.forEach(column => {

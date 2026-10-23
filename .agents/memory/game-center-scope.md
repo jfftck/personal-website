@@ -9,11 +9,11 @@ Keep the existing apps and document/picture entries in the app launcher's root m
 
 **How to apply:** Preserve existing root entries when changing the launcher. Place future games inside Game Center rather than adding separate game entries at the root.
 
-The initial card rules are Klondike, Spider, and FreeCell. Chess and Reversi must support both local two-player play and computer opponents, with no game server.
+The card rules include Klondike, Spider, FreeCell, Pyramid, TriPeaks, and Golf. Chess and Reversi must support both local two-player play and computer opponents, with no game server.
 
-**Why:** The user chose these games and both opponent modes, and the site is intended to remain statically published.
+**Why:** The user selected Pyramid, TriPeaks, and Golf as additions to the original card games, chose both opponent modes for Chess and Reversi, and the site is intended to remain statically published.
 
-**How to apply:** Keep gameplay and computer opponents browser-local when extending the games.
+**How to apply:** Keep gameplay and computer opponents browser-local when extending the games. New card rules belong inside Game Center and should share its card themes and Settings organization.
 
 Keep card/piece appearance separate from board/playfield appearance. Put configuration and appearance choices in Settings dialogs. Minesweeper's Flag mode is an immediate-play exception: use a switch on the left toolbar where other games have Undo.
 

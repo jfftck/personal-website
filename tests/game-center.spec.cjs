@@ -133,7 +133,7 @@ async function restoreGame(page, session, game = 'klondike') {
   return app;
 }
 
-test('root menu restores app and file entries; the six game tiles stay nested with back/Escape navigation', async ({ page }) => {
+test('root menu restores app and file entries; all nine game tiles stay nested with back/Escape navigation', async ({ page }) => {
   await page.locator('#app-menu-btn').click();
   await expect(page.locator('#app-list .app-launcher')).toHaveCount(6);
   await expect(page.locator('#app-list .app-launcher[data-type]')).toHaveCount(5);
@@ -147,9 +147,9 @@ test('root menu restores app and file entries; the six game tiles stay nested wi
   await expect(page.locator('#app-menu-title')).toHaveAttribute('aria-atomic', 'true');
   await expect(page.getByRole('button', { name: 'Back to root app menu' })).toBeVisible();
   await expect(page.locator('.game-menu-description')).toHaveCount(0);
-  await expect(page.locator('#game-list .app-launcher')).toHaveCount(6);
+  await expect(page.locator('#game-list .app-launcher')).toHaveCount(9);
   await expect(page.locator('#game-list .app-launcher small')).toHaveCount(0);
-  for (const game of ['Klondike', 'Spider', 'FreeCell', 'Minesweeper', 'Chess', 'Reversi']) {
+  for (const game of ['Klondike', 'Spider', 'FreeCell', 'Pyramid', 'TriPeaks', 'Golf', 'Minesweeper', 'Chess', 'Reversi']) {
     await expect(page.getByRole('button', { name: new RegExp(game) })).toBeVisible();
   }
   await expect(page.locator('#launcher-root [data-game]')).toHaveCount(0);
@@ -161,6 +161,46 @@ test('root menu restores app and file entries; the six game tiles stay nested wi
   await expect(page.locator('#launcher-root')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.locator('#app-menu')).toBeHidden();
+});
+
+test('Pyramid, TriPeaks, and Golf use shared card settings and their own playable layouts', async ({ page }) => {
+  for (const game of [
+    { type: 'pyramid', title: 'Pyramid', cardCount: 28, stock: 24, rule: 'pairs that total 13' },
+    { type: 'tripeaks', title: 'TriPeaks', cardCount: 28, stock: 23, rule: 'Ace and King connect' },
+    { type: 'golf', title: 'Golf', cardCount: 35, stock: 16, rule: 'Aces and Kings do not connect' },
+  ]) {
+    const app = await openGame(page, game.type);
+    const table = app.locator('.solitaire-table');
+    await expect(table).toHaveClass(new RegExp(game.type));
+    await expect(table).toHaveCSS('user-select', 'none');
+    if (game.type === 'golf') {
+      await expect(table.locator('.card-columns > .card-pile')).toHaveCount(7);
+      await expect(table.locator('.card-columns .playing-card')).toHaveCount(game.cardCount);
+    } else {
+      await expect(table.locator('.card-triangle-position:not(.removed)')).toHaveCount(game.cardCount);
+    }
+
+    const stock = app.locator('.card-stock button');
+    await expect(stock).toContainText(String(game.stock));
+    await stock.click();
+    await expect(stock).toContainText(String(game.stock - 1));
+    await expect(table.locator('.card-pile[aria-label="Waste"] .playing-card')).toHaveCount(1);
+
+    const instructions = app.getByRole('button', { name: 'Instructions', exact: true });
+    await instructions.click();
+    const panel = app.locator('.game-instructions');
+    await expect(panel.getByRole('heading', { name: `How to play ${game.title}` })).toBeVisible();
+    await expect(panel).toContainText(game.rule);
+    await panel.getByRole('button', { name: 'Close instructions' }).click();
+
+    const dialog = await openSettings(app);
+    await dialog.getByRole('radio', { name: 'Card theme: Glass', exact: true }).click();
+    await dialog.getByRole('radio', { name: 'Playfield theme: Midnight', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Close settings' }).click();
+    await expect(app).toHaveAttribute('data-card-theme', 'glass');
+    await expect(app).toHaveAttribute('data-card-table-theme', 'midnight');
+    await page.locator('#close-btn').click();
+  }
 });
 
 test('app launcher is anchored under its button with aligned search and an inset scrollbar', async ({ page }) => {
@@ -244,7 +284,7 @@ test('app launcher is anchored under its button with aligned search and an inset
 });
 
 test('Game Center game icons stay distinct and legible in both themes at desktop and phone sizes', async ({ page }) => {
-  const games = ['klondike', 'spider', 'freecell', 'minesweeper', 'chess', 'reversi'];
+  const games = ['klondike', 'spider', 'freecell', 'pyramid', 'tripeaks', 'golf', 'minesweeper', 'chess', 'reversi'];
   const contrastRatio = (foreground, background) => {
     const luminance = color => {
       const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map(value => value / 255);
@@ -284,7 +324,7 @@ test('Game Center game icons stay distinct and legible in both themes at desktop
         iconPaths.add(details.path);
         expect(contrastRatio(details.color, details.background)).toBeGreaterThanOrEqual(3);
       }
-      expect(iconPaths.size).toBe(6);
+      expect(iconPaths.size).toBe(9);
       await page.keyboard.press('Escape');
       await page.keyboard.press('Escape');
     }
@@ -530,7 +570,7 @@ test('reset all game themes restores defaults in every open game and saved prefe
 });
 
 test('game settings dialogs contain options, trap keyboard focus, and return focus on Escape', async ({ page }) => {
-  for (const game of ['klondike', 'spider', 'freecell', 'minesweeper', 'chess', 'reversi']) {
+  for (const game of ['klondike', 'spider', 'freecell', 'pyramid', 'tripeaks', 'golf', 'minesweeper', 'chess', 'reversi']) {
     const app = await openGame(page, game);
     await expect(app.locator('.game-toolbar select, .game-toolbar .game-theme-control')).toHaveCount(0);
     const dialog = await openSettings(app);
@@ -549,7 +589,7 @@ test('game settings dialogs contain options, trap keyboard focus, and return foc
 });
 
 test('all game toolbars place instructions and undo left, new game in the center, and settings right', async ({ page }) => {
-  for (const game of ['klondike', 'spider', 'freecell', 'minesweeper', 'chess', 'reversi']) {
+  for (const game of ['klondike', 'spider', 'freecell', 'pyramid', 'tripeaks', 'golf', 'minesweeper', 'chess', 'reversi']) {
     const app = await openGame(page, game);
     const toolbar = app.locator('.game-toolbar');
     const left = toolbar.locator('.game-toolbar-left');
@@ -1092,10 +1132,10 @@ test('all three solitaire games deal, select, draw, undo, configure, and restart
   }
 });
 
-test('all six games share a keyboard-operable instructions side panel', async ({ page }) => {
+test('all nine games share a keyboard-operable instructions side panel', async ({ page }) => {
   for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
-    for (const game of ['klondike', 'spider', 'freecell', 'minesweeper', 'chess', 'reversi']) {
+    for (const game of ['klondike', 'spider', 'freecell', 'pyramid', 'tripeaks', 'golf', 'minesweeper', 'chess', 'reversi']) {
       const app = await openGame(page, game);
       const toggle = app.getByRole('button', { name: 'Instructions', exact: true });
       await expect(toggle).toHaveAttribute('aria-expanded', 'false');
@@ -1104,8 +1144,10 @@ test('all six games share a keyboard-operable instructions side panel', async ({
       await expect(panel).toBeVisible();
       await expect(toggle.locator('.game-instructions-icon')).toBeVisible();
       await expect(toggle.locator('.game-instructions-icon')).toHaveAttribute('aria-hidden', 'true');
-      const tabIcon = page.locator(`.app-tab-btn[aria-label="${game === 'minesweeper'
-        ? 'Minesweeper' : game === 'freecell' ? 'FreeCell' : game[0].toUpperCase() + game.slice(1)}"] svg path`);
+      const gameTitle = game === 'minesweeper' ? 'Minesweeper'
+        : game === 'freecell' ? 'FreeCell' : game === 'tripeaks' ? 'TriPeaks'
+          : game[0].toUpperCase() + game.slice(1);
+      const tabIcon = page.locator(`.app-tab-btn[aria-label="${gameTitle}"] svg path`);
       await expect(toggle.locator('.game-instructions-icon svg path'))
         .toHaveAttribute('d', await tabIcon.getAttribute('d'));
       const appBox = await app.boundingBox();
@@ -1115,11 +1157,7 @@ test('all six games share a keyboard-operable instructions side panel', async ({
       expect(panelBox.y).toBeGreaterThanOrEqual(toggleBox.y + toggleBox.height - 1);
       expect(panelBox.x).toBeGreaterThanOrEqual(appBox.x);
       expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(appBox.x + appBox.width + 1);
-      await expect(panel.getByRole('heading', { level: 2 })).toHaveText(`How to play ${
-        game === 'minesweeper' ? 'Minesweeper'
-          : game === 'freecell' ? 'FreeCell'
-            : game[0].toUpperCase() + game.slice(1)
-      }`);
+      await expect(panel.getByRole('heading', { level: 2 })).toHaveText(`How to play ${gameTitle}`);
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
       await expect(panel.getByRole('button', { name: 'Close instructions' })).toBeFocused();
       await page.keyboard.press('Escape');
@@ -1137,6 +1175,7 @@ test('game windows use distinct game icons and do not duplicate Game Center navi
   const iconPaths = new Set();
   for (const [game, title] of [
     ['klondike', 'Klondike'], ['spider', 'Spider'], ['freecell', 'FreeCell'],
+    ['pyramid', 'Pyramid'], ['tripeaks', 'TriPeaks'], ['golf', 'Golf'],
     ['minesweeper', 'Minesweeper'], ['chess', 'Chess'], ['reversi', 'Reversi'],
   ]) {
     const app = await openGame(page, game);
@@ -1157,7 +1196,7 @@ test('game windows use distinct game icons and do not duplicate Game Center navi
     await page.locator('#app-menu-btn').click();
     await page.locator('#close-btn').click();
   }
-  expect(iconPaths.size).toBe(6);
+  expect(iconPaths.size).toBe(9);
 });
 
 test('double-click keeps Klondike auto-home and moves FreeCell cards by their source', async ({ page }) => {

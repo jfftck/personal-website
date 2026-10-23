@@ -35,6 +35,19 @@ function getWinningCards(kind, state, table) {
     })).filter(item => item.anchor);
   }
 
+  if (kind === 'pyramid') {
+    return state.columns.flatMap(row => row.map(card => ({
+      card,
+      anchor: table.querySelector(`[data-game-card-id="${CSS.escape(String(card.id))}"]`),
+      stackOffset: card.id % 7,
+    }))).filter(item => item.anchor);
+  }
+
+  if (kind === 'tripeaks' || kind === 'golf') {
+    const anchor = table.querySelector('.card-pile[data-zone="waste"]');
+    return state.waste.map((card, stackOffset) => ({ card, anchor, stackOffset })).filter(item => item.anchor);
+  }
+
   return state.foundations.flatMap((pile, suit) => {
     const anchor = table.querySelector(
       `.card-pile[data-zone="foundations"][data-pile-index="${suit}"]`,

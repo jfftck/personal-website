@@ -1191,6 +1191,32 @@
   min-height: 6rem;
 }
 
+.card-triangle-layout {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  width: max-content;
+  min-width: 100%;
+  padding-bottom: 1.5rem;
+}
+.card-triangle-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--layout-columns), minmax(2.5rem, var(--card-width)));
+  gap: .45rem;
+  width: max-content;
+}
+.card-triangle-row + .card-triangle-row {
+  margin-top: calc(0px - var(--card-width) / 1.4);
+}
+.card-triangle-position {
+  width: var(--card-width);
+  aspect-ratio: .70;
+}
+.card-triangle-position.removed { visibility: hidden; }
+.card-triangle-position .playing-card { width: 100%; }
+
 .playing-card {
   position: relative;
   display: block;

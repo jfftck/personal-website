@@ -16,6 +16,18 @@ export const GAMES = [
     iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2zm0 3.2L6.6 12 12 18.8 17.4 12 12 5.2zm-7 6.8h14v1.6H5V12z"/></svg>',
   },
   {
+    type: 'pyramid', title: 'Pyramid', symbol: '△',
+    iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3 2 21h20L12 3zm0 4.2 6.5 11.3h-13L12 7.2zM11 10h2v5h-2zm0 6h2v2h-2z"/></svg>',
+  },
+  {
+    type: 'tripeaks', title: 'TriPeaks', symbol: '♠',
+    iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m4 18 4-8 3 5 4-9 5 12H4zm-2 2h20v2H2z"/></svg>',
+  },
+  {
+    type: 'golf', title: 'Golf', symbol: '⚑',
+    iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 22h2V4h2v9c4-3 7 2 11-1V4c-4 3-7-2-11 1V2H5v20zm3-2c-1.7 0-3 .5-4 1.2V23c1-.7 2.3-1 4-1 2.6 0 4.3 1 6.5 1 1.7 0 3-.3 4.5-1v-1.8c-1.5.7-2.8 1-4.5 1-2.2 0-3.9-1.2-6.5-1.2z"/></svg>',
+  },
+  {
     type: 'minesweeper', title: 'Minesweeper', symbol: '⚑',
     iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 21h2V4h2V2H5v19zm5-17v9c3-2 6 2 9 0V4c-3 2-6-2-9 0zm2 2c2-.4 3.5.9 5 1v3c-1.5-.1-3-1.4-5-1V6z"/></svg>',
   },
@@ -32,7 +44,7 @@ export const GAMES = [
 export function buildGame(type, id, ctx, initialState = null) {
   const game = GAMES.find(item => item.type === type);
   const { title, iconSvg } = game;
-  if (['klondike', 'spider', 'freecell'].includes(type)) {
+  if (['klondike', 'spider', 'freecell', 'pyramid', 'tripeaks', 'golf'].includes(type)) {
     return buildSolitaire(type, id, title, ctx, initialState, iconSvg);
   }
   if (type === 'minesweeper') return buildMinesweeper(id, ctx, initialState, iconSvg);

@@ -19,7 +19,7 @@ function blank(kind) {
 }
 
 test('saved game snapshots validate rules, board/deal state, and reject corrupt or older formats', () => {
-  for (const kind of ['klondike', 'spider', 'freecell']) {
+  for (const kind of ['klondike', 'spider', 'freecell', 'pyramid', 'tripeaks', 'golf']) {
     const options = { suits: kind === 'spider' ? 4 : 1, drawCount: kind === 'klondike' ? 3 : 1 };
     const state = cards.createSolitaire(kind, options, () => 0.25);
     const saved = gameState.createGameSession(kind, options, state);
@@ -80,6 +80,88 @@ test('all solitaire deals conserve cards, unique IDs, and the correct exposed la
     assert.equal(s.stock.length, stock);
     assert.equal(s.columns.flat().filter(c => c.up).length, kind === 'freecell' ? 52 : sizes.length);
   }
+  for (const [kind, sizes, stock, waste] of [
+    ['pyramid', [1, 2, 3, 4, 5, 6, 7], 24, 0],
+    ['tripeaks', [3, 6, 9, 10], 23, 1],
+    ['golf', [5, 5, 5, 5, 5, 5, 5], 16, 1],
+  ]) {
+    const s = cards.createSolitaire(kind, {}, () => 0.25);
+    const deck = [...s.columns.flat().filter(card => !(kind === 'tripeaks' && card.removed)), ...s.stock, ...s.waste];
+    assert.equal(deck.length, 52);
+    assert.equal(new Set(deck.map(card => card.id)).size, 52);
+    assert.deepEqual(s.columns.map(pile => pile.length), sizes);
+    assert.equal(s.stock.length, stock);
+    assert.equal(s.waste.length, waste);
+    assert.equal(s.columns.flat().filter(card => card.up && !card.removed).length, kind === 'golf' ? 35 : 28);
+  }
+});
+
+test('Pyramid removes exposed Kings and pairs totaling thirteen, and recycles the stock once', () => {
+  const s = blank('pyramid');
+  s.columns[5] = [card(4)];
+  s.columns[6] = Array.from({ length: 7 }, (_, index) => ({
+    ...card(index + 1), removed: false,
+  }));
+  assert.equal(cards.isPyramidExposed(s, 5, 0), false);
+  s.columns[6][0].removed = true;
+  s.columns[6][1].removed = true;
+  assert.equal(cards.isPyramidExposed(s, 5, 0), true);
+
+  s.columns[5] = [];
+  s.columns[6] = [card(5), card(8)];
+  assert.equal(cards.removePyramidCards(s, from('columns', 6, 0), from('columns', 6, 1)), true);
+  assert.deepEqual(s.columns[6].map(item => item.removed), [true, true]);
+  assert.equal(s.moves, 1);
+
+  const king = blank('pyramid');
+  king.columns[6] = [{ ...card(13), removed: false }];
+  assert.equal(cards.removePyramidCards(king, from('columns', 6, 0)), true);
+  assert.equal(king.won, true);
+
+  const stock = blank('pyramid');
+  stock.stock = [card(2, 0, false), card(3, 0, false)];
+  stock.waste = [card(4)];
+  assert.equal(cards.drawCards(stock), true);
+  assert.equal(stock.waste.at(-1).rank, 3);
+  assert.equal(cards.drawCards(stock), true);
+  assert.equal(cards.drawCards(stock), true);
+  assert.equal(stock.recyclesLeft, 0);
+  assert.equal(stock.stock.length, 3);
+  assert.equal(cards.drawCards(stock), true);
+  assert.equal(stock.waste.at(-1).rank, 4);
+  assert.equal(cards.drawCards(stock), true);
+  assert.equal(stock.waste.at(-1).rank, 3);
+  assert.equal(cards.drawCards(stock), true);
+  assert.equal(stock.waste.at(-1).rank, 2);
+  assert.equal(cards.drawCards(stock), false);
+});
+
+test('TriPeaks exposes cards only after their covers are cleared and allows Ace-King wraparound', () => {
+  const s = blank('tripeaks');
+  s.columns[0] = [card(13)];
+  s.columns[1] = [{ removed: false }, { removed: false }];
+  s.waste = [card(1)];
+  assert.equal(cards.isTriPeaksExposed(s, 0, 0), false);
+  s.columns[1] = [{ removed: true }, { removed: true }];
+  assert.equal(cards.isTriPeaksExposed(s, 0, 0), true);
+  assert.equal(cards.moveCards(s, from('columns', 0, 0), to('waste')), true);
+  assert.deepEqual(s.columns[0][0], { removed: true });
+  assert.equal(s.waste.at(-1).rank, 13);
+  assert.equal(s.won, true);
+});
+
+test('Golf only removes the top card of a column when it is one rank from the waste card', () => {
+  const s = blank('golf');
+  s.columns[0] = [card(1), card(13)];
+  s.waste = [card(12)];
+  assert.equal(cards.moveCards(s, from('columns', 0, 0), to('waste')), false);
+  assert.equal(cards.moveCards(s, from('columns', 0, 1), to('waste')), true);
+  assert.equal(s.columns[0].length, 1);
+  assert.equal(s.waste.at(-1).rank, 13);
+
+  s.columns[1] = [card(1)];
+  s.waste = [card(13)];
+  assert.equal(cards.moveCards(s, from('columns', 1, 0), to('waste')), false);
 });
 
 test('Klondike enforces alternating colors, descending runs, King-only spaces, and flips exposed cards', () => {

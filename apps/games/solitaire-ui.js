@@ -1,5 +1,6 @@
 import {
   createSolitaire, getPile, moveCards, drawCards, isSequence, sendEligibleCardsHome,
+  removePyramidCards, isPyramidExposed, isTriPeaksExposed,
   chooseWinCelebration, SUITS, rankLabel, isRed,
 } from './cards.js';
 import { createWinCelebration } from './celebrations.js';
@@ -14,6 +15,9 @@ const rules = {
   klondike: 'Build the four foundations from Ace to King by suit. Tableau piles descend in alternating colors; only Kings fill empty columns. Click an exposed card or sequence, then a destination. Use Send home to move an eligible card to a foundation. Click the stock to draw or recycle. Choose draw one or draw three for a new deal.',
   spider: 'Build King-to-Ace runs of one suit to remove them. You may place a card on the next higher rank of any suit, but only same-suit descending runs move together. Any run can fill an empty column. Stock deals one card to each column; every column must contain a card first. Remove all eight runs to win.',
   freecell: 'Build foundations from Ace to King by suit. Tableau piles descend in alternating colors; any card may fill an empty column. The four free cells each hold one card. Sequence moves are limited by available free cells and empty columns. Click a card or sequence, then a destination. Use Send home to move an eligible card to a foundation.',
+  pyramid: 'Remove exposed cards in pairs that total 13; Kings are removed by themselves. A card is exposed when no cards cover it. Draw from the stock when no pair is available; you may recycle the waste once. Clear all 28 pyramid cards to win.',
+  tripeaks: 'Remove an exposed peak card when it is one rank above or below the waste card. Ace and King connect. Draw from the stock when no move is available. Clear all 28 peak cards to win.',
+  golf: 'Remove the top card of any column when it is exactly one rank above or below the waste card. Aces and Kings do not connect. Draw from the stock when no move is available. Clear all 35 tableau cards to win.',
 };
 
 export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSvg) {
@@ -59,7 +63,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
   }
   toolbarCenter.append(button('New deal', restart));
   toolbarLeft.append(undo);
-  if (kind !== 'spider') toolbarLeft.append(button('Send home', () => {
+  if (kind === 'klondike' || kind === 'freecell') toolbarLeft.append(button('Send home', () => {
     const alreadyHome = new Set(state.foundations.flat().map(card => card.id));
     const moved = action(() => sendEligibleCardsHome(state));
     if (!moved) status.textContent = 'No card can move home yet. An Ace starts a home pile; the next card must match its suit.';
@@ -155,6 +159,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     );
   }
   function autoMove(source) {
+    if (!['klondike', 'freecell'].includes(kind)) return;
     const card = getPile(state, source)?.[source.offset];
     if (kind === 'freecell') {
       const sourcePile = getPile(state, source);
@@ -214,8 +219,81 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     }, card ? [card.id] : []);
     if (!moved) status.textContent = 'This card cannot move home yet. It must be an Ace or the next rank in its suit.';
   }
+  function canSelectCard(zone, index, offset) {
+    const card = getPile(state, { zone, index })?.[offset];
+    if (!card?.up) return false;
+    if (kind === 'pyramid') {
+      return zone === 'waste'
+        ? offset === state.waste.length - 1
+        : zone === 'columns' && isPyramidExposed(state, index, offset);
+    }
+    if (kind === 'tripeaks') return zone === 'columns' && isTriPeaksExposed(state, index, offset);
+    if (kind === 'golf') {
+      const pile = getPile(state, { zone, index });
+      return zone === 'columns' && offset === pile.length - 1;
+    }
+    return true;
+  }
+  function clickPyramidCard(source) {
+    const card = getPile(state, source)?.[source.offset];
+    if (!card || !canSelectCard(source.zone, source.index, source.offset)) {
+      status.textContent = 'That card is still covered.';
+      return;
+    }
+    if (card.rank === 13) {
+      if (action(() => removePyramidCards(state, source), [card.id])) {
+        status.textContent = 'Removed a King.';
+      }
+      return;
+    }
+    if (!selected) {
+      selected = { ...source };
+      render();
+      status.textContent = 'Card selected. Choose another exposed card that makes 13.';
+      return;
+    }
+    const first = { ...selected };
+    if (first.zone === source.zone && first.index === source.index && first.offset === source.offset) {
+      selected = null;
+      render();
+      return;
+    }
+    const firstCard = getPile(state, first)?.[first.offset];
+    if (action(() => removePyramidCards(state, first, source), [firstCard?.id, card.id])) {
+      status.textContent = `Removed ${rankLabel(firstCard.rank)} and ${rankLabel(card.rank)}.`;
+    } else {
+      selected = { ...source };
+      render();
+      status.textContent = 'Those cards do not make 13. Choose another exposed card.';
+    }
+  }
+  function clickOpenTableauCard(source) {
+    const card = getPile(state, source)?.[source.offset];
+    if (!card || !canSelectCard(source.zone, source.index, source.offset)) {
+      status.textContent = kind === 'golf'
+        ? 'Only the top card of each column can be played.'
+        : 'That card is still covered by the cards below it.';
+      return;
+    }
+    const wasteCard = state.waste.at(-1);
+    const wrap = kind === 'tripeaks' && Math.abs(card.rank - wasteCard.rank) === 12;
+    if (kind === 'tripeaks'
+      ? !wrap && Math.abs(card.rank - wasteCard.rank) !== 1
+      : Math.abs(card.rank - wasteCard.rank) !== 1) {
+      status.textContent = `${rankLabel(card.rank)} is not one rank above or below the waste card.`;
+      return;
+    }
+    if (action(() => moveCards(state, source, { zone: 'waste', index: 0 }), [card.id])) {
+      status.textContent = `Moved ${rankLabel(card.rank)} to the waste pile.`;
+    }
+  }
   function clickPile(zone, index, offset) {
     if (suppressClick) return;
+    if (['pyramid', 'tripeaks', 'golf'].includes(kind)) {
+      if (kind === 'pyramid') clickPyramidCard({ zone, index, offset });
+      else clickOpenTableauCard({ zone, index, offset });
+      return;
+    }
     const pile = getPile(state, { zone, index });
     if (selected) {
       const from = { ...selected };
@@ -330,7 +408,8 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     clearTimeout(suppressClickTimer);
   }, true);
   area.addEventListener('pointerdown', event => {
-    if (![0, 2].includes(event.button) || event.target.closest('button')?.disabled || pointerDrag) return;
+    if (!['klondike', 'spider', 'freecell'].includes(kind)
+      || ![0, 2].includes(event.button) || event.target.closest('button')?.disabled || pointerDrag) return;
     const card = event.target.closest('.playing-card');
     if (!card) return;
     const inStack = !!card.closest('.card-columns');
@@ -443,6 +522,31 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     clearPointerGesture();
   }, { signal: dragAbort.signal });
   window.addEventListener('blur', clearPointerGesture, { signal: dragAbort.signal });
+  function cardButton(card, zone, index, offset, label) {
+    const face = `${rankLabel(card.rank)}${SUITS[card.suit]}`;
+    const btn = button(card.up ? face : '', () => clickPile(zone, index, offset), 'playing-card');
+    if (card.up) paintCardFace(btn, card);
+    btn.classList.toggle('face-down', !card.up);
+    btn.classList.toggle('red', isRed(card));
+    btn.classList.toggle('selected', selected?.zone === zone && selected.index === index && selected.offset === offset);
+    btn.disabled = !card.up || !canSelectCard(zone, index, offset);
+    btn.dataset.key = `card-${card.id}`;
+    btn.dataset.cardId = card.id;
+    btn.dataset.gameCardId = card.id;
+    btn.dataset.offset = offset;
+    btn.dataset.zone = zone;
+    btn.dataset.pileIndex = index;
+    btn.setAttribute('aria-label', card.up ? `${face}, ${label}, card ${offset + 1}` : `Face down, ${label}`);
+    btn.setAttribute('aria-pressed', String(selected?.zone === zone && selected.index === index && selected.offset === offset));
+    if (['klondike', 'freecell'].includes(kind)) {
+      btn.addEventListener('dblclick', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        autoMove({ zone, index, offset });
+      });
+    }
+    return btn;
+  }
   function pileView(zone, index, label, all = false) {
     const pile = getPile(state, { zone, index });
     const div = document.createElement('div');
@@ -466,29 +570,43 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     } else {
       pile.forEach((card, offset) => {
         if (!all && offset !== pile.length - 1) return;
-        const face = `${rankLabel(card.rank)}${SUITS[card.suit]}`;
-        const btn = button(card.up ? face : '', () => clickPile(zone, index, offset), 'playing-card');
-        if (card.up) paintCardFace(btn, card);
-        btn.classList.toggle('face-down', !card.up);
-        btn.classList.toggle('red', isRed(card));
-        btn.classList.toggle('selected', selected?.zone === zone && selected.index === index && selected.offset === offset);
-        btn.disabled = !card.up;
-        btn.dataset.key = `card-${card.id}`;
-        btn.dataset.cardId = card.id;
-        btn.dataset.offset = offset;
-        btn.dataset.zone = zone;
-        btn.dataset.pileIndex = index;
-        btn.setAttribute('aria-label', card.up ? `${face}, ${label}, card ${offset + 1}` : `Face down, ${label}`);
-        btn.setAttribute('aria-pressed', String(selected?.zone === zone && selected.index === index && selected.offset === offset));
-        btn.addEventListener('dblclick', event => {
-          event.preventDefault();
-          event.stopPropagation();
-          autoMove({ zone, index, offset });
-        });
-        div.append(btn);
+        div.append(cardButton(card, zone, index, offset, label));
       });
     }
     return div;
+  }
+  function triangleBoard() {
+    const isPyramid = kind === 'pyramid';
+    const gridColumns = isPyramid ? 7 : 10;
+    const peakPositions = [[2, 5, 8], [1, 2, 4, 5, 7, 8],
+      Array.from({ length: 9 }, (_, index) => index + 1),
+      Array.from({ length: 10 }, (_, index) => index + 1)];
+    const board = document.createElement('div');
+    board.className = `card-triangle-layout ${isPyramid ? 'pyramid-layout' : 'tripeaks-layout'}`;
+    board.style.setProperty('--layout-columns', gridColumns);
+    state.columns.forEach((cards, rowIndex) => {
+      const row = document.createElement('div');
+      row.className = 'card-triangle-row';
+      row.setAttribute('role', 'group');
+      row.setAttribute('aria-label', `${isPyramid ? 'Pyramid' : 'Peaks'} row ${rowIndex + 1}`);
+      cards.forEach((card, offset) => {
+        const slot = document.createElement('div');
+        slot.className = 'card-triangle-position';
+        slot.dataset.gameCardId = card.id;
+        slot.style.gridColumn = isPyramid
+          ? `${Math.floor((gridColumns - cards.length) / 2) + offset + 1}`
+          : `${peakPositions[rowIndex][offset]}`;
+        if (card.removed) {
+          slot.classList.add('removed');
+          slot.setAttribute('aria-hidden', 'true');
+        } else {
+          slot.append(cardButton(card, 'columns', rowIndex, offset, `Row ${rowIndex + 1}`));
+        }
+        row.append(slot);
+      });
+      board.append(row);
+    });
+    return board;
   }
   function resolveDropTarget(clientX, clientY) {
     const direct = document.elementFromPoint(clientX, clientY)?.closest('[data-drop-zone]');
@@ -522,11 +640,18 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     }
     undo.disabled = !history.length;
     status.textContent = state.won ? 'You won! Start a new deal to play again.'
-      : `${state.moves} moves · ${kind === 'spider' ? `${state.completed} / 8 runs completed` : `${state.foundations.reduce((n, p) => n + p.length, 0)} / 52 cards home`}`;
+      : kind === 'spider' ? `${state.moves} moves · ${state.completed} / 8 runs completed`
+        : ['pyramid', 'tripeaks', 'golf'].includes(kind)
+          ? `${state.moves} moves · ${kind === 'pyramid'
+            ? state.columns.flat().filter(card => !card.removed).length
+            : kind === 'tripeaks'
+              ? state.columns.flat().filter(card => !card.removed).length
+              : state.columns.reduce((total, pile) => total + pile.length, 0)} cards left · ${state.stock.length} stock${kind === 'pyramid' ? ` · ${state.recyclesLeft} recycle${state.recyclesLeft === 1 ? '' : 's'} left` : ''}`
+          : `${state.moves} moves · ${state.foundations.reduce((n, p) => n + p.length, 0)} / 52 cards home`;
     preserveFocus(area, () => {
       const table = document.createElement('div');
       table.className = `solitaire-table ${kind}`;
-      table.style.setProperty('--pile-count', state.columns.length);
+      table.style.setProperty('--pile-count', kind === 'tripeaks' ? 10 : state.columns.length);
       const top = document.createElement('div'); top.className = 'card-top-row';
       const fieldGroup = (label, className) => {
         const group = document.createElement('div');
@@ -551,39 +676,57 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       } else {
         const stock = document.createElement('div');
         stock.className = 'card-pile card-stock';
-        const draw = button(state.stock.length ? `${state.stock.length}` : '↻', () => {
+        const canRecycle = kind === 'klondike'
+          ? state.waste.length > 0
+          : kind === 'pyramid' && state.recyclesLeft > 0 && state.waste.length > 0;
+        const draw = button(state.stock.length ? `${state.stock.length}` : canRecycle ? '↻' : '—', () => {
           if (!action(() => drawCards(state))) status.textContent = kind === 'spider'
             ? 'Fill every empty column before dealing, or no stock remains.' : 'No cards left in stock.';
         });
-        draw.setAttribute('aria-label', `Stock: ${state.stock.length} cards. ${state.stock.length ? 'Deal cards' : 'Recycle waste'}`);
+        draw.disabled = !state.stock.length && !canRecycle;
+        draw.setAttribute('aria-label', `Stock: ${state.stock.length} cards. ${state.stock.length
+          ? kind === 'spider' ? 'Deal one card to each pile' : 'Draw one card'
+          : canRecycle ? 'Recycle waste' : 'No cards remain'}`);
         draw.dataset.key = 'stock';
         stock.append(draw); top.append(stock);
-        if (kind === 'klondike') top.append(pileView('waste', 0, 'Waste'));
-      }
-      const home = fieldGroup('Home', 'home-group');
-      if (kind !== 'spider') {
-        for (let i = 0; i < 4; i++) {
-          home.pileContainer.append(pileView('foundations', i, `Home ${i + 1}`));
+        if (['klondike', 'pyramid', 'tripeaks', 'golf'].includes(kind)) {
+          top.append(pileView('waste', 0, 'Waste'));
         }
+      }
+      if (['klondike', 'spider', 'freecell'].includes(kind)) {
+        const home = fieldGroup('Home', 'home-group');
+        if (kind !== 'spider') {
+          for (let i = 0; i < 4; i++) {
+            home.pileContainer.append(pileView('foundations', i, `Home ${i + 1}`));
+          }
+        } else {
+          const completedHomes = document.createElement('div');
+          completedHomes.className = 'spider-home-spaces';
+          completedHomes.setAttribute('role', 'group');
+          completedHomes.setAttribute('aria-label', `${state.completed} of 8 completed runs`);
+          for (let i = 0; i < 8; i++) {
+            const space = document.createElement('span');
+            const completed = i < state.completed;
+            space.className = `spider-home-space${completed ? ' completed' : ''}`;
+            space.setAttribute('aria-label', completed ? `Completed home run ${i + 1}` : `Empty home space ${i + 1}`);
+            space.textContent = completed ? '✓' : '';
+            completedHomes.append(space);
+          }
+          home.pileContainer.append(completedHomes);
+        }
+        top.append(home);
+      }
+      let columns;
+      if (kind === 'pyramid' || kind === 'tripeaks') {
+        columns = triangleBoard();
       } else {
-        const completedHomes = document.createElement('div');
-        completedHomes.className = 'spider-home-spaces';
-        completedHomes.setAttribute('role', 'group');
-        completedHomes.setAttribute('aria-label', `${state.completed} of 8 completed runs`);
-        for (let i = 0; i < 8; i++) {
-          const space = document.createElement('span');
-          const completed = i < state.completed;
-          space.className = `spider-home-space${completed ? ' completed' : ''}`;
-          space.setAttribute('aria-label', completed ? `Completed home run ${i + 1}` : `Empty home space ${i + 1}`);
-          space.textContent = completed ? '✓' : '';
-          completedHomes.append(space);
+        columns = document.createElement('div');
+        columns.className = 'card-columns';
+        columns.style.setProperty('--columns', state.columns.length);
+        for (let i = 0; i < state.columns.length; i++) {
+          columns.append(pileView('columns', i, `Pile ${i + 1}`, true));
         }
-        home.pileContainer.append(completedHomes);
       }
-      top.append(home);
-      const columns = document.createElement('div'); columns.className = 'card-columns';
-      columns.style.setProperty('--columns', state.columns.length);
-      for (let i = 0; i < state.columns.length; i++) columns.append(pileView('columns', i, `Pile ${i + 1}`, true));
       const tableau = document.createElement('div');
       tableau.className = 'card-tableau-scroll';
       tableau.append(columns);
