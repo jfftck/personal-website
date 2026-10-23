@@ -1893,6 +1893,39 @@ test('Reversi flips discs, makes a computer move, undoes and supports local play
   await expect(page.locator('#launcher-root')).toBeVisible();
 });
 
+test('Glass Reversi pieces preserve their 3D flip and finish on the new side', async ({ page }) => {
+  const app = await openGame(page, 'reversi');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  let dialog = await openSettings(app);
+  await dialog.getByRole('radio', { name: 'Piece theme: Glass', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Close settings' }).click();
+  await setGameOption(app, 'Opponent', 'local');
+  await app.locator('[data-square="d6"]').click();
+  const disc = app.locator('[data-square="d5"] .disc');
+  await expect(disc).toHaveClass(/disc-flipping/);
+  const layers = await disc.evaluate(element => ({
+    transformStyle: getComputedStyle(element).transformStyle,
+    backdropFilter: getComputedStyle(element).backdropFilter,
+    fillMode: getComputedStyle(element).animationFillMode,
+    animationName: getComputedStyle(element).animationName,
+    beforeBackface: getComputedStyle(element, '::before').backfaceVisibility,
+    afterBackface: getComputedStyle(element, '::after').backfaceVisibility,
+    faceBlur: getComputedStyle(element, '::after').backdropFilter,
+  }));
+  expect(layers).toEqual({
+    transformStyle: 'preserve-3d', backdropFilter: 'none', fillMode: 'both',
+    animationName: 'reversi-disc-flip', beforeBackface: 'hidden',
+    afterBackface: 'hidden', faceBlur: 'blur(5px) saturate(1.2)',
+  });
+  await expect.poll(() => disc.evaluate(element =>
+    element.getAnimations().some(animation => animation.playState === 'finished'))).toBe(true);
+  expect(await disc.evaluate(element => new DOMMatrix(getComputedStyle(element).transform).m11))
+    .toBeLessThan(-0.99);
+  await expect(disc).toHaveClass(/white/);
+  expect(await disc.evaluate(element => getComputedStyle(element, '::after').backgroundImage))
+    .toContain('radial-gradient');
+});
+
 test('game windows restore and closing a thinking computer does not leave errors', async ({ page }) => {
   const app = await openGame(page, 'chess');
   await app.locator('[data-square="e2"]').click();
