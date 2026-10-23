@@ -665,8 +665,11 @@ test('Minesweeper Glass number and flag colors remain readable in light and dark
   await app.getByRole('button', { name: 'Close settings' }).click();
   await app.locator('.mine-cell').nth(10).press('f');
   const contrast = await app.evaluate(element => {
+    const root = element.querySelector('.mine-board').closest('.game-app');
     const luminance = color => {
-      const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map(value => value / 255);
+      const channels = color.startsWith('#')
+        ? color.slice(1).match(/../g).map(value => parseInt(value, 16) / 255)
+        : color.match(/[\d.]+/g).slice(0, 3).map(Number).map(value => value / 255);
       const linear = channels.map(value => value <= 0.04045
         ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
       return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
@@ -685,17 +688,18 @@ test('Minesweeper Glass number and flag colors remain readable in light and dark
       for (let number = 1; number <= 8; number++) {
         const cell = element.querySelector(`.mine-cell[data-number="${number}"]`);
         const style = getComputedStyle(cell);
-        const stops = colors(getComputedStyle(element).getPropertyValue('--mine-cell-open'));
+        const stops = colors(getComputedStyle(root).getPropertyValue('--mine-cell-open'));
         results[`${theme}-${number}`] = Math.min(...stops.map(stop => contrastRatio(style.color, stop)));
       }
       const flag = element.querySelector('.mine-cell.flagged');
       const flagColor = getComputedStyle(flag, '::after').borderTopColor;
-      const stops = colors(getComputedStyle(element).getPropertyValue('--mine-cell-open'));
+      const stops = colors(getComputedStyle(root).getPropertyValue('--mine-cell-face'));
       results[`${theme}-flag`] = Math.min(...stops.map(stop => contrastRatio(flagColor, stop)));
     }
     return results;
   });
   for (const value of Object.values(contrast)) {
+    expect(Number.isFinite(value), JSON.stringify(contrast)).toBe(true);
     expect(value, JSON.stringify(contrast)).toBeGreaterThanOrEqual(4.5);
   }
 });
@@ -703,7 +707,6 @@ test('Minesweeper Glass number and flag colors remain readable in light and dark
 test('Minesweeper revealed cells are darker across themes, with a centered Glass gradient and adaptive border', async ({ page }) => {
   const app = await restoreGame(page, savedMinesweeper({ finalSafeCell: 10 }), 'minesweeper');
   const settings = await openSettings(app);
-  const picker = app.getByRole('radiogroup', { name: 'Theme' });
   const choices = [
     ['Classic grey', 'classic'],
     ['Ocean', 'ocean'],
@@ -711,26 +714,30 @@ test('Minesweeper revealed cells are darker across themes, with a centered Glass
     ['Glass', 'glass'],
     ['Color-blind friendly', 'colorblind'],
   ];
-  const result = await app.evaluate(async (element, themeChoices) => {
+  const result = await app.evaluate((element, themeChoices) => {
+    const root = element.querySelector('.mine-board').closest('.game-app');
     const getStops = value => [...value.matchAll(/rgba?\([^)]*\)|#[\da-f]{6}/gi)].map(match => match[0]);
     const luminance = color => {
-      const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map(value => value / 255);
+      const channels = color.startsWith('#')
+        ? color.slice(1).match(/../g).map(value => parseInt(value, 16) / 255)
+        : color.match(/[\d.]+/g).slice(0, 3).map(Number).map(value => value / 255);
       const linear = channels.map(value => value <= 0.04045
         ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
       return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
     };
     const ratio = (first, second) => (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
     const values = {};
-    for (const [label, theme] of themeChoices) {
-      element.dataset.minesweeperTheme = theme;
+    for (const [, theme] of themeChoices) {
+      root.dataset.minesweeperTheme = theme;
       for (const appearance of ['light', 'dark']) {
         document.documentElement.dataset.theme = appearance;
-        const appStyle = getComputedStyle(element);
+        const appStyle = getComputedStyle(root);
         const faceStops = getStops(appStyle.getPropertyValue('--mine-cell-face')).map(luminance);
         const openStops = getStops(appStyle.getPropertyValue('--mine-cell-open')).map(luminance);
         const faceMean = faceStops.reduce((sum, value) => sum + value, 0) / faceStops.length;
         const openMean = openStops.reduce((sum, value) => sum + value, 0) / openStops.length;
         values[`${theme}-${appearance}-surface`] = ratio(faceMean, openMean);
+        values[`${theme}-${appearance}-darker`] = openMean < faceMean;
 
         const cells = [...element.querySelectorAll('.mine-cell.revealed')].slice(0, 8);
         cells.forEach((cell, index) => { cell.dataset.number = String(index + 1); });
@@ -755,9 +762,11 @@ test('Minesweeper revealed cells are darker across themes, with a centered Glass
     return values;
   }, choices);
 
-  for (const [theme] of choices) {
+  for (const [, theme] of choices) {
     expect(result[`${theme}-light-surface`], theme).toBeGreaterThanOrEqual(2.5);
     expect(result[`${theme}-dark-surface`], theme).toBeGreaterThanOrEqual(2.5);
+    expect(result[`${theme}-light-darker`], theme).toBe(true);
+    expect(result[`${theme}-dark-darker`], theme).toBe(true);
     expect(result[`${theme}-preview-open`]).toBe(true);
     for (const appearance of ['light', 'dark']) {
       for (let number = 1; number <= 8; number++) {

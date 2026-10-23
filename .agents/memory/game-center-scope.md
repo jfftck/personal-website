@@ -20,3 +20,9 @@ Keep card/piece appearance separate from board/playfield appearance. Put game co
 **Why:** The user requested independent card and playfield themes and settings dialogs for all game options.
 
 **How to apply:** Follow this separation for future games and settings. Keep immediate play actions such as New game and Undo in the toolbar.
+
+Minesweeper's revealed and untouched cells must be strongly distinct. When untouched cells are light, make revealed cells darker. Glass cells should have darker edges, brighter centers, and borders that are lighter in dark appearance and darker in light appearance.
+
+**Why:** The user requested stronger cell-state contrast and this Glass treatment.
+
+**How to apply:** Preserve these distinctions when adding or changing Minesweeper themes, including their settings previews.

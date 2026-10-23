@@ -45,8 +45,8 @@
   --mine-cell-highlight: #fff;
   --mine-cell-shadow: #41474c;
   --mine-cell-hover: #d3d3d3;
-  --mine-flag-color: #ff9b92;
-  --mine-flag-stem: #f3f3f3;
+  --mine-flag-color: #8e1b1b;
+  --mine-flag-stem: #303944;
 
   display: flex;
   flex: 1 1 auto;
@@ -216,8 +216,8 @@
   --mine-cell-highlight: #f5ffff;
   --mine-cell-shadow: #2c4654;
   --mine-cell-hover: #e9fbff;
-  --mine-flag-color: #ff9b92;
-  --mine-flag-stem: #f3f3f3;
+  --mine-flag-color: #8e1b1b;
+  --mine-flag-stem: #303944;
 }
 .game-app[data-minesweeper-theme="sunset"] {
   --mine-board-frame: #694037;
@@ -229,8 +229,8 @@
   --mine-cell-highlight: #fff8ee;
   --mine-cell-shadow: #4c352f;
   --mine-cell-hover: #fff0db;
-  --mine-flag-color: #ff9b92;
-  --mine-flag-stem: #f3f3f3;
+  --mine-flag-color: #8e1b1b;
+  --mine-flag-stem: #303944;
 }
 .game-app[data-minesweeper-theme="glass"] {
   --mine-board-frame: color-mix(in srgb, var(--app-border) 82%, transparent);
@@ -241,26 +241,28 @@
   --mine-cell-text: #f3f3f3;
   --mine-cell-highlight: rgba(255,255,255,.62);
   --mine-cell-shadow: rgba(39,57,70,.56);
-  --mine-cell-hover: linear-gradient(155deg, #d8e4ec, #fff);
-  --mine-flag-color: #ff9b92;
-  --mine-flag-stem: #f3f3f3;
+  --mine-cell-hover: linear-gradient(155deg, #d8e4ec 0%, #fff 52%, #d1dde6 100%);
+  --mine-flag-color: #8e1b1b;
+  --mine-flag-stem: #303944;
 }
 :root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] {
-  --mine-cell-face: linear-gradient(155deg, #536776 0%, #718695 52%, #4d606f 100%);
+  --mine-cell-face: linear-gradient(155deg, #7d91a0 0%, #b0bec7 52%, #788c9b 100%);
   --mine-cell-open: linear-gradient(155deg, #18232c 0%, #26343e 52%, #141d25 100%);
-  --mine-cell-border: #c4d4df;
+  --mine-cell-border: #d7e5ee;
   --mine-cell-highlight: rgba(255,255,255,.36);
   --mine-cell-shadow: rgba(5,13,20,.72);
-  --mine-cell-hover: linear-gradient(155deg, #607687, #8095a3);
+  --mine-cell-hover: linear-gradient(155deg, #899fac 0%, #c2d1db 52%, #8298a7 100%);
+  --mine-flag-color: #35000a;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) .game-app[data-minesweeper-theme="glass"] {
-    --mine-cell-face: linear-gradient(155deg, #536776 0%, #718695 52%, #4d606f 100%);
+    --mine-cell-face: linear-gradient(155deg, #7d91a0 0%, #b0bec7 52%, #788c9b 100%);
     --mine-cell-open: linear-gradient(155deg, #18232c 0%, #26343e 52%, #141d25 100%);
-    --mine-cell-border: #c4d4df;
+    --mine-cell-border: #d7e5ee;
     --mine-cell-highlight: rgba(255,255,255,.36);
     --mine-cell-shadow: rgba(5,13,20,.72);
-    --mine-cell-hover: linear-gradient(155deg, #607687, #8095a3);
+    --mine-cell-hover: linear-gradient(155deg, #899fac 0%, #c2d1db 52%, #8298a7 100%);
+    --mine-flag-color: #35000a;
   }
 }
 
@@ -274,8 +276,8 @@
   --mine-cell-highlight: #fff;
   --mine-cell-shadow: #2d3c4d;
   --mine-cell-hover: #f1f5f9;
-  --mine-flag-color: #ffb454;
-  --mine-flag-stem: #f3f3f3;
+  --mine-flag-color: #a33d00;
+  --mine-flag-stem: #1f2937;
 }
 :root .game-app .mine-cell[data-number="1"] { color: #c4eaff; }
 :root .game-app .mine-cell[data-number="2"] { color: #c7f5d8; }
@@ -286,7 +288,7 @@
 :root .game-app .mine-cell[data-number="7"] { color: #f6f6f6; }
 :root .game-app .mine-cell[data-number="8"] { color: #e0e6ea; }
 .game-app[data-minesweeper-theme="colorblind"] .mine-cell.flagged {
-  outline: 2px dashed #f3f3f3;
+  outline: 2px dashed #1f2937;
   outline-offset: -4px;
 }
 
@@ -761,7 +763,7 @@
   font-weight: 800;
 }
 .game-theme-mine-number { background: var(--preview-mine-open) !important; color: #c7f5d8 !important; }
-.game-theme-mine-flag { color: #ff9b92 !important; }
+.game-theme-mine-flag { color: var(--preview-mine-flag, #8e1b1b) !important; }
 .game-theme-preview--minesweeper[data-preview-theme="classic"] {
   --preview-mine-surface: #808080;
   --preview-mine-face: #c0c0c0;
@@ -787,15 +789,17 @@
   --preview-mine-border: #526b7c;
 }
 :root[data-theme="dark"] .game-theme-preview--minesweeper[data-preview-theme="glass"] {
-  --preview-mine-face: linear-gradient(155deg, #536776 0%, #718695 52%, #4d606f 100%);
+  --preview-mine-face: linear-gradient(155deg, #7d91a0 0%, #b0bec7 52%, #788c9b 100%);
   --preview-mine-open: linear-gradient(155deg, #18232c 0%, #26343e 52%, #141d25 100%);
-  --preview-mine-border: #c4d4df;
+  --preview-mine-border: #d7e5ee;
+  --preview-mine-flag: #35000a;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) .game-theme-preview--minesweeper[data-preview-theme="glass"] {
-    --preview-mine-face: linear-gradient(155deg, #536776 0%, #718695 52%, #4d606f 100%);
+    --preview-mine-face: linear-gradient(155deg, #7d91a0 0%, #b0bec7 52%, #788c9b 100%);
     --preview-mine-open: linear-gradient(155deg, #18232c 0%, #26343e 52%, #141d25 100%);
-    --preview-mine-border: #c4d4df;
+    --preview-mine-border: #d7e5ee;
+    --preview-mine-flag: #35000a;
   }
 }
 .game-theme-preview--minesweeper[data-preview-theme="colorblind"] {
@@ -805,8 +809,8 @@
   --preview-mine-border: #65758b;
 }
 .game-theme-preview--minesweeper[data-preview-theme="colorblind"] .game-theme-mine-flag {
-  color: #ffb454 !important;
-  outline: 1px dashed #f3f3f3;
+  color: #a33d00 !important;
+  outline: 1px dashed #1f2937;
 }
 
 .game-toolbar [aria-pressed="true"],
@@ -1527,6 +1531,9 @@
   border-radius: 0.8rem;
   background: var(--mine-board-frame);
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+.game-app[data-minesweeper-theme="glass"] .mine-board-wrap {
+  border-color: var(--mine-cell-border);
 }
 .mine-board {
   display: grid;
