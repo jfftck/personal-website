@@ -6,7 +6,7 @@ import { createGameSession, inspectGameSession } from './game-state.js';
 import { addGameThemeControl } from './themes.js';
 
 export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
-  const { el, toolbar, status, area } = gameShell(id, 'Minesweeper',
+  const { el, toolbar, status, area, settings } = gameShell(id, 'Minesweeper',
     'Reveal every safe square without hitting a mine. Numbers count neighboring mines. The first reveal and its neighbors are safe. Right-click or press F on a square to flag it; on touch, turn on Flag mode. Click an open number to reveal its neighbors when the neighboring flag count matches. Use arrow keys to move and Enter or Space to reveal.', ctx, iconSvg);
   const restored = inspectGameSession('minesweeper', initialState);
   let level = restored.status === 'valid' || restored.status === 'finished'
@@ -20,6 +20,7 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
     if (!pendingRestore) ctx.saveSession();
   }
   function restart() {
+    settings.close();
     newGameScreenCleanup?.();
     newGameScreenCleanup = null;
     promptedStatus = null;
@@ -43,7 +44,7 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
       }],
       nextOptions => {
         level = nextOptions.level;
-        const toolbarSelect = toolbar.querySelector('select[aria-label="Difficulty"]');
+        const toolbarSelect = settings.element.querySelector('select[aria-label="Difficulty"]');
         if (toolbarSelect) toolbarSelect.value = level;
         restart();
       },
@@ -55,11 +56,12 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
     render(); persist();
   });
   flag.setAttribute('aria-pressed', 'false');
-  toolbar.append(button('New game', restart),
-    selectControl('Difficulty', [['beginner', 'Beginner'], ['intermediate', 'Intermediate'], ['expert', 'Expert']], level, value => {
+  toolbar.append(button('New game', restart));
+  settings.addGameOption(selectControl('Difficulty', [['beginner', 'Beginner'], ['intermediate', 'Intermediate'], ['expert', 'Expert']], level, value => {
       level = value; restart();
-    }), flag);
-  const removeThemeControl = addGameThemeControl(el, toolbar, 'minesweeper');
+    }));
+  settings.addGameOption(flag);
+  const removeThemeControl = addGameThemeControl(el, settings.appearanceOptions, 'minesweeper');
   function act(index, mark = flagMode) {
     const changed = mark ? flagMineCell(state, index) : revealMineCell(state, index);
     render();
@@ -115,6 +117,7 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
     destroy() {
       newGameScreenCleanup?.();
       removeThemeControl();
+      settings.destroy();
     },
   };
   if (restored.status === 'finished') ctx.saveSession();

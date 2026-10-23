@@ -23,6 +23,122 @@ export function selectControl(text, options, value, onChange) {
   return label;
 }
 
+function createGameSettings(root, toolbar, title, id) {
+  const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g, '-');
+  const buttonId = `game-settings-${safeId}`;
+  const dialogId = `${buttonId}-dialog`;
+  const toggle = button('Settings', open, 'game-settings-toggle');
+  toggle.id = buttonId;
+  toggle.setAttribute('aria-haspopup', 'dialog');
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('aria-controls', dialogId);
+  toolbar.append(toggle);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'game-settings-overlay';
+  overlay.hidden = true;
+  const dialog = document.createElement('section');
+  dialog.className = 'game-settings-dialog';
+  dialog.id = dialogId;
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-labelledby', `${dialogId}-title`);
+
+  const heading = document.createElement('h2');
+  heading.id = `${dialogId}-title`;
+  heading.textContent = `${title} settings`;
+  const closeButton = button('Done', () => close(), 'game-settings-close');
+  closeButton.setAttribute('aria-label', 'Close settings');
+  const header = document.createElement('div');
+  header.className = 'game-settings-header';
+  header.append(heading, closeButton);
+
+  const gameOptions = document.createElement('fieldset');
+  const gameLegend = document.createElement('legend');
+  gameLegend.textContent = 'Game';
+  gameOptions.append(gameLegend);
+  gameOptions.hidden = true;
+
+  const appearanceOptions = document.createElement('fieldset');
+  const appearanceLegend = document.createElement('legend');
+  appearanceLegend.textContent = 'Appearance';
+  appearanceOptions.append(appearanceLegend);
+  appearanceOptions.hidden = true;
+
+  dialog.append(header, gameOptions, appearanceOptions);
+  overlay.append(dialog);
+  root.append(overlay);
+
+  let isOpen = false;
+  let priorFocus = null;
+  let inertStates = [];
+
+  function open() {
+    if (isOpen) return;
+    isOpen = true;
+    priorFocus = document.activeElement;
+    inertStates = [...root.children]
+      .filter(child => child !== overlay)
+      .map(node => ({ node, inert: node.inert }));
+    inertStates.forEach(({ node }) => { node.inert = true; });
+    overlay.hidden = false;
+    toggle.setAttribute('aria-expanded', 'true');
+    closeButton.focus({ preventScroll: true });
+  }
+
+  function close(restoreFocus = true) {
+    if (!isOpen) return;
+    isOpen = false;
+    overlay.hidden = true;
+    inertStates.forEach(({ node, inert }) => { node.inert = inert; });
+    inertStates = [];
+    toggle.setAttribute('aria-expanded', 'false');
+    if (restoreFocus && priorFocus?.isConnected) priorFocus.focus({ preventScroll: true });
+    priorFocus = null;
+  }
+
+  function addOption(group, control) {
+    group.hidden = false;
+    control.classList.add('game-settings-option');
+    group.append(control);
+  }
+
+  overlay.addEventListener('click', event => {
+    if (event.target === overlay) close();
+  });
+  dialog.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = [...dialog.querySelectorAll(
+      'button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )].filter(node => !node.closest('[hidden]') && node.tabIndex >= 0);
+    if (!focusable.length) return;
+    if (event.shiftKey && document.activeElement === focusable[0]) {
+      event.preventDefault();
+      focusable.at(-1).focus();
+    } else if (!event.shiftKey && document.activeElement === focusable.at(-1)) {
+      event.preventDefault();
+      focusable[0].focus();
+    }
+  });
+
+  return {
+    overlay,
+    element: dialog,
+    gameOptions,
+    appearanceOptions,
+    addGameOption: control => addOption(gameOptions, control),
+    addAppearanceOption: control => addOption(appearanceOptions, control),
+    close,
+    destroy: () => close(false),
+  };
+}
+
 export function gameShell(id, title, rules, ctx, iconSvg) {
   const el = document.createElement('div');
   el.className = 'game-app';
@@ -44,6 +160,7 @@ export function gameShell(id, title, rules, ctx, iconSvg) {
   instructionsControl.className = 'game-instructions-control';
   instructionsControl.append(instructionsButton);
   toolbar.append(instructionsControl);
+  const settings = createGameSettings(el, toolbar, title, id);
   const status = document.createElement('div');
   status.className = 'game-status';
   status.setAttribute('role', 'status');
@@ -72,7 +189,7 @@ export function gameShell(id, title, rules, ctx, iconSvg) {
   area.setAttribute('aria-label', `${title} play area`);
   instructionsControl.append(instructions);
   stage.append(area);
-  el.append(toolbar, status, stage);
+  el.append(toolbar, status, stage, settings.overlay);
   let instructionsOpen = false;
   function setInstructionsOpen(open) {
     instructionsOpen = Boolean(open);
@@ -94,7 +211,7 @@ export function gameShell(id, title, rules, ctx, iconSvg) {
     }
   });
   ctx.setAppTitle(id, title);
-  return { el, toolbar, status, area, instructions, instructionsButton };
+  return { el, toolbar, status, area, instructions, instructionsButton, settings };
 }
 
 export function showRestorePrompt(area, onResume, onNew, invalid = false) {

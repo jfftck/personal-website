@@ -7,6 +7,18 @@ const config = {
     preview: 'cards',
     choices: [['classic', 'Classic'], ['midnight', 'Midnight'], ['botanical', 'Botanical'], ['glass', 'Glass']],
   },
+  cardTable: {
+    dataset: 'cardTableTheme',
+    label: 'Playfield theme',
+    preview: 'card-table',
+    choices: [
+      ['classic', 'Classic green'],
+      ['ocean', 'Ocean'],
+      ['midnight', 'Midnight'],
+      ['botanical', 'Botanical'],
+      ['glass', 'Glass'],
+    ],
+  },
   chessBoard: {
     dataset: 'chessBoardTheme',
     label: 'Board theme',
@@ -65,7 +77,7 @@ function currentValue(key) {
   return normalize(key, readPreferences()[key]);
 }
 
-export function addGameThemeControl(root, toolbar, key) {
+export function addGameThemeControl(root, container, key) {
   const theme = config[key];
   if (!theme) throw new Error(`Unknown game theme: ${key}`);
   const control = document.createElement('div');
@@ -87,6 +99,8 @@ export function addGameThemeControl(root, toolbar, key) {
     sample.setAttribute('aria-hidden', 'true');
     if (theme.preview === 'cards') {
       sample.innerHTML = '<span class="game-theme-card-back"></span>';
+    } else if (theme.preview === 'card-table') {
+      sample.innerHTML = '<span class="game-theme-felt-sample"></span>';
     } else if (theme.preview.endsWith('-board')) {
       sample.innerHTML = theme.preview === 'reversi-board'
         ? '<span></span><span></span><span class="game-theme-disc"></span><span></span><span></span><span class="game-theme-disc game-theme-disc--light"></span><span></span><span></span><span></span>'
@@ -157,7 +171,7 @@ export function addGameThemeControl(root, toolbar, key) {
       choose(next);
     });
   }
-  toolbar.append(control);
+  container.append(control);
   apply(currentValue(key));
 
   const onThemeChange = event => {

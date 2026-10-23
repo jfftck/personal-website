@@ -17,7 +17,7 @@ const rules = {
 
 export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSvg) {
   const shell = gameShell(id, title, rules[kind], ctx, iconSvg);
-  const { el, toolbar, area, status } = shell;
+  const { el, toolbar, area, status, settings } = shell;
   area.classList.add('solitaire-game-area');
   const restored = inspectGameSession(kind, initialState);
   let options = restored.status === 'valid' || restored.status === 'finished'
@@ -49,6 +49,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     state = history.pop(); selected = null; render(); persist();
   });
   function restart() {
+    settings.close();
     clearCelebration();
     clearNewGameScreen();
     pendingRestore = false;
@@ -65,16 +66,17 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     }
   }));
   if (kind === 'klondike') {
-    toolbar.append(selectControl('Draw', [['1', 'One card'], ['3', 'Three cards']], String(options.drawCount), value => {
+    settings.addGameOption(selectControl('Draw', [['1', 'One card'], ['3', 'Three cards']], String(options.drawCount), value => {
       options.drawCount = Number(value); restart();
     }));
   }
   if (kind === 'spider') {
-    toolbar.append(selectControl('Suits', [['1', 'One suit'], ['2', 'Two suits'], ['4', 'Four suits']], String(options.suits), value => {
+    settings.addGameOption(selectControl('Suits', [['1', 'One suit'], ['2', 'Two suits'], ['4', 'Four suits']], String(options.suits), value => {
       options.suits = Number(value); restart();
     }));
   }
-  const removeThemeControl = addGameThemeControl(el, toolbar, 'cards');
+  const removeThemeControl = addGameThemeControl(el, settings.appearanceOptions, 'cards');
+  const removeTableThemeControl = addGameThemeControl(el, settings.appearanceOptions, 'cardTable');
   function action(fn, animateIds = []) {
     const before = structuredClone(state);
     const result = fn();
@@ -140,7 +142,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       nextOptions => {
         if (kind === 'klondike') options.drawCount = Number(nextOptions.drawCount);
         if (kind === 'spider') options.suits = Number(nextOptions.suits);
-        const toolbarSelect = settingLabel && toolbar.querySelector(`select[aria-label="${settingLabel}"]`);
+        const toolbarSelect = settingLabel && settings.element.querySelector(`select[aria-label="${settingLabel}"]`);
         if (toolbarSelect) toolbarSelect.value = String(nextOptions[kind === 'klondike' ? 'drawCount' : 'suits']);
         restart();
       },
@@ -497,6 +499,8 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     destroy() {
       dragAbort.abort();
       removeThemeControl();
+      removeTableThemeControl();
+      settings.destroy();
       clearTimeout(suppressClickTimer);
       clearCelebration();
       clearNewGameScreen();
