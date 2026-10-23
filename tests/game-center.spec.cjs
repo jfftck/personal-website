@@ -1755,7 +1755,56 @@ test('bounce and spiral win celebrations use floating card layers too', async ({
     await expect(layer).toHaveCount(1);
     await expect(layer.locator(`.game-layer-card.win-${effect}`)).toHaveCount(52);
     await expect(app.locator('.solitaire-table .win-bounce, .solitaire-table .win-spiral')).toHaveCount(0);
-    if (effect === 'spiral') {
+    if (effect === 'bounce') {
+      const gatheredCards = await layer.locator('.win-bounce').evaluateAll(elements => elements.map(card => {
+        const frames = card.getAnimations()[0].effect.getKeyframes();
+        const matrix = new DOMMatrixReadOnly(frames.at(-1).transform);
+        const width = parseFloat(card.style.width);
+        const height = parseFloat(card.style.height);
+        const x = parseFloat(card.style.left) + width / 2 + matrix.m41;
+        const y = parseFloat(card.style.top) + height / 2 + matrix.m42;
+        const parent = card.closest('.solitaire-celebration-layer');
+        return {
+          x,
+          y,
+          centerX: parseFloat(parent.style.width) / 2,
+          topY: parseFloat(parent.style.height) * 0.16,
+          duration: getComputedStyle(card).animationDuration,
+          gatherDuration: card.getAnimations()[0].effect.getTiming().duration,
+        };
+      }));
+      expect(gatheredCards).toHaveLength(52);
+      expect(gatheredCards.every(card => Math.abs(card.x - card.centerX) < 15)).toBe(true);
+      expect(gatheredCards.every(card => Math.abs(card.y - card.topY) < 12)).toBe(true);
+      expect(gatheredCards.every(card => card.gatherDuration === 420)).toBe(true);
+
+      await page.waitForTimeout(1750);
+      const bouncingCards = await layer.locator('.win-bounce').evaluateAll(elements => elements.map(card => {
+        const animation = card.getAnimations().find(candidate =>
+          candidate.effect.getKeyframes().some(frame => Number(frame.opacity) < 1));
+        if (!animation) return null;
+        const frames = animation.effect.getKeyframes();
+        const landing = new DOMMatrixReadOnly(frames[1].transform);
+        const peak = new DOMMatrixReadOnly(frames[2].transform);
+        const fadeStart = frames.find(frame => Number(frame.opacity) < 1).offset;
+        return {
+          duration: animation.effect.getTiming().duration,
+          horizontalBounce: Math.abs(peak.m41 - landing.m41),
+          fadeDuration: animation.effect.getTiming().duration * (1 - fadeStart),
+          finalOpacity: Number(frames.at(-1).opacity),
+          dropY: landing.m42,
+        };
+      }));
+      expect(bouncingCards).toHaveLength(52);
+      expect(bouncingCards.every(card => card && card.finalOpacity === 0)).toBe(true);
+      expect(bouncingCards.every(card => card.dropY > 0)).toBe(true);
+      const weakestBounce = bouncingCards.reduce((weakest, card) =>
+        card.horizontalBounce < weakest.horizontalBounce ? card : weakest);
+      const strongestBounce = bouncingCards.reduce((strongest, card) =>
+        card.horizontalBounce > strongest.horizontalBounce ? card : strongest);
+      expect(strongestBounce.duration).toBeGreaterThan(weakestBounce.duration);
+      expect(strongestBounce.fadeDuration).toBeGreaterThan(weakestBounce.fadeDuration);
+    } else if (effect === 'spiral') {
       const details = await layer.locator('.win-spiral').evaluateAll(elements => elements.slice(0, 4).map(card => {
         const frames = card.getAnimations()[0].effect.getKeyframes();
         const layer = card.closest('.solitaire-celebration-layer');

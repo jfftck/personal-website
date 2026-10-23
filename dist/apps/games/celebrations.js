@@ -99,46 +99,88 @@ function collectSprites(kind, state, table, tableRect, layer) {
 }
 
 function animateBounce(sprites, bounds) {
+  const gatherDuration = 420;
+  const dropStagger = 24;
+  const timers = [];
+  const gatherAnimations = [];
+  let duration = gatherDuration;
+
   sprites.forEach((sprite, index) => {
     const gatherX = bounds.width / 2 - (sprite.x + sprite.width / 2);
     const gatherY = bounds.height * 0.16 - (sprite.y + sprite.height / 2);
     const pileX = (index % 7 - 3) * 1.6;
     const pileY = (index % 11) * 0.8;
-    const bounciness = 0.72 + unit(index, 1) * 0.72;
-    const bounceX = (unit(index, 2) - 0.5) * bounds.width * 0.3;
-    const cycles = 2 + Math.floor(unit(index, 3) * 3);
+    const gatherTransform = transform(gatherX + pileX, gatherY + pileY, 0.9);
+    sprite.element.classList.add('win-bounce');
+    gatherAnimations.push(sprite.element.animate([
+      { transform: transform(0, 0, 1), opacity: 1 },
+      { transform: gatherTransform, opacity: 1 },
+    ], {
+      duration: gatherDuration,
+      easing: 'cubic-bezier(.18,.72,.28,1)',
+      fill: 'both',
+    }));
+
+    const strength = unit(index, 1);
+    const dropX = bounds.width / 2 - (sprite.x + sprite.width / 2)
+      + (unit(index, 5) - 0.5) * bounds.width * 0.12;
+    const dropY = bounds.height * 0.76 - (sprite.y + sprite.height / 2);
+    const horizontalBounce = bounds.width * (0.12 + strength * 0.27);
+    const verticalBounce = bounds.height * (0.025 + strength * 0.055);
+    const cycles = 2 + Math.floor(strength * 3);
+    const bounceDuration = 1400 + strength * 1650;
+    const fadeStart = 0.58 - strength * 0.17;
+    const fadeAt = offset => Math.max(0, 1 - Math.max(0, (offset - fadeStart) / (1 - fadeStart)));
     const frames = [
-      { transform: transform(0, 0, 1), offset: 0 },
-      { transform: transform(gatherX + pileX, gatherY + pileY, 0.9), offset: 0.34 },
+      { transform: gatherTransform, opacity: 1, offset: 0 },
+      { transform: transform(dropX, dropY, 0.94, 2), opacity: 1, offset: 0.32 },
     ];
 
     for (let cycle = 0; cycle < cycles; cycle++) {
-      const decay = Math.pow(0.64, cycle);
+      const decay = Math.pow(0.61, cycle);
       const direction = cycle % 2 ? -1 : 1;
-      const peak = 0.34 + 0.61 * (cycle + 0.34) / cycles;
-      const landing = 0.34 + 0.61 * (cycle + 0.72) / cycles;
-      const height = (16 + unit(index, cycle + 4) * 30) * bounciness * decay;
-      const drift = bounceX * decay * direction;
+      const peak = 0.32 + 0.68 * (cycle + 0.32) / cycles;
+      const landing = 0.32 + 0.68 * (cycle + 0.78) / cycles;
+      const horizontal = horizontalBounce * decay * direction;
+      const lift = verticalBounce * decay;
       frames.push(
         {
-          transform: transform(gatherX + pileX + drift, gatherY + pileY - height, 1.02, direction * 7),
+          transform: transform(dropX + horizontal, dropY - lift, 1.01, direction * 8),
+          opacity: fadeAt(peak),
           offset: peak,
         },
         {
-          transform: transform(gatherX + pileX - drift * 0.38, gatherY + pileY + height * 0.12, 0.95, -direction * 4),
+          transform: transform(dropX - horizontal * 0.28, dropY + lift * 0.12, 0.96, -direction * 4),
+          opacity: fadeAt(landing),
           offset: landing,
         },
       );
     }
-    frames.push({ transform: transform(gatherX + pileX, gatherY + pileY, 0.94), offset: 1 });
-    sprite.element.classList.add('win-bounce');
-    sprite.element.animate(frames, {
-      duration: 2100,
-      delay: index * 7,
-      easing: 'cubic-bezier(.18,.72,.28,1)',
-      fill: 'both',
+    frames.push({
+      transform: transform(dropX, dropY, 0.92),
+      opacity: 0,
+      offset: 1,
     });
+
+    const delay = gatherDuration + index * dropStagger;
+    duration = Math.max(duration, delay + bounceDuration);
+    timers.push(setTimeout(() => {
+      if (!sprite.element.isConnected) return;
+      sprite.element.animate(frames, {
+        duration: bounceDuration,
+        easing: 'cubic-bezier(.18,.72,.28,1)',
+        fill: 'both',
+      });
+    }, delay));
   });
+
+  return {
+    duration,
+    cleanup() {
+      timers.forEach(clearTimeout);
+      gatherAnimations.forEach(animation => animation.cancel());
+    },
+  };
 }
 
 function animateSpiral(sprites, bounds) {
@@ -372,8 +414,9 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
   let interval = null;
   let rainDuration = 0;
   let particleAnimation = null;
+  let bounceAnimation = null;
   switch (effect) {
-    case 'bounce': animateBounce(sprites, bounds); break;
+    case 'bounce': bounceAnimation = animateBounce(sprites, bounds); break;
     case 'spiral': animateSpiral(sprites, bounds); break;
     case 'fireworks': particleAnimation = animateFireworks(sprites, bounds, layer); break;
     case 'rain': {
@@ -403,7 +446,7 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
     tornado: 2450,
   }[effect] || 2500;
   const animationEnd = Math.max(
-    effect === 'rain' ? rainDuration : duration + stagger,
+    effect === 'rain' ? rainDuration : effect === 'bounce' ? bounceAnimation.duration : duration + stagger,
     particleAnimation?.duration || 0,
   );
 
@@ -414,6 +457,7 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
     cleaned = true;
     clearTimeout(timer);
     clearInterval(interval);
+    bounceAnimation?.cleanup();
     particleAnimation?.cleanup();
     layer.remove();
     sources.forEach(source => source.classList.remove('celebration-source-hidden'));
