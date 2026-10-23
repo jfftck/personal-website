@@ -209,15 +209,25 @@
 .game-app[data-minesweeper-theme="glass"] {
   --mine-board-frame: color-mix(in srgb, var(--app-border) 72%, transparent);
   --mine-board-surface: color-mix(in srgb, var(--app-bg) 54%, transparent);
-  --mine-cell-face: color-mix(in srgb, var(--app-bg) 60%, var(--app-text) 11%);
-  --mine-cell-open: color-mix(in srgb, var(--app-bg) 78%, transparent);
+  --mine-cell-face: #dce3ea;
+  --mine-cell-open: #f7fafc;
   --mine-cell-border: color-mix(in srgb, var(--app-border) 88%, transparent);
   --mine-cell-text: var(--app-text);
-  --mine-cell-highlight: color-mix(in srgb, white 42%, var(--app-bg));
-  --mine-cell-shadow: color-mix(in srgb, var(--app-text) 24%, transparent);
+  --mine-cell-highlight: #fff;
+  --mine-cell-shadow: #718096;
   --mine-cell-hover: color-mix(in srgb, var(--app-bg) 50%, var(--app-text) 15%);
-  --mine-flag-color: #e45a56;
-  --mine-flag-stem: var(--app-text);
+  --mine-flag-color: #a32924;
+  --mine-flag-stem: #263238;
+}
+:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] {
+  --mine-cell-face: #334155;
+  --mine-cell-open: #1f2937;
+  --mine-cell-border: #64748b;
+  --mine-cell-highlight: #64748b;
+  --mine-cell-shadow: #0f172a;
+  --mine-cell-hover: #475569;
+  --mine-flag-color: #ff8a80;
+  --mine-flag-stem: #f8fafc;
 }
 :root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="1"] { color: #92bcff; }
 :root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="2"] { color: #8de0a8; }
@@ -225,6 +235,34 @@
 :root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="4"] { color: #c5a9ff; }
 :root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="5"] { color: #ffb38f; }
 :root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="6"] { color: #8fe6e8; }
+:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="7"] { color: #f3f4f6; }
+:root[data-theme="dark"] .game-app[data-minesweeper-theme="glass"] .mine-cell[data-number="8"] { color: #cbd5e1; }
+
+.game-app[data-minesweeper-theme="colorblind"] {
+  --mine-board-frame: #263445;
+  --mine-board-surface: #425267;
+  --mine-cell-face: #dce3ea;
+  --mine-cell-open: #fafbfc;
+  --mine-cell-border: #65758b;
+  --mine-cell-text: #1f2937;
+  --mine-cell-highlight: #fff;
+  --mine-cell-shadow: #94a3b8;
+  --mine-cell-hover: #f1f5f9;
+  --mine-flag-color: #a33d00;
+  --mine-flag-stem: #1f2937;
+}
+.game-app[data-minesweeper-theme="colorblind"] .mine-cell[data-number="1"] { color: #005a9c; }
+.game-app[data-minesweeper-theme="colorblind"] .mine-cell[data-number="2"] { color: #006b4f; }
+.game-app[data-minesweeper-theme="colorblind"] .mine-cell[data-number="3"] { color: #a33b00; }
+.game-app[data-minesweeper-theme="colorblind"] .mine-cell[data-number="4"] { color: #704080; }
+.game-app[data-minesweeper-theme="colorblind"] .mine-cell[data-number="5"] { color: #775500; }
+.game-app[data-minesweeper-theme="colorblind"] .mine-cell[data-number="6"] { color: #006d77; }
+.game-app[data-minesweeper-theme="colorblind"] .mine-cell[data-number="7"] { color: #252525; }
+.game-app[data-minesweeper-theme="colorblind"] .mine-cell[data-number="8"] { color: #565656; }
+.game-app[data-minesweeper-theme="colorblind"] .mine-cell.flagged {
+  outline: 2px dashed #1f2937;
+  outline-offset: -4px;
+}
 
 .game-app *,
 .game-app *::before,
@@ -563,6 +601,19 @@
   --preview-mine-face: #bccbc8;
   --preview-mine-open: #e2ece9;
   --preview-mine-border: #879f9c;
+}
+.game-theme-preview--minesweeper[data-preview-theme="colorblind"] {
+  --preview-mine-surface: #425267;
+  --preview-mine-face: #dce3ea;
+  --preview-mine-open: #fafbfc;
+  --preview-mine-border: #65758b;
+}
+.game-theme-preview--minesweeper[data-preview-theme="colorblind"] .game-theme-mine-number {
+  color: #006b4f;
+}
+.game-theme-preview--minesweeper[data-preview-theme="colorblind"] .game-theme-mine-flag {
+  color: #a33d00 !important;
+  outline: 1px dashed #1f2937;
 }
 
 .game-toolbar [aria-pressed="true"],
@@ -1316,7 +1367,7 @@
 .mine-cell[data-number="5"] { color: #85422f; }
 .mine-cell[data-number="6"] { color: #267e82; }
 .mine-cell[data-number="7"] { color: #26302c; }
-.mine-cell[data-number="8"] { color: #737c76; }
+.mine-cell[data-number="8"] { color: #565656; }
 .mine-cell.flagged::after {
   width: 0;
   height: 0;

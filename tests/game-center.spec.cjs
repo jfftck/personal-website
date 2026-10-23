@@ -336,11 +336,13 @@ test('all games prevent mouse text selection and expose shared, game-specific vi
   const minesweeper = await openGame(page, 'minesweeper');
   await checkSelectionDisabled(minesweeper, '.mine-board');
   const themePicker = minesweeper.getByRole('radiogroup', { name: 'Theme' });
-  await expect(themePicker.locator('.game-theme-preview')).toHaveCount(4);
-  for (const theme of ['classic', 'ocean', 'sunset', 'glass']) {
-    await themePicker.getByRole('radio', { name: new RegExp(`Theme: ${theme}`, 'i') }).click();
+  await expect(themePicker.locator('.game-theme-preview')).toHaveCount(5);
+  for (const theme of ['classic', 'ocean', 'sunset', 'glass', 'colorblind']) {
+    const label = theme === 'colorblind' ? 'Color-blind friendly' : theme;
+    await themePicker.getByRole('radio', { name: new RegExp(`Theme: ${label}`, 'i') }).click();
     await expect(minesweeper).toHaveAttribute('data-minesweeper-theme', theme);
   }
+  await themePicker.getByRole('radio', { name: 'Theme: Glass' }).click();
   const glassColors = await page.evaluate(async () => {
     const cell = document.querySelector('.app-window[data-type="minesweeper"] .mine-cell');
     document.documentElement.dataset.theme = 'light';
@@ -363,6 +365,101 @@ test('all games prevent mouse text selection and expose shared, game-specific vi
     });
   });
   expect(fitsToolbar).toBe(true);
+});
+
+test('Minesweeper color-blind palette keeps every number legible and flags distinct in both desktop themes', async ({ page }) => {
+  const app = await restoreGame(page, savedMinesweeper({ finalSafeCell: 10 }), 'minesweeper');
+  const themePicker = app.getByRole('radiogroup', { name: 'Theme' });
+  await themePicker.getByRole('radio', { name: 'Theme: Color-blind friendly' }).click();
+  await expect(app).toHaveAttribute('data-minesweeper-theme', 'colorblind');
+  const flagged = app.locator('.mine-cell').nth(10);
+  await flagged.press('f');
+  await expect(flagged).toHaveClass(/flagged/);
+  await expect(flagged).toHaveAttribute('aria-label', /flagged/);
+
+  const contrast = await app.evaluate(element => {
+    const luminance = color => {
+      const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map(value => value / 255);
+      const linear = channels.map(value => value <= 0.04045
+        ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+      return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+    };
+    const ratio = (foreground, background) => {
+      const fg = luminance(foreground), bg = luminance(background);
+      return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+    };
+    const results = {};
+    [...element.querySelectorAll('.mine-cell.revealed')].slice(0, 8)
+      .forEach((cell, index) => { cell.dataset.number = String(index + 1); });
+    for (const theme of ['light', 'dark']) {
+      document.documentElement.dataset.theme = theme;
+      for (let number = 1; number <= 8; number++) {
+        const cell = element.querySelector(`.mine-cell[data-number="${number}"]`);
+        const style = getComputedStyle(cell);
+        results[`${theme}-${number}`] = {
+          color: style.color,
+          background: style.backgroundColor,
+          contrast: ratio(style.color, style.backgroundColor),
+        };
+      }
+    }
+    const flag = element.querySelector('.mine-cell.flagged');
+    const flagStyle = getComputedStyle(flag, '::after');
+    const flagColor = flagStyle.borderTopColor;
+    const flagBackground = getComputedStyle(flag).backgroundColor;
+    return {
+      numbers: results,
+      flagContrast: ratio(flagColor, flagBackground),
+      flagColor,
+      flagBackground,
+      flagOutline: getComputedStyle(flag).outlineStyle,
+      flagOutlineColor: getComputedStyle(flag).outlineColor,
+    };
+  });
+  for (const value of Object.values(contrast.numbers)) {
+    expect(value.contrast).toBeGreaterThanOrEqual(4.5);
+  }
+  expect(contrast.flagContrast).toBeGreaterThanOrEqual(4.5);
+  expect(contrast.flagOutline).toBe('dashed');
+  expect(contrast.flagColor).not.toBe(contrast.flagBackground);
+  expect(contrast.flagOutlineColor).not.toBe(contrast.flagBackground);
+});
+
+test('Minesweeper Glass number and flag colors remain readable in light and dark appearances', async ({ page }) => {
+  const app = await restoreGame(page, savedMinesweeper({ finalSafeCell: 10 }), 'minesweeper');
+  const themePicker = app.getByRole('radiogroup', { name: 'Theme' });
+  await themePicker.getByRole('radio', { name: 'Theme: Glass' }).click();
+  await app.locator('.mine-cell').nth(10).press('f');
+  const contrast = await app.evaluate(element => {
+    const luminance = color => {
+      const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map(value => value / 255);
+      const linear = channels.map(value => value <= 0.04045
+        ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+      return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+    };
+    const ratio = (foreground, background) => {
+      const fg = luminance(foreground), bg = luminance(background);
+      return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+    };
+    const results = {};
+    [...element.querySelectorAll('.mine-cell.revealed')].slice(0, 8)
+      .forEach((cell, index) => { cell.dataset.number = String(index + 1); });
+    for (const theme of ['light', 'dark']) {
+      document.documentElement.dataset.theme = theme;
+      for (let number = 1; number <= 8; number++) {
+        const cell = element.querySelector(`.mine-cell[data-number="${number}"]`);
+        const style = getComputedStyle(cell);
+        results[`${theme}-${number}`] = ratio(style.color, style.backgroundColor);
+      }
+      const flag = element.querySelector('.mine-cell.flagged');
+      const flagColor = getComputedStyle(flag, '::after').borderTopColor;
+      results[`${theme}-flag`] = ratio(flagColor, getComputedStyle(flag).backgroundColor);
+    }
+    return results;
+  });
+  for (const value of Object.values(contrast)) {
+    expect(value, JSON.stringify(contrast)).toBeGreaterThanOrEqual(4.5);
+  }
 });
 
 test('all previous app shortcuts still launch and manifest files open in the document viewer', async ({ page }) => {

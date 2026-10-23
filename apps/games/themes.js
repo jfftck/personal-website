@@ -35,7 +35,13 @@ const config = {
     dataset: 'minesweeperTheme',
     label: 'Theme',
     preview: 'minesweeper',
-    choices: [['classic', 'Classic grey'], ['ocean', 'Ocean'], ['sunset', 'Sunset'], ['glass', 'Glass']],
+    choices: [
+      ['classic', 'Classic grey'],
+      ['ocean', 'Ocean'],
+      ['sunset', 'Sunset'],
+      ['glass', 'Glass'],
+      ['colorblind', 'Color-blind friendly'],
+    ],
   },
 };
 
