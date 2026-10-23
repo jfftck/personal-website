@@ -121,6 +121,24 @@ test('root menu restores app and file entries; the six game tiles stay nested wi
   await expect(page.locator('#app-menu')).toBeHidden();
 });
 
+test('Game Center game icons stay visible and decorative at desktop and phone sizes', async ({ page }) => {
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await page.locator('#app-menu-btn').click();
+    await page.locator('#game-center-entry').click();
+    for (const game of ['klondike', 'spider', 'freecell', 'minesweeper', 'chess', 'reversi']) {
+      const icon = page.locator(`#game-list [data-game="${game}"] .game-launcher-icon`);
+      await expect(icon).toHaveAttribute('aria-hidden', 'true');
+      await expect(icon.locator('svg')).toBeVisible();
+      const box = await icon.locator('svg').boundingBox();
+      expect(box.width).toBeGreaterThanOrEqual(24);
+      expect(box.height).toBeGreaterThanOrEqual(24);
+    }
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+  }
+});
+
 test('all previous app shortcuts still launch and manifest files open in the document viewer', async ({ page }) => {
   await page.locator('#app-menu-btn').click();
   await expect(page.locator('#app-list .app-launcher[data-type="welcome"]')).toBeFocused();
@@ -368,7 +386,17 @@ test('game windows use distinct game icons and do not duplicate Game Center navi
     await expect(app.locator('.game-toolbar button', { hasText: 'Game Center' })).toHaveCount(0);
     const tabIcon = page.locator(`.app-tab-btn[aria-label="${title}"] svg path`);
     await expect(tabIcon).toHaveCount(1);
-    iconPaths.add(await tabIcon.getAttribute('d'));
+    const path = await tabIcon.getAttribute('d');
+    iconPaths.add(path);
+
+    await page.locator('#app-menu-btn').click();
+    await page.locator('#game-center-entry').click();
+    const tileIcon = page.locator(`#game-list [data-game="${game}"] .game-launcher-icon`);
+    await expect(tileIcon).toHaveAttribute('aria-hidden', 'true');
+    await expect(tileIcon.locator('svg')).toHaveCount(1);
+    await expect(tileIcon.locator('svg path')).toHaveAttribute('d', path);
+    await expect(app.locator('.game-instructions-icon svg path')).toHaveAttribute('d', path);
+    await page.locator('#app-menu-btn').click();
     await page.locator('#close-btn').click();
   }
   expect(iconPaths.size).toBe(6);

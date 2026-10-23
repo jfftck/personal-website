@@ -51,8 +51,9 @@ export function initGameMenu(menu, openGame) {
     btn.type = 'button'; btn.className = 'app-launcher';
     btn.dataset.game = game.type;
     const icon = document.createElement('span');
-    icon.className = 'app-launcher-icon game-launcher-symbol';
-    icon.textContent = game.symbol; icon.setAttribute('aria-hidden', 'true');
+    icon.className = 'app-launcher-icon game-launcher-icon';
+    icon.innerHTML = game.iconSvg;
+    icon.setAttribute('aria-hidden', 'true');
     const name = document.createElement('span'); name.className = 'app-launcher-name';
     name.textContent = game.title;
     const description = document.createElement('small'); description.textContent = game.description;
