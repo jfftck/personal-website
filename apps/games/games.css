@@ -1207,6 +1207,15 @@
   gap: .45rem;
   width: max-content;
 }
+.pyramid-layout .card-triangle-row {
+  grid-template-columns: repeat(var(--row-card-count), minmax(2.5rem, var(--card-width)));
+}
+.tripeaks-layout .card-triangle-row:nth-child(1) {
+  transform: translateX(calc(0px - var(--card-width) / 2));
+}
+.tripeaks-layout .card-triangle-row:nth-child(3) {
+  transform: translateX(calc(var(--card-width) / 2));
+}
 .card-triangle-row + .card-triangle-row {
   margin-top: calc(0px - var(--card-width) / 1.4);
 }

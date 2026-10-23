@@ -587,6 +587,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     state.columns.forEach((cards, rowIndex) => {
       const row = document.createElement('div');
       row.className = 'card-triangle-row';
+      if (isPyramid) row.style.setProperty('--row-card-count', cards.length);
       row.setAttribute('role', 'group');
       row.setAttribute('aria-label', `${isPyramid ? 'Pyramid' : 'Peaks'} row ${rowIndex + 1}`);
       cards.forEach((card, offset) => {
@@ -594,7 +595,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
         slot.className = 'card-triangle-position';
         slot.dataset.gameCardId = card.id;
         slot.style.gridColumn = isPyramid
-          ? `${Math.floor((gridColumns - cards.length) / 2) + offset + 1}`
+          ? `${offset + 1}`
           : `${peakPositions[rowIndex][offset]}`;
         if (card.removed) {
           slot.classList.add('removed');

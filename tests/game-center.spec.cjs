@@ -164,6 +164,36 @@ test('root menu restores app and file entries; all nine game tiles stay nested w
 });
 
 test('Pyramid, TriPeaks, and Golf use shared card settings and their own playable layouts', async ({ page }) => {
+  const expectStagger = async (table, type) => {
+    if (type === 'pyramid') {
+      const offsets = await table.evaluate(element => {
+        const rows = [...element.querySelectorAll('.pyramid-layout .card-triangle-row')];
+        const first = rows[0].getBoundingClientRect();
+        const second = rows[1].getBoundingClientRect();
+        const cardWidth = rows[0].querySelector('.card-triangle-position').getBoundingClientRect().width;
+        const gap = parseFloat(getComputedStyle(rows[0]).columnGap);
+        return { offset: first.left - second.left, expected: (cardWidth + gap) / 2 };
+      });
+      expect(Math.abs(offsets.offset - offsets.expected)).toBeLessThan(1);
+    } else if (type === 'tripeaks') {
+      const offsets = await table.evaluate(element => {
+        const rows = [...element.querySelectorAll('.tripeaks-layout .card-triangle-row')];
+        const cardWidth = rows[0].querySelector('.card-triangle-position').getBoundingClientRect().width;
+        return {
+          cardWidth,
+          x: rows.map(row => {
+            const transform = getComputedStyle(row).transform;
+            return transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m41;
+          }),
+        };
+      });
+      for (const [actual, expected] of offsets.x.map((value, index) =>
+        [value, index === 0 ? -offsets.cardWidth / 2 : index === 2 ? offsets.cardWidth / 2 : 0])) {
+        expect(Math.abs(actual - expected)).toBeLessThan(1);
+      }
+    }
+  };
+
   for (const game of [
     { type: 'pyramid', title: 'Pyramid', cardCount: 28, stock: 24, rule: 'pairs that total 13' },
     { type: 'tripeaks', title: 'TriPeaks', cardCount: 28, stock: 23, rule: 'Ace and King connect' },
@@ -178,6 +208,10 @@ test('Pyramid, TriPeaks, and Golf use shared card settings and their own playabl
       await expect(table.locator('.card-columns .playing-card')).toHaveCount(game.cardCount);
     } else {
       await expect(table.locator('.card-triangle-position:not(.removed)')).toHaveCount(game.cardCount);
+      await expectStagger(table, game.type);
+      await page.setViewportSize({ width: 402, height: 874 });
+      await expectStagger(table, game.type);
+      await page.setViewportSize({ width: 1280, height: 720 });
     }
 
     const stock = app.locator('.card-stock button');
