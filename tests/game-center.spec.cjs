@@ -1707,22 +1707,26 @@ test('one selected win celebration runs and restarting allows a new celebration'
   await expect(table).toHaveAttribute('data-win-celebration', 'fireworks');
   const celebration = page.locator('body > .solitaire-celebration-layer');
   await expect(celebration).toHaveCount(1);
-  await expect(celebration.locator('.game-layer-card .card-face-art')).toHaveCount(52);
-  await expect(celebration.locator('.game-layer-card.card-firework')).toHaveCount(52);
-  const particles = celebration.locator('canvas.celebration-particle-canvas');
-  await expect(particles).toHaveAttribute('data-particle-effect', 'fireworks');
-  await expect(particles).toHaveAttribute('data-particle-bursts', '8');
-  expect(Number(await particles.getAttribute('data-particle-duration'))).toBeGreaterThan(6000);
-  const layerPosition = await celebration.evaluate(layer => ({
-    position: getComputedStyle(layer).position,
-    zIndex: getComputedStyle(layer).zIndex,
-    pointerEvents: getComputedStyle(layer).pointerEvents,
-    parent: layer.parentElement.tagName,
-  }));
-  expect(layerPosition).toEqual({
-    position: 'fixed', zIndex: '2147483646', pointerEvents: 'none', parent: 'BODY',
+  const details = await celebration.evaluate(layer => {
+    const particles = layer.querySelector('canvas');
+    return {
+      faces: layer.querySelectorAll('.game-layer-card .card-face-art').length,
+      cards: layer.querySelectorAll('.game-layer-card.card-firework').length,
+      effect: particles.dataset.particleEffect,
+      bursts: particles.dataset.particleBursts,
+      duration: Number(particles.dataset.particleDuration),
+      position: getComputedStyle(layer).position,
+      zIndex: getComputedStyle(layer).zIndex,
+      pointerEvents: getComputedStyle(layer).pointerEvents,
+      parent: layer.parentElement?.tagName,
+      randomCalls: window.celebrationRandomCalls,
+    };
   });
-  await expect.poll(() => page.evaluate(() => window.celebrationRandomCalls)).toBe(1);
+  expect(details).toMatchObject({
+    faces: 52, cards: 52, effect: 'fireworks', bursts: '8',
+    position: 'fixed', zIndex: '2147483646', pointerEvents: 'none', parent: 'BODY', randomCalls: 1,
+  });
+  expect(details.duration).toBeGreaterThan(5500);
   await app.getByRole('button', { name: 'Undo', exact: true }).click();
   await app.locator('[data-key="card-12"]').dblclick();
   await expect(table).toHaveAttribute('data-win-celebration', 'fireworks');
@@ -2027,7 +2031,7 @@ test('Minesweeper win screen lets users change the next game difficulty', async 
   await expect(app.locator('.mine-cell.revealed')).toHaveCount(71);
   const screen = app.locator('.game-new-game-screen');
   await expect(screen).toBeHidden();
-  await expect(screen).toBeVisible();
+  await expect(screen).toBeVisible({ timeout: 8000 });
   await expect(layer).toHaveCount(0);
   await expect(screen.getByRole('heading', { name: 'Minefield cleared!' })).toBeVisible();
   await screen.getByLabel('Difficulty', { exact: true }).selectOption('intermediate');

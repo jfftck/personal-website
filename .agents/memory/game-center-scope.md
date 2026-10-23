@@ -56,3 +56,9 @@ At game end, keep the finished board visible through its celebration before show
 **Why:** The user asked for clear end-of-game celebrations and color choice against the computer without changing the current default sides.
 
 **How to apply:** Respect reduced-motion settings, clean up celebration overlays when a game is reset or closed, and keep the final board visible underneath.
+
+Particle-heavy celebrations should use shared, composable canvas effects alongside the existing card and piece motion. Fireworks should be large, varied, and longer-lasting; waves can add splashes and tornadoes can add streaks.
+
+**Why:** The user requested richer particle effects without drawing large numbers of individual elements across the viewport.
+
+**How to apply:** Reuse the particle rendering system for future celebration details, preserve the underlying motion, and let the full particle effect finish before offering the next game.

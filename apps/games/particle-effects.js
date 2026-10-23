@@ -20,7 +20,15 @@ function randomSource() {
 }
 
 function makeEvents(type, width, height, random, options) {
-  if (Array.isArray(options.events)) return options.events;
+  if (Array.isArray(options.events)) {
+    return options.events.map(event => ({
+      count: 52,
+      radius: Math.min(width, height) * 0.13,
+      life: 1400,
+      palette: PALETTES[type] || PALETTES.fireworks,
+      ...event,
+    }));
+  }
 
   if (type === 'fireworks') {
     const count = options.burstCount || 8;
@@ -39,7 +47,7 @@ function makeEvents(type, width, height, random, options) {
     const count = options.burstCount || 7;
     return Array.from({ length: count }, (_, index) => ({
       delay: 180 + index * 330 + random() * 140,
-      x: width * (0.08 + ((index + random() * 0.8) / Math.max(1, count - 1)) * 0.84),
+      x: width * clamp(0.08 + ((index + random() * 0.8) / Math.max(1, count - 1)) * 0.84, 0.08, 0.94),
       y: height * (0.77 + random() * 0.13),
       count: 22 + Math.floor(random() * 20),
       radius: Math.min(width, height) * (0.1 + random() * 0.08),
@@ -48,20 +56,10 @@ function makeEvents(type, width, height, random, options) {
     }));
   }
 
-  if (type === 'explosions') {
-    return (options.events || []).map(event => ({
-      ...event,
-      count: event.count || 52,
-      radius: event.radius || Math.min(width, height) * 0.13,
-      life: event.life || 850 + random() * 550,
-      palette: event.palette || PALETTES.explosions,
-    }));
-  }
-
   return [];
 }
 
-function makeBurst(event, now, type, random, particles, rings) {
+function makeBurst(event, type, random, particles, rings) {
   const splash = type === 'splash';
   const palette = event.palette || PALETTES[type] || PALETTES.fireworks;
   if (!splash) {
@@ -81,22 +79,21 @@ function makeBurst(event, now, type, random, particles, rings) {
       : (index / event.count) * Math.PI * 2 + (random() - 0.5) * 0.16;
     const speed = splash
       ? 55 + random() * event.radius * 2.2
-      : event.radius * (0.55 + random() * 0.55) / (event.life / 1000);
+      : event.radius * (1.4 + random() * 0.9) / (event.life / 1000);
     particles.push({
       x: event.x,
       y: event.y,
       px: event.x,
       py: event.y,
-      vx: Math.cos(angle) * speed * (splash ? 1 : 1),
+      vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
-      gravity: splash ? 210 + random() * 180 : 55 + random() * 110,
-      drag: splash ? 0.982 : 0.989,
+      gravity: splash ? 210 + random() * 180 : 18 + random() * 42,
+      drag: splash ? 0.982 : 0.996,
       life: (splash ? 600 : 1250) + random() * (event.life - (splash ? 600 : 1250)),
       age: 0,
-      size: splash ? 1.5 + random() * 3.4 : 1.8 + random() * 4.2,
+      size: splash ? 1.5 + random() * 3.4 : 0.9 + random() * 2.1,
       color: palette[Math.floor(random() * palette.length)],
       shape: random() < (splash ? 0.5 : 0.76) ? 'streak' : 'dot',
-      started: now,
     });
   }
 }
@@ -126,7 +123,6 @@ function addTornadoStreaks(elapsed, width, height, random, particles) {
       size: 1.2 + random() * 2.2,
       color: PALETTES.streaks[Math.floor(random() * PALETTES.streaks.length)],
       shape: 'streak',
-      started: elapsed,
     });
   }
 }
@@ -168,6 +164,22 @@ export function createParticleAnimation(layer, type, bounds, options = {}) {
     throw new Error('Canvas particle effects are unavailable in this browser.');
   }
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  // Cache the soft light once per color, instead of blurring every spark every frame.
+  const glowSprites = new Map();
+  const getGlow = color => {
+    if (glowSprites.has(color)) return glowSprites.get(color);
+    const glow = document.createElement('canvas');
+    glow.width = glow.height = 32;
+    const glowContext = glow.getContext('2d');
+    const gradient = glowContext.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(0.18, color);
+    gradient.addColorStop(1, 'transparent');
+    glowContext.fillStyle = gradient;
+    glowContext.fillRect(0, 0, 32, 32);
+    glowSprites.set(color, glow);
+    return glow;
+  };
 
   const startTime = performance.now();
   let eventIndex = 0;
@@ -184,7 +196,7 @@ export function createParticleAnimation(layer, type, bounds, options = {}) {
 
     while (eventIndex < events.length && elapsed >= events[eventIndex].delay) {
       const event = events[eventIndex++];
-      makeBurst(event, now, type, random, particles, rings);
+      makeBurst(event, type, random, particles, rings);
     }
     if (type === 'streaks' && elapsed >= nextStreak && elapsed < spawnDuration) {
       addTornadoStreaks(elapsed, width, height, random, particles);
@@ -206,13 +218,15 @@ export function createParticleAnimation(layer, type, bounds, options = {}) {
       context.arc(ring.x, ring.y, ring.radius * (0.35 + progress * 1.3), 0, Math.PI * 2);
       context.stroke();
     }
+    context.shadowBlur = 0;
     for (const particle of particles) {
       particle.age += delta * 1000;
       const progress = clamp(particle.age / particle.life, 0, 1);
       particle.px = particle.x;
       particle.py = particle.y;
-      particle.vx *= particle.drag;
-      particle.vy = particle.vy * particle.drag + particle.gravity * delta;
+      const drag = Math.pow(particle.drag, delta * 60);
+      particle.vx *= drag;
+      particle.vy = particle.vy * drag + particle.gravity * delta;
       particle.x += particle.vx * delta;
       particle.y += particle.vy * delta;
       const fade = progress < 0.72 ? 1 : 1 - (progress - 0.72) / 0.28;
@@ -220,11 +234,12 @@ export function createParticleAnimation(layer, type, bounds, options = {}) {
       context.strokeStyle = particle.color;
       context.fillStyle = particle.color;
       context.lineWidth = particle.size;
-      context.shadowColor = particle.color;
-      context.shadowBlur = particle.size * 3.5;
+      const glowSize = particle.size * 5;
+      context.drawImage(getGlow(particle.color),
+        particle.x - glowSize / 2, particle.y - glowSize / 2, glowSize, glowSize);
       if (particle.shape === 'streak') {
         context.beginPath();
-        context.moveTo(particle.px, particle.py);
+        context.moveTo(particle.x - particle.vx * 0.085, particle.y - particle.vy * 0.085);
         context.lineTo(particle.x, particle.y);
         context.stroke();
       } else {
