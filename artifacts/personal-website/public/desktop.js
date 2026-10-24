@@ -970,6 +970,269 @@ function updateLauncherFileSearch() {
   return { query, documentCount, pictureCount, videoCount };
 }
 
+// ── Desktop quick search ──────────────────────────────────────
+const desktopSearch = $('desktop-search');
+const desktopSearchInput = $('desktop-search-input');
+const desktopSearchSuggestions = $('desktop-search-suggestions');
+const desktopSearchResults = $('desktop-search-results');
+const desktopSearchStatus = $('desktop-search-status');
+let desktopSearchItems = [];
+let desktopSearchItemsReady = false;
+let desktopSearchActiveIndex = -1;
+let desktopSearchResultId = 0;
+
+const SEARCH_FILE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg>';
+const SEARCH_GAME_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 6h10a4 4 0 0 1 3.9 3.1l1.5 6.6a3 3 0 0 1-5 2.8L15 16H9l-2.4 2.5a3 3 0 0 1-5-2.8l1.5-6.6A4 4 0 0 1 7 6z"/><path d="M7 9v5m-2.5-2.5h5M16 10h.01M19 13h.01"/></svg>';
+
+function getSearchPostDate(file) {
+  const match = file.url.match(/(?:^|\/)(\d{8})_/);
+  return match ? Number(match[1]) : 0;
+}
+
+function sortRecentPosts(files) {
+  return [...files].sort((a, b) => getSearchPostDate(b) - getSearchPostDate(a));
+}
+
+function closeDesktopSearch({ restoreFocus = false } = {}) {
+  desktopSearchSuggestions.hidden = true;
+  desktopSearchInput.setAttribute('aria-expanded', 'false');
+  desktopSearchInput.removeAttribute('aria-activedescendant');
+  desktopSearchActiveIndex = -1;
+  if (restoreFocus) desktopSearchInput.focus({ preventScroll: true });
+}
+
+function makeDesktopSearchItem({ id, title, detail, group, icon, queryTerms, activate }) {
+  return { id, title, detail, group, icon, queryTerms: queryTerms || title, activate };
+}
+
+function buildDesktopSearchItems() {
+  const latestPosts = sortRecentPosts(_launcherCache.posts || []).slice(0, 3);
+  const recentPostUrls = new Set(latestPosts.map(file => file.url));
+  const suggestions = [
+    ...latestPosts.map(file => makeDesktopSearchItem({
+      id: `file:posts:${file.url}`,
+      title: file.displayName,
+      detail: 'Recent post',
+      group: 'Recent posts',
+      icon: SEARCH_FILE_ICON,
+      queryTerms: `${file.displayName} post`,
+      activate: () => requestOpenFile(file),
+    })),
+    makeDesktopSearchItem({
+      id: 'games',
+      title: 'Games',
+      detail: 'Open Game Center',
+      group: latestPosts.length ? 'Quick access' : 'Apps and games',
+      icon: SEARCH_GAME_ICON,
+      queryTerms: 'games game center',
+      activate: () => openAppMenu(true),
+    }),
+    ...GAMES.map(game => makeDesktopSearchItem({
+      id: `game:${game.type}`,
+      title: game.title,
+      detail: 'Game',
+      group: 'Apps and games',
+      icon: game.iconSvg,
+      queryTerms: `${game.title} games game`,
+      activate: () => {
+        openApp(game.type);
+        closeAppMenu();
+      },
+    })),
+  ];
+
+  const appButtons = [...document.querySelectorAll('#app-list .app-launcher[data-type]')];
+  for (const button of appButtons) {
+    const type = button.dataset.type;
+    const title = button.querySelector('.app-launcher-name')?.textContent?.trim();
+    const icon = button.querySelector('.app-launcher-icon')?.innerHTML || SEARCH_FILE_ICON;
+    if (!type || !title || type === 'file-manager') continue;
+    suggestions.push(makeDesktopSearchItem({
+      id: `app:${type}`,
+      title,
+      detail: 'App',
+      group: 'Apps',
+      icon,
+      queryTerms: title,
+      activate: () => {
+        if (type === 'welcome') openWelcomeWindow();
+        else openApp(type);
+      },
+    }));
+  }
+
+  const fileLists = [
+    ...(_launcherCache.posts || []),
+    ...(_launcherCache.documents || []),
+    ...(_launcherCache.pictures || []),
+    ...(_launcherCache.videos || []),
+  ];
+  for (const file of fileLists) {
+    const isPost = file.folder === 'posts';
+    if (isPost && recentPostUrls.has(file.url)) continue;
+    suggestions.push(makeDesktopSearchItem({
+      id: `file:${file.folder}:${file.url}`,
+      title: file.displayName,
+      detail: isPost ? 'Post' : file.type === 'image' ? 'Picture' : file.type === 'video' ? 'Video' : 'Document',
+      group: 'Files',
+      icon: SEARCH_FILE_ICON,
+      queryTerms: `${file.displayName} ${file.folder} ${file.type}`,
+      activate: () => requestOpenFile(file),
+    }));
+  }
+
+  suggestions.push(makeDesktopSearchItem({
+    id: 'app:file-manager',
+    title: 'File Manager',
+    detail: 'Browse all files',
+    group: 'Apps',
+    icon: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>',
+    queryTerms: 'file manager files browse',
+    activate: () => openApp('file-manager'),
+  }));
+  return suggestions;
+}
+
+function renderDesktopSearchResults() {
+  const query = desktopSearchInput.value.trim().toLocaleLowerCase();
+  const defaults = desktopSearchItems.filter(item =>
+    item.detail === 'Recent post' || item.id === 'games' || item.id === 'app:file-manager');
+  const matches = query
+    ? desktopSearchItems.filter(item =>
+        `${item.title} ${item.detail} ${item.queryTerms}`.toLocaleLowerCase().includes(query))
+    : defaults;
+  const visible = matches.slice(0, 10);
+  desktopSearchActiveIndex = -1;
+  desktopSearchInput.removeAttribute('aria-activedescendant');
+  desktopSearchResults.replaceChildren();
+
+  if (!visible.length) {
+    const empty = document.createElement('p');
+    empty.className = 'desktop-search-empty';
+    empty.textContent = query ? 'No apps or files found.' : 'No recent posts are available.';
+    desktopSearchResults.append(empty);
+    desktopSearchStatus.textContent = empty.textContent;
+    return;
+  }
+
+  let currentGroup = '';
+  let groupElement;
+  visible.forEach((item, index) => {
+    if (item.group !== currentGroup) {
+      currentGroup = item.group;
+      groupElement = document.createElement('section');
+      groupElement.className = 'desktop-search-group';
+      groupElement.setAttribute('role', 'group');
+      const heading = document.createElement('h2');
+      heading.className = 'desktop-search-group-title';
+      heading.textContent = currentGroup;
+      heading.id = `desktop-search-group-${++desktopSearchResultId}`;
+      groupElement.setAttribute('aria-labelledby', heading.id);
+      groupElement.append(heading);
+      desktopSearchResults.append(groupElement);
+    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'desktop-search-result';
+    button.id = `desktop-search-result-${++desktopSearchResultId}`;
+    button.dataset.index = String(index);
+    button.setAttribute('role', 'option');
+    button.setAttribute('aria-selected', 'false');
+    button.setAttribute('aria-label', `${item.title}, ${item.detail}`);
+    const icon = document.createElement('span');
+    icon.className = 'desktop-search-result-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = item.icon;
+    const copy = document.createElement('span');
+    copy.className = 'desktop-search-result-copy';
+    const title = document.createElement('span');
+    title.className = 'desktop-search-result-title';
+    title.textContent = item.title;
+    const detail = document.createElement('span');
+    detail.className = 'desktop-search-result-detail';
+    detail.textContent = item.detail;
+    copy.append(title, detail);
+    button.append(icon, copy);
+    button.addEventListener('pointerdown', event => event.preventDefault());
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      closeDesktopSearch();
+      item.activate();
+    });
+    groupElement.append(button);
+  });
+  desktopSearchStatus.textContent = `${visible.length} suggestion${visible.length === 1 ? '' : 's'} available.`;
+}
+
+async function loadDesktopSearchItems() {
+  if (desktopSearchItemsReady) return;
+  desktopSearchStatus.textContent = 'Loading suggestions…';
+  await Promise.all([
+    ensureLauncherManifest('posts'),
+    ensureLauncherManifest('documents'),
+    ensureLauncherManifest('pictures'),
+    ensureLauncherManifest('videos'),
+  ]);
+  desktopSearchItems = buildDesktopSearchItems();
+  desktopSearchItemsReady = true;
+  renderDesktopSearchResults();
+}
+
+desktopSearchInput.addEventListener('focus', () => {
+  desktopSearchSuggestions.hidden = false;
+  desktopSearchInput.setAttribute('aria-expanded', 'true');
+  renderDesktopSearchResults();
+  loadDesktopSearchItems();
+});
+
+desktopSearchInput.addEventListener('input', () => {
+  desktopSearchSuggestions.hidden = false;
+  desktopSearchInput.setAttribute('aria-expanded', 'true');
+  if (desktopSearchItemsReady) renderDesktopSearchResults();
+  else loadDesktopSearchItems();
+});
+
+desktopSearchInput.addEventListener('keydown', event => {
+  const buttons = [...desktopSearchResults.querySelectorAll('.desktop-search-result')];
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    closeDesktopSearch({ restoreFocus: true });
+    return;
+  }
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if (!buttons.length) return;
+    event.preventDefault();
+    const delta = event.key === 'ArrowDown' ? 1 : -1;
+    desktopSearchActiveIndex = desktopSearchActiveIndex < 0
+      ? delta > 0 ? 0 : buttons.length - 1
+      : (desktopSearchActiveIndex + delta + buttons.length) % buttons.length;
+    buttons.forEach((button, index) => {
+      button.classList.toggle('active', index === desktopSearchActiveIndex);
+      button.setAttribute('aria-selected', String(index === desktopSearchActiveIndex));
+    });
+    desktopSearchInput.setAttribute(
+      'aria-activedescendant',
+      buttons[desktopSearchActiveIndex].id,
+    );
+    return;
+  }
+  if (event.key === 'Enter' && buttons.length) {
+    event.preventDefault();
+    buttons[desktopSearchActiveIndex < 0 ? 0 : desktopSearchActiveIndex].click();
+  }
+});
+
+desktopSearch.addEventListener('focusout', () => {
+  requestAnimationFrame(() => {
+    if (!desktopSearch.contains(document.activeElement)) closeDesktopSearch();
+  });
+});
+
+document.addEventListener('pointerdown', event => {
+  if (!desktopSearch.contains(event.target)) closeDesktopSearch();
+});
+
 launcherFileSearch.addEventListener('input', () => {
   const { query, documentCount, pictureCount, videoCount } = updateLauncherFileSearch();
   clearTimeout(launcherSearchAnnouncementTimer);

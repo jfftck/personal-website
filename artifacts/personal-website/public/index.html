@@ -331,6 +331,24 @@
   </div>
 
   <main id="desktop">
+    <section id="desktop-search" aria-label="Search apps and files">
+      <div class="desktop-search-control">
+        <svg class="desktop-search-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="10.8" cy="10.8" r="6.8"></circle>
+          <path d="m16 16 5 5"></path>
+        </svg>
+        <label class="sr-only" for="desktop-search-input">Search apps and files</label>
+        <input id="desktop-search-input" type="search" role="combobox"
+               aria-autocomplete="list" aria-haspopup="listbox"
+               placeholder="What do you want to do?" autocomplete="off"
+               aria-controls="desktop-search-suggestions" aria-expanded="false">
+      </div>
+      <div id="desktop-search-suggestions" class="desktop-search-suggestions"
+           role="listbox" aria-label="Search suggestions" hidden>
+        <div id="desktop-search-results"></div>
+      </div>
+      <p id="desktop-search-status" class="sr-only" role="status" aria-live="polite"></p>
+    </section>
     <div id="app-strip-wrapper">
       <div id="app-strip"></div>
     </div>
