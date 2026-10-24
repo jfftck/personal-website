@@ -4,9 +4,9 @@ const assert = require('node:assert/strict');
 let cards, mines, reversi, chess, gameState;
 test.before(async () => {
   [cards, mines, reversi, chess, gameState] = await Promise.all([
-    import('../apps/games/cards.js'), import('../apps/games/minesweeper.js'),
-    import('../apps/games/reversi.js'), import('../apps/games/chess.js'),
-    import('../apps/games/game-state.js'),
+    import('../artifacts/personal-website/public/apps/games/cards.js'), import('../artifacts/personal-website/public/apps/games/minesweeper.js'),
+    import('../artifacts/personal-website/public/apps/games/reversi.js'), import('../artifacts/personal-website/public/apps/games/chess.js'),
+    import('../artifacts/personal-website/public/apps/games/game-state.js'),
   ]);
 });
 const card = (rank, suit = 0, up = true) => ({ id: `${rank}-${suit}`, rank, suit, up });

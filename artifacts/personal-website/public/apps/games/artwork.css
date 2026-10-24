@@ -1,0 +1,95 @@
+/* Artwork is independent of the color theme and shared by every card game. */
+.playing-card .card-corner { position: relative; z-index: 1; white-space: nowrap; }
+.card-face-art { position: absolute; inset: 0; width: 100%; height: 100%; fill: currentColor; pointer-events: none; }
+.card-art-ornate, .card-art-minimal { display: none; }
+[data-card-face-style="ornate"] .card-art-classic,
+[data-card-face-style="minimal"] .card-art-classic { display: none; }
+[data-card-face-style="ornate"] .card-art-ornate,
+[data-card-face-style="minimal"] .card-art-minimal { display: inline; }
+.playing-card.face-down .card-face-art,
+.playing-card.face-down .card-corner { display: none; }
+.card-stock button { position: relative; overflow: hidden; }
+[data-card-back-style="diamonds"] :is(.playing-card.face-down, .card-stock button),
+[data-card-back-style="orbit"] :is(.playing-card.face-down, .card-stock button) {
+  background: linear-gradient(135deg, var(--card-back-start), var(--card-back-end));
+}
+[data-card-back-style="diamonds"] :is(.playing-card.face-down, .card-stock button)::before,
+[data-card-back-style="orbit"] :is(.playing-card.face-down, .card-stock button)::before {
+  content: ""; position: absolute; inset: .22rem; border: 1px solid currentColor;
+  color: var(--card-back-border);
+  border-radius: .3rem; pointer-events: none; opacity: .5;
+}
+[data-card-back-style="diamonds"] :is(.playing-card.face-down, .card-stock button)::before {
+  background: repeating-conic-gradient(from 45deg, transparent 0 25%, currentColor 0 50%) 50% / 12px 12px;
+}
+[data-card-back-style="orbit"] :is(.playing-card.face-down, .card-stock button)::before {
+  background: repeating-radial-gradient(ellipse at center, transparent 0 5px, currentColor 6px 7px, transparent 8px 12px);
+}
+.chess-shape-geometric, .chess-shape-carved { display: none; }
+[data-chess-piece-style="geometric"] .chess-shape-classic,
+[data-chess-piece-style="carved"] .chess-shape-classic { display: none; }
+[data-chess-piece-style="geometric"] .chess-shape-geometric,
+[data-chess-piece-style="carved"] .chess-shape-carved { display: inline; }
+.game-theme-preview--card-faces { background: var(--card-face, #fffdf5); color: var(--card-ink, #17232a); }
+.game-theme-card-sample {
+  position: relative; display: block; overflow: hidden; aspect-ratio: .7;
+  border: 1px solid var(--card-back-border, #9aabae); background: var(--card-face, #fffdf5);
+  color: var(--card-ink, #17232a); font-family: Georgia, serif;
+}
+.game-theme-card-sample .card-corner { position: relative; z-index: 1; white-space: nowrap; }
+.game-theme-preview--card-faces .game-theme-card-sample {
+  width: 1.65rem; height: 2.15rem; min-height: 0; font-size: .5rem;
+  padding: .1rem; border-radius: .15rem; pointer-events: none;
+}
+.game-theme-preview--card-backs { background: color-mix(in srgb, var(--app-bg) 70%, var(--app-text) 30%); color: #d3dfec; }
+.game-theme-preview--card-backs .game-theme-card-sample {
+  width: 1.55rem; height: 2rem; border-radius: .15rem; pointer-events: none;
+  color: var(--card-back-border, #d3dfec);
+  background: repeating-linear-gradient(45deg, transparent 0 3px, var(--card-back-pattern) 3px 4px),
+    linear-gradient(135deg, var(--card-back-start), var(--card-back-end));
+}
+.game-theme-preview--chess-artwork { grid-template-columns: 1fr 1fr; background: color-mix(in srgb, var(--app-bg) 70%, #86948c 30%); }
+.game-theme-preview--chess-artwork .game-theme-chess-piece { color: #f6eee1; }
+.game-theme-preview--chess-artwork .game-theme-chess-piece--dark { color: #263b46; }
+.game-theme-preview--card-faces .card-art-classic { display: inline; }
+.game-theme-preview--card-faces :is(.card-art-ornate, .card-art-minimal) { display: none; }
+.game-theme-preview--card-faces[data-card-face-style="ornate"] .card-art-classic,
+.game-theme-preview--card-faces[data-card-face-style="minimal"] .card-art-classic { display: none; }
+.game-theme-preview--card-faces[data-card-face-style="ornate"] .card-art-ornate,
+.game-theme-preview--card-faces[data-card-face-style="minimal"] .card-art-minimal { display: inline; }
+.game-theme-preview--chess-artwork .chess-shape-classic { display: inline; }
+.game-theme-preview--chess-artwork :is(.chess-shape-geometric, .chess-shape-carved) { display: none; }
+.game-theme-preview--chess-artwork[data-chess-piece-style="geometric"] .chess-shape-classic,
+.game-theme-preview--chess-artwork[data-chess-piece-style="carved"] .chess-shape-classic { display: none; }
+.game-theme-preview--chess-artwork[data-chess-piece-style="geometric"] .chess-shape-geometric,
+.game-theme-preview--chess-artwork[data-chess-piece-style="carved"] .chess-shape-carved { display: inline; }
+.game-theme-preview--card-backs[data-card-back-style="diamonds"] .game-theme-card-sample,
+.game-theme-preview--card-backs[data-card-back-style="orbit"] .game-theme-card-sample {
+  background: linear-gradient(135deg, var(--card-back-start), var(--card-back-end));
+}
+.game-theme-preview--card-backs[data-card-back-style="diamonds"] .game-theme-card-sample::before {
+  content: ""; position: absolute; inset: .15rem; opacity: .5;
+  background: repeating-conic-gradient(from 45deg, transparent 0 25%, currentColor 0 50%) 50% / 8px 8px;
+}
+.game-theme-preview--card-backs[data-card-back-style="orbit"] .game-theme-card-sample::before {
+  content: ""; position: absolute; inset: .15rem; opacity: .5;
+  background: repeating-radial-gradient(ellipse at center, transparent 0 2px, currentColor 3px 4px, transparent 5px 7px);
+}
+.game-toolbar .game-flag-toggle {
+  display: inline-flex; align-items: center; gap: .45rem;
+  border: 0; padding-inline: .15rem; background: transparent; box-shadow: none; white-space: nowrap;
+}
+.game-toolbar .game-flag-toggle:hover { background: transparent; }
+.game-flag-track {
+  display: inline-block; position: relative; width: 2.2rem; height: 1.25rem;
+  border: 1px solid var(--game-line); border-radius: 999px;
+  background: color-mix(in srgb, var(--app-text) 28%, var(--app-bg));
+}
+.game-flag-track::before {
+  content: ""; position: absolute; top: 2px; left: 2px; width: .88rem; height: .88rem;
+  border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #0005;
+  transition: transform 160ms ease;
+}
+.game-flag-toggle[aria-checked="true"] .game-flag-track { background: var(--accent, #069); border-color: var(--accent, #069); }
+.game-flag-toggle[aria-checked="true"] .game-flag-track::before { transform: translateX(.91rem); }
+@media (prefers-reduced-motion: reduce) { .game-flag-track::before { transition: none; } }

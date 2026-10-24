@@ -4,7 +4,7 @@ const { join } = require('node:path');
 
 // Run the production editing, rendering, tab-switch and unload code in an
 // isolated DOM. No authentication changes or real manifest writes are needed.
-const source = readFileSync(join(__dirname, '../admin/admin.js'), 'utf8');
+const source = readFileSync(join(__dirname, '../artifacts/api-server/legacy/admin/admin.js'), 'utf8');
 function between(start, end) {
   const from = source.indexOf(start);
   const to = source.indexOf(end, from);

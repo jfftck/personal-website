@@ -1,20 +1,22 @@
 {
   "name": "workspace",
-  "version": "1.0.0",
-  "main": "index.js",
+  "version": "0.0.0",
+  "license": "MIT",
   "scripts": {
-    "build": "node scripts/build-static.js",
     "test": "node --test tests/*.test.js",
-    "test:browser": "playwright test --config=tests/playwright.config.cjs"
+    "test:browser": "playwright test --config=tests/playwright.config.cjs",
+    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "private": true,
   "dependencies": {
-    "@clerk/backend": "^3.11.4",
-    "@clerk/clerk-js": "^5.127.0",
+    "@replit/connectors-sdk": "^0.4.3"
+  },
+  "devDependencies": {
     "@playwright/test": "^1.64.1",
-    "chess.js": "^1.4.0"
+    "prettier": "^3.9.10",
+    "typescript": "~5.9.3"
   }
 }

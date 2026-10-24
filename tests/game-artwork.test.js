@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cardFaceMarkup } from '../apps/games/card-artwork.js';
-import { chessPieceSvg } from '../apps/games/chess-piece-svg.js';
-import { rankLabel, SUITS } from '../apps/games/cards.js';
+import { cardFaceMarkup } from '../artifacts/personal-website/public/apps/games/card-artwork.js';
+import { chessPieceSvg } from '../artifacts/personal-website/public/apps/games/chess-piece-svg.js';
+import { rankLabel, SUITS } from '../artifacts/personal-website/public/apps/games/cards.js';
 
 test('every playing card provides independent pip, ornate, and minimal SVG artwork with one corner label', () => {
   for (let suit = 0; suit < 4; suit++) for (let rank = 1; rank <= 13; rank++) {

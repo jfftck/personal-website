@@ -1,28 +1,54 @@
 # Jeffrey M. Tackett — Personal Website
 
-## Project Overview
-A personal website for Jeffrey M. Tackett. The site is a fully static project served by `static-web-server` on port 80.
+Personal website with a tiling desktop, document and media viewers, and browser games.
 
-### Pages
-- `index.html` — The current live personal page (curtain animation, article grid, theme selector)
-- `desktop.html` — **New:** Niri-style tiling window manager desktop (to replace index.html eventually)
+## Run & Operate
 
-### Tech stack
-- Vanilla HTML5, CSS3 (custom properties, scroll-snap, backdrop-filter, logical properties)
-- Vanilla ES-module JavaScript (no frameworks, no build tools)
-- `static-web-server` for serving files
-- `signal.js` — custom reactive signals (used in gallery, not in desktop)
+- Start the managed `artifacts/personal-website: web` and `artifacts/api-server: API Server` workflows to preview the site.
+- `pnpm test` — original game and server unit tests
+- `pnpm test:browser` — original browser regression tests (uses `REPLIT_DEV_DOMAIN` by default)
+- `pnpm run typecheck` — full typecheck across all packages
+- `pnpm run build` — typecheck + build all packages
+- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
+- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+- The existing website does not use the scaffold database. Content remains file-based.
+- Existing admin authentication uses the external Clerk configuration; preserve it.
 
-### Key files
-| File | Purpose |
-|---|---|
-| `index.html / index.css / index.js` | Current main page |
-| `desktop.html / desktop.css / desktop.js` | New Niri-style desktop page |
-| `signal.js` | Reactive signals primitive |
-| `gallery.js` | ArrowJS-based gallery component (in progress) |
-| `jmt.svg` | Site logo |
+## Stack
 
-## User Preferences
-- No frameworks or build tools — stay vanilla HTML/CSS/JS
-- New pages are added alongside existing ones; don't replace `index.html` without explicit instruction
-- Keep responsive breakpoints: small portrait (≤640px portrait), medium (641px–1023px), large (≥1024px)
+- pnpm workspaces, Node.js 24, TypeScript 5.9
+- API: Express 5
+- DB: PostgreSQL + Drizzle ORM
+- Validation: Zod (`zod/v4`), `drizzle-zod`
+- API codegen: Orval (from OpenAPI spec)
+- Build: esbuild (CJS bundle)
+
+## Where things live
+
+- `artifacts/personal-website/public/` — original browser-ready site, assets, manifests, and content
+- `artifacts/personal-website/scripts/build-static.cjs` — copies the original static site without bundling or changing its URLs
+- `artifacts/api-server/legacy/admin/` — preserved admin UI and request handler
+- `artifacts/api-server/src/app.ts` — mounts the legacy handler before body parsers, preserving streaming uploads
+- `tests/` — preserved regression tests with workspace-relative imports
+
+## Architecture decisions
+
+- Keep the existing vanilla website and custom API layer intact during migration; do not rewrite it to use scaffold React components or generated hooks.
+- Mutable content URLs route to the same backend storage used by admin edits, including in production.
+- The admin console remains at its original URL. Creating a separate Library app is separate work.
+
+## Product
+
+_Describe the high-level user-facing capabilities of this app once they exist._
+
+## User preferences
+
+_Populate as you build — explicit user instructions worth remembering across sessions._
+
+## Gotchas
+
+_Populate as you build — sharp edges, "always run X before Y" rules._
+
+## Pointers
+
+- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details

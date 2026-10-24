@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Personal Website"
+description = "The existing personal website, preserved with its desktop interface, documents, media galleries, games, and administration routes."
+version = "1.0.0"
+id = "artifacts/personal-website"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19147
+
+[services.development]
+run = "pnpm --filter @workspace/personal-website run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/personal-website", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/personal-website/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19147"
+BASE_PATH = "/"

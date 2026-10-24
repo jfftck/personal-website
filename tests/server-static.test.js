@@ -19,7 +19,7 @@ async function waitForServer() {
 }
 
 test.before(async () => {
-  server = spawn(process.execPath, ['admin/server.js'], {
+  server = spawn(process.execPath, ['artifacts/api-server/legacy/admin/server.js'], {
     env: { ...process.env, PORT: String(PORT), SESSION_SECRET: 'test-session-secret' },
     stdio: 'ignore',
   });
@@ -35,6 +35,14 @@ test('serves desktop assets', async () => {
     const response = await fetch(`http://127.0.0.1:${PORT}${pathname}`);
     assert.equal(response.status, 200, pathname);
   }
+});
+
+test('admin bootstrap keeps API and Clerk requests on the shared origin', async () => {
+  const response = await fetch(`http://127.0.0.1:${PORT}/admin/admin.html`);
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /window\.ADMIN_API_BASE = '';/);
+  assert.doesNotMatch(html, /:3001|-3001/);
 });
 
 test('does not expose hidden, server, dependency, or memory files', async () => {

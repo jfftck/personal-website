@@ -1,5 +1,4 @@
 #!/bin/bash
 set -e
-
-# Static site — no dependencies to install or migrations to run.
-echo "Post-merge setup complete."
+pnpm install --frozen-lockfile
+# The preserved website uses file-based content, not the scaffold database.

@@ -4,7 +4,7 @@ const { join } = require('node:path');
 
 // Exercise the real list/editor functions in an isolated DOM, without changing
 // the admin's authentication or writing to any on-disk manifests.
-const source = readFileSync(join(__dirname, '../admin/admin.js'), 'utf8');
+const source = readFileSync(join(__dirname, '../artifacts/api-server/legacy/admin/admin.js'), 'utf8');
 const schemas = source.slice(source.indexOf('const SECTIONS ='), source.indexOf('// ── API base'));
 const editing = source.slice(source.indexOf('function makeEditable('), source.indexOf('// ── Rename a file'));
 const rendering = source.slice(source.indexOf('function renderList('), source.indexOf('// ── Delete'));

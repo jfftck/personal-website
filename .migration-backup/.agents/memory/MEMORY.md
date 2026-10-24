@@ -1,0 +1,8 @@
+- [Desktop module split](desktop-module-split.md) — desktop.js split into 7 ES modules; drag targets individual windows not columns; 3-zone drop system.
+- [Clerk script injection](clerk-script-injection.md) — clerk.browser.js needs data-clerk-publishable-key on the script tag at load time; Go proxy also ruled out (network-level block).
+- [Reminder delivery scope](reminder-delivery-scope.md) — reminders intentionally run only while the page is open so production can remain static.
+- [Game Center scope](game-center-scope.md) — preserve root entries, browser-local games, independent board/piece themes, and Settings dialogs.
+- [Game contrast verification](game-contrast-verification.md) — test numbers on revealed cells, flags on untouched cells, and every gradient stop with finite ratios.
+- [Game preview isolation](game-preview-isolation.md) — appearance samples must not share live-game classes used for card counts or event delegation.
+- [Layered-card hit tests](layered-card-hit-tests.md) — sample visible interior points; fractional card edges can hit a neighbor despite non-overlapping rectangle calculations.
+- [Viewer restoration](viewer-restoration.md) — pending selections must survive session saves before asynchronous manifests finish loading.
