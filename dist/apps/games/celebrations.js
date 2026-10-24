@@ -1,6 +1,7 @@
-import { chooseUnseenWinCelebration, isRed, SUITS } from './cards.js';
+import { chooseUnseenWinCelebration, chooseWinCelebration, isRed, SUITS } from './cards.js';
 import { paintCardFace } from './card-artwork.js';
 import { createParticleAnimation } from './particle-effects.js';
+import { getWinAnimationPreference } from './win-animation-settings.js';
 
 const CELEBRATION_HISTORY_KEY = 'game-center-solitaire-celebrations-v1';
 let trackedCelebrations = null;
@@ -22,6 +23,12 @@ export function chooseNextWinCelebration(random = Math.random) {
     globalThis.localStorage?.setItem(CELEBRATION_HISTORY_KEY, JSON.stringify(trackedCelebrations));
   } catch {}
   return choice.celebration;
+}
+
+export function chooseConfiguredWinCelebration(random = Math.random, avoidRecentRepeats = true) {
+  const preference = getWinAnimationPreference('solitaire');
+  if (preference !== 'random') return preference;
+  return avoidRecentRepeats ? chooseNextWinCelebration(random) : chooseWinCelebration(random);
 }
 
 const unit = (index, salt = 0) => {
@@ -343,33 +350,70 @@ function animateTornado(sprites, bounds, layer) {
   sprites.forEach((sprite, index) => {
     const startX = sprite.x + sprite.width / 2;
     const startY = sprite.y + sprite.height / 2;
-    const apexX = entryX + (unit(index, 16) - 0.5) * Math.min(12, bounds.width * 0.02);
+    const apexX = entryX + (unit(index, 16) - 0.5) * Math.min(10, bounds.width * 0.015);
     const phase = index / Math.max(1, sprites.length) * Math.PI * 2 + unit(index, 14) * 0.35;
     const delay = index * 42;
-    const duration = 5200 + unit(index, 17) * 2800;
-    const fadeOffset = 0.66 + unit(index, 18) * 0.18;
+    const fadeDuration = 1000 + unit(index, 18) * 4000;
+    const pathDuration = 3500 + unit(index, 17) * 1800;
+    const fadeStartProgress = 0.4 + unit(index, 19) * 0.22;
+    const endProgress = Math.min(
+      0.98,
+      fadeStartProgress + 0.12 + 0.28 * (fadeDuration / 5000),
+    );
+    const fadeStartTime = pathDuration * fadeStartProgress;
+    const duration = fadeStartTime + fadeDuration;
+    const topBuildTime = fadeStartTime * 0.18;
+    const timeAtProgress = progress => progress <= fadeStartProgress
+      ? topBuildTime + (fadeStartTime - topBuildTime) * progress / fadeStartProgress
+      : fadeStartTime + fadeDuration * (progress - fadeStartProgress) / (endProgress - fadeStartProgress);
+    const offsetAtProgress = progress => Math.min(1, Math.max(0, timeAtProgress(progress) / duration));
+    const opacityAtProgress = progress => progress <= fadeStartProgress
+      ? 1
+      : Math.max(0, 1 - (progress - fadeStartProgress) / (endProgress - fadeStartProgress));
     animationEnd = Math.max(animationEnd, delay + duration);
     const frames = [
       { transform: transform(0, 0, 1), opacity: 1, offset: 0 },
-      { transform: transform(apexX - startX, -sprite.height / 2 - startY, 0.48), opacity: 1, offset: 0.1 },
-    ];
-    for (let step = 0; step <= 48; step++) {
-      const progress = step / 48;
-      const radius = bounds.width * (0.008 + 0.22 * progress);
-      const angle = phase + direction * progress * Math.PI * 5;
-      const x = apexX + Math.cos(angle) * radius;
-      const bottomY = bounds.height - sprite.height * 0.45;
-      const y = -sprite.height / 2 + progress * (bottomY + sprite.height / 2);
-      const scale = 0.48 + progress * 0.86 + Math.sin(angle) * 0.06;
-      frames.push({
-        transform: transform(x - startX, y - startY, scale, direction * progress * 900),
+      {
+        transform: transform(apexX - startX, bounds.height * 0.025 - startY, 0.48),
         opacity: 1,
-        offset: 0.1 + progress * 0.54,
+        offset: fadeStartTime * 0.05 / duration,
+      },
+    ];
+
+    // Cards spread around the funnel's top, then spiral downward through a
+    // cone that narrows toward its bottom point.
+    for (let step = 1; step <= 24; step++) {
+      const progress = step / 24;
+      const radius = bounds.width * (0.006 + 0.21 * progress);
+      const angle = phase + direction * progress * Math.PI * 2;
+      const x = apexX + Math.cos(angle) * radius;
+      const y = bounds.height * (0.025 + 0.12 * progress);
+      const offset = (fadeStartTime * 0.05 + (topBuildTime - fadeStartTime * 0.05) * progress) / duration;
+      frames.push({
+        transform: transform(x - startX, y - startY, 0.48 + progress * 0.2, direction * progress * 360),
+        opacity: 1,
+        offset,
       });
     }
-    const lastFrame = frames.at(-1);
-    frames.push({ ...lastFrame, opacity: 1, offset: fadeOffset });
-    frames.push({ ...lastFrame, opacity: 0, offset: 1 });
+
+    const descentProgresses = new Set([
+      ...Array.from({ length: 48 }, (_, step) => endProgress * (step + 1) / 48),
+      fadeStartProgress,
+      endProgress,
+    ]);
+    for (const progress of [...descentProgresses].sort((a, b) => a - b)) {
+      const radius = bounds.width * (0.006 + 0.21 * (1 - progress));
+      const angle = phase + direction * (1 + progress * 4) * Math.PI * 2;
+      const x = apexX + Math.cos(angle) * radius;
+      const y = bounds.height * (0.145 + 0.82 * progress);
+      const scale = 0.68 + progress * 0.68 + Math.sin(angle) * 0.05;
+      frames.push({
+        transform: transform(x - startX, y - startY, scale, direction * (360 + progress * 1440)),
+        opacity: opacityAtProgress(progress),
+        offset: offsetAtProgress(progress),
+      });
+    }
+
     sprite.element.classList.add('card-tornado');
     sprite.element.animate(frames, {
       duration,

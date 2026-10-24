@@ -7,6 +7,7 @@ import { createGameSession, inspectGameSession, restoreChess } from './game-stat
 import { addGameThemeControl, addGameThemeResetControl } from './themes.js';
 import { chessPieceSvg } from './chess-piece-svg.js';
 import { createBoardCelebration, chooseBoardCelebration } from './game-celebrations.js';
+import { boardWinAnimationChoices, getWinAnimationPreference, setWinAnimationPreference } from './win-animation-settings.js';
 
 const names = { k: 'King', q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight', p: 'Pawn' };
 const squareName = index => `${'abcdefgh'[index % 8]}${8 - Math.floor(index / 8)}`;
@@ -51,6 +52,12 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     restart();
   }));
   settings.addGameOption(colorControl);
+  settings.addGameOption(selectControl(
+    'Win animation',
+    boardWinAnimationChoices,
+    getWinAnimationPreference(kind),
+    value => setWinAnimationPreference(kind, value),
+  ));
   const removeBoardTheme = addGameThemeControl(el, settings.appearanceOptions, isChess ? 'chessBoard' : 'reversiBoard');
   const removePieceTheme = addGameThemeControl(el, settings.appearanceOptions, isChess ? 'chessPieces' : 'reversiPieces');
   const removePieceStyle = isChess ? addGameThemeControl(el, settings.appearanceOptions, 'chessArtwork') : null;
@@ -150,7 +157,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
               const score = reversiScore(game.board);
               return score.black === score.white ? null : score.black > score.white ? 'black' : 'white';
             })();
-          const effect = chooseBoardCelebration();
+          const effect = chooseBoardCelebration(kind);
           celebrationCleanup = createBoardCelebration(kind, board, winner, effect, () => {
             celebrationCleanup = null;
             showEndScreen();

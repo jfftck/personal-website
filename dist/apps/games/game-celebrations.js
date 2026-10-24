@@ -1,13 +1,16 @@
 import { createParticleAnimation } from './particle-effects.js';
+import { boardWinAnimationChoices, getWinAnimationPreference } from './win-animation-settings.js';
 
-const effects = ['pulse', 'fade', 'fireworks', 'knock'];
+const effects = boardWinAnimationChoices.slice(1).map(([effect]) => effect);
 
 const unit = (index, salt = 0) => {
   const value = Math.sin((index + 1) * 127.1 + (salt + 1) * 311.7) * 43758.5453;
   return value - Math.floor(value);
 };
 
-export function chooseBoardCelebration(random = Math.random) {
+export function chooseBoardCelebration(kind, random = Math.random) {
+  const preference = getWinAnimationPreference(kind);
+  if (preference !== 'random') return preference;
   return effects[Math.max(0, Math.min(effects.length - 1, Math.floor(random() * effects.length)))];
 }
 

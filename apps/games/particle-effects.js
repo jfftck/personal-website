@@ -102,7 +102,8 @@ function addTornadoStreaks(elapsed, width, height, random, particles, spawnDurat
   const progress = clamp(elapsed / spawnDuration, 0, 1);
   const centerX = entryX;
   const centerY = -45 + progress * (height + 100);
-  const radius = width * (0.22 * progress + 0.006);
+  const spread = progress < 0.24 ? progress / 0.24 : (1 - progress) / 0.76;
+  const radius = width * (0.006 + 0.22 * clamp(spread, 0, 1));
   const angle = progress * Math.PI * 5;
 
   for (let index = 0; index < 7; index++) {

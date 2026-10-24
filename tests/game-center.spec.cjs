@@ -1739,6 +1739,61 @@ test('one selected win celebration runs and restarting allows a new celebration'
   await expect(app.locator('.solitaire-table')).not.toHaveAttribute('data-win-celebration', /.+/);
 });
 
+test('solitaire win animation can be fixed or random and is shared across card games', async ({ page }) => {
+  const app = await restoreGame(page, savedKlondike({
+    columns: [[[13, 0]]],
+    foundations: { 0: Array.from({ length: 12 }, (_, index) => index + 1),
+      1: Array.from({ length: 13 }, (_, index) => index + 1),
+      2: Array.from({ length: 13 }, (_, index) => index + 1),
+      3: Array.from({ length: 13 }, (_, index) => index + 1) },
+  }));
+  const dialog = await openSettings(app);
+  const animation = dialog.getByLabel('Win animation', { exact: true });
+  await expect(animation).toHaveValue('random');
+  await expect(animation.locator('option')).toHaveCount(7);
+  await animation.selectOption('tornado');
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).solitaire))
+    .toBe('tornado');
+  await dialog.getByRole('button', { name: 'Close settings' }).click();
+
+  await app.locator('[data-key="card-12"]').dblclick();
+  const table = app.locator('.solitaire-table');
+  await expect(table).toHaveAttribute('data-win-celebration', 'tornado');
+  await expect(page.locator('body > .solitaire-celebration-layer .card-tornado')).toHaveCount(52);
+  await app.getByRole('button', { name: 'New deal' }).click();
+
+  const spider = await openGame(page, 'spider');
+  const spiderSettings = await openSettings(spider);
+  await expect(spiderSettings.getByLabel('Win animation', { exact: true })).toHaveValue('tornado');
+  await spiderSettings.getByLabel('Win animation', { exact: true }).selectOption('random');
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).solitaire))
+    .toBe('random');
+});
+
+test('Chess and Reversi can use a fixed win animation or random selection', async ({ page }) => {
+  const chess = await openGame(page, 'chess');
+  const chessSettings = await openSettings(chess);
+  const chessAnimation = chessSettings.getByLabel('Win animation', { exact: true });
+  await expect(chessAnimation).toHaveValue('random');
+  await expect(chessAnimation.locator('option')).toHaveCount(5);
+  await chessAnimation.selectOption('knock');
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).chess))
+    .toBe('knock');
+  await chessSettings.getByRole('button', { name: 'Close settings' }).click();
+
+  const reversi = await openGame(page, 'reversi');
+  const reversiSettings = await openSettings(reversi);
+  const reversiAnimation = reversiSettings.getByLabel('Win animation', { exact: true });
+  await expect(reversiAnimation).toHaveValue('random');
+  await reversiAnimation.selectOption('fade');
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).reversi))
+    .toBe('fade');
+});
+
 test('bounce and spiral win celebrations use floating card layers too', async ({ page }) => {
   const winningDeal = savedKlondike({
     columns: [[[13, 0]]],
@@ -1878,16 +1933,17 @@ test('rain, wave, and tornado celebrations animate changing cards on the fixed l
           const startX = parseFloat(card.style.left) + width / 2;
           const startY = parseFloat(card.style.top) + height / 2;
           const frames = card.getAnimations()[0].effect.getKeyframes();
-          const pointAt = offset => {
-            const frame = frames.find(keyframe => Math.abs(keyframe.offset - offset) < 0.0001);
+          const pointAt = frame => {
             const matrix = new DOMMatrixReadOnly(frame.transform);
             return { x: startX + matrix.m41, y: startY + matrix.m42 };
           };
           const timing = card.getAnimations()[0].effect.getTiming();
-          const fadeStart = Number(frames.at(-2).offset);
+          const firstFadingFrame = frames.findIndex(frame => Number(frame.opacity) < 1);
+          const fadeStart = Number(frames[firstFadingFrame - 1].offset);
           return {
-            apex: pointAt(0.1),
-            bottom: pointAt(0.64),
+            entry: pointAt(frames[1]),
+            top: pointAt(frames[25]),
+            exit: pointAt(frames.at(-1)),
             duration: timing.duration,
             fadeDuration: timing.duration * (1 - fadeStart),
             finalOpacity: Number(frames.at(-1).opacity),
@@ -1897,21 +1953,26 @@ test('rain, wave, and tornado celebrations animate changing cards on the fixed l
         return {
           width: bounds.width,
           height: bounds.height,
-          apexXSpread: range(samples.map(sample => sample.apex.x)),
-          apexY: samples.map(sample => sample.apex.y),
-          bottomXSpread: range(samples.map(sample => sample.bottom.x)),
-          bottomY: samples.map(sample => sample.bottom.y),
+          entryXSpread: range(samples.map(sample => sample.entry.x)),
+          topXSpread: range(samples.map(sample => sample.top.x)),
+          topY: samples.map(sample => sample.top.y),
+          exitXSpread: range(samples.map(sample => sample.exit.x)),
+          exitY: samples.map(sample => sample.exit.y),
           durations: new Set(samples.map(sample => sample.duration)).size,
           fadeDurations: samples.map(sample => sample.fadeDuration),
           finalOpacities: samples.map(sample => sample.finalOpacity),
         };
       });
-      expect(funnel.apexXSpread).toBeLessThan(funnel.width * 0.04);
-      expect(funnel.apexY.every(y => y < 0)).toBe(true);
-      expect(funnel.bottomXSpread).toBeGreaterThan(funnel.width * 0.2);
-      expect(funnel.bottomY.every(y => y > funnel.height - 100 && y <= funnel.height)).toBe(true);
+      expect(funnel.entryXSpread).toBeLessThan(funnel.width * 0.03);
+      expect(funnel.topXSpread).toBeGreaterThan(funnel.width * 0.3);
+      expect(funnel.topXSpread).toBeGreaterThan(funnel.exitXSpread * 1.5);
+      expect(funnel.topY.every(y => y > 0 && y < funnel.height * 0.2)).toBe(true);
+      expect(funnel.exitY.every(y => y > funnel.height * 0.6 && y < funnel.height)).toBe(true);
+      expect(Math.min(...funnel.exitY)).toBeLessThan(funnel.height * 0.85);
+      expect(Math.max(...funnel.exitY)).toBeGreaterThan(funnel.height * 0.85);
       expect(funnel.durations).toBeGreaterThan(1);
-      expect(funnel.fadeDurations.every(duration => duration > 800 && duration < 2800)).toBe(true);
+      expect(funnel.fadeDurations.every(duration => duration >= 1000 && duration <= 5000)).toBe(true);
+      expect(Math.max(...funnel.fadeDurations) - Math.min(...funnel.fadeDurations)).toBeGreaterThan(1000);
       expect(funnel.finalOpacities.every(opacity => opacity === 0)).toBe(true);
     }
     if (effect === 'rain') {
