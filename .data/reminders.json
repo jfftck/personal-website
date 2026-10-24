@@ -1,0 +1,14 @@
+{
+  "subscriptions": {
+    "59e1f11e2f6ddb02d040147accd823f8eae6": {
+      "endpoint": "https://updates.push.services.mozilla.com/wpush/v2/gAAAAABqp6DzkQWLdCBxaNw6cFqGvZKfqI8PSolIeaDaM4Cdel6KhAyFlNoWjKszhDgpAOlEOm1BiYAlP22KLd-IzemCIWbXtpuxO9Bjc3INEWtn2Vr_ERbHKlLYtPkNmY3ytd3rmWyfIErp__1Wa-beiaJ73CZcN_Lzn9IE8RhOHn1P69R3zRs",
+      "expirationTime": null,
+      "keys": {
+        "auth": "O4-ZA_sgqrdcHUonMcL5qA",
+        "p256dh": "BE79Qlw0NTgdUn2N9g0QC9Lr-SMPu7IWfZgWT4nX4yZ-EYehGozJWZmidMKFu4oFYnZoknqvg1hvsEnanMKxQM8"
+      }
+    }
+  },
+  "reminders": {},
+  "invalidEndpoints": {}
+}
