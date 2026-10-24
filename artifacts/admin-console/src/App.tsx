@@ -7,7 +7,7 @@ import NotFound from '@/pages/not-found';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
-const ADMIN_PAGE = '/console/admin/admin.html';
+const ADMIN_PAGE = `${import.meta.env.BASE_URL}admin/admin.html`;
 
 function Home() {
   const [attempt, setAttempt] = useState(0);

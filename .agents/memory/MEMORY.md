@@ -1,1 +1,2 @@
 - [Preview overlay compatibility](website-preservation.md) — template banners can cover the desktop launcher and intercept clicks.
+- [Preview routing checks](preview-routing.md) — verify the actual development domain before treating localhost:80 errors as broken artifact routes.

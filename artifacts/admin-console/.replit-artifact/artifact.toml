@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/console/"
+previewPath = "/admin-console/"
 title = "Admin Console"
 description = "The existing JMT Content Admin for managing posts, documents, pictures, videos, and welcome content through the shared administration API."
 version = "1.0.0"
@@ -8,7 +8,7 @@ router = "path"
 
 [[services]]
 name = "web"
-paths = [ "/console/" ]
+paths = [ "/admin-console/" ]
 localPort = 26208
 
 [services.development]
@@ -25,4 +25,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "26208"
-BASE_PATH = "/console/"
+BASE_PATH = "/admin-console/"
