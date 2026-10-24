@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/console/"
+title = "Admin Console"
+description = "The existing JMT Content Admin for managing posts, documents, pictures, videos, and welcome content through the shared administration API."
+version = "1.0.0"
+id = "artifacts/admin-console"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/console/" ]
+localPort = 26208
+
+[services.development]
+run = "pnpm --filter @workspace/admin-console run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/admin-console", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/admin-console/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26208"
+BASE_PATH = "/console/"

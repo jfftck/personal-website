@@ -6,8 +6,9 @@ const path = require('path');
 const url  = require('url');
 
 const PORT = Number(process.env.PORT) || 80;
-const ROOT = path.resolve(__dirname, '../../../personal-website/public');
-const ADMIN_ROOT = __dirname;
+const WORKSPACE_ROOT = process.cwd();
+const ROOT = path.resolve(WORKSPACE_ROOT, 'artifacts/personal-website/public');
+const ADMIN_ROOT = path.resolve(WORKSPACE_ROOT, 'artifacts/api-server/legacy/admin');
 const ALLOWED_DIRS = new Set(['videos', 'pictures', 'documents', 'posts']);
 const PUBLIC_ROOT_FILES = new Set([
   'index.html',
