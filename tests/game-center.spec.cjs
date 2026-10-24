@@ -1750,7 +1750,8 @@ test('solitaire win animation can be fixed or random and is shared across card g
   const dialog = await openSettings(app);
   const animation = dialog.getByLabel('Win animation', { exact: true });
   await expect(animation).toHaveValue('random');
-  await expect(animation.locator('option')).toHaveCount(7);
+  await expect(animation.locator('option')).toHaveCount(8);
+  await expect(animation.locator('option[value="kitchen-sink"]')).toHaveText('Kitchen Sink');
   await animation.selectOption('tornado');
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).solitaire))
@@ -1794,7 +1795,7 @@ test('Chess and Reversi can use a fixed win animation or random selection', asyn
     .toBe('fade');
 });
 
-test('bounce and spiral win celebrations use floating card layers too', async ({ page }) => {
+test('bounce, Kitchen Sink, and spiral win celebrations use floating card layers too', async ({ page }) => {
   const winningDeal = savedKlondike({
     columns: [[[13, 0]]],
     foundations: { 0: Array.from({ length: 12 }, (_, index) => index + 1),
@@ -1802,9 +1803,9 @@ test('bounce and spiral win celebrations use floating card layers too', async ({
       2: Array.from({ length: 13 }, (_, index) => index + 1),
       3: Array.from({ length: 13 }, (_, index) => index + 1) },
   });
-  for (const [randomValue, effect] of [[0.2, 'bounce'], [0.2, 'spiral']]) {
+  for (const effect of ['bounce', 'kitchen-sink', 'spiral']) {
     const app = await restoreGame(page, winningDeal);
-    await page.evaluate(value => { Math.random = () => value; }, randomValue);
+    await setGameOption(app, 'Win animation', effect);
     await app.locator('[data-key="card-12"]').dblclick();
     const layer = page.locator('body > .solitaire-celebration-layer');
     await expect(layer).toHaveCount(1);
@@ -1833,18 +1834,30 @@ test('bounce and spiral win celebrations use floating card layers too', async ({
       expect(gatheredCards.every(card => Math.abs(card.y - card.topY) < 12)).toBe(true);
       expect(gatheredCards.every(card => card.gatherDuration === 420)).toBe(true);
 
-      await page.waitForTimeout(1750);
+      await page.waitForTimeout(2150);
       const bouncingCards = await layer.locator('.win-bounce').evaluateAll(elements => elements.map(card => {
         const animation = card.getAnimations().find(candidate =>
           candidate.effect.getKeyframes().some(frame => Number(frame.opacity) < 1));
         if (!animation) return null;
         const frames = animation.effect.getKeyframes();
-        const landing = new DOMMatrixReadOnly(frames[1].transform);
-        const peak = new DOMMatrixReadOnly(frames[2].transform);
+        const landing = new DOMMatrixReadOnly(frames[20].transform);
+        const peak = new DOMMatrixReadOnly(frames[36].transform);
+        const heights = Array.from({ length: 4 }, (_, bounce) =>
+          landing.m42 - new DOMMatrixReadOnly(frames[36 + bounce * 32].transform).m42);
+        const parent = card.closest('.solitaire-celebration-layer');
         const fadeStart = frames.find(frame => Number(frame.opacity) < 1).offset;
         return {
           duration: animation.effect.getTiming().duration,
-          horizontalBounce: Math.abs(peak.m41 - landing.m41),
+          height: landing.m42 - peak.m42,
+          heights,
+          boardHeight: parseFloat(parent.style.height),
+          visible: frames.every(frame => {
+            const matrix = new DOMMatrixReadOnly(frame.transform);
+            const x = parseFloat(card.style.left) + parseFloat(card.style.width) / 2 + matrix.m41;
+            const y = parseFloat(card.style.top) + parseFloat(card.style.height) / 2 + matrix.m42;
+            return x >= 0 && x <= parseFloat(parent.style.width)
+              && y >= 0 && y <= parseFloat(parent.style.height);
+          }),
           fadeDuration: animation.effect.getTiming().duration * (1 - fadeStart),
           finalOpacity: Number(frames.at(-1).opacity),
           dropY: landing.m42,
@@ -1853,12 +1866,24 @@ test('bounce and spiral win celebrations use floating card layers too', async ({
       expect(bouncingCards).toHaveLength(52);
       expect(bouncingCards.every(card => card && card.finalOpacity === 0)).toBe(true);
       expect(bouncingCards.every(card => card.dropY > 0)).toBe(true);
+      expect(bouncingCards.every(card => card.visible)).toBe(true);
+      expect(bouncingCards.every(card => card.height / card.boardHeight > 0.45)).toBe(true);
+      expect(bouncingCards.every(card => card.height / card.boardHeight <= 2 / 3 + 0.001)).toBe(true);
+      expect(bouncingCards.every(card =>
+        card.heights.slice(1).every((height, index) => Math.abs(height / card.heights[index] - 0.52) < 0.001)))
+        .toBe(true);
       const weakestBounce = bouncingCards.reduce((weakest, card) =>
-        card.horizontalBounce < weakest.horizontalBounce ? card : weakest);
+        card.height < weakest.height ? card : weakest);
       const strongestBounce = bouncingCards.reduce((strongest, card) =>
-        card.horizontalBounce > strongest.horizontalBounce ? card : strongest);
+        card.height > strongest.height ? card : strongest);
       expect(strongestBounce.duration).toBeGreaterThan(weakestBounce.duration);
       expect(strongestBounce.fadeDuration).toBeGreaterThan(weakestBounce.fadeDuration);
+      await page.screenshot({ path: 'generated-artifacts/bounce-preview.png' });
+    } else if (effect === 'kitchen-sink') {
+      await page.waitForTimeout(1750);
+      expect(await layer.locator('.win-kitchen-sink').first().evaluate(card =>
+        card.getAnimations().some(animation =>
+          animation.effect.getKeyframes().some(frame => Number(frame.opacity) === 0)))).toBe(true);
     } else if (effect === 'spiral') {
       const details = await layer.locator('.win-spiral').evaluateAll(elements => elements.slice(0, 4).map(card => {
         const frames = card.getAnimations()[0].effect.getKeyframes();
@@ -1909,9 +1934,9 @@ test('rain, wave, and tornado celebrations animate changing cards on the fixed l
       2: Array.from({ length: 13 }, (_, index) => index + 1),
       3: Array.from({ length: 13 }, (_, index) => index + 1) },
   });
-  for (const [randomValue, effect] of [[0.55, 'rain'], [0.72, 'wave'], [0.9, 'tornado']]) {
+  for (const effect of ['rain', 'wave', 'tornado']) {
     const app = await restoreGame(page, winningDeal);
-    await page.evaluate(value => { Math.random = () => value; }, randomValue);
+    await setGameOption(app, 'Win animation', effect);
     await app.locator('[data-key="card-12"]').dblclick();
     const layer = page.locator('body > .solitaire-celebration-layer');
     await expect(layer).toHaveCount(1);

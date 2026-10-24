@@ -10,7 +10,8 @@ const settings = {
 
 export const solitaireWinAnimationChoices = [
   ['random', 'Random'],
-  ...WIN_CELEBRATIONS.map(effect => [effect, effect[0].toUpperCase() + effect.slice(1)]),
+  ...WIN_CELEBRATIONS.map(effect => [effect, effect === 'kitchen-sink'
+    ? 'Kitchen Sink' : effect[0].toUpperCase() + effect.slice(1)]),
 ];
 export const boardWinAnimationChoices = [
   ['random', 'Random'],

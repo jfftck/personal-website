@@ -263,19 +263,20 @@ test('Send home repeats until cards exposed by earlier home moves are no longer 
   assert.equal(cards.sendEligibleCardsHome(blank('spider')), 0);
 });
 
-test('solitaire win celebrations select among six effects from the supplied random source', () => {
+test('solitaire win celebrations select among seven effects from the supplied random source', () => {
   assert.equal(cards.chooseWinCelebration(() => 0), 'fireworks');
   assert.equal(cards.chooseWinCelebration(() => 0.17), 'bounce');
   assert.equal(cards.chooseWinCelebration(() => 0.34), 'spiral');
-  assert.equal(cards.chooseWinCelebration(() => 0.5), 'rain');
+  assert.equal(cards.chooseWinCelebration(() => 0.45), 'rain');
   assert.equal(cards.chooseWinCelebration(() => 0.67), 'wave');
-  assert.equal(cards.chooseWinCelebration(() => 0.99), 'tornado');
+  assert.equal(cards.chooseWinCelebration(() => 0.8), 'tornado');
+  assert.equal(cards.chooseWinCelebration(() => 0.99), 'kitchen-sink');
 });
 
 test('solitaire win celebrations randomize unseen effects before starting another cycle', () => {
   assert.equal(
     cards.chooseUnseenWinCelebration(['fireworks', 'bounce'], () => 0.99).celebration,
-    'tornado',
+    'kitchen-sink',
   );
   let seen = [];
   const selected = [];
@@ -287,8 +288,8 @@ test('solitaire win celebrations randomize unseen effects before starting anothe
   assert.equal(new Set(selected).size, cards.WIN_CELEBRATIONS.length);
   assert.deepEqual(new Set(selected), new Set(cards.WIN_CELEBRATIONS));
   const nextCycle = cards.chooseUnseenWinCelebration(seen, () => 0.99);
-  assert.equal(nextCycle.celebration, 'tornado');
-  assert.deepEqual(nextCycle.seen, ['tornado']);
+  assert.equal(nextCycle.celebration, 'kitchen-sink');
+  assert.deepEqual(nextCycle.seen, ['kitchen-sink']);
 });
 
 test('Minesweeper difficulty sizes, mine counts, and safe-first-reveal hold', () => {

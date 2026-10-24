@@ -62,3 +62,9 @@ Particle-heavy celebrations should use shared, composable canvas effects alongsi
 **Why:** The user requested richer particle effects without drawing large numbers of individual elements across the viewport.
 
 **How to apply:** Reuse the particle rendering system for future celebration details, preserve the underlying motion, and let the full particle effect finish before offering the next game.
+
+Bounce should visibly follow progressively smaller arches after each landing, rather than resemble a stream of cards. Preserve the earlier stream-like effect as “Kitchen Sink.”
+
+**Why:** The user found the previous Bounce looked like water being turned on. They suggested approximately two-thirds of the playfield as an initial height to verify, not an exact required height.
+
+**How to apply:** Keep Bounce and Kitchen Sink distinct. When tuning Bounce, verify visible arc height and diminishing rebounds within the actual playfield rather than relying only on duration or horizontal spread.

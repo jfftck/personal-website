@@ -106,6 +106,79 @@ function collectSprites(kind, state, table, tableRect, layer) {
 }
 
 function animateBounce(sprites, bounds) {
+  const timers = [];
+  const animations = [];
+  let duration = 420;
+  sprites.forEach((sprite, index) => {
+    const strength = unit(index, 1);
+    const startX = bounds.width / 2 + (index % 7 - 3) * 1.6;
+    const startY = bounds.height * 0.16 + (index % 11) * 0.8;
+    const floorY = bounds.height - sprite.height / 2 - 10;
+    const firstHeight = Math.max(8, Math.min(
+      bounds.height * (2 / 3) * (0.7 + strength * 0.3),
+      floorY - sprite.height / 2 - 10,
+    ));
+    const direction = unit(index, 4) < 0.5 ? -1 : 1;
+    const speed = bounds.width * (0.14 + strength * 0.12) * direction;
+    const gravity = bounds.height * 1.8;
+    const frames = [];
+    let elapsed = 0;
+    // Reflect horizontal motion at the sides, without changing the vertical parabola.
+    const left = sprite.width / 2 + 8;
+    const span = Math.max(1, bounds.width - sprite.width - 16);
+    const sample = (x, y, time) => {
+      const travel = ((x - left) % (span * 2) + span * 2) % (span * 2);
+      const centerX = left + (travel > span ? span * 2 - travel : travel);
+      frames.push({
+        transform: transform(centerX - sprite.x - sprite.width / 2,
+          y - sprite.y - sprite.height / 2, 0.94),
+        time,
+      });
+    };
+    const dropDuration = Math.sqrt(2 * Math.max(1, floorY - startY) / gravity);
+    for (let step = 0; step <= 20; step++) {
+      const t = dropDuration * step / 20;
+      sample(startX + speed * t, startY + (floorY - startY) * (step / 20) ** 2, t);
+    }
+    elapsed = dropDuration;
+    for (let bounce = 0; bounce < 4; bounce++) {
+      const height = firstHeight * 0.52 ** bounce;
+      const flightDuration = 2 * Math.sqrt(2 * height / gravity);
+      for (let step = 1; step <= 32; step++) {
+        const progress = step / 32;
+        const time = elapsed + progress * flightDuration;
+        sample(startX + speed * time, floorY - 4 * height * progress * (1 - progress), time);
+      }
+      elapsed += flightDuration;
+    }
+    const gatherTransform = transform(startX - sprite.x - sprite.width / 2,
+      startY - sprite.y - sprite.height / 2, 0.94);
+    sprite.element.classList.add('win-bounce');
+    animations.push(sprite.element.animate([
+      { transform: transform(0, 0), opacity: 1 },
+      { transform: gatherTransform, opacity: 1 },
+    ], { duration: 420, easing: 'ease-out', fill: 'both' }));
+    const delay = 420 + index * 32;
+    duration = Math.max(duration, delay + elapsed * 1000);
+    timers.push(setTimeout(() => {
+      if (!sprite.element.isConnected) return;
+      animations.push(sprite.element.animate(frames.map(({ time, ...frame }) => ({
+        ...frame,
+        offset: time / elapsed,
+        opacity: Math.max(0, Math.min(1, (1 - time / elapsed) / 0.55)),
+      })), { duration: elapsed * 1000, easing: 'linear', fill: 'both' }));
+    }, delay));
+  });
+  return {
+    duration,
+    cleanup() {
+      timers.forEach(clearTimeout);
+      animations.forEach(animation => animation.cancel());
+    },
+  };
+}
+
+function animateKitchenSink(sprites, bounds) {
   const gatherDuration = 420;
   const dropStagger = 24;
   const timers = [];
@@ -118,7 +191,7 @@ function animateBounce(sprites, bounds) {
     const pileX = (index % 7 - 3) * 1.6;
     const pileY = (index % 11) * 0.8;
     const gatherTransform = transform(gatherX + pileX, gatherY + pileY, 0.9);
-    sprite.element.classList.add('win-bounce');
+    sprite.element.classList.add('win-kitchen-sink');
     gatherAnimations.push(sprite.element.animate([
       { transform: transform(0, 0, 1), opacity: 1 },
       { transform: gatherTransform, opacity: 1 },
@@ -461,6 +534,7 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
   let bounceAnimation = null;
   switch (effect) {
     case 'bounce': bounceAnimation = animateBounce(sprites, bounds); break;
+    case 'kitchen-sink': bounceAnimation = animateKitchenSink(sprites, bounds); break;
     case 'spiral': animateSpiral(sprites, bounds); break;
     case 'fireworks': particleAnimation = animateFireworks(sprites, bounds, layer); break;
     case 'rain': {
@@ -490,7 +564,7 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
     tornado: 2450,
   }[effect] || 2500;
   const animationEnd = Math.max(
-    effect === 'rain' ? rainDuration : effect === 'bounce' ? bounceAnimation.duration : duration + stagger,
+    effect === 'rain' ? rainDuration : bounceAnimation ? bounceAnimation.duration : duration + stagger,
     particleAnimation?.duration || 0,
   );
 

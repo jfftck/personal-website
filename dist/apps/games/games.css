@@ -1313,6 +1313,7 @@
   isolation: isolate;
 }
 .game-layer-card.win-bounce,
+.game-layer-card.win-kitchen-sink,
 .game-layer-card.win-spiral,
 .game-layer-card.card-firework,
 .game-layer-card.card-rain,

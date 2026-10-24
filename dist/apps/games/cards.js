@@ -2,7 +2,7 @@
 export const SUITS = ['♠', '♥', '♣', '♦'];
 export const rankLabel = rank => ({ 1: 'A', 11: 'J', 12: 'Q', 13: 'K' }[rank] || String(rank));
 export const isRed = card => card.suit === 1 || card.suit === 3;
-export const WIN_CELEBRATIONS = ['fireworks', 'bounce', 'spiral', 'rain', 'wave', 'tornado'];
+export const WIN_CELEBRATIONS = ['fireworks', 'bounce', 'spiral', 'rain', 'wave', 'tornado', 'kitchen-sink'];
 const randomIndex = (length, random) =>
   Math.max(0, Math.min(length - 1, Math.floor(random() * length)));
 
