@@ -168,3 +168,113 @@ test('keeps each saved city paired with its unit after selection and opening a n
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
   await expect.poll(() => forecastRequests.at(-1)?.temperatureUnit).toBe('fahrenheit');
 });
+
+test('canceling removal changes nothing, and removing an inactive place keeps the active place', async ({ page }) => {
+  const initialPrefs = {
+    locations: [
+      { location: 'Seattle', unit: 'fahrenheit' },
+      { location: 'Oslo', unit: 'celsius' },
+    ],
+    activeLocation: 'Seattle',
+    refreshMinutes: 45,
+  };
+  await page.evaluate(({ key, prefs }) => localStorage.setItem(key, JSON.stringify(prefs)), {
+    key: PREF_KEY,
+    prefs: initialPrefs,
+  });
+
+  const weather = await openWeather(page);
+  const locationSelect = weather.locator('.weather-saved-location');
+  const unitSelect = weather.locator('.weather-unit');
+  await locationSelect.selectOption('Oslo');
+  await expect(unitSelect).toHaveValue('celsius');
+
+  page.once('dialog', dialog => dialog.dismiss());
+  await weather.locator('.weather-remove').click();
+  await expect.poll(() => savedPrefs(page)).toEqual(initialPrefs);
+  await expect(locationSelect.locator('option')).toHaveText(['Seattle', 'Oslo']);
+  await expect(locationSelect).toHaveValue('Oslo');
+  await expect(unitSelect).toHaveValue('celsius');
+
+  page.once('dialog', dialog => dialog.accept());
+  await weather.locator('.weather-remove').click();
+  await expect.poll(() => savedPrefs(page)).toEqual({
+    locations: [{ location: 'Seattle', unit: 'fahrenheit' }],
+    activeLocation: 'Seattle',
+    refreshMinutes: 45,
+  });
+  await expect(weather.locator('.weather-saved-location')).toHaveValue('Seattle');
+  await expect(weather.locator('.weather-unit')).toHaveValue('fahrenheit');
+});
+
+test('removing the active place selects another saved place and preserves preferences after reload', async ({ page }) => {
+  const initialPrefs = {
+    locations: [
+      { location: 'Seattle', unit: 'fahrenheit' },
+      { location: 'Oslo', unit: 'celsius' },
+      { location: 'Lisbon', unit: 'fahrenheit' },
+    ],
+    activeLocation: 'Oslo',
+    refreshMinutes: 35,
+  };
+  await page.evaluate(({ key, prefs }) => localStorage.setItem(key, JSON.stringify(prefs)), {
+    key: PREF_KEY,
+    prefs: initialPrefs,
+  });
+
+  let weather = await openWeather(page);
+  await expect(weather.locator('.weather-saved-location')).toHaveValue('Oslo');
+  page.once('dialog', dialog => dialog.accept());
+  await weather.locator('.weather-remove').click();
+  const remainingPrefs = {
+    locations: [
+      { location: 'Seattle', unit: 'fahrenheit' },
+      { location: 'Lisbon', unit: 'fahrenheit' },
+    ],
+    activeLocation: 'Seattle',
+    refreshMinutes: 35,
+  };
+  await expect.poll(() => savedPrefs(page)).toEqual(remainingPrefs);
+  await expect(weather.locator('.weather-saved-location')).toHaveValue('Seattle');
+  await expect(weather.locator('.weather-unit')).toHaveValue('fahrenheit');
+
+  await page.reload();
+  const welcomeClose = page.locator('#welcome-win-close');
+  if (await welcomeClose.isVisible()) await welcomeClose.click();
+  weather = await openWeather(page);
+  const savedLocationSelect = weather.locator('.weather-saved-location');
+  const savedUnitSelect = weather.locator('.weather-unit');
+  await expect(savedLocationSelect.locator('option')).toHaveText(['Seattle', 'Lisbon']);
+  await expect(savedLocationSelect).toHaveValue('Seattle');
+  await expect(savedUnitSelect).toHaveValue('fahrenheit');
+  await savedLocationSelect.selectOption('Lisbon');
+  await expect(savedUnitSelect).toHaveValue('fahrenheit');
+  await expect.poll(() => savedPrefs(page)).toEqual(remainingPrefs);
+});
+
+test('removing the last saved place shows the new-location form and keeps refresh settings', async ({ page }) => {
+  await page.evaluate(({ key, prefs }) => localStorage.setItem(key, JSON.stringify(prefs)), {
+    key: PREF_KEY,
+    prefs: {
+      locations: [{ location: 'Tokyo', unit: 'celsius' }],
+      activeLocation: 'Tokyo',
+      refreshMinutes: 90,
+    },
+  });
+
+  const weather = await openWeather(page);
+  page.once('dialog', dialog => dialog.accept());
+  await weather.locator('.weather-remove').click();
+
+  await expect.poll(() => savedPrefs(page)).toEqual({
+    locations: [],
+    activeLocation: '',
+    refreshMinutes: 90,
+  });
+  await expect(weather.locator('.weather-location-label')).toBeVisible();
+  await expect(weather.locator('.weather-location')).toBeVisible();
+  await expect(weather.locator('.weather-location')).toHaveAttribute('required', '');
+  await expect(weather.locator('.weather-saved-row')).toBeHidden();
+  await expect(weather.locator('.weather-submit')).toHaveText('Add & show forecast');
+  await expect(weather.locator('.weather-error')).toContainText('Add a new location');
+});
