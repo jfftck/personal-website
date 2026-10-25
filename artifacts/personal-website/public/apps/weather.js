@@ -47,9 +47,13 @@ export function buildWeather(id, ctx) {
       : ''}`;
     if (!window.confirm(confirmation)) return null;
 
-    prefs.locations = prefs.locations.filter(item => item.location !== savedLocation.location);
-    if (wasActive) prefs.activeLocation = prefs.locations[0]?.location || '';
-    savePrefs(prefs);
+    const nextPrefs = {
+      ...prefs,
+      locations: prefs.locations.filter(item => item.location !== savedLocation.location),
+    };
+    if (wasActive) nextPrefs.activeLocation = nextPrefs.locations[0]?.location || '';
+    if (!savePrefs(nextPrefs)) return { failed: true };
+    prefs = nextPrefs;
     return { location: savedLocation.location, wasActive };
   }
 
@@ -112,6 +116,10 @@ export function buildWeather(id, ctx) {
     removeButton.addEventListener('click', () => {
       const removed = removeSavedLocation(savedSelect.value);
       if (!removed) return;
+      if (removed.failed) {
+        form.querySelector('.weather-error').textContent = 'Your location change was not saved. Browser storage is unavailable; try again.';
+        return;
+      }
       showSetup(prefs.locations.length
         ? `Removed ${removed.location} from saved locations.`
         : `Removed ${removed.location}. Add a new location to see its forecast.`);
@@ -136,15 +144,23 @@ export function buildWeather(id, ctx) {
       const location = addingLocation ? locationInput.value.trim() : savedSelect.value;
       const unit = unitSelect.value;
       if (!location) return;
-      const existing = prefs.locations.find(item => item.location.toLocaleLowerCase() === location.toLocaleLowerCase());
+      const nextPrefs = {
+        ...prefs,
+        locations: prefs.locations.map(item => ({ ...item })),
+      };
+      const existing = nextPrefs.locations.find(item => item.location.toLocaleLowerCase() === location.toLocaleLowerCase());
       if (existing) {
         existing.unit = unit;
-        prefs.activeLocation = existing.location;
+        nextPrefs.activeLocation = existing.location;
       } else {
-        prefs.locations.push({ location, unit });
-        prefs.activeLocation = location;
+        nextPrefs.locations.push({ location, unit });
+        nextPrefs.activeLocation = location;
       }
-      savePrefs(prefs);
+      if (!savePrefs(nextPrefs)) {
+        form.querySelector('.weather-error').textContent = 'Your location change was not saved. Browser storage is unavailable; try again.';
+        return;
+      }
+      prefs = nextPrefs;
       await loadForecast(location, unit);
     });
     (addingLocation ? locationInput : savedSelect).focus({ preventScroll: true });
@@ -214,6 +230,7 @@ export function buildWeather(id, ctx) {
         </button>
       </div>
       <a class="weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Weather data by Open-Meteo</a>
+      <p class="weather-save-status weather-error" role="status" aria-live="polite"></p>
       <div class="weather-current"></div><div class="weather-place"></div><div class="weather-meta"></div>
       <div class="weather-refresh-status sr-only" role="status" aria-live="polite"></div>
     </header><div class="weather-panels">
@@ -267,13 +284,26 @@ export function buildWeather(id, ctx) {
     locationSelect.addEventListener('change', () => {
       const selected = prefs.locations.find(item => item.location === locationSelect.value);
       if (!selected) return;
-      prefs.activeLocation = selected.location;
-      savePrefs(prefs);
+      const previousLocation = prefs.activeLocation;
+      const nextPrefs = { ...prefs, activeLocation: selected.location };
+      if (!savePrefs(nextPrefs)) {
+        locationSelect.value = previousLocation;
+        setSaveStatus('Your location change was not saved. Browser storage is unavailable; try again.');
+        return;
+      }
+      prefs = nextPrefs;
       loadForecast(selected.location, selected.unit);
     });
     function removeFromForecast(location) {
       const removed = removeSavedLocation(location);
       if (!removed) return;
+      if (removed.failed) {
+        if (dialog.open) dialog.querySelector('.weather-settings-error').textContent = 'Your location change was not saved. Browser storage is unavailable; try again.';
+        else setSaveStatus('Your location change was not saved. Browser storage is unavailable; try again.');
+        return;
+      }
+      setSaveStatus('');
+      dialog.querySelector('.weather-settings-error').textContent = '';
       if (removed.wasActive) {
         if (prefs.locations.length) {
           const nextLocation = prefs.locations.find(item => item.location === prefs.activeLocation);
@@ -312,19 +342,27 @@ export function buildWeather(id, ctx) {
         dialog.querySelector('.weather-settings-error').textContent = 'Choose an update interval from 5 to 1440 minutes.';
         return;
       }
-      let selected = prefs.locations.find(item => item.location === prefs.activeLocation) || prefs.locations[0];
+      const nextPrefs = {
+        ...prefs,
+        locations: prefs.locations.map(item => ({ ...item })),
+      };
+      let selected = nextPrefs.locations.find(item => item.location === nextPrefs.activeLocation) || nextPrefs.locations[0];
       if (newLocation) {
-        selected = prefs.locations.find(item => item.location.toLocaleLowerCase() === newLocation.toLocaleLowerCase());
+        selected = nextPrefs.locations.find(item => item.location.toLocaleLowerCase() === newLocation.toLocaleLowerCase());
         if (!selected) {
           selected = { location: newLocation, unit: nextUnit };
-          prefs.locations.push(selected);
+          nextPrefs.locations.push(selected);
         }
-        prefs.activeLocation = selected.location;
+        nextPrefs.activeLocation = selected.location;
       }
       if (!selected) return;
       selected.unit = nextUnit;
-      prefs.refreshMinutes = nextInterval;
-      savePrefs(prefs);
+      nextPrefs.refreshMinutes = nextInterval;
+      if (!savePrefs(nextPrefs)) {
+        dialog.querySelector('.weather-settings-error').textContent = 'Your Weather settings were not saved. Browser storage is unavailable; try again.';
+        return;
+      }
+      prefs = nextPrefs;
       dialog.close();
       loadForecast(selected.location, selected.unit);
     });
@@ -353,6 +391,11 @@ export function buildWeather(id, ctx) {
 
   function setRefreshStatus(message) {
     const status = root.querySelector('.weather-refresh-status');
+    if (status) status.textContent = message;
+  }
+
+  function setSaveStatus(message) {
+    const status = root.querySelector('.weather-save-status');
     if (status) status.textContent = message;
   }
 
@@ -403,7 +446,12 @@ function readPrefs() {
 }
 
 function savePrefs(prefs) {
-  try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch {}
+  try {
+    localStorage.setItem(PREF_KEY, JSON.stringify(prefs));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function escapeHTML(text) {

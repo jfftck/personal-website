@@ -90,6 +90,131 @@ async function savedPrefs(page) {
   return page.evaluate(key => JSON.parse(localStorage.getItem(key)), PREF_KEY);
 }
 
+async function setWeatherStorageFailure(page, shouldFail) {
+  await page.evaluate(shouldFail => {
+    if (!window.__weatherOriginalSetItem) {
+      window.__weatherOriginalSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key === 'personal-desktop-weather-setup-v1' && window.__weatherStorageShouldFail) {
+          throw new DOMException('Storage unavailable', 'QuotaExceededError');
+        }
+        return window.__weatherOriginalSetItem.call(this, key, value);
+      };
+    }
+    window.__weatherStorageShouldFail = shouldFail;
+  }, shouldFail);
+}
+
+test('warns when a new location cannot be saved and accepts it after storage recovers', async ({ page }) => {
+  const weather = await openWeather(page);
+  await weather.locator('.weather-location').fill('Seattle');
+  await weather.locator('.weather-unit').selectOption('fahrenheit');
+
+  await setWeatherStorageFailure(page, true);
+  await weather.locator('.weather-submit').click();
+  await expect(weather.locator('.weather-error'))
+    .toHaveText('Your location change was not saved. Browser storage is unavailable; try again.');
+  await expect(weather.locator('.weather-location-label')).toBeVisible();
+  expect(await savedPrefs(page)).toBeNull();
+  await expect.poll(() => forecastRequests).toHaveLength(0);
+
+  await setWeatherStorageFailure(page, false);
+  await weather.locator('.weather-submit').click();
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+  await expect.poll(() => savedPrefs(page)).toEqual({
+    locations: [{ location: 'Seattle', unit: 'fahrenheit' }],
+    activeLocation: 'Seattle',
+    refreshMinutes: 60,
+  });
+});
+
+test('keeps the current forecast when a location switch cannot be saved, then recovers', async ({ page }) => {
+  await page.evaluate(({ key, prefs }) => localStorage.setItem(key, JSON.stringify(prefs)), {
+    key: PREF_KEY,
+    prefs: {
+      locations: [
+        { location: 'Seattle', unit: 'fahrenheit' },
+        { location: 'Oslo', unit: 'celsius' },
+      ],
+      activeLocation: 'Seattle',
+      refreshMinutes: 60,
+    },
+  });
+  const weather = await openWeather(page);
+  await weather.locator('.weather-submit').click();
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+
+  await setWeatherStorageFailure(page, true);
+  await weather.locator('.weather-location-select').selectOption('Oslo');
+  await expect(weather.locator('.weather-save-status'))
+    .toHaveText('Your location change was not saved. Browser storage is unavailable; try again.');
+  await expect(weather.locator('.weather-location-select')).toHaveValue('Seattle');
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+  await expect.poll(() => savedPrefs(page)).toMatchObject({ activeLocation: 'Seattle' });
+
+  await setWeatherStorageFailure(page, false);
+  await weather.locator('.weather-location-select').selectOption('Oslo');
+  await expect(weather.locator('.weather-current')).toHaveText('22°C');
+  await expect.poll(() => savedPrefs(page)).toMatchObject({ activeLocation: 'Oslo' });
+});
+
+test('keeps settings and saved locations unchanged after failed writes, then saves them on retry', async ({ page }) => {
+  await page.evaluate(({ key, prefs }) => localStorage.setItem(key, JSON.stringify(prefs)), {
+    key: PREF_KEY,
+    prefs: {
+      locations: [{ location: 'Seattle', unit: 'celsius' }],
+      activeLocation: 'Seattle',
+      refreshMinutes: 60,
+    },
+  });
+  const weather = await openWeather(page);
+  await weather.locator('.weather-submit').click();
+  await expect(weather.locator('.weather-current')).toHaveText('22°C');
+
+  await weather.locator('.weather-settings-button').click();
+  const settings = weather.locator('.weather-settings-dialog');
+  await settings.locator('.weather-settings-unit').selectOption('fahrenheit');
+  await setWeatherStorageFailure(page, true);
+  await settings.locator('.weather-settings-save').click();
+  await expect(settings.locator('.weather-settings-error'))
+    .toHaveText('Your Weather settings were not saved. Browser storage is unavailable; try again.');
+  await expect(settings).toBeVisible();
+  await expect(weather.locator('.weather-current')).toHaveText('22°C');
+  await expect.poll(() => savedPrefs(page)).toMatchObject({
+    locations: [{ location: 'Seattle', unit: 'celsius' }],
+    activeLocation: 'Seattle',
+  });
+
+  await setWeatherStorageFailure(page, false);
+  await settings.locator('.weather-settings-save').click();
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+  await expect.poll(() => savedPrefs(page)).toMatchObject({
+    locations: [{ location: 'Seattle', unit: 'fahrenheit' }],
+    activeLocation: 'Seattle',
+  });
+
+  await setWeatherStorageFailure(page, true);
+  page.once('dialog', dialog => dialog.accept());
+  await weather.locator('.weather-remove-current').click();
+  await expect(weather.locator('.weather-save-status'))
+    .toHaveText('Your location change was not saved. Browser storage is unavailable; try again.');
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+  await expect.poll(() => savedPrefs(page)).toMatchObject({
+    locations: [{ location: 'Seattle', unit: 'fahrenheit' }],
+    activeLocation: 'Seattle',
+  });
+
+  await setWeatherStorageFailure(page, false);
+  page.once('dialog', dialog => dialog.accept());
+  await weather.locator('.weather-remove-current').click();
+  await expect(weather.locator('.weather-location-label')).toBeVisible();
+  await expect(weather.locator('.weather-error')).toContainText('Removed Seattle');
+  await expect.poll(() => savedPrefs(page)).toMatchObject({
+    locations: [],
+    activeLocation: '',
+  });
+});
+
 test('migrates the previous single-location preference when its forecast is opened', async ({ page }) => {
   await page.evaluate(key => localStorage.setItem(key, JSON.stringify({
     location: 'Legacy City',

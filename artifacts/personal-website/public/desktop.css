@@ -1542,6 +1542,8 @@ body.mod-overview .app-window.focused {
 .weather-settings-button svg { width:1.15rem;height:1.15rem;fill:currentColor; }
 .weather-credit { position:absolute;inset-block-start:2.75rem;inset-inline-end:.2rem;color:var(--util-detail);font-size:.7rem;text-decoration:none; }
 .weather-credit:hover { color:var(--util-teal);text-decoration:underline; }
+.weather-save-status { margin:.25rem 0;color:var(--util-danger);font-size:.82rem; }
+.weather-save-status:empty { display:none; }
 .weather-current { font-size:clamp(4rem,16vw,7rem);font-weight:300;line-height:.95;letter-spacing:-.08em;color:var(--util-amber);font-variant-numeric:tabular-nums; }
 .weather-place { font-size:1.1rem;font-weight:650; }
 .weather-meta { display:flex;gap:.45rem 1rem;flex-wrap:wrap;margin-top:.5rem;font-size:.95rem; }
