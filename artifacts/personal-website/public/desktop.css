@@ -1417,7 +1417,7 @@ body.mod-overview .app-window.focused {
 .cal-weekday { font-size:1.35rem; margin-top:.75rem; }
 .clock-app { height:100%; display:flex; flex-direction:column; gap:.75rem; padding:1rem; }
 .clock-controls { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
-.clock-controls select,.weather-setup input,.weather-setup select { min-width:0; border:1px solid var(--app-border); color:var(--app-text); background:var(--toolbar-bg); border-radius:.55rem; padding:.55rem .65rem; }
+.clock-controls select,.weather-setup input,.weather-setup select,.weather-settings-dialog input,.weather-settings-dialog select { min-width:0; border:1px solid var(--app-border); color:var(--app-text); background:var(--toolbar-bg); border-radius:.55rem; padding:.55rem .65rem; }
 .clock-list { overflow:auto; display:grid; gap:.65rem; grid-template-columns:1fr; min-height:0; }
 .clock-list.grid { grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); align-content:start; }
 .clock-item { display:flex; align-items:center; justify-content:space-between; gap:.8rem; border:1px solid var(--app-border); border-radius:.85rem; padding:.85rem 1rem; background:var(--util-surface); }
@@ -1453,7 +1453,12 @@ body.mod-overview .app-window.focused {
 .note-toolbar { display:flex;justify-content:space-between;align-items:center;gap:.5rem; }
 .weather-app { height:100%;display:flex;flex-direction:column;min-height:0;padding:clamp(.8rem,3vw,1.3rem);gap:.85rem; }
 .weather-top { position:relative;min-height:150px;flex:none;padding:.25rem .2rem 1rem;border-bottom:1px solid var(--app-border); }
-.weather-credit { position:absolute;inset-block-start:.25rem;inset-inline-end:.2rem;color:var(--util-detail);font-size:.7rem;text-decoration:none; }
+.weather-top-tools { position:absolute;inset-block-start:.15rem;inset-inline-end:.2rem;display:flex;align-items:center;gap:.4rem;z-index:1; }
+.weather-location-select { width:min(14rem,45vw);max-width:calc(100vw - 5rem);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem; }
+.weather-settings-button { width:2.45rem;height:2.45rem;flex:none;display:grid;place-items:center;border:1px solid var(--app-border);border-radius:.7rem;background:var(--util-surface);color:var(--app-text);cursor:pointer; }
+.weather-settings-button:hover { background:var(--util-surface-strong); }
+.weather-settings-button svg { width:1.15rem;height:1.15rem;fill:currentColor; }
+.weather-credit { position:absolute;inset-block-start:2.75rem;inset-inline-end:.2rem;color:var(--util-detail);font-size:.7rem;text-decoration:none; }
 .weather-credit:hover { color:var(--util-teal);text-decoration:underline; }
 .weather-current { font-size:clamp(4rem,16vw,7rem);font-weight:300;line-height:.95;letter-spacing:-.08em;color:var(--util-amber);font-variant-numeric:tabular-nums; }
 .weather-place { font-size:1.1rem;font-weight:650; }
@@ -1478,6 +1483,19 @@ body.mod-overview .app-window.focused {
 .weather-setup [hidden] { display:none !important; }
 .weather-setup-actions { display:flex;flex-wrap:wrap;gap:.5rem; }
 .weather-setup-actions .weather-submit { flex:1 1 100%; }
+.weather-settings-dialog { box-sizing:border-box;width:min(calc(100vw - 2rem),28rem);max-width:min(calc(100vw - 2rem),28rem);max-height:calc(100dvh - 2rem);overflow:auto;margin:auto;padding:1.15rem;border:1px solid var(--app-border);border-radius:1rem;background:var(--util-surface-strong);color:var(--app-text);box-shadow:0 1.5rem 4rem rgba(0,0,0,.28); }
+.weather-settings-dialog::backdrop { background:rgba(5,12,18,.48);backdrop-filter:blur(4px); }
+.weather-settings-form { display:grid;gap:.85rem; }
+.weather-settings-heading { display:flex;align-items:center;justify-content:space-between;gap:1rem; }
+.weather-settings-heading h2 { margin:0;font-size:1.25rem; }
+.weather-settings-close { width:2rem;height:2rem;border:0;border-radius:.55rem;background:transparent;color:var(--app-text);font-size:1.4rem;line-height:1;cursor:pointer; }
+.weather-settings-close:hover { background:var(--util-surface); }
+.weather-settings-form > label { display:grid;gap:.35rem;font-size:.88rem; }
+.weather-settings-hint { margin:-.65rem 0 0;color:var(--util-detail);font-size:.8rem; }
+.weather-interval-field { display:flex;align-items:center;gap:.55rem; }
+.weather-refresh-interval { width:7rem; }
+.weather-settings-actions { display:flex;justify-content:flex-end;gap:.5rem;margin-top:.1rem; }
+.weather-settings-save { border-color:color-mix(in srgb,var(--util-teal) 55%,var(--app-border));background:color-mix(in srgb,var(--util-teal) 18%,transparent); }
 .weather-error { color:var(--util-danger); }
 @media(max-width:560px) {
  .notes-app { grid-template-columns:120px minmax(0,1fr); }

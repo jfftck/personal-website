@@ -1320,7 +1320,7 @@ const APP_DEFS = {
   weather: {
     title: 'Weather',
     iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 18a5 5 0 1 1 .8-9.9A6 6 0 0 1 19 10a4 4 0 0 1 0 8H7z"/></svg>`,
-    build: id => buildWeather(id),
+    build: id => buildWeather(id, appCtx),
   },
 };
 
