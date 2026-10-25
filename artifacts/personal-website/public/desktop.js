@@ -8,7 +8,7 @@ import { buildFileManager } from './apps/file-manager.js';
 import { buildCalendar } from './apps/calendar.js';
 import { buildWorldClock } from './apps/world-clock.js';
 import { buildCalculator } from './apps/calculator.js';
-import { buildStickyNotes } from './apps/sticky-notes.js';
+import { buildStickyNotes, loadStickyNotes } from './apps/sticky-notes.js';
 import { buildWeather } from './apps/weather.js';
 import { renderMarkdown }   from './shared/markdown.js';
 import { GAMES, buildGame, initGameMenu } from './apps/game-center.js';
@@ -29,6 +29,8 @@ const systemTimeBtn    = $('system-time-btn');
 const systemPanel      = $('system-panel');
 const appStrip         = $('app-strip');
 const emptyState       = $('empty-state');
+const desktopWidgets   = $('desktop-widgets');
+const showDesktopBtn   = $('show-desktop-btn');
 
 // ── Width helpers ─────────────────────────────────────────────
 function rem() { return parseFloat(getComputedStyle(document.documentElement).fontSize); }
@@ -523,6 +525,7 @@ function closeApp(id) {
 }
 
 function focusApp(id) {
+  if (document.body.classList.contains('mod-show-desktop')) setShowDesktop(false);
   if (S.focusedId === id) return;
 
   if (S.focusedId) {
@@ -771,6 +774,50 @@ function updateEmptyState() {
 function updateStripLayout() {
   appStrip.classList.toggle('center-apps', S.columns.length === 1);
 }
+
+// ── Sticky-note desktop widgets ───────────────────────────────
+let desktopWidgetNotes = [];
+
+function setShowDesktop(show) {
+  if (show && desktopWidgetNotes.length === 0) return;
+  if (show && document.body.classList.contains('mod-overview')) exitOverview();
+  document.body.classList.toggle('mod-show-desktop', show);
+  showDesktopBtn.setAttribute('aria-pressed', String(show));
+  showDesktopBtn.setAttribute('aria-label', show ? 'Return to apps' : 'Show desktop');
+  showDesktopBtn.title = show ? 'Return to apps' : 'Show desktop';
+}
+
+function updateDesktopNotes(notes) {
+  desktopWidgetNotes = notes.filter(note => note.desktop);
+  desktopWidgets.replaceChildren();
+  for (const note of desktopWidgetNotes) {
+    const widget = document.createElement('button');
+    widget.type = 'button';
+    widget.className = 'desktop-note-widget';
+    widget.setAttribute('aria-label', `Open note: ${note.title || 'Untitled note'}`);
+    const title = document.createElement('strong');
+    const body = document.createElement('span');
+    title.textContent = note.title || 'Untitled note';
+    body.textContent = note.body || 'No additional text';
+    widget.append(title, body);
+    widget.addEventListener('click', () => openStickyNote(note.id));
+    desktopWidgets.append(widget);
+  }
+  showDesktopBtn.disabled = desktopWidgetNotes.length === 0;
+  if (desktopWidgetNotes.length === 0) setShowDesktop(false);
+}
+
+function openStickyNote(noteId) {
+  setShowDesktop(false);
+  const existing = S.apps.find(app => app.type === 'sticky-notes');
+  const id = existing ? existing.id : openApp('sticky-notes');
+  if (id) {
+    focusApp(id);
+    S.appApis[id]?.openNote?.(noteId);
+  }
+}
+
+updateDesktopNotes(loadStickyNotes());
 
 // ── App navigation ────────────────────────────────────────────
 function focusNextApp() {
@@ -1261,6 +1308,7 @@ const appCtx = {
   requestOpenFile,
   saveSession,
   openGameMenu: () => openAppMenu(true),
+  updateDesktopNotes,
 };
 
 // ── App registry ──────────────────────────────────────────────
@@ -1316,7 +1364,7 @@ const APP_DEFS = {
   'sticky-notes': {
     title: 'Sticky Notes',
     iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 3h14a2 2 0 0 1 2 2v11l-5 5H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/></svg>`,
-    build: id => buildStickyNotes(id),
+    build: (id) => buildStickyNotes(id, appCtx),
   },
   weather: {
     title: 'Weather',
@@ -1431,6 +1479,9 @@ document.querySelectorAll('#app-list .app-launcher[data-type]').forEach(button =
 
 closeBtn.addEventListener('click', () => { if (S.focusedId) closeApp(S.focusedId); });
 overviewBtn.addEventListener('click', () => toggleOverview());
+showDesktopBtn.addEventListener('click', () => {
+  setShowDesktop(!document.body.classList.contains('mod-show-desktop'));
+});
 winMenuBtn.addEventListener('click', e => {
   e.stopPropagation();
   if (document.getElementById('win-menu-open')) { closeWinMenu(); return; }
