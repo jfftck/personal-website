@@ -49,6 +49,17 @@ test('resolves a curated city to its IANA zone and displays the matching city an
     .toMatchObject({ cityLabels: { 'Asia/Kolkata': 'Bengaluru' } });
 });
 
+test('adds a city entered with spacing and punctuation variants using its catalog name', async ({ page }) => {
+  const clock = await openWorldClock(page);
+  await clock.getByLabel('City or time zone').fill('Ho-Chi  Minh City');
+  await clock.getByRole('button', { name: 'Add clock' }).click();
+
+  const cityClock = clock.locator('.clock-item[data-zone="Asia/Ho_Chi_Minh"]');
+  await expect(cityClock.locator('strong')).toHaveText('Ho Chi Minh City');
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), PREF_KEY))
+    .toMatchObject({ cityLabels: { 'Asia/Ho_Chi_Minh': 'Ho Chi Minh City' } });
+});
+
 test('groups cities by their IANA region and adds the selected city time zone', async ({ page }) => {
   const clock = await openWorldClock(page);
   const browser = clock.getByLabel('Browse cities by region');

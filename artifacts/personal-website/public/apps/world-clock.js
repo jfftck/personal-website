@@ -145,7 +145,13 @@ const CITY_LOOKUP = new Map();
 for (const option of CITY_OPTIONS) {
   for (const name of [option.city, ...(option.aliases || [])]) {
     const key = normalizeCity(name);
-    if (!CITY_LOOKUP.has(key)) CITY_LOOKUP.set(key, option);
+    const existing = CITY_LOOKUP.get(key);
+    if (existing && existing.zone !== option.zone) {
+      throw new Error(
+        `Conflicting time zones for normalized city name "${key}": ${existing.zone} and ${option.zone}`,
+      );
+    }
+    if (!existing) CITY_LOOKUP.set(key, option);
   }
 }
 
@@ -318,7 +324,11 @@ export function buildWorldClock(id, ctx) {
 }
 
 export function normalizeCity(value) {
-  return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().toLocaleLowerCase();
+  return value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLocaleLowerCase()
+    .replace(/[\p{P}\p{Z}\s]+/gu, '');
 }
 
 function getCityRegion(zone) {

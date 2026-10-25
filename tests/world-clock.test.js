@@ -42,6 +42,22 @@ test('normalized city names never point to conflicting time zones', () => {
   }
 });
 
+test('city search ignores spacing and punctuation variants', () => {
+  for (const [name, zone] of [
+    ['New   York', 'America/New_York'],
+    ['New-York', 'America/New_York'],
+    ['New.York', 'America/New_York'],
+    ['Ho-Chi Minh City', 'Asia/Ho_Chi_Minh'],
+    ['Ho  Chi Minh City', 'Asia/Ho_Chi_Minh'],
+    ['Sao-Paulo', 'America/Sao_Paulo'],
+    ['San Jose', 'America/Costa_Rica'],
+    ['San-José', 'America/Costa_Rica'],
+    ['Alma Ata', 'Asia/Almaty'],
+  ]) {
+    assert.equal(resolveCity(name)?.zone, zone, `${JSON.stringify(name)} should resolve to ${zone}`);
+  }
+});
+
 test('diacritic-insensitive and alternate city names resolve to their expected zones', () => {
   for (const [name, zone] of [
     ['Bogotá', 'America/Bogota'],
