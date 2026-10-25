@@ -3,7 +3,7 @@
 const KEY = 'personal-desktop-world-clock-v1';
 const DEFAULT_ZONES = ['UTC', 'America/New_York', 'Europe/London', 'Asia/Tokyo'];
 const ZONE_SUGGESTIONS = ['UTC', 'America/New_York', 'Europe/London', 'Europe/Paris', 'Asia/Tokyo', 'Australia/Sydney', 'Pacific/Honolulu'];
-const CITY_OPTIONS = [
+export const CITY_OPTIONS = [
   { city: 'Abidjan', country: 'Côte d’Ivoire', zone: 'Africa/Abidjan' },
   { city: 'Accra', country: 'Ghana', zone: 'Africa/Accra' },
   { city: 'Anchorage', country: 'United States', zone: 'America/Anchorage' },
@@ -149,6 +149,10 @@ for (const option of CITY_OPTIONS) {
   }
 }
 
+export function resolveCity(value) {
+  return CITY_LOOKUP.get(normalizeCity(value));
+}
+
 let nextClockId = 1;
 
 export function buildWorldClock(id, ctx) {
@@ -286,7 +290,7 @@ export function buildWorldClock(id, ctx) {
   const addClock = value => {
     const input = root.querySelector('.clock-zone-input');
     const entry = typeof value === 'string' ? value.trim() : value;
-    const city = typeof entry === 'string' ? CITY_LOOKUP.get(normalizeCity(entry)) : entry;
+    const city = typeof entry === 'string' ? resolveCity(entry) : entry;
     const zone = city?.zone || entry;
     try { new Intl.DateTimeFormat(undefined, { timeZone: zone }); }
     catch { input.setCustomValidity('Choose a city from the suggestions or enter a valid IANA time zone.'); input.reportValidity(); return; }
@@ -313,7 +317,7 @@ export function buildWorldClock(id, ctx) {
   return root;
 }
 
-function normalizeCity(value) {
+export function normalizeCity(value) {
   return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().toLocaleLowerCase();
 }
 
