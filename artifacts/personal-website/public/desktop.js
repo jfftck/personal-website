@@ -5,6 +5,11 @@ import { buildDocViewer }   from './apps/doc-viewer.js';
 import { buildImgViewer }   from './apps/img-viewer.js';
 import { buildMediaPlayer } from './apps/media-player.js';
 import { buildFileManager } from './apps/file-manager.js';
+import { buildCalendar } from './apps/calendar.js';
+import { buildWorldClock } from './apps/world-clock.js';
+import { buildCalculator } from './apps/calculator.js';
+import { buildStickyNotes } from './apps/sticky-notes.js';
+import { buildWeather } from './apps/weather.js';
 import { renderMarkdown }   from './shared/markdown.js';
 import { GAMES, buildGame, initGameMenu } from './apps/game-center.js';
 
@@ -1291,6 +1296,31 @@ const APP_DEFS = {
       <path d="M21 3H3c-1.11 0-2 .89-2 2v14c0 1.11.89 2 2 2h18c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 16H3V5h18v14zM8 15l7-4-7-4v8z"/>
     </svg>`,
     build: id => buildMediaPlayer(id, appCtx),
+  },
+  calendar: {
+    title: 'Calendar',
+    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 2h2v2h6V2h2v2h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3V2zm13 8H4v10h16V10z"/></svg>`,
+    build: id => buildCalendar(id, appCtx),
+  },
+  'world-clock': {
+    title: 'World Clock',
+    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 10.4 4 2.4-1 1.7-5-3V6h2v6.4z"/></svg>`,
+    build: (id, state) => buildWorldClock(id, appCtx, state),
+  },
+  calculator: {
+    title: 'Calculator',
+    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 2h14a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm1 3v4h12V5H6z"/></svg>`,
+    build: (id, state) => buildCalculator(id, appCtx, state),
+  },
+  'sticky-notes': {
+    title: 'Sticky Notes',
+    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 3h14a2 2 0 0 1 2 2v11l-5 5H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/></svg>`,
+    build: id => buildStickyNotes(id),
+  },
+  weather: {
+    title: 'Weather',
+    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 18a5 5 0 1 1 .8-9.9A6 6 0 0 1 19 10a4 4 0 0 1 0 8H7z"/></svg>`,
+    build: id => buildWeather(id),
   },
 };
 
