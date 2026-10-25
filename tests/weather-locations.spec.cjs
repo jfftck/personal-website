@@ -4,11 +4,18 @@ const PREF_KEY = 'personal-desktop-weather-setup-v1';
 let forecastRequests;
 let errors;
 let forecastFailure;
+let delayedForecastLatitude;
+let releaseDelayedForecast;
+let delayedForecastStarted;
+let resolveDelayedForecastStarted;
 
 test.beforeEach(async ({ page }) => {
   forecastRequests = [];
   errors = [];
   forecastFailure = false;
+  delayedForecastLatitude = null;
+  releaseDelayedForecast = null;
+  delayedForecastStarted = new Promise(resolve => { resolveDelayedForecastStarted = resolve; });
   page.on('pageerror', error => errors.push(error.message));
   await page.route('https://geocoding-api.open-meteo.com/v1/search**', async route => {
     const url = new URL(route.request().url());
@@ -34,6 +41,12 @@ test.beforeEach(async ({ page }) => {
       latitude: url.searchParams.get('latitude'),
       temperatureUnit: unit,
     });
+    if (url.searchParams.get('latitude') === delayedForecastLatitude) {
+      resolveDelayedForecastStarted();
+      await new Promise(resolve => {
+        releaseDelayedForecast = resolve;
+      });
+    }
     if (forecastFailure) {
       await route.fulfill({ status: 503, body: 'Forecast unavailable' });
       return;
@@ -156,6 +169,51 @@ test('keeps the current forecast when a location switch cannot be saved, then re
   await weather.locator('.weather-location-select').selectOption('Oslo');
   await expect(weather.locator('.weather-current')).toHaveText('22°C');
   await expect.poll(() => savedPrefs(page)).toMatchObject({ activeLocation: 'Oslo' });
+});
+
+test('ignores a delayed forecast for the previous city after switching locations', async ({ page }) => {
+  await page.clock.install();
+  await page.evaluate(({ key, prefs }) => localStorage.setItem(key, JSON.stringify(prefs)), {
+    key: PREF_KEY,
+    prefs: {
+      locations: [
+        { location: 'Seattle', unit: 'fahrenheit' },
+        { location: 'Oslo', unit: 'celsius' },
+      ],
+      activeLocation: 'Seattle',
+      refreshMinutes: 5,
+    },
+  });
+  const weather = await openWeather(page);
+  await weather.locator('.weather-submit').click();
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+
+  delayedForecastLatitude = '47.6062';
+  await page.clock.fastForward(5 * 60 * 1000);
+  await delayedForecastStarted;
+  await expect(weather.locator('.weather-location-select')).toHaveValue('Seattle');
+
+  await weather.locator('.weather-location-select').selectOption('Oslo');
+  await expect(weather.locator('.weather-current')).toHaveText('22°C');
+  await expect(weather.locator('.weather-location-select')).toHaveValue('Oslo');
+  await expect.poll(() => forecastRequests.at(-1)).toEqual({
+    latitude: '59.9139',
+    temperatureUnit: 'celsius',
+  });
+
+  const delayedResponse = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.hostname === 'api.open-meteo.com'
+      && url.pathname === '/v1/forecast'
+      && url.searchParams.get('latitude') === '47.6062';
+  });
+  releaseDelayedForecast();
+  await (await delayedResponse).finished();
+  await page.waitForTimeout(100);
+
+  await expect(weather.locator('.weather-location-select')).toHaveValue('Oslo');
+  await expect(weather.locator('.weather-current')).toHaveText('22°C');
+  await expect(weather.locator('.weather-hourly')).toContainText('22°C');
 });
 
 test('keeps settings and saved locations unchanged after failed writes, then saves them on retry', async ({ page }) => {
