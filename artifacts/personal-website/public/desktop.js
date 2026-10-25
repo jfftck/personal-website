@@ -1255,6 +1255,7 @@ launcherFileSearch.addEventListener('input', () => {
 const appCtx = {
   appApis:        S.appApis,
   appTitles:      S.appTitles,
+  is24HourTime:   () => use24HourTime,
   setAppTitle,
   toast,
   requestOpenFile,

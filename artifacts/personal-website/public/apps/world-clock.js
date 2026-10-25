@@ -193,6 +193,16 @@ export function buildWorldClock(id, ctx) {
     }
   }
   const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch {} };
+  const formatDigitalTime = (date, zone) => {
+    const use24HourTime = Boolean(ctx?.is24HourTime?.());
+    return new Intl.DateTimeFormat(undefined, {
+      timeZone: zone,
+      hour: use24HourTime ? '2-digit' : 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: !use24HourTime,
+    }).format(date);
+  };
   const render = () => {
     root.querySelector('.clock-layout').textContent = prefs.layout === 'grid' ? 'Grid' : 'List';
     root.querySelector('.clock-face-mode').textContent = prefs.face === 'analog' ? 'Analog' : 'Digital';
@@ -212,7 +222,7 @@ export function buildWorldClock(id, ctx) {
       const draw = () => {
         const date = new Date();
         const fmt = opts => new Intl.DateTimeFormat(undefined, { ...opts, timeZone: zone }).format(date);
-        item.querySelector('time').textContent = fmt({ hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        item.querySelector('time').textContent = formatDigitalTime(date, zone);
         item.querySelector('.clock-date').textContent = fmt({ weekday: 'short', month: 'short', day: 'numeric' });
         if (prefs.face === 'analog') {
           const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(date);
@@ -241,7 +251,7 @@ export function buildWorldClock(id, ctx) {
       list.querySelectorAll('.clock-item').forEach(item => {
         const zone = item.dataset.zone;
         const date = new Date();
-        item.querySelector('time').textContent = new Intl.DateTimeFormat(undefined, { timeZone: zone, hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(date);
+        item.querySelector('time').textContent = formatDigitalTime(date, zone);
         item.querySelector('.clock-date').textContent = new Intl.DateTimeFormat(undefined, { timeZone: zone, weekday: 'short', month: 'short', day: 'numeric' }).format(date);
         const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(date).map(part => [part.type, part.value]));
         const face = item.querySelector('.clock-face');
