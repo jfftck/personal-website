@@ -35,6 +35,24 @@ export function buildWeather(id, ctx) {
     }, prefs.refreshMinutes * 60_000);
   }
 
+  function removeSavedLocation(location) {
+    const savedLocation = prefs.locations.find(item => item.location === location);
+    if (!savedLocation) return null;
+
+    const wasActive = prefs.activeLocation === savedLocation.location;
+    const confirmation = `Remove “${savedLocation.location}” from your saved locations?${wasActive
+      ? prefs.locations.length > 1
+        ? ' Another saved location will become active.'
+        : ' Weather will return to setup.'
+      : ''}`;
+    if (!window.confirm(confirmation)) return null;
+
+    prefs.locations = prefs.locations.filter(item => item.location !== savedLocation.location);
+    if (wasActive) prefs.activeLocation = prefs.locations[0]?.location || '';
+    savePrefs(prefs);
+    return { location: savedLocation.location, wasActive };
+  }
+
   function showSetup(message = '') {
     stopRefreshTimer();
     requestToken++;
@@ -92,20 +110,11 @@ export function buildWeather(id, ctx) {
     }
     savedSelect.addEventListener('change', updateUnitForSelection);
     removeButton.addEventListener('click', () => {
-      const location = savedSelect.value;
-      const savedLocation = prefs.locations.find(item => item.location === location);
-      if (!savedLocation) return;
-
-      const isActive = prefs.activeLocation === savedLocation.location;
-      const confirmation = `Remove “${savedLocation.location}” from your saved locations?${isActive ? ' Another saved location will become active.' : ''}`;
-      if (!window.confirm(confirmation)) return;
-
-      prefs.locations = prefs.locations.filter(item => item.location !== savedLocation.location);
-      if (isActive) prefs.activeLocation = prefs.locations[0]?.location || '';
-      savePrefs(prefs);
+      const removed = removeSavedLocation(savedSelect.value);
+      if (!removed) return;
       showSetup(prefs.locations.length
-        ? `Removed ${savedLocation.location} from saved locations.`
-        : `Removed ${savedLocation.location}. Add a new location to see its forecast.`);
+        ? `Removed ${removed.location} from saved locations.`
+        : `Removed ${removed.location}. Add a new location to see its forecast.`);
     });
     addButton.addEventListener('click', () => {
       addingLocation = true;
@@ -198,6 +207,7 @@ export function buildWeather(id, ctx) {
     root.innerHTML = `<header class="weather-top">
       <div class="weather-top-tools">
         <select class="weather-location-select" aria-label="Weather location"></select>
+        <button class="util-action weather-remove-current" type="button" aria-label="Remove current location">Remove</button>
         <button class="weather-settings-button" type="button" aria-label="Weather settings" title="Settings">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Zm9 4.8a9.2 9.2 0 0 0 0-2l2-1.5-2-3.5-2.4 1a8.2 8.2 0 0 0-1.7-1L16.5 3h-4l-.4 2.7a8.2 8.2 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a9.2 9.2 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a8.2 8.2 0 0 0 1.7 1l.4 2.7h4l.4-2.7a8.2 8.2 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5Z"/></svg>
           <span class="sr-only">Settings</span>
@@ -216,6 +226,10 @@ export function buildWeather(id, ctx) {
         <label>Temperature units<select class="weather-settings-unit" required><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
         <label>Add a location<input class="weather-settings-location" type="text" autocomplete="off" placeholder="City or town"></label>
         <p class="weather-settings-hint">Leave the location blank to update the selected place.</p>
+        <section class="weather-settings-saved" aria-label="Saved locations">
+          <h3>Saved locations</h3>
+          <div class="weather-settings-locations"></div>
+        </section>
         <label>Update weather every <span class="weather-interval-field"><input class="weather-refresh-interval" type="number" min="5" max="1440" step="5" required><span>minutes</span></span></label>
         <p class="weather-settings-error" role="status" aria-live="polite"></p>
         <div class="weather-settings-actions"><button class="util-action weather-settings-cancel" type="button">Cancel</button><button class="util-action weather-settings-save" type="submit">Save settings</button></div>
@@ -224,19 +238,55 @@ export function buildWeather(id, ctx) {
     root.querySelector('.weather-current').textContent = `${Math.round(current.temperature_2m)}${degrees}`;
     root.querySelector('.weather-place').textContent = displayName;
     const locationSelect = root.querySelector('.weather-location-select');
-    prefs.locations.forEach(item => {
-      const option = document.createElement('option');
-      option.value = item.location;
-      option.textContent = item.location === prefs.activeLocation ? displayName : item.location;
-      locationSelect.append(option);
-    });
-    locationSelect.value = prefs.activeLocation;
+    const savedLocations = root.querySelector('.weather-settings-locations');
+    function updateSavedLocationControls() {
+      locationSelect.replaceChildren();
+      savedLocations.replaceChildren();
+      prefs.locations.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.location;
+        option.textContent = item.location === prefs.activeLocation ? displayName : item.location;
+        locationSelect.append(option);
+
+        const row = document.createElement('div');
+        row.className = 'weather-settings-location-row';
+        const name = document.createElement('span');
+        name.textContent = item.location;
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'util-action weather-remove weather-settings-remove';
+        removeButton.textContent = 'Remove';
+        removeButton.setAttribute('aria-label', `Remove ${item.location}`);
+        removeButton.addEventListener('click', () => removeFromForecast(item.location));
+        row.append(name, removeButton);
+        savedLocations.append(row);
+      });
+      locationSelect.value = prefs.activeLocation;
+    }
+    updateSavedLocationControls();
     locationSelect.addEventListener('change', () => {
       const selected = prefs.locations.find(item => item.location === locationSelect.value);
       if (!selected) return;
       prefs.activeLocation = selected.location;
       savePrefs(prefs);
       loadForecast(selected.location, selected.unit);
+    });
+    function removeFromForecast(location) {
+      const removed = removeSavedLocation(location);
+      if (!removed) return;
+      if (removed.wasActive) {
+        if (prefs.locations.length) {
+          const nextLocation = prefs.locations.find(item => item.location === prefs.activeLocation);
+          if (nextLocation) loadForecast(nextLocation.location, nextLocation.unit);
+        } else {
+          showSetup(`Removed ${removed.location}. Add a new location to see its forecast.`);
+        }
+        return;
+      }
+      updateSavedLocationControls();
+    }
+    root.querySelector('.weather-remove-current').addEventListener('click', () => {
+      removeFromForecast(prefs.activeLocation);
     });
     const dialog = root.querySelector('.weather-settings-dialog');
     root.querySelector('.weather-settings-button').addEventListener('click', () => {

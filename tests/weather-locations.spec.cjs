@@ -449,3 +449,103 @@ test('removing the last saved place shows the new-location form and keeps refres
   await expect(weather.locator('.weather-submit')).toHaveText('Add & show forecast');
   await expect(weather.locator('.weather-error')).toContainText('Add a new location');
 });
+
+test('removing the active forecast location loads the next saved place with its saved unit', async ({ page }) => {
+  const initialPrefs = {
+    locations: [
+      { location: 'Seattle', unit: 'fahrenheit' },
+      { location: 'Oslo', unit: 'celsius' },
+    ],
+    activeLocation: 'Oslo',
+    refreshMinutes: 50,
+  };
+  await page.evaluate(({ key, prefs }) => localStorage.setItem(key, JSON.stringify(prefs)), {
+    key: PREF_KEY,
+    prefs: initialPrefs,
+  });
+
+  const weather = await openWeather(page);
+  await weather.locator('.weather-submit').click();
+  await expect(weather.locator('.weather-current')).toHaveText('22°C');
+  let confirmationMessage = '';
+  page.once('dialog', async dialog => {
+    confirmationMessage = dialog.message();
+    await dialog.accept();
+  });
+  await weather.locator('.weather-remove-current').click();
+
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+  await expect(weather.locator('.weather-location-select')).toHaveValue('Seattle');
+  await expect.poll(() => forecastRequests.at(-1)?.temperatureUnit).toBe('fahrenheit');
+  await expect.poll(() => savedPrefs(page)).toEqual({
+    locations: [{ location: 'Seattle', unit: 'fahrenheit' }],
+    activeLocation: 'Seattle',
+    refreshMinutes: 50,
+  });
+  expect(confirmationMessage).toContain('Another saved location will become active.');
+});
+
+test('canceling forecast removal changes nothing and settings can remove an inactive place', async ({ page }) => {
+  const initialPrefs = {
+    locations: [
+      { location: 'Seattle', unit: 'fahrenheit' },
+      { location: 'Oslo', unit: 'celsius' },
+    ],
+    activeLocation: 'Seattle',
+    refreshMinutes: 40,
+  };
+  await page.evaluate(({ key, prefs }) => localStorage.setItem(key, JSON.stringify(prefs)), {
+    key: PREF_KEY,
+    prefs: initialPrefs,
+  });
+
+  const weather = await openWeather(page);
+  await weather.locator('.weather-submit').click();
+  await expect.poll(() => forecastRequests.length).toBe(1);
+  const activeRequests = forecastRequests.length;
+  page.once('dialog', dialog => dialog.dismiss());
+  await weather.locator('.weather-remove-current').click();
+  await expect.poll(() => savedPrefs(page)).toEqual(initialPrefs);
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+
+  await weather.locator('.weather-settings-button').click();
+  const settings = weather.locator('.weather-settings-dialog');
+  page.once('dialog', dialog => dialog.accept());
+  await settings.getByRole('button', { name: 'Remove Oslo' }).click();
+  await expect(settings.locator('.weather-settings-locations')).not.toContainText('Oslo');
+  await expect(weather.locator('.weather-location-select option'))
+    .toHaveText(['Seattle, Test Region, Test Country']);
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+  await expect.poll(() => forecastRequests.length).toBe(activeRequests);
+  await expect.poll(() => savedPrefs(page)).toEqual({
+    locations: [{ location: 'Seattle', unit: 'fahrenheit' }],
+    activeLocation: 'Seattle',
+    refreshMinutes: 40,
+  });
+});
+
+test('removing the last place from the forecast returns to the new-location form', async ({ page }) => {
+  await page.evaluate(({ key, prefs }) => localStorage.setItem(key, JSON.stringify(prefs)), {
+    key: PREF_KEY,
+    prefs: {
+      locations: [{ location: 'Tokyo', unit: 'celsius' }],
+      activeLocation: 'Tokyo',
+      refreshMinutes: 75,
+    },
+  });
+
+  const weather = await openWeather(page);
+  await weather.locator('.weather-submit').click();
+  await expect(weather.locator('.weather-panels')).toBeVisible();
+  page.once('dialog', dialog => dialog.accept());
+  await weather.locator('.weather-remove-current').click();
+
+  await expect(weather.locator('.weather-location-label')).toBeVisible();
+  await expect(weather.locator('.weather-location')).toHaveAttribute('required', '');
+  await expect(weather.locator('.weather-saved-row')).toBeHidden();
+  await expect.poll(() => savedPrefs(page)).toEqual({
+    locations: [],
+    activeLocation: '',
+    refreshMinutes: 75,
+  });
+});

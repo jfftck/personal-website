@@ -1536,6 +1536,7 @@ body.mod-overview .app-window.focused {
 .weather-top { position:relative;min-height:150px;flex:none;padding:.25rem .2rem 1rem;border-bottom:1px solid var(--app-border); }
 .weather-top-tools { position:absolute;inset-block-start:.15rem;inset-inline-end:.2rem;display:flex;align-items:center;gap:.4rem;z-index:1; }
 .weather-location-select { width:min(14rem,45vw);max-width:calc(100vw - 5rem);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem; }
+.weather-remove-current { min-height:2.45rem;padding:.4rem .55rem;border-color:color-mix(in srgb,#d96868 52%,var(--app-border));color:color-mix(in srgb,#ff8b8b 78%,var(--app-text));font-size:.76rem;white-space:nowrap; }
 .weather-settings-button { width:2.45rem;height:2.45rem;flex:none;display:grid;place-items:center;border:1px solid var(--app-border);border-radius:.7rem;background:var(--util-surface);color:var(--app-text);cursor:pointer; }
 .weather-settings-button:hover { background:var(--util-surface-strong); }
 .weather-settings-button svg { width:1.15rem;height:1.15rem;fill:currentColor; }
@@ -1576,12 +1577,19 @@ body.mod-overview .app-window.focused {
 .weather-settings-close:hover { background:var(--util-surface); }
 .weather-settings-form > label { display:grid;gap:.35rem;font-size:.88rem; }
 .weather-settings-hint { margin:-.65rem 0 0;color:var(--util-detail);font-size:.8rem; }
+.weather-settings-saved { display:grid;gap:.4rem; }
+.weather-settings-saved h3 { margin:0;font-size:.85rem;color:var(--util-detail); }
+.weather-settings-locations { display:grid;gap:.35rem;max-height:9rem;overflow:auto; }
+.weather-settings-location-row { display:flex;align-items:center;justify-content:space-between;gap:.75rem;min-width:0;padding:.35rem 0;border-top:1px solid var(--app-border); }
+.weather-settings-location-row > span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.weather-settings-remove { flex:none;padding:.35rem .55rem;font-size:.76rem; }
 .weather-interval-field { display:flex;align-items:center;gap:.55rem; }
 .weather-refresh-interval { width:7rem; }
 .weather-settings-actions { display:flex;justify-content:flex-end;gap:.5rem;margin-top:.1rem; }
 .weather-settings-save { border-color:color-mix(in srgb,var(--util-teal) 55%,var(--app-border));background:color-mix(in srgb,var(--util-teal) 18%,transparent); }
 .weather-error { color:var(--util-danger); }
 @media(max-width:560px) {
+ .weather-location-select { width:min(14rem,34vw); }
  .notes-app { grid-template-columns:120px minmax(0,1fr); }
  .notes-sidebar { padding:.55rem; }
  .note-toolbar .util-muted { display:none; }
