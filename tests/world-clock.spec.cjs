@@ -63,6 +63,34 @@ test('browses cities in regional groups and adds the selected city time zone', a
   await expect(browser).toHaveValue('');
 });
 
+test('updates the displayed city for a shared time zone and keeps both clocks after reload', async ({ page }) => {
+  let clock = await openWorldClock(page);
+  const browser = clock.getByLabel('Browse cities by region');
+
+  await browser.selectOption({ label: 'Dallas · United States' });
+  await expect(clock.locator('.clock-item[data-zone="America/Chicago"] strong')).toHaveText('Dallas');
+
+  await browser.selectOption({ label: 'Chicago · United States' });
+  const chicagoZoneClocks = clock.locator('.clock-item[data-zone="America/Chicago"]');
+  await expect(chicagoZoneClocks).toHaveCount(1);
+  await expect(chicagoZoneClocks.locator('strong')).toHaveText('Chicago');
+
+  await browser.selectOption({ label: 'Sydney · Australia' });
+  await expect(clock.locator('.clock-item[data-zone="Australia/Sydney"] strong')).toHaveText('Sydney');
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), PREF_KEY))
+    .toMatchObject({
+      zones: expect.arrayContaining(['America/Chicago', 'Australia/Sydney']),
+      cityLabels: { 'America/Chicago': 'Chicago', 'Australia/Sydney': 'Sydney' },
+    });
+
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  clock = await getWorldClock(page);
+  await expect(clock.locator('.clock-item[data-zone="America/Chicago"] strong')).toHaveText('Chicago');
+  await expect(clock.locator('.clock-item[data-zone="Australia/Sydney"] strong')).toHaveText('Sydney');
+  await expect(clock.locator('.clock-item[data-zone="America/Chicago"]')).toHaveCount(1);
+});
+
 test('accepts a direct IANA zone and restores saved zones and city names after reload', async ({ page }) => {
   let clock = await openWorldClock(page);
   await clock.getByLabel('City or time zone').fill('America/Argentina/Buenos_Aires');

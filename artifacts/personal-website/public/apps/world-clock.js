@@ -296,7 +296,7 @@ export function buildWorldClock(id, ctx) {
     catch { input.setCustomValidity('Choose a city from the suggestions or enter a valid IANA time zone.'); input.reportValidity(); return; }
     input.setCustomValidity('');
     if (!prefs.zones.includes(zone)) prefs.zones.push(zone);
-    if (city && !prefs.cityLabels[zone]) prefs.cityLabels[zone] = city.city;
+    if (city) prefs.cityLabels[zone] = city.city;
     if (typeof entry === 'string') input.value = '';
     persist(); render();
   };
