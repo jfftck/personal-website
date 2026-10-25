@@ -19,27 +19,87 @@ export function buildWeather() {
   showSetup();
 
   function showSetup(message = '') {
+    const hasLocations = prefs.locations.length > 0;
+    const selectedLocation = prefs.locations.find(item => item.location === prefs.activeLocation) || prefs.locations[0];
+    let addingLocation = !hasLocations;
     root.innerHTML = `<form class="weather-setup">
-      <div><span class="util-muted">A quick local setup</span><h2 style="margin:.15rem 0;font-size:1.35rem">Weather, where you are.</h2><p class="util-muted" style="margin:.25rem 0 0">Choose a place to fetch its current forecast.</p></div>
-      <label>Location<input class="weather-location" type="text" required autocomplete="off" placeholder="City or town"></label>
+      <div><span class="util-muted">Saved on this device</span><h2 style="margin:.15rem 0;font-size:1.35rem">Weather, where you are.</h2><p class="util-muted" style="margin:.25rem 0 0">Choose a saved place or add another location.</p></div>
+      <label class="weather-saved-label">Saved location<select class="weather-saved-location"></select></label>
+      <label class="weather-location-label">New location<input class="weather-location" type="text" autocomplete="off" placeholder="City or town"></label>
       <label>Temperature units<select class="weather-unit" required><option value="" disabled>Choose a unit</option><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
       <div class="weather-error" role="status" aria-live="polite"></div>
-      <button class="util-action" type="submit" style="background:rgba(183,205,118,.19)">Show forecast</button>
+      <div class="weather-setup-actions">
+        <button class="util-action weather-submit" type="submit" style="background:rgba(183,205,118,.19)">Show forecast</button>
+        <button class="util-action weather-add" type="button">Add another location</button>
+        <button class="util-action weather-back" type="button">Back to saved locations</button>
+      </div>
     </form>`;
     const form = root.querySelector('form');
-    form.querySelector('.weather-location').value = prefs.location || '';
-    form.querySelector('.weather-unit').value = prefs.unit || '';
+    const savedLabel = form.querySelector('.weather-saved-label');
+    const savedSelect = form.querySelector('.weather-saved-location');
+    const locationLabel = form.querySelector('.weather-location-label');
+    const locationInput = form.querySelector('.weather-location');
+    const addButton = form.querySelector('.weather-add');
+    const backButton = form.querySelector('.weather-back');
+    const unitSelect = form.querySelector('.weather-unit');
+    prefs.locations.forEach(item => {
+      const option = document.createElement('option');
+      option.value = item.location;
+      option.textContent = item.location;
+      savedSelect.append(option);
+    });
+    if (selectedLocation) {
+      savedSelect.value = selectedLocation.location;
+      unitSelect.value = selectedLocation.unit;
+    } else {
+      unitSelect.value = '';
+    }
+    function renderLocationMode() {
+      savedLabel.hidden = addingLocation || !hasLocations;
+      locationLabel.hidden = !addingLocation;
+      locationInput.required = addingLocation;
+      savedSelect.required = !addingLocation && hasLocations;
+      addButton.hidden = addingLocation || !hasLocations;
+      backButton.hidden = !addingLocation || !hasLocations;
+      form.querySelector('.weather-submit').textContent = addingLocation ? 'Add & show forecast' : 'Show forecast';
+    }
+    function updateUnitForSelection() {
+      const item = prefs.locations.find(place => place.location === savedSelect.value);
+      unitSelect.value = item?.unit || '';
+    }
+    savedSelect.addEventListener('change', updateUnitForSelection);
+    addButton.addEventListener('click', () => {
+      addingLocation = true;
+      locationInput.value = '';
+      unitSelect.value = '';
+      renderLocationMode();
+      locationInput.focus({ preventScroll: true });
+    });
+    backButton.addEventListener('click', () => {
+      addingLocation = false;
+      updateUnitForSelection();
+      renderLocationMode();
+      savedSelect.focus({ preventScroll: true });
+    });
+    renderLocationMode();
     form.querySelector('.weather-error').textContent = message;
     form.addEventListener('submit', async event => {
       event.preventDefault();
-      const location = form.querySelector('.weather-location').value.trim();
-      const unit = form.querySelector('.weather-unit').value;
+      const location = addingLocation ? locationInput.value.trim() : savedSelect.value;
+      const unit = unitSelect.value;
       if (!location) return;
-      prefs = { location, unit };
-      try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch {}
+      const existing = prefs.locations.find(item => item.location.toLocaleLowerCase() === location.toLocaleLowerCase());
+      if (existing) {
+        existing.unit = unit;
+        prefs.activeLocation = existing.location;
+      } else {
+        prefs.locations.push({ location, unit });
+        prefs.activeLocation = location;
+      }
+      savePrefs(prefs);
       await loadForecast(location, unit);
     });
-    form.querySelector('.weather-location').focus({ preventScroll: true });
+    (addingLocation ? locationInput : savedSelect).focus({ preventScroll: true });
   }
 
   async function loadForecast(location, unit) {
@@ -142,9 +202,26 @@ function parseLocalTimestamp(value) {
 function readPrefs() {
   try {
     const data = JSON.parse(localStorage.getItem(PREF_KEY));
-    if (data && typeof data.location === 'string') return { location: data.location, unit: ['fahrenheit', 'celsius'].includes(data.unit) ? data.unit : '' };
+    if (Array.isArray(data?.locations)) {
+      const locations = data.locations
+        .filter(item => item && typeof item.location === 'string' && item.location.trim())
+        .map(item => ({ location: item.location.trim(), unit: ['fahrenheit', 'celsius'].includes(item.unit) ? item.unit : '' }))
+        .filter((item, index, items) => items.findIndex(other => other.location.toLocaleLowerCase() === item.location.toLocaleLowerCase()) === index);
+      const activeLocation = locations.some(item => item.location === data.activeLocation) ? data.activeLocation : locations[0]?.location || '';
+      return { locations, activeLocation };
+    }
+    if (data && typeof data.location === 'string' && data.location.trim()) {
+      return {
+        locations: [{ location: data.location.trim(), unit: ['fahrenheit', 'celsius'].includes(data.unit) ? data.unit : '' }],
+        activeLocation: data.location.trim(),
+      };
+    }
   } catch {}
-  return { location: '', unit: '' };
+  return { locations: [], activeLocation: '' };
+}
+
+function savePrefs(prefs) {
+  try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch {}
 }
 
 function escapeHTML(text) {
