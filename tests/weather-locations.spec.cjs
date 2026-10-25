@@ -11,11 +11,12 @@ test.beforeEach(async ({ page }) => {
   await page.route('https://geocoding-api.open-meteo.com/v1/search**', async route => {
     const url = new URL(route.request().url());
     const name = url.searchParams.get('name');
+    const latitudeByLocation = { Seattle: 47.6062, Oslo: 59.9139 };
     await route.fulfill({
       json: {
         results: [{
           name,
-          latitude: 40,
+          latitude: latitudeByLocation[name] || 40,
           longitude: -70,
           timezone: 'UTC',
           admin1: 'Test Region',
@@ -167,6 +168,104 @@ test('keeps each saved city paired with its unit after selection and opening a n
   await weather.locator('.weather-submit').click();
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
   await expect.poll(() => forecastRequests.at(-1)?.temperatureUnit).toBe('fahrenheit');
+});
+
+test('changing a saved city unit preserves the other city after switching and reopening Weather', async ({ page }) => {
+  let weather = await openWeather(page);
+  await weather.locator('.weather-location').fill('Seattle');
+  await weather.locator('.weather-unit').selectOption('fahrenheit');
+  await weather.locator('.weather-submit').click();
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+
+  const settings = weather.locator('.weather-settings-dialog');
+  await weather.locator('.weather-settings-button').click();
+  await settings.locator('.weather-settings-location').fill('Oslo');
+  await settings.locator('.weather-settings-unit').selectOption('celsius');
+  await settings.locator('.weather-settings-save').click();
+  await expect(weather.locator('.weather-current')).toHaveText('22°C');
+  await expect.poll(() => forecastRequests.at(-1)).toEqual({
+    latitude: '59.9139',
+    temperatureUnit: 'celsius',
+  });
+  await expect.poll(() => savedPrefs(page)).toEqual({
+    locations: [
+      { location: 'Seattle', unit: 'fahrenheit' },
+      { location: 'Oslo', unit: 'celsius' },
+    ],
+    activeLocation: 'Oslo',
+    refreshMinutes: 60,
+  });
+
+  await weather.locator('.weather-location-select').selectOption('Seattle');
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+  await expect.poll(() => forecastRequests.at(-1)).toEqual({
+    latitude: '47.6062',
+    temperatureUnit: 'fahrenheit',
+  });
+
+  await weather.locator('.weather-settings-button').click();
+  await expect(settings.locator('.weather-settings-unit')).toHaveValue('fahrenheit');
+  await settings.locator('.weather-settings-unit').selectOption('celsius');
+  await settings.locator('.weather-settings-save').click();
+  await expect(weather.locator('.weather-current')).toHaveText('22°C');
+  await expect.poll(() => forecastRequests.at(-1)).toEqual({
+    latitude: '47.6062',
+    temperatureUnit: 'celsius',
+  });
+  await expect.poll(() => savedPrefs(page)).toEqual({
+    locations: [
+      { location: 'Seattle', unit: 'celsius' },
+      { location: 'Oslo', unit: 'celsius' },
+    ],
+    activeLocation: 'Seattle',
+    refreshMinutes: 60,
+  });
+
+  await weather.locator('.weather-location-select').selectOption('Oslo');
+  await expect(weather.locator('.weather-current')).toHaveText('22°C');
+  await expect.poll(() => forecastRequests.at(-1)).toEqual({
+    latitude: '59.9139',
+    temperatureUnit: 'celsius',
+  });
+  await expect.poll(() => savedPrefs(page)).toEqual({
+    locations: [
+      { location: 'Seattle', unit: 'celsius' },
+      { location: 'Oslo', unit: 'celsius' },
+    ],
+    activeLocation: 'Oslo',
+    refreshMinutes: 60,
+  });
+
+  await page.locator('#close-btn').click();
+  weather = await openWeather(page);
+  const savedLocationSelect = weather.locator('.weather-saved-location');
+  const savedUnitSelect = weather.locator('.weather-unit');
+  await expect(savedLocationSelect.locator('option')).toHaveText(['Seattle', 'Oslo']);
+  await expect(savedLocationSelect).toHaveValue('Oslo');
+  await expect(savedUnitSelect).toHaveValue('celsius');
+  await savedLocationSelect.selectOption('Seattle');
+  await expect(savedUnitSelect).toHaveValue('celsius');
+  await savedLocationSelect.selectOption('Oslo');
+  await expect(savedUnitSelect).toHaveValue('celsius');
+  await weather.locator('.weather-submit').click();
+  await expect(weather.locator('.weather-current')).toHaveText('22°C');
+  await expect.poll(() => forecastRequests.at(-1)).toEqual({
+    latitude: '59.9139',
+    temperatureUnit: 'celsius',
+  });
+  const reopenedLocationSelect = weather.locator('.weather-location-select');
+  await reopenedLocationSelect.selectOption('Seattle');
+  await expect(weather.locator('.weather-current')).toHaveText('22°C');
+  await expect.poll(() => forecastRequests.at(-1)).toEqual({
+    latitude: '47.6062',
+    temperatureUnit: 'celsius',
+  });
+  await reopenedLocationSelect.selectOption('Oslo');
+  await expect(weather.locator('.weather-current')).toHaveText('22°C');
+  await expect.poll(() => forecastRequests.at(-1)).toEqual({
+    latitude: '59.9139',
+    temperatureUnit: 'celsius',
+  });
 });
 
 test('canceling removal changes nothing, and removing an inactive place keeps the active place', async ({ page }) => {
