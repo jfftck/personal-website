@@ -49,17 +49,41 @@ test('resolves a curated city to its IANA zone and displays the matching city an
     .toMatchObject({ cityLabels: { 'Asia/Kolkata': 'Bengaluru' } });
 });
 
-test('browses cities in regional groups and adds the selected city time zone', async ({ page }) => {
+test('groups cities by their IANA region and adds the selected city time zone', async ({ page }) => {
   const clock = await openWorldClock(page);
   const browser = clock.getByLabel('Browse cities by region');
 
-  await expect(browser.locator('optgroup[label="Asia"] option', { hasText: 'Tokyo · Japan' })).toHaveCount(1);
+  const groups = await browser.locator('optgroup').evaluateAll(elements =>
+    elements.map(element => element.label).sort()
+  );
+  expect(groups).toEqual(['Africa', 'Americas', 'Asia', 'Europe', 'Oceania']);
+
+  const representativeCities = {
+    Africa: 'Accra · Ghana',
+    Americas: 'Bogotá · Colombia',
+    Asia: 'Tokyo · Japan',
+    Europe: 'London · United Kingdom',
+    Oceania: 'Sydney · Australia',
+  };
+  for (const [region, city] of Object.entries(representativeCities)) {
+    await expect(browser.locator(`optgroup[label="${region}"] option`, { hasText: city })).toHaveCount(1);
+  }
+  await expect(browser.locator('optgroup[label="Europe"] option', { hasText: 'Reykjavík · Iceland' }))
+    .toHaveCount(1);
+
   await browser.selectOption({ label: 'Tokyo · Japan' });
 
   const tokyo = clock.locator('.clock-item[data-zone="Asia/Tokyo"]');
   await expect(tokyo.locator('strong')).toHaveText('Tokyo');
+  await browser.selectOption({ label: 'Reykjavík · Iceland' });
+
+  const reykjavik = clock.locator('.clock-item[data-zone="Atlantic/Reykjavik"]');
+  await expect(reykjavik.locator('strong')).toHaveText('Reykjavík');
   await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), PREF_KEY))
-    .toMatchObject({ zones: expect.arrayContaining(['Asia/Tokyo']), cityLabels: { 'Asia/Tokyo': 'Tokyo' } });
+    .toMatchObject({
+      zones: expect.arrayContaining(['Asia/Tokyo', 'Atlantic/Reykjavik']),
+      cityLabels: { 'Asia/Tokyo': 'Tokyo', 'Atlantic/Reykjavik': 'Reykjavík' },
+    });
   await expect(browser).toHaveValue('');
 });
 
