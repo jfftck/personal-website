@@ -3,10 +3,12 @@ const { test, expect } = require('@playwright/test');
 const PREF_KEY = 'personal-desktop-weather-setup-v1';
 let forecastRequests;
 let errors;
+let forecastFailure;
 
 test.beforeEach(async ({ page }) => {
   forecastRequests = [];
   errors = [];
+  forecastFailure = false;
   page.on('pageerror', error => errors.push(error.message));
   await page.route('https://geocoding-api.open-meteo.com/v1/search**', async route => {
     const url = new URL(route.request().url());
@@ -32,6 +34,10 @@ test.beforeEach(async ({ page }) => {
       latitude: url.searchParams.get('latitude'),
       temperatureUnit: unit,
     });
+    if (forecastFailure) {
+      await route.fulfill({ status: 503, body: 'Forecast unavailable' });
+      return;
+    }
     const temperature = unit === 'fahrenheit' ? 72 : 22;
     const hourlyTimes = Array.from({ length: 24 }, (_, index) => {
       const time = new Date(Date.UTC(2026, 9, 25, 12 + index));
@@ -265,6 +271,72 @@ test('changing a saved city unit preserves the other city after switching and re
   await expect.poll(() => forecastRequests.at(-1)).toEqual({
     latitude: '59.9139',
     temperatureUnit: 'celsius',
+  });
+});
+
+test('keeps saved locations and units available after a forecast failure and reopening Weather', async ({ page }) => {
+  let weather = await openWeather(page);
+  await weather.locator('.weather-location').fill('Seattle');
+  await weather.locator('.weather-unit').selectOption('fahrenheit');
+  await weather.locator('.weather-submit').click();
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+
+  const settings = weather.locator('.weather-settings-dialog');
+  await weather.locator('.weather-settings-button').click();
+  await settings.locator('.weather-settings-location').fill('Oslo');
+  await settings.locator('.weather-settings-unit').selectOption('celsius');
+  await settings.locator('.weather-settings-save').click();
+  await expect(weather.locator('.weather-current')).toHaveText('22°C');
+
+  const savedLocations = [
+    { location: 'Seattle', unit: 'fahrenheit' },
+    { location: 'Oslo', unit: 'celsius' },
+  ];
+  await expect.poll(() => savedPrefs(page)).toEqual({
+    locations: savedLocations,
+    activeLocation: 'Oslo',
+    refreshMinutes: 60,
+  });
+
+  forecastFailure = true;
+  await weather.locator('.weather-location-select').selectOption('Seattle');
+  await expect(weather.locator('.weather-error'))
+    .toContainText('The weather service could not be reached');
+  await expect(weather.locator('.weather-retry')).toBeVisible();
+  await expect(weather.locator('.weather-change')).toBeVisible();
+  await expect.poll(() => savedPrefs(page)).toEqual({
+    locations: savedLocations,
+    activeLocation: 'Seattle',
+    refreshMinutes: 60,
+  });
+
+  await weather.locator('.weather-change').click();
+  const setupLocations = weather.locator('.weather-saved-location');
+  const setupUnit = weather.locator('.weather-unit');
+  await expect(setupLocations.locator('option')).toHaveText(['Seattle', 'Oslo']);
+  await expect(setupLocations).toHaveValue('Seattle');
+  await expect(setupUnit).toHaveValue('fahrenheit');
+  await setupLocations.selectOption('Oslo');
+  await expect(setupUnit).toHaveValue('celsius');
+  await setupLocations.selectOption('Seattle');
+  await expect(setupUnit).toHaveValue('fahrenheit');
+
+  await page.locator('#close-btn').click();
+  await expect(page.locator('.app-window[data-type="weather"]')).toHaveCount(0);
+  weather = await openWeather(page);
+  const reopenedLocations = weather.locator('.weather-saved-location');
+  const reopenedUnit = weather.locator('.weather-unit');
+  await expect(reopenedLocations.locator('option')).toHaveText(['Seattle', 'Oslo']);
+  await expect(reopenedLocations).toHaveValue('Seattle');
+  await expect(reopenedUnit).toHaveValue('fahrenheit');
+  await reopenedLocations.selectOption('Oslo');
+  await expect(reopenedUnit).toHaveValue('celsius');
+  await reopenedLocations.selectOption('Seattle');
+  await expect(reopenedUnit).toHaveValue('fahrenheit');
+  await expect.poll(() => savedPrefs(page)).toEqual({
+    locations: savedLocations,
+    activeLocation: 'Seattle',
+    refreshMinutes: 60,
   });
 });
 
