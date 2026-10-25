@@ -161,6 +161,9 @@ export function buildWorldClock(id, ctx) {
     <input class="clock-zone-input" aria-label="City or time zone" placeholder="Search a city (e.g. Paris)">
     <datalist></datalist>
     <button type="button" class="util-action clock-add">Add clock</button>
+    <select class="clock-city-browser" aria-label="Browse cities by region">
+      <option value="">Browse cities by region…</option>
+    </select>
     <span class="util-muted" style="margin-left:auto">View</span>
     <button type="button" class="util-action clock-layout" aria-label="Change clock layout"></button>
     <button type="button" class="util-action clock-face-mode" aria-label="Change clock face"></button>
@@ -170,6 +173,26 @@ export function buildWorldClock(id, ctx) {
   suggestions.id = listId;
   const addInput = root.querySelector('.clock-zone-input');
   addInput.setAttribute('list', listId);
+  const cityBrowser = root.querySelector('.clock-city-browser');
+  const citiesByRegion = new Map();
+  for (const city of CITY_OPTIONS) {
+    const region = getCityRegion(city.zone);
+    if (!citiesByRegion.has(region)) citiesByRegion.set(region, []);
+    citiesByRegion.get(region).push(city);
+  }
+  for (const [region, cities] of [...citiesByRegion].sort(([a], [b]) => a.localeCompare(b))) {
+    const group = document.createElement('optgroup');
+    group.label = region;
+    for (const { index, city } of cities
+      .map(city => ({ city, index: CITY_OPTIONS.indexOf(city) }))
+      .sort((a, b) => a.city.city.localeCompare(b.city.city))) {
+      const option = document.createElement('option');
+      option.value = String(index);
+      option.textContent = `${city.city} · ${city.country}`;
+      group.append(option);
+    }
+    cityBrowser.append(group);
+  }
   const zoneOptions = new Set(CITY_OPTIONS.map(option => option.zone));
   for (const zone of ZONE_SUGGESTIONS) {
     if (zoneOptions.has(zone)) continue;
@@ -260,17 +283,26 @@ export function buildWorldClock(id, ctx) {
       });
     }, 1000);
   };
-  root.querySelector('.clock-add').addEventListener('click', () => {
+  const addClock = value => {
     const input = root.querySelector('.clock-zone-input');
-    const value = input.value.trim();
-    const city = CITY_LOOKUP.get(normalizeCity(value));
-    const zone = city?.zone || value;
+    const entry = typeof value === 'string' ? value.trim() : value;
+    const city = typeof entry === 'string' ? CITY_LOOKUP.get(normalizeCity(entry)) : entry;
+    const zone = city?.zone || entry;
     try { new Intl.DateTimeFormat(undefined, { timeZone: zone }); }
     catch { input.setCustomValidity('Choose a city from the suggestions or enter a valid IANA time zone.'); input.reportValidity(); return; }
     input.setCustomValidity('');
     if (!prefs.zones.includes(zone)) prefs.zones.push(zone);
     if (city && !prefs.cityLabels[zone]) prefs.cityLabels[zone] = city.city;
-    input.value = ''; persist(); render();
+    if (typeof entry === 'string') input.value = '';
+    persist(); render();
+  };
+  root.querySelector('.clock-add').addEventListener('click', () => {
+    addClock(root.querySelector('.clock-zone-input').value);
+  });
+  cityBrowser.addEventListener('change', () => {
+    const city = CITY_OPTIONS[Number(cityBrowser.value)];
+    if (city) addClock(city);
+    cityBrowser.value = '';
   });
   addInput.addEventListener('input', () => addInput.setCustomValidity(''));
   addInput.addEventListener('keydown', e => { if (e.key === 'Enter') root.querySelector('.clock-add').click(); });
@@ -283,6 +315,15 @@ export function buildWorldClock(id, ctx) {
 
 function normalizeCity(value) {
   return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().toLocaleLowerCase();
+}
+
+function getCityRegion(zone) {
+  if (zone.startsWith('America/')) return 'Americas';
+  if (zone.startsWith('Africa/')) return 'Africa';
+  if (zone.startsWith('Asia/')) return 'Asia';
+  if (zone.startsWith('Europe/') || zone.startsWith('Atlantic/')) return 'Europe';
+  if (zone.startsWith('Australia/') || zone.startsWith('Pacific/')) return 'Oceania';
+  return 'Other';
 }
 
 function readPrefs() {

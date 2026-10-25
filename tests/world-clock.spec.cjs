@@ -35,16 +35,32 @@ test('resolves a curated city to its IANA zone and displays the matching city an
   await expect.poll(() => page.evaluate(zone => {
     const displayed = document.querySelector(`.clock-item[data-zone="${zone}"] time`)?.textContent || '';
     const displayedWithoutSeconds = displayed.replace(/:\d{2}(?=\s|$)/, '');
+    const use24HourTime = localStorage.getItem('desktop-time-24h') === 'true';
     const expected = new Intl.DateTimeFormat(undefined, {
       timeZone: zone,
-      hour: '2-digit',
+      hour: use24HourTime ? '2-digit' : 'numeric',
       minute: '2-digit',
+      hour12: !use24HourTime,
     }).format(new Date());
     return displayedWithoutSeconds === expected;
   }, 'Asia/Kolkata')).toBe(true);
 
   await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), PREF_KEY))
     .toMatchObject({ cityLabels: { 'Asia/Kolkata': 'Bengaluru' } });
+});
+
+test('browses cities in regional groups and adds the selected city time zone', async ({ page }) => {
+  const clock = await openWorldClock(page);
+  const browser = clock.getByLabel('Browse cities by region');
+
+  await expect(browser.locator('optgroup[label="Asia"] option', { hasText: 'Tokyo · Japan' })).toHaveCount(1);
+  await browser.selectOption({ label: 'Tokyo · Japan' });
+
+  const tokyo = clock.locator('.clock-item[data-zone="Asia/Tokyo"]');
+  await expect(tokyo.locator('strong')).toHaveText('Tokyo');
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), PREF_KEY))
+    .toMatchObject({ zones: expect.arrayContaining(['Asia/Tokyo']), cityLabels: { 'Asia/Tokyo': 'Tokyo' } });
+  await expect(browser).toHaveValue('');
 });
 
 test('accepts a direct IANA zone and restores saved zones and city names after reload', async ({ page }) => {
