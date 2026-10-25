@@ -1481,6 +1481,9 @@ body.mod-overview .app-window.focused {
 @keyframes weather-shimmer { from { opacity:.38; } to { opacity:.78; } }
 .weather-setup { width:min(100%,420px);margin:auto;display:grid;gap:.8rem;padding:1.25rem;border:1px solid var(--app-border);border-radius:1rem;background:var(--util-surface); }
 .weather-setup label { display:grid;gap:.3rem;text-align:left;font-size:.88rem; }
+.weather-saved-row { display:flex;align-items:end;gap:.5rem; }
+.weather-saved-row .weather-saved-label { flex:1;min-width:0; }
+.weather-remove { flex:none;border-color:color-mix(in srgb,#d96868 52%,var(--app-border));color:color-mix(in srgb,#ff8b8b 78%,var(--app-text)); }
 .weather-setup [hidden] { display:none !important; }
 .weather-setup-actions { display:flex;flex-wrap:wrap;gap:.5rem; }
 .weather-setup-actions .weather-submit { flex:1 1 100%; }

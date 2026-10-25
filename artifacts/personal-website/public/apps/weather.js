@@ -43,7 +43,10 @@ export function buildWeather(id, ctx) {
     let addingLocation = !hasLocations;
     root.innerHTML = `<form class="weather-setup">
       <div><span class="util-muted">Saved on this device</span><h2 style="margin:.15rem 0;font-size:1.35rem">Weather, where you are.</h2><p class="util-muted" style="margin:.25rem 0 0">Choose a saved place or add another location.</p></div>
-      <label class="weather-saved-label">Saved location<select class="weather-saved-location"></select></label>
+      <div class="weather-saved-row">
+        <label class="weather-saved-label">Saved location<select class="weather-saved-location"></select></label>
+        <button class="util-action weather-remove" type="button">Remove saved location</button>
+      </div>
       <label class="weather-location-label">New location<input class="weather-location" type="text" autocomplete="off" placeholder="City or town"></label>
       <label>Temperature units<select class="weather-unit" required><option value="" disabled>Choose a unit</option><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
       <div class="weather-error" role="status" aria-live="polite"></div>
@@ -54,12 +57,13 @@ export function buildWeather(id, ctx) {
       </div>
     </form>`;
     const form = root.querySelector('form');
-    const savedLabel = form.querySelector('.weather-saved-label');
+    const savedRow = form.querySelector('.weather-saved-row');
     const savedSelect = form.querySelector('.weather-saved-location');
     const locationLabel = form.querySelector('.weather-location-label');
     const locationInput = form.querySelector('.weather-location');
     const addButton = form.querySelector('.weather-add');
     const backButton = form.querySelector('.weather-back');
+    const removeButton = form.querySelector('.weather-remove');
     const unitSelect = form.querySelector('.weather-unit');
     prefs.locations.forEach(item => {
       const option = document.createElement('option');
@@ -74,7 +78,7 @@ export function buildWeather(id, ctx) {
       unitSelect.value = '';
     }
     function renderLocationMode() {
-      savedLabel.hidden = addingLocation || !hasLocations;
+      savedRow.hidden = addingLocation || !hasLocations;
       locationLabel.hidden = !addingLocation;
       locationInput.required = addingLocation;
       savedSelect.required = !addingLocation && hasLocations;
@@ -87,6 +91,22 @@ export function buildWeather(id, ctx) {
       unitSelect.value = item?.unit || '';
     }
     savedSelect.addEventListener('change', updateUnitForSelection);
+    removeButton.addEventListener('click', () => {
+      const location = savedSelect.value;
+      const savedLocation = prefs.locations.find(item => item.location === location);
+      if (!savedLocation) return;
+
+      const isActive = prefs.activeLocation === savedLocation.location;
+      const confirmation = `Remove “${savedLocation.location}” from your saved locations?${isActive ? ' Another saved location will become active.' : ''}`;
+      if (!window.confirm(confirmation)) return;
+
+      prefs.locations = prefs.locations.filter(item => item.location !== savedLocation.location);
+      if (isActive) prefs.activeLocation = prefs.locations[0]?.location || '';
+      savePrefs(prefs);
+      showSetup(prefs.locations.length
+        ? `Removed ${savedLocation.location} from saved locations.`
+        : `Removed ${savedLocation.location}. Add a new location to see its forecast.`);
+    });
     addButton.addEventListener('click', () => {
       addingLocation = true;
       locationInput.value = '';
