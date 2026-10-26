@@ -1,13 +1,13 @@
 'use strict';
 
 const KEY = 'personal-desktop-sticky-notes-v1';
-const NOTE_COLORS = [
-  { value: 'yellow', label: 'Yellow' },
-  { value: 'orange', label: 'Orange' },
-  { value: 'red', label: 'Red' },
-  { value: 'purple', label: 'Purple' },
-  { value: 'blue', label: 'Blue' },
-  { value: 'green', label: 'Green' },
+export const NOTE_COLORS = [
+  { value: 'yellow', label: 'Yellow', hex: '#e5bb22' },
+  { value: 'orange', label: 'Orange', hex: '#e47b27' },
+  { value: 'red', label: 'Red', hex: '#d94a4a' },
+  { value: 'purple', label: 'Purple', hex: '#9a69d4' },
+  { value: 'blue', label: 'Blue', hex: '#3689cf' },
+  { value: 'green', label: 'Green', hex: '#48945a' },
 ];
 
 export function buildStickyNotes(id, ctx) {

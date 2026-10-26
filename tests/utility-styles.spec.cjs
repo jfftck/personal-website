@@ -13,6 +13,7 @@ async function openUtility(page, type) {
 
 test('calculator, calendar, and weather controls follow shared theme tokens', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
+  await expect(calculator.getByText('DESK / 04')).toHaveCount(0);
   const calculatorColors = {};
   for (const theme of ['dark', 'light']) {
     await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
@@ -98,10 +99,135 @@ test('calculator supports scientific calculations, reusable history, and graphin
   await calculator.getByRole('button', { name: 'Plot' }).click();
   await expect(calculator.locator('.calc-graph-line')).toHaveAttribute('d', /M/);
   await expect(calculator.locator('.calc-graph-status')).toContainText('Plotted');
-  await calculator.getByLabel('Function of x').fill('window.alert(1)');
-  await calculator.getByRole('button', { name: 'Plot' }).click();
-  await expect(calculator.locator('.calc-graph-status')).toContainText('Cannot plot');
-  await expect(calculator.locator('.calc-graph-line')).toHaveCount(0);
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  await calculator.getByLabel('Function expression').fill('window.alert(1)');
+  await calculator.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect(calculator.locator('.calc-editor-error')).toContainText('Unknown function or name');
+  await calculator.getByRole('button', { name: 'Close function editor' }).click();
+  await expect(calculator.locator('.calc-graph-line')).toHaveCount(1);
+});
+
+test('calculator graph edits multiple functions in an accessible keypad dialog', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('radio')).toHaveCount(6);
+  await expect(editor.getByRole('button', { name: 'sin(', exact: true })).toBeVisible();
+  await editor.getByRole('button', { name: 'Add function' }).click();
+  const functionExpression = editor.getByRole('textbox', { name: 'Function expression' });
+  await functionExpression.fill('');
+  await editor.getByRole('button', { name: 'cos(', exact: true }).click();
+  await editor.getByRole('button', { name: '2', exact: true }).click();
+  await editor.getByRole('button', { name: '×', exact: true }).click();
+  await editor.getByRole('button', { name: 'x', exact: true }).click();
+  await editor.getByRole('button', { name: ')', exact: true }).click();
+  await expect(functionExpression).toHaveValue('cos(2*x)');
+  await editor.locator('.note-color-choice[data-note-color="orange"]').click();
+  await expect(editor.getByRole('radio', { name: 'Orange line color' })).toBeChecked();
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect(calculator.locator('.calc-function-item')).toHaveCount(2);
+  await calculator.getByRole('button', { name: 'Plot', exact: true }).click();
+  await expect(calculator.locator('.calc-graph-line')).toHaveCount(2);
+  const colors = await calculator.locator('.calc-graph-line').evaluateAll(lines => lines.map(line => line.style.getPropertyValue('--function-color')));
+  expect(new Set(colors).size).toBe(2);
+  await calculator.getByRole('button', { name: /Hide function/ }).first().click();
+  await expect(calculator.locator('.calc-graph-line')).toHaveCount(1);
+});
+
+test('calculator graph settings keep modes and plot ranges independent', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  const settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  const graphMode = settings.getByRole('combobox', { name: 'Graph mode' });
+  await graphMode.click();
+  await settings.getByRole('option', { name: /Polar/ }).click();
+  await expect(settings.getByLabel('Minimum theta')).toBeVisible();
+  await settings.getByLabel('Maximum theta').fill('6.28');
+  await settings.getByLabel('Minimum r').fill('0');
+  await settings.getByLabel('Maximum r').fill('5');
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await editor.getByLabel('Function expression').fill('sin(theta)');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Plot', exact: true }).click();
+  await expect(calculator.locator('.calc-graph-status')).toContainText('polar');
+  await expect(calculator.locator('.calc-graph-line')).toHaveCount(1);
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  await graphMode.click();
+  await settings.getByRole('option', { name: /Parametric/ }).click();
+  await expect(settings.getByLabel('Minimum t')).toBeVisible();
+  await settings.getByLabel('Maximum t').fill('6.28');
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  await expect(editor.getByLabel('x(t)')).toBeVisible();
+  await expect(editor.getByLabel('y(t)')).toBeVisible();
+  await editor.getByLabel('x(t)').fill('cos(t)');
+  await editor.getByLabel('y(t)').fill('sin(t)');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Plot', exact: true }).click();
+  await expect(calculator.locator('.calc-graph-status')).toContainText('parametric');
+});
+
+test('graph mode uses the window height without calculator panels or vertical overflow', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await expect(calculator.locator('.calc-display')).toBeHidden();
+  await expect(calculator.locator('.calc-history')).toBeHidden();
+  await expect(calculator.locator('.calc-plot-area')).toBeVisible();
+  const dimensions = await calculator.locator('.calc').evaluate(element => ({
+    client: element.clientHeight, scroll: element.scrollHeight,
+    plotHeight: element.querySelector('.calc-plot-area').getBoundingClientRect().height,
+  }));
+  expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.client + 2);
+  expect(dimensions.plotHeight).toBeGreaterThan(80);
+});
+
+test('scientific calculator controls fit in a short app window', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await calculator.evaluate(element => {
+    element.style.height = '460px';
+    element.style.flex = '0 0 460px';
+  });
+  await calculator.getByRole('button', { name: 'Scientific', exact: true }).click();
+  const dimensions = await calculator.locator('.calc-main').evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    const bottom = Math.max(
+      element.querySelector('.calc-keys').getBoundingClientRect().bottom,
+      element.querySelector('.calc-scientific').getBoundingClientRect().bottom,
+    );
+    return { client: element.clientHeight, scroll: element.scrollHeight, bottom, mainBottom: bounds.bottom };
+  });
+  expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.client + 2);
+  expect(dimensions.bottom).toBeLessThanOrEqual(dimensions.mainBottom + 2);
+});
+
+test('basic and scientific calculator modes remain usable after graphing', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: '7', exact: true }).click();
+  await calculator.getByRole('button', { name: '+', exact: true }).click();
+  await calculator.getByRole('button', { name: '3', exact: true }).click();
+  await calculator.getByRole('button', { name: '=', exact: true }).click();
+  await expect(calculator.locator('.calc-value')).toHaveText('10');
+  await calculator.getByRole('button', { name: 'Scientific', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Basic', exact: true }).click();
+  await calculator.getByRole('button', { name: 'AC', exact: true }).click();
+  await calculator.getByRole('button', { name: '6', exact: true }).click();
+  await calculator.getByRole('button', { name: '×', exact: true }).click();
+  await calculator.getByRole('button', { name: '7', exact: true }).click();
+  await calculator.getByRole('button', { name: '=', exact: true }).click();
+  await expect(calculator.locator('.calc-value')).toHaveText('42');
+  await calculator.getByRole('button', { name: 'Scientific', exact: true }).click();
+  await calculator.locator('.calc-science-key').filter({ hasText: '√(' }).click();
+  await calculator.getByRole('button', { name: '9', exact: true }).click();
+  await calculator.locator('.calc-science-key').filter({ hasText: ')' }).click();
+  await calculator.getByRole('button', { name: '=', exact: true }).click();
+  await expect(calculator.locator('.calc-value')).toHaveText('3');
 });
 
 test('utility app layouts respond to their own narrow window width', async ({ page }) => {
