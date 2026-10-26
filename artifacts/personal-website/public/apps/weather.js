@@ -201,7 +201,6 @@ export function buildWeather(id, ctx) {
         <div class="weather-location-picker">
           <button class="weather-location-button util-action" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="${id || 'weather'}-location-menu">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-7.2 8-13a8 8 0 1 0-16 0c0 5.8 8 13 8 13Zm0-10.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg>
-            <span class="weather-location-unit"></span>
             <svg class="weather-location-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
           </button>
           <div class="weather-location-menu" id="${id || 'weather'}-location-menu" role="menu" aria-label="Saved weather locations" hidden></div>
@@ -257,8 +256,7 @@ export function buildWeather(id, ctx) {
     locationButton = root.querySelector('.weather-location-button');
     locationMenu = root.querySelector('.weather-location-menu');
     locationButton.dataset.location = prefs.activeLocation;
-    locationButton.setAttribute('aria-label', `Switch weather location; currently ${displayName}, ${degrees}`);
-    locationButton.querySelector('.weather-location-unit').textContent = degrees;
+    locationButton.setAttribute('aria-label', `Switch weather location; currently ${displayName}`);
     const savedLocations = root.querySelector('.weather-settings-locations');
     function updateSavedLocationControls() {
       locationMenu.replaceChildren();
@@ -273,10 +271,7 @@ export function buildWeather(id, ctx) {
         const optionName = document.createElement('span');
         optionName.className = 'weather-location-option-name';
         optionName.textContent = item.location === prefs.activeLocation ? displayName : item.location;
-        const optionUnit = document.createElement('span');
-        optionUnit.className = 'weather-location-option-unit';
-        optionUnit.textContent = item.unit === 'fahrenheit' ? '°F' : '°C';
-        option.append(optionName, optionUnit);
+        option.append(optionName);
         locationMenu.append(option);
 
         const row = document.createElement('div');
