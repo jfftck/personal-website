@@ -1,3 +1,5 @@
+import { refreshCustomSelect } from '../custom-select.js';
+
 import { Chess, chessStatus } from './chess.js';
 import { createReversi, reversiMoves, playReversi, reversiScore, chooseReversiMove } from './reversi.js';
 import {
@@ -192,8 +194,13 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
         mode = nextOptions.mode;
         if (nextOptions.playerColor) playerColor = nextOptions.playerColor;
         const toolbarSelect = settings.element.querySelector('select[aria-label="Opponent"]');
-        if (toolbarSelect) toolbarSelect.value = mode;
-        colorControl.querySelector('select').value = playerColor;
+        if (toolbarSelect) {
+          toolbarSelect.value = mode;
+          refreshCustomSelect(toolbarSelect);
+        }
+        const playerColorSelect = colorControl.querySelector('select');
+        playerColorSelect.value = playerColor;
+        refreshCustomSelect(playerColorSelect);
         colorControl.hidden = mode !== 'computer';
         restart();
       },

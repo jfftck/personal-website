@@ -1,4 +1,4 @@
-'use strict';
+import { enhanceSelects, focusCustomSelect, refreshCustomSelect } from './custom-select.js';
 
 const PREF_KEY = 'personal-desktop-weather-setup-v1';
 const CONDITIONS = {
@@ -113,12 +113,13 @@ export function buildWeather(id, ctx) {
     root.innerHTML = `<form class="weather-setup">
       <div><h2 style="margin:.15rem 0;font-size:1.35rem">Weather, where you are.</h2><p class="util-muted" style="margin:.25rem 0 0">Add a location and choose its temperature unit.</p></div>
       <label class="weather-location-label">Location<input class="weather-location util-field" type="text" autocomplete="off" placeholder="City or town" required></label>
-      <label>Temperature units<select class="weather-unit util-field util-select" required><option value="" disabled>Choose a unit</option><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
+      <label>Temperature units<select class="weather-unit util-field" required><option value="" disabled>Choose a unit</option><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
       <div class="weather-error" role="status" aria-live="polite"></div>
       <div class="weather-setup-actions">
         <button class="util-action weather-submit" type="submit">Show forecast</button>
       </div>
     </form>`;
+    enhanceSelects(root);
     const form = root.querySelector('form');
     const locationInput = form.querySelector('.weather-location');
     const unitSelect = form.querySelector('.weather-unit');
@@ -128,6 +129,13 @@ export function buildWeather(id, ctx) {
       const location = locationInput.value.trim();
       const unit = unitSelect.value;
       if (!location) return;
+      if (!unit) {
+        const unitControl = form.querySelector('.standard-select-trigger');
+        unitControl?.setAttribute('aria-invalid', 'true');
+        unitControl?.focus({ preventScroll: true });
+        form.querySelector('.weather-error').textContent = 'Choose a temperature unit.';
+        return;
+      }
       const nextPrefs = {
         ...prefs,
         locations: prefs.locations.map(item => ({ ...item })),
@@ -232,10 +240,10 @@ export function buildWeather(id, ctx) {
     <dialog class="weather-settings-dialog" aria-labelledby="${settingsTitleId}">
       <form class="weather-settings-form">
         <div class="weather-settings-heading"><h2 id="${settingsTitleId}">Weather settings</h2><button class="weather-settings-close" type="button" aria-label="Close settings">×</button></div>
-        <label>Temperature units for selected location<select class="weather-settings-unit util-field util-select" required><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
+        <label>Temperature units for selected location<select class="weather-settings-unit util-field" required><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
         <div class="weather-add-location-row">
           <label>Add a location<input class="weather-settings-location util-field" type="text" autocomplete="off" placeholder="City or town"></label>
-          <label>Unit for new location<select class="weather-settings-new-unit util-field util-select"><option value="celsius">°C</option><option value="fahrenheit">°F</option></select></label>
+          <label>Unit for new location<select class="weather-settings-new-unit util-field"><option value="celsius">°C</option><option value="fahrenheit">°F</option></select></label>
           <button class="util-action weather-settings-add-location" type="button">Add</button>
         </div>
         <p class="weather-settings-hint">Add each place separately. The dialog stays open so you can add several.</p>
@@ -252,6 +260,7 @@ export function buildWeather(id, ctx) {
         <div class="weather-settings-actions"><button class="util-action weather-settings-cancel" type="button">Cancel</button><button class="util-action weather-settings-save" type="submit">Save settings</button></div>
       </form>
     </dialog>`;
+    enhanceSelects(root);
     root.querySelector('.weather-current').textContent = `${Math.round(current.temperature_2m)}${degrees}`;
     root.querySelector('.weather-place').textContent = displayName;
     const todayHigh = data.daily.temperature_2m_max?.[0];
@@ -447,6 +456,8 @@ export function buildWeather(id, ctx) {
       const selected = prefs.locations.find(item => item.location === prefs.activeLocation);
       dialog.querySelector('.weather-settings-unit').value = selected?.unit || unit;
       addLocationUnit.value = selected?.unit || unit;
+      refreshCustomSelect(dialog.querySelector('.weather-settings-unit'));
+      refreshCustomSelect(addLocationUnit);
       dialog.querySelectorAll('[data-weather-detail]').forEach(input => {
         input.checked = prefs.details[input.dataset.weatherDetail] !== false;
       });
@@ -456,7 +467,7 @@ export function buildWeather(id, ctx) {
       addLocationStatus.textContent = '';
       addLocationStatus.classList.remove('weather-error');
       dialog.showModal();
-      dialog.querySelector('.weather-settings-unit').focus({ preventScroll: true });
+      focusCustomSelect(dialog.querySelector('.weather-settings-unit'));
     });
     dialog.querySelector('.weather-settings-close').addEventListener('click', () => dialog.close());
     dialog.querySelector('.weather-settings-cancel').addEventListener('click', () => dialog.close());

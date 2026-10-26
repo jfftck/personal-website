@@ -1,3 +1,5 @@
+import { enhanceSelect } from '../custom-select.js';
+
 export function button(text, onClick, className = '') {
   const el = document.createElement('button');
   el.type = 'button';
@@ -21,7 +23,7 @@ export function selectControl(text, options, value, onChange) {
   select.value = value;
   select.addEventListener('change', () => onChange(select.value));
   label.append(select);
-  return label;
+  return enhanceSelect(select)?.field || label;
 }
 
 function createGameSettings(root, toolbar, title, id) {
@@ -116,7 +118,7 @@ function createGameSettings(root, toolbar, title, id) {
     }
     if (event.key !== 'Tab') return;
     const focusable = [...dialog.querySelectorAll(
-      'button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
     )].filter(node => !node.closest('[hidden]') && node.tabIndex >= 0);
     if (!focusable.length) return;
     if (event.shiftKey && document.activeElement === focusable[0]) {
@@ -340,7 +342,8 @@ export function showNewGameScreen(area, id, headingText, messageText, options, o
       return;
     }
     if (event.key !== 'Tab') return;
-    const focusable = [...screen.querySelectorAll('select, button')].filter(node => !node.disabled);
+    const focusable = [...screen.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter(node => !node.closest('[hidden]'));
     if (!focusable.length) return;
     if (event.shiftKey && document.activeElement === focusable[0]) {
       event.preventDefault();
@@ -350,7 +353,8 @@ export function showNewGameScreen(area, id, headingText, messageText, options, o
       focusable[0].focus();
     }
   });
-  screen.querySelector('select, button')?.focus({ preventScroll: true });
+  screen.querySelector('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')
+    ?.focus({ preventScroll: true });
   return dismiss;
 }
 

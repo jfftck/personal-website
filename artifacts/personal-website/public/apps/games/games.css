@@ -377,21 +377,19 @@
   accent-color: var(--accent);
 }
 
-.game-toolbar select.util-select,
-.game-settings-dialog select.util-select,
-.game-options select.util-select,
-.game-new-game-option select.util-select {
+.game-toolbar .standard-select-trigger,
+.game-settings-dialog .standard-select-trigger,
+.game-new-game-option .standard-select-trigger {
   min-height: 2.4rem;
   padding: 0.5rem 0.7rem;
-  border-color: var(--app-border);
+  border: 1px solid var(--app-border);
   border-radius: 0.65rem;
   background: color-mix(in srgb, var(--app-bg) 92%, var(--app-text) 8%);
   color: var(--app-text);
 }
-.game-toolbar select.util-select:hover,
-.game-settings-dialog select.util-select:hover,
-.game-options select.util-select:hover,
-.game-new-game-option select.util-select:hover {
+.game-toolbar .standard-select-trigger:hover,
+.game-settings-dialog .standard-select-trigger:hover,
+.game-new-game-option .standard-select-trigger:hover {
   background: var(--btn-hover);
 }
 
@@ -472,7 +470,7 @@
 }
 .game-settings-option[hidden],
 .game-new-game-option[hidden] { display: none; }
-.game-settings-option select { min-width: min(12rem, 52%); }
+.game-settings-option .standard-select-control { flex: 0 1 52%; width: 52%; min-width: min(12rem, 52%); }
 .game-settings-dialog .game-theme-control {
   display: grid;
   justify-items: start;

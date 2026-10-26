@@ -21,9 +21,23 @@ async function openSettings(app) {
   return app.locator('.game-settings-dialog');
 }
 
-async function setGameOption(app, label, value) {
+async function chooseDropdownValue(page, trigger, value) {
+  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+  const popupId = await trigger.getAttribute('aria-controls');
+  await page.locator(`[id="${popupId}"] [role="option"][data-value="${value}"]`).click();
+}
+
+async function setDropdownValue(page, container, label, value) {
+  await chooseDropdownValue(page, container.getByRole('combobox', { name: label, exact: true }), value);
+}
+
+async function expectDropdownValue(container, label, value) {
+  await expect(container.getByRole('combobox', { name: label, exact: true })).toHaveAttribute('data-value', value);
+}
+
+async function setGameOption(page, app, label, value) {
   const dialog = await openSettings(app);
-  await dialog.getByLabel(label, { exact: true }).selectOption(value);
+  await setDropdownValue(page, dialog, label, value);
   if (await dialog.isVisible()) await dialog.getByRole('button', { name: 'Close settings' }).click();
 }
 

@@ -1277,6 +1277,89 @@ body.mod-overview #desktop-search {
   box-shadow: 0 8px 28px rgba(0,0,0,0.45);
 }
 
+.standard-select-field { position:relative;display:grid;gap:.3rem;min-width:0; }
+.standard-select-label { display:block; }
+.standard-select-control { display:block; width:100%; min-width:0; }
+.standard-select-trigger {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:.65rem;
+  width:100%;
+  min-width:0;
+  text-align:left;
+}
+.standard-select-value { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.standard-select-chevron {
+  width:.9rem;
+  height:.9rem;
+  flex:none;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:2;
+  transition:transform 140ms ease;
+}
+.standard-select-trigger[aria-expanded="true"] .standard-select-chevron { transform:rotate(180deg); }
+.standard-select-popup {
+  position:fixed;
+  inset:auto;
+  z-index:12000;
+  display:grid;
+  gap:1px;
+  width:min(14rem,calc(100vw - 1rem));
+  max-width:calc(100vw - 1rem);
+  max-height:min(19rem,45dvh);
+  overflow:auto;
+  margin-block-start:.25rem;
+  scrollbar-width:thin;
+  scrollbar-color:var(--scrollbar-thumb) transparent;
+}
+.standard-select-popup[popover]:not(:popover-open),
+.standard-select-popup[hidden] { display:none; }
+.standard-select-popup[popover]:popover-open { display:grid; }
+@supports (position-area: block-end span-inline-start) {
+  .standard-select-popup[data-anchor-positioned="true"] {
+    position-area:block-end span-inline-start;
+  }
+}
+@supports (position-try-fallbacks: flip-block, flip-inline) {
+  .standard-select-popup[data-anchor-positioned="true"] {
+    position-try-fallbacks:flip-block,flip-inline;
+  }
+}
+.standard-select-option {
+  display:flex;
+  align-items:center;
+  width:100%;
+  min-height:2.35rem;
+  padding:.4375rem .625rem;
+  border:0;
+  border-radius:.375rem;
+  background:transparent;
+  color:var(--app-text);
+  text-align:left;
+  cursor:pointer;
+}
+.standard-select-option:hover,
+.standard-select-option.is-active { background:var(--btn-hover); }
+.standard-select-option[aria-selected="true"] { background:var(--btn-active); }
+.standard-select-option[aria-disabled="true"] { opacity:.48;cursor:not-allowed; }
+.standard-select-native {
+  position:absolute !important;
+  width:1px !important;
+  height:1px !important;
+  padding:0 !important;
+  margin:-1px !important;
+  overflow:hidden !important;
+  clip:rect(0,0,0,0) !important;
+  clip-path:inset(50%) !important;
+  white-space:nowrap !important;
+  border:0 !important;
+}
+@supports not (position-area: block-end span-inline-start) {
+  .standard-select-popup { position:fixed; }
+}
+
 /* ── Per-window ⋮ menu ── */
 .win-menu-dropdown {
   position: fixed;
@@ -1539,17 +1622,6 @@ body.mod-overview .app-window.focused {
   background:var(--toolbar-bg);
   color:var(--app-text);
 }
-.util-select {
-  min-height:2.4rem;
-  border:1px solid var(--app-border);
-  border-radius:.65rem;
-  padding:.5rem .7rem;
-  background:var(--util-surface, color-mix(in srgb,var(--app-bg) 92%,var(--app-text) 8%));
-  color:var(--app-text);
-  cursor:pointer;
-}
-.util-select:hover { background:var(--util-surface-strong, var(--btn-hover)); }
-.util-select:disabled { opacity:.45;cursor:default; }
 .util-field::placeholder { color:var(--util-detail); opacity:1; }
 .util-field option { background:var(--app-bg); color:var(--app-text); }
 .util-action:focus-visible,.utility-app :focus-visible { outline:2px solid var(--focus-color); outline-offset:2px; }
@@ -1741,7 +1813,7 @@ body.mod-overview .app-window.focused {
 .weather-skeleton-meta { width:80%;height:.8rem; }
 @keyframes weather-shimmer { from { opacity:.38; } to { opacity:.78; } }
 .weather-setup { width:min(100%,420px);margin:auto;display:grid;gap:.8rem;padding:1.25rem;border:1px solid var(--app-border);border-radius:1rem;background:var(--util-surface); }
-.weather-setup label { display:grid;gap:.3rem;text-align:left;font-size:.88rem; }
+.weather-setup label,.weather-setup .standard-select-field { display:grid;gap:.3rem;text-align:left;font-size:.88rem; }
 .weather-remove { flex:none;border-color:color-mix(in srgb,#d96868 52%,var(--app-border));color:color-mix(in srgb,#ff8b8b 78%,var(--app-text)); }
 .weather-setup-actions { display:flex;flex-wrap:wrap;gap:.5rem; }
 .weather-setup-actions .weather-submit { flex:1 1 100%; }
@@ -1752,10 +1824,10 @@ body.mod-overview .app-window.focused {
 .weather-settings-heading h2 { margin:0;font-size:1.25rem; }
 .weather-settings-close { width:2rem;height:2rem;border:0;border-radius:.55rem;background:transparent;color:var(--app-text);font-size:1.4rem;line-height:1;cursor:pointer; }
 .weather-settings-close:hover { background:var(--util-surface); }
-.weather-settings-form > label { display:grid;gap:.35rem;font-size:.88rem; }
+.weather-settings-form > label,.weather-settings-form > .standard-select-field { display:grid;gap:.35rem;font-size:.88rem; }
 .weather-settings-hint { margin:-.65rem 0 0;color:var(--util-detail);font-size:.8rem; }
 .weather-add-location-row { display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:end;gap:.5rem; }
-.weather-add-location-row label { display:grid;gap:.35rem;min-width:0;font-size:.88rem; }
+.weather-add-location-row label,.weather-add-location-row .standard-select-field { display:grid;gap:.35rem;min-width:0;font-size:.88rem; }
 .weather-settings-new-unit { min-width:4.5rem; }
 .weather-settings-add-location { min-height:2.4rem; }
 .weather-settings-add-location:disabled { opacity:.65;cursor:wait; }
