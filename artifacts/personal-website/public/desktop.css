@@ -1494,9 +1494,11 @@ body.mod-overview .app-window.focused {
 .cal-weekday { font-size:1.35rem; margin-top:.75rem; }
 .clock-app { height:100%; display:flex; flex-direction:column; gap:.75rem; padding:1rem; }
 .clock-controls { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
-.clock-controls select,.weather-setup input,.weather-setup select,.weather-settings-dialog input,.weather-settings-dialog select { min-width:0; border:1px solid var(--app-border); color:var(--app-text); background:var(--toolbar-bg); border-radius:.55rem; padding:.55rem .65rem; }
+.clock-controls select,.clock-controls .clock-city-filter,.weather-setup input,.weather-setup select,.weather-settings-dialog input,.weather-settings-dialog select { min-width:0; border:1px solid var(--app-border); color:var(--app-text); background:var(--toolbar-bg); border-radius:.55rem; padding:.55rem .65rem; }
 .clock-controls .clock-zone-input { flex:1 1 14rem; width:min(100%,24rem); max-width:24rem; min-width:0; border:1px solid var(--app-border); color:var(--app-text); background:var(--toolbar-bg); border-radius:.55rem; padding:.55rem .65rem; }
 .clock-controls .clock-city-browser { flex:1 1 14rem; max-width:24rem; }
+.clock-controls .clock-city-filter { flex:1 1 12rem; max-width:20rem; }
+.clock-controls .clock-city-empty { flex-basis:100%; }
 .clock-list { overflow:auto; display:grid; gap:.65rem; grid-template-columns:1fr; min-height:0; }
 .clock-list.grid { grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); align-content:start; }
 .clock-item { display:flex; align-items:center; justify-content:space-between; gap:.8rem; border:1px solid var(--app-border); border-radius:.85rem; padding:.85rem 1rem; background:var(--util-surface); }

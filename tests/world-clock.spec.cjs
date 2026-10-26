@@ -98,6 +98,34 @@ test('groups cities by their IANA region and adds the selected city time zone', 
   await expect(browser).toHaveValue('');
 });
 
+test('filters the regional browser by city name, keeps selection working, and explains empty results', async ({ page }) => {
+  const clock = await openWorldClock(page);
+  const browser = clock.getByLabel('Browse cities by region');
+  const filter = clock.getByLabel('Filter cities by name');
+
+  await filter.fill('bogota');
+  const visibleGroups = await browser.locator('optgroup').evaluateAll(elements =>
+    elements.filter(element => !element.hidden).map(element => element.label)
+  );
+  expect(visibleGroups).toEqual(['Americas']);
+  await expect(browser.locator('optgroup[label="Americas"] option:not([hidden])'))
+    .toHaveText(['Bogotá · Colombia']);
+  await expect(clock.getByRole('status')).toBeHidden();
+
+  await browser.selectOption({ label: 'Bogotá · Colombia' });
+  await expect(clock.locator('.clock-item[data-zone="America/Bogota"] strong')).toHaveText('Bogotá');
+  await expect(browser).toHaveValue('');
+
+  await filter.fill('Atlantis');
+  await expect(clock.getByRole('status')).toHaveText('No cities match that search.');
+  await expect(clock.getByRole('status')).toBeVisible();
+  await expect(browser.locator('optgroup:not([hidden])')).toHaveCount(0);
+
+  await filter.clear();
+  await expect(clock.getByRole('status')).toBeHidden();
+  await expect(browser.locator('optgroup:not([hidden])')).toHaveCount(5);
+});
+
 test('updates the displayed city for a shared time zone and keeps both clocks after reload', async ({ page }) => {
   let clock = await openWorldClock(page);
   const browser = clock.getByLabel('Browse cities by region');

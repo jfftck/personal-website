@@ -171,9 +171,11 @@ export function buildWorldClock(id, ctx) {
     <input class="clock-zone-input" aria-label="City or time zone" placeholder="Search a city (e.g. Paris)">
     <datalist></datalist>
     <button type="button" class="util-action clock-add">Add clock</button>
+    <input class="clock-city-filter" type="search" aria-label="Filter cities by name" placeholder="Filter cities…">
     <select class="clock-city-browser" aria-label="Browse cities by region">
       <option value="">Browse cities by region…</option>
     </select>
+    <span class="util-muted clock-city-empty" role="status" aria-live="polite" hidden>No cities match that search.</span>
     <span class="util-muted" style="margin-left:auto">View</span>
     <button type="button" class="util-action clock-layout" aria-label="Change clock layout"></button>
     <button type="button" class="util-action clock-face-mode" aria-label="Change clock face"></button>
@@ -184,6 +186,8 @@ export function buildWorldClock(id, ctx) {
   const addInput = root.querySelector('.clock-zone-input');
   addInput.setAttribute('list', listId);
   const cityBrowser = root.querySelector('.clock-city-browser');
+  const cityFilter = root.querySelector('.clock-city-filter');
+  const cityEmptyMessage = root.querySelector('.clock-city-empty');
   const citiesByRegion = new Map();
   for (const city of CITY_OPTIONS) {
     const region = getCityRegion(city.zone);
@@ -199,10 +203,26 @@ export function buildWorldClock(id, ctx) {
       const option = document.createElement('option');
       option.value = String(index);
       option.textContent = `${city.city} · ${city.country}`;
+      option.dataset.city = city.city;
       group.append(option);
     }
     cityBrowser.append(group);
   }
+  cityFilter.addEventListener('input', () => {
+    const query = normalizeCity(cityFilter.value.trim());
+    let matchingCities = 0;
+    for (const group of cityBrowser.querySelectorAll('optgroup')) {
+      let groupMatches = 0;
+      for (const option of group.querySelectorAll('option')) {
+        const matches = normalizeCity(option.dataset.city).includes(query);
+        option.hidden = !matches;
+        if (matches) groupMatches += 1;
+      }
+      group.hidden = groupMatches === 0;
+      matchingCities += groupMatches;
+    }
+    cityEmptyMessage.hidden = query.length === 0 || matchingCities > 0;
+  });
   const zoneOptions = new Set(CITY_OPTIONS.map(option => option.zone));
   for (const zone of ZONE_SUGGESTIONS) {
     if (zoneOptions.has(zone)) continue;
