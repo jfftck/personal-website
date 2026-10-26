@@ -25,6 +25,15 @@ function readWeatherDetails(source) {
   ]));
 }
 
+async function geocodeWeatherLocation(location) {
+  const geoUrl = new URL('https://geocoding-api.open-meteo.com/v1/search');
+  geoUrl.search = new URLSearchParams({ name: location, count: '1', language: 'en', format: 'json' });
+  const response = await fetch(geoUrl);
+  if (!response.ok) throw new Error('network');
+  const geo = await response.json();
+  return Array.isArray(geo.results) ? geo.results[0] || null : null;
+}
+
 export function buildWeather(id, ctx) {
   const root = document.createElement('section');
   root.className = 'utility-app weather-app';
@@ -151,18 +160,13 @@ export function buildWeather(id, ctx) {
       <span class="sr-only">Finding ${escapeHTML(location)} and loading forecast…</span>
     </div>`;
     try {
-      const geoUrl = new URL('https://geocoding-api.open-meteo.com/v1/search');
-      geoUrl.search = new URLSearchParams({ name: location, count: '1', language: 'en', format: 'json' });
-      const geoResponse = await fetch(geoUrl);
-      if (!geoResponse.ok) throw new Error('network');
-      const geo = await geoResponse.json();
+      const place = await geocodeWeatherLocation(location);
       if (token !== requestToken) return;
-      if (!Array.isArray(geo.results) || !geo.results.length) {
+      if (!place) {
         if (background) { setRefreshStatus('The latest weather update could not find this location.'); scheduleRefresh(); }
         else showSetup(`We couldn't find “${location}”. Check the spelling and try again.`);
         return;
       }
-      const place = geo.results[0];
       const forecastUrl = new URL('https://api.open-meteo.com/v1/forecast');
       forecastUrl.search = new URLSearchParams({
         latitude: String(place.latitude), longitude: String(place.longitude),
@@ -203,7 +207,7 @@ export function buildWeather(id, ctx) {
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-7.2 8-13a8 8 0 1 0-16 0c0 5.8 8 13 8 13Zm0-10.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg>
             <svg class="weather-location-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
           </button>
-          <div class="weather-location-menu" id="${id || 'weather'}-location-menu" role="menu" aria-label="Saved weather locations" hidden></div>
+          <div class="weather-location-menu menu-popover" id="${id || 'weather'}-location-menu" role="menu" aria-label="Saved weather locations" hidden></div>
         </div>
         <button class="weather-settings-button" type="button" aria-label="Weather settings" title="Settings">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Zm9 4.8a9.2 9.2 0 0 0 0-2l2-1.5-2-3.5-2.4 1a8.2 8.2 0 0 0-1.7-1L16.5 3h-4l-.4 2.7a8.2 8.2 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a9.2 9.2 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a8.2 8.2 0 0 0 1.7 1l.4 2.7h4l.4-2.7a8.2 8.2 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5Z"/></svg>
@@ -215,8 +219,8 @@ export function buildWeather(id, ctx) {
       <div class="weather-temp-row">
         <div class="weather-current"></div>
         <div class="weather-high-low">
-          <span class="weather-high"><span class="sr-only">High </span><span class="weather-high-value"></span></span>
-          <span class="weather-low"><span class="sr-only">Low </span><span class="weather-low-value"></span></span>
+          <span class="weather-high"><span class="sr-only">High </span><span class="weather-extreme-label" aria-hidden="true">H</span><span class="weather-high-value"></span></span>
+          <span class="weather-low"><span class="sr-only">Low </span><span class="weather-extreme-label" aria-hidden="true">L</span><span class="weather-low-value"></span></span>
         </div>
       </div>
       <div class="weather-place"></div><div class="weather-meta"></div>
@@ -228,9 +232,14 @@ export function buildWeather(id, ctx) {
     <dialog class="weather-settings-dialog" aria-labelledby="${settingsTitleId}">
       <form class="weather-settings-form">
         <div class="weather-settings-heading"><h2 id="${settingsTitleId}">Weather settings</h2><button class="weather-settings-close" type="button" aria-label="Close settings">×</button></div>
-        <label>Temperature units<select class="weather-settings-unit util-field" required><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
-        <label>Add a location<input class="weather-settings-location util-field" type="text" autocomplete="off" placeholder="City or town"></label>
-        <p class="weather-settings-hint">Leave the location blank to update the selected place.</p>
+        <label>Temperature units for selected location<select class="weather-settings-unit util-field" required><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
+        <div class="weather-add-location-row">
+          <label>Add a location<input class="weather-settings-location util-field" type="text" autocomplete="off" placeholder="City or town"></label>
+          <label>Unit for new location<select class="weather-settings-new-unit util-field"><option value="celsius">°C</option><option value="fahrenheit">°F</option></select></label>
+          <button class="util-action weather-settings-add-location" type="button">Add</button>
+        </div>
+        <p class="weather-settings-hint">Add each place separately. The dialog stays open so you can add several.</p>
+        <p class="weather-settings-add-status" role="status" aria-live="polite"></p>
         <fieldset class="weather-detail-settings"><legend>Additional weather details</legend>
           ${WEATHER_DETAIL_OPTIONS.map(({ key, label }) => `<label><input class="weather-detail-toggle" type="checkbox" data-weather-detail="${key}"> ${label}</label>`).join('')}
         </fieldset>
@@ -356,17 +365,96 @@ export function buildWeather(id, ctx) {
       updateSavedLocationControls();
     }
     const dialog = root.querySelector('.weather-settings-dialog');
+    const locationInput = dialog.querySelector('.weather-settings-location');
+    const addLocationButton = dialog.querySelector('.weather-settings-add-location');
+    const addLocationUnit = dialog.querySelector('.weather-settings-new-unit');
+    const addLocationStatus = dialog.querySelector('.weather-settings-add-status');
+    const saveSettingsButton = dialog.querySelector('.weather-settings-save');
+    async function addLocationFromSettings() {
+      const location = locationInput.value.trim();
+      const unit = addLocationUnit.value;
+      if (!location) {
+        addLocationStatus.textContent = 'Enter a city or town to add.';
+        addLocationStatus.classList.add('weather-error');
+        locationInput.focus({ preventScroll: true });
+        return;
+      }
+      if (prefs.locations.some(item => item.location.toLocaleLowerCase() === location.toLocaleLowerCase())) {
+        addLocationStatus.textContent = `${location} is already saved.`;
+        addLocationStatus.classList.add('weather-error');
+        locationInput.focus({ preventScroll: true });
+        return;
+      }
+
+      addLocationButton.disabled = true;
+      locationInput.disabled = true;
+      saveSettingsButton.disabled = true;
+      addLocationButton.setAttribute('aria-busy', 'true');
+      addLocationButton.textContent = 'Adding…';
+      addLocationStatus.textContent = `Looking up ${location}…`;
+      addLocationStatus.classList.remove('weather-error');
+      try {
+        const place = await geocodeWeatherLocation(location);
+        if (!place) {
+          addLocationStatus.textContent = `We couldn't find “${location}”. Check the spelling and try again.`;
+          addLocationStatus.classList.add('weather-error');
+          return;
+        }
+        if (prefs.locations.some(item => item.location.toLocaleLowerCase() === location.toLocaleLowerCase())) {
+          addLocationStatus.textContent = `${location} is already saved.`;
+          addLocationStatus.classList.add('weather-error');
+          return;
+        }
+        const nextPrefs = {
+          ...prefs,
+          locations: [...prefs.locations.map(item => ({ ...item })), { location, unit }],
+        };
+        if (!savePrefs(nextPrefs)) {
+          addLocationStatus.textContent = 'This location could not be saved. Browser storage is unavailable; try again.';
+          addLocationStatus.classList.add('weather-error');
+          return;
+        }
+        prefs = nextPrefs;
+        updateSavedLocationControls();
+        locationInput.value = '';
+        addLocationStatus.textContent = `${location} added. You can add another location or save settings.`;
+        addLocationStatus.classList.remove('weather-error');
+      } catch {
+        addLocationStatus.textContent = `Could not look up ${location}. Check your connection and try again.`;
+        addLocationStatus.classList.add('weather-error');
+      } finally {
+        addLocationButton.disabled = false;
+        locationInput.disabled = false;
+        saveSettingsButton.disabled = false;
+        addLocationButton.removeAttribute('aria-busy');
+        addLocationButton.textContent = 'Add';
+      }
+    }
+    addLocationButton.addEventListener('click', addLocationFromSettings);
+    locationInput.addEventListener('input', () => {
+      addLocationStatus.textContent = '';
+      addLocationStatus.classList.remove('weather-error');
+    });
+    locationInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        addLocationFromSettings();
+      }
+    });
     root.querySelector('.weather-settings-button').addEventListener('click', () => {
       setLocationMenuOpen(false);
       stopRefreshTimer();
       const selected = prefs.locations.find(item => item.location === prefs.activeLocation);
       dialog.querySelector('.weather-settings-unit').value = selected?.unit || unit;
+      addLocationUnit.value = selected?.unit || unit;
       dialog.querySelectorAll('[data-weather-detail]').forEach(input => {
         input.checked = prefs.details[input.dataset.weatherDetail] !== false;
       });
       dialog.querySelector('.weather-refresh-interval').value = String(prefs.refreshMinutes);
-      dialog.querySelector('.weather-settings-location').value = '';
+      locationInput.value = '';
       dialog.querySelector('.weather-settings-error').textContent = '';
+      addLocationStatus.textContent = '';
+      addLocationStatus.classList.remove('weather-error');
       dialog.showModal();
       dialog.querySelector('.weather-settings-unit').focus({ preventScroll: true });
     });
@@ -378,9 +466,14 @@ export function buildWeather(id, ctx) {
       event.preventDefault();
       const nextUnit = dialog.querySelector('.weather-settings-unit').value;
       const nextInterval = Number(dialog.querySelector('.weather-refresh-interval').value);
-      const newLocation = dialog.querySelector('.weather-settings-location').value.trim();
       if (!Number.isInteger(nextInterval) || nextInterval < 5 || nextInterval > 1440) {
         dialog.querySelector('.weather-settings-error').textContent = 'Choose an update interval from 5 to 1440 minutes.';
+        return;
+      }
+      if (locationInput.value.trim()) {
+        addLocationStatus.textContent = 'Use Add to save this location before saving settings.';
+        addLocationStatus.classList.add('weather-error');
+        addLocationButton.focus({ preventScroll: true });
         return;
       }
       const nextPrefs = {
@@ -390,14 +483,6 @@ export function buildWeather(id, ctx) {
         locations: prefs.locations.map(item => ({ ...item })),
       };
       let selected = nextPrefs.locations.find(item => item.location === nextPrefs.activeLocation) || nextPrefs.locations[0];
-      if (newLocation) {
-        selected = nextPrefs.locations.find(item => item.location.toLocaleLowerCase() === newLocation.toLocaleLowerCase());
-        if (!selected) {
-          selected = { location: newLocation, unit: nextUnit };
-          nextPrefs.locations.push(selected);
-        }
-        nextPrefs.activeLocation = selected.location;
-      }
       if (!selected) return;
       selected.unit = nextUnit;
       nextPrefs.refreshMinutes = nextInterval;

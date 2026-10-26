@@ -803,6 +803,7 @@ function updateDesktopNotes(notes) {
     const widget = document.createElement('button');
     widget.type = 'button';
     widget.className = 'desktop-note-widget';
+    widget.dataset.noteColor = note.color || 'yellow';
     widget.setAttribute('aria-label', `Open note: ${note.title || 'Untitled note'}`);
     const title = document.createElement('strong');
     const body = document.createElement('span');
@@ -2073,7 +2074,7 @@ function openWinMenu() {
   if (!S.focusedId) return;
   const col = getAppColumn(S.focusedId);
   const dropdown = document.createElement('div');
-  dropdown.className = 'win-menu-dropdown';
+  dropdown.className = 'win-menu-dropdown menu-popover';
   dropdown.id = 'win-menu-open';
 
   WIDTH_MENU_ITEMS.forEach(({ preset, label, svg }) => {

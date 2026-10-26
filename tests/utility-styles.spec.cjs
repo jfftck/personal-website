@@ -92,3 +92,50 @@ test('World Clock search suggestions remain attached and fit a phone viewport', 
   expect(popupBox.y).toBeGreaterThanOrEqual(inputBox.y + inputBox.height - 1);
   expect(popupBox.x + popupBox.width).toBeLessThanOrEqual(390);
 });
+
+test('sticky notes expose accessible color choices that adapt to the system theme', async ({ page }) => {
+  await page.evaluate(() => localStorage.removeItem('desktop-theme'));
+  await page.emulateMedia({ colorScheme: 'light' });
+  const notes = await openUtility(page, 'sticky-notes');
+  await notes.locator('.note-create').click();
+
+  const editor = notes.locator('.note-editor');
+  const picker = editor.locator('.note-color-picker');
+  const radios = picker.getByRole('radio');
+  await expect(picker.locator('legend')).toHaveText('Background color');
+  await expect(radios).toHaveCount(6);
+  const yellow = picker.getByRole('radio', { name: 'Yellow note background' });
+  await expect(yellow).toBeChecked();
+  await yellow.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(picker.getByRole('radio', { name: 'Orange note background' })).toBeChecked();
+  await notes.locator('.note-color-choice[data-note-color="purple"]').click();
+  await expect(picker.getByRole('radio', { name: 'Purple note background' })).toBeChecked();
+  await expect(editor).toHaveAttribute('data-note-color', 'purple');
+
+  await notes.getByRole('textbox', { name: 'Note title' }).fill('Theme note');
+  await notes.locator('.note-desktop-toggle input').check();
+  const widget = page.locator('.desktop-note-widget');
+  await expect(widget).toHaveAttribute('data-note-color', 'purple');
+  await expect.poll(() => page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('personal-desktop-sticky-notes-v1') || '[]');
+    return saved[0]?.color;
+  })).toBe('purple');
+
+  const lightColors = await editor.evaluate(element => ({
+    background: getComputedStyle(element).backgroundColor,
+    text: getComputedStyle(element).color,
+  }));
+  const lightWidgetBackground = await widget.evaluate(element => getComputedStyle(element).backgroundColor);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect.poll(() => editor.evaluate(element => getComputedStyle(element).backgroundColor))
+    .not.toBe(lightColors.background);
+  await expect.poll(() => widget.evaluate(element => getComputedStyle(element).backgroundColor))
+    .not.toBe(lightWidgetBackground);
+  const darkColors = await editor.evaluate(element => ({
+    background: getComputedStyle(element).backgroundColor,
+    text: getComputedStyle(element).color,
+  }));
+  expect(darkColors.text).not.toBe(lightColors.text);
+  await expect(notes.locator('.note-select.active')).toHaveAttribute('aria-pressed', 'true');
+});
