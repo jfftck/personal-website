@@ -193,7 +193,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
       nextOptions => {
         mode = nextOptions.mode;
         if (nextOptions.playerColor) playerColor = nextOptions.playerColor;
-        const toolbarSelect = settings.element.querySelector('select[aria-label="Opponent"]');
+        const toolbarSelect = settings.element.querySelector('select[data-game-option="Opponent"]');
         if (toolbarSelect) {
           toolbarSelect.value = mode;
           refreshCustomSelect(toolbarSelect);

@@ -5,6 +5,7 @@ import {
 import { createGameSession, inspectGameSession } from './game-state.js';
 import { addGameThemeControl, addGameThemeResetControl } from './themes.js';
 import { createMinesweeperCelebration } from './game-celebrations.js';
+import { refreshCustomSelect } from '../custom-select.js';
 
 export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
   const { el, toolbarLeft, toolbarCenter, status, area, settings } = gameShell(id, 'Minesweeper',
@@ -50,8 +51,11 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
       }],
       nextOptions => {
         level = nextOptions.level;
-        const toolbarSelect = settings.element.querySelector('select[aria-label="Difficulty"]');
-        if (toolbarSelect) toolbarSelect.value = level;
+        const toolbarSelect = settings.element.querySelector('select[data-game-option="Difficulty"]');
+        if (toolbarSelect) {
+          toolbarSelect.value = level;
+          refreshCustomSelect(toolbarSelect);
+        }
         restart();
       },
     );

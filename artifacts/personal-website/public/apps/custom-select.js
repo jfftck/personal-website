@@ -134,6 +134,7 @@ export function enhanceSelect(select) {
   select.classList.add('standard-select-native');
   select.setAttribute('aria-hidden', 'true');
   select.tabIndex = -1;
+  select.removeAttribute('aria-label');
   select.dataset.customSelectTrigger = triggerId;
   select.dataset.customSelectPopup = popupId;
   if (select.required) {
@@ -143,7 +144,7 @@ export function enhanceSelect(select) {
   }
 
   field.append(select);
-  const popupHost = hasPopover ? document.body : (select.closest('dialog') || document.body);
+  const popupHost = select.closest('dialog') || document.body;
   popupHost.append(popup);
 
   let optionElements = [];

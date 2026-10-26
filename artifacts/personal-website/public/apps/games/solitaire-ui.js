@@ -10,6 +10,7 @@ import {
 } from './ui.js';
 import { createGameSession, inspectGameSession } from './game-state.js';
 import { addGameThemeControl, addGameThemeResetControl } from './themes.js';
+import { refreshCustomSelect } from '../custom-select.js';
 import { getWinAnimationPreference, setWinAnimationPreference, solitaireWinAnimationChoices } from './win-animation-settings.js';
 
 const rules = {
@@ -161,8 +162,12 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       nextOptions => {
         if (kind === 'klondike') options.drawCount = Number(nextOptions.drawCount);
         if (kind === 'spider') options.suits = Number(nextOptions.suits);
-        const toolbarSelect = settingLabel && settings.element.querySelector(`select[aria-label="${settingLabel}"]`);
-        if (toolbarSelect) toolbarSelect.value = String(nextOptions[kind === 'klondike' ? 'drawCount' : 'suits']);
+        const toolbarSelect = settingLabel && [...settings.element.querySelectorAll('select[data-game-option]')]
+          .find(select => select.dataset.gameOption === settingLabel);
+        if (toolbarSelect) {
+          toolbarSelect.value = String(nextOptions[kind === 'klondike' ? 'drawCount' : 'suits']);
+          refreshCustomSelect(toolbarSelect);
+        }
         restart();
       },
     );

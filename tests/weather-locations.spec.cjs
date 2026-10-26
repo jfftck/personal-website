@@ -130,9 +130,17 @@ async function selectWeatherLocation(weather, location) {
   await weather.locator('.weather-location-option').filter({ hasText: location }).click();
 }
 
-async function addWeatherLocation(settings, location, unit) {
+async function chooseSelectValue(page, select, value) {
+  const triggerId = await select.getAttribute('data-custom-select-trigger');
+  const popupId = await select.getAttribute('data-custom-select-popup');
+  const trigger = page.locator(`[id="${triggerId}"]`);
+  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+  await page.locator(`[id="${popupId}"] [role="option"][data-value="${value}"]`).click();
+}
+
+async function addWeatherLocation(page, settings, location, unit) {
   await settings.locator('.weather-settings-location').fill(location);
-  await settings.locator('.weather-settings-new-unit').selectOption(unit);
+  await chooseSelectValue(page, settings.locator('.weather-settings-new-unit'), unit);
   await settings.locator('.weather-settings-add-location').click();
   await expect(settings.locator('.weather-settings-add-status')).toContainText(`${location} added`);
 }
@@ -161,7 +169,7 @@ async function setWeatherStorageFailure(page, shouldFail) {
 test('warns when a new location cannot be saved and accepts it after storage recovers', async ({ page }) => {
   const weather = await openWeather(page);
   await weather.locator('.weather-location').fill('Seattle');
-  await weather.locator('.weather-unit').selectOption('fahrenheit');
+  await chooseSelectValue(page, weather.locator('.weather-unit'), 'fahrenheit');
 
   await setWeatherStorageFailure(page, true);
   await weather.locator('.weather-submit').click();
@@ -360,7 +368,7 @@ test('keeps settings and saved locations unchanged after failed writes, then sav
 
   await weather.locator('.weather-settings-button').click();
   const settings = weather.locator('.weather-settings-dialog');
-  await settings.locator('.weather-settings-unit').selectOption('fahrenheit');
+  await chooseSelectValue(page, settings.locator('.weather-settings-unit'), 'fahrenheit');
   await setWeatherStorageFailure(page, true);
   await settings.locator('.weather-settings-save').click();
   await expect(settings.locator('.weather-settings-error'))
@@ -559,13 +567,13 @@ test('shows today’s high and low beside the current temperature and saves opti
 test('keeps each saved city paired with its unit after selection and opening a new Weather window', async ({ page }) => {
   let weather = await openWeather(page);
   await weather.locator('.weather-location').fill('Seattle');
-  await weather.locator('.weather-unit').selectOption('fahrenheit');
+  await chooseSelectValue(page, weather.locator('.weather-unit'), 'fahrenheit');
   await weather.locator('.weather-submit').click();
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
 
   await weather.locator('.weather-settings-button').click();
   const settings = weather.locator('.weather-settings-dialog');
-  await addWeatherLocation(settings, 'Oslo', 'celsius');
+  await addWeatherLocation(page, settings, 'Oslo', 'celsius');
   await expect(settings).toBeVisible();
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
   await expect(weather.locator('.weather-location-button')).toHaveAttribute('data-location', 'Seattle');
@@ -610,16 +618,16 @@ test('keeps each saved city paired with its unit after selection and opening a n
 test('lets users add multiple locations without closing Weather settings', async ({ page }) => {
   const weather = await openWeather(page);
   await weather.locator('.weather-location').fill('Seattle');
-  await weather.locator('.weather-unit').selectOption('fahrenheit');
+  await chooseSelectValue(page, weather.locator('.weather-unit'), 'fahrenheit');
   await weather.locator('.weather-submit').click();
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
 
   const settings = weather.locator('.weather-settings-dialog');
   await weather.locator('.weather-settings-button').click();
-  await addWeatherLocation(settings, 'Oslo', 'celsius');
+  await addWeatherLocation(page, settings, 'Oslo', 'celsius');
   await expect(settings).toBeVisible();
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
-  await addWeatherLocation(settings, 'Lisbon', 'fahrenheit');
+  await addWeatherLocation(page, settings, 'Lisbon', 'fahrenheit');
   await expect(settings.getByRole('button', { name: 'Remove Oslo' })).toBeVisible();
   await expect(settings.getByRole('button', { name: 'Remove Lisbon' })).toBeVisible();
 
@@ -644,13 +652,13 @@ test('lets users add multiple locations without closing Weather settings', async
 test('changing a saved city unit preserves the other city after switching and reopening Weather', async ({ page }) => {
   let weather = await openWeather(page);
   await weather.locator('.weather-location').fill('Seattle');
-  await weather.locator('.weather-unit').selectOption('fahrenheit');
+  await chooseSelectValue(page, weather.locator('.weather-unit'), 'fahrenheit');
   await weather.locator('.weather-submit').click();
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
 
   const settings = weather.locator('.weather-settings-dialog');
   await weather.locator('.weather-settings-button').click();
-  await addWeatherLocation(settings, 'Oslo', 'celsius');
+  await addWeatherLocation(page, settings, 'Oslo', 'celsius');
   await expect(settings).toBeVisible();
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
   await settings.locator('.weather-settings-save').click();
@@ -679,7 +687,7 @@ test('changing a saved city unit preserves the other city after switching and re
 
   await weather.locator('.weather-settings-button').click();
   await expect(settings.locator('.weather-settings-unit')).toHaveValue('fahrenheit');
-  await settings.locator('.weather-settings-unit').selectOption('celsius');
+  await chooseSelectValue(page, settings.locator('.weather-settings-unit'), 'celsius');
   await settings.locator('.weather-settings-save').click();
   await expect(weather.locator('.weather-current')).toHaveText('22°C');
   await expect.poll(() => forecastRequests.at(-1)).toEqual({
@@ -735,13 +743,13 @@ test('changing a saved city unit preserves the other city after switching and re
 test('keeps saved locations and units available after a forecast failure and reopening Weather', async ({ page }) => {
   let weather = await openWeather(page);
   await weather.locator('.weather-location').fill('Seattle');
-  await weather.locator('.weather-unit').selectOption('fahrenheit');
+  await chooseSelectValue(page, weather.locator('.weather-unit'), 'fahrenheit');
   await weather.locator('.weather-submit').click();
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
 
   const settings = weather.locator('.weather-settings-dialog');
   await weather.locator('.weather-settings-button').click();
-  await addWeatherLocation(settings, 'Oslo', 'celsius');
+  await addWeatherLocation(page, settings, 'Oslo', 'celsius');
   await expect(settings).toBeVisible();
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
   await settings.locator('.weather-settings-save').click();

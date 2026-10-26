@@ -47,14 +47,57 @@ test('calculator, calendar, and weather controls follow shared theme tokens', as
   expect(weatherFieldStyle.border).toBe('1px');
   expect(weatherFieldStyle.background).not.toBe('rgba(0, 0, 0, 0)');
   const weatherSelect = weather.locator('.weather-unit');
-  await expect(weatherSelect).toHaveClass(/util-select/);
-  const selectStyle = await weatherSelect.evaluate(element => {
+  await expect(weatherSelect).toHaveClass(/standard-select-native/);
+  const trigger = weather.getByRole('combobox', { name: 'Temperature units', exact: true });
+  await expect(trigger).toHaveAttribute('aria-haspopup', 'listbox');
+  const selectStyle = await trigger.evaluate(element => {
     const style = getComputedStyle(element);
     return { radius: style.borderRadius, border: style.borderTopWidth, transform: style.transform };
   });
   expect(selectStyle.radius).toBe('10.4px');
   expect(selectStyle.border).toBe('1px');
   expect(selectStyle.transform).toBe('none');
+
+  await trigger.click();
+  const popupId = await trigger.getAttribute('aria-controls');
+  const popup = page.locator(`[id="${popupId}"]`);
+  await expect(popup).toBeVisible();
+  await expect(popup).toHaveAttribute('role', 'listbox');
+  const popupStyles = await popup.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { blur: style.backdropFilter, background: style.backgroundColor };
+  });
+  expect(popupStyles.blur).toContain('blur(');
+  expect(popupStyles.background).not.toBe('rgba(0, 0, 0, 0)');
+  const [triggerBox, popupBox] = await Promise.all([trigger.boundingBox(), popup.boundingBox()]);
+  expect(Math.abs(popupBox.x - triggerBox.x)).toBeLessThan(2);
+});
+
+test('custom dropdown keeps working without Popover or CSS Anchor support', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(HTMLElement.prototype, 'showPopover', { configurable: true, value: undefined });
+    Object.defineProperty(HTMLElement.prototype, 'hidePopover', { configurable: true, value: undefined });
+    Object.defineProperty(CSS, 'supports', { configurable: true, value: () => false });
+  });
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  const weather = await openUtility(page, 'weather');
+  const select = weather.locator('.weather-unit');
+  const trigger = weather.getByRole('combobox', { name: 'Temperature units', exact: true });
+  const popupId = await select.getAttribute('data-custom-select-popup');
+  const popup = page.locator(`[id="${popupId}"]`);
+
+  await trigger.focus();
+  await page.keyboard.press('Enter');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(popup).toBeVisible();
+  await expect(popup).not.toHaveAttribute('popover');
+  expect(await popup.evaluate(element => getComputedStyle(element).position)).toBe('fixed');
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(trigger).toHaveAttribute('data-value', 'fahrenheit');
+  await expect(select).toHaveValue('fahrenheit');
 });
 
 test('top-bar menu and view toggles share the same active appearance', async ({ page }) => {

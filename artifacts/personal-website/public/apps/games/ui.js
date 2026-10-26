@@ -15,6 +15,7 @@ export function selectControl(text, options, value, onChange) {
   const select = document.createElement('select');
   select.className = 'util-select';
   select.setAttribute('aria-label', text);
+  select.dataset.gameOption = text;
   for (const [key, title] of options) {
     const option = document.createElement('option');
     option.value = key; option.textContent = title;

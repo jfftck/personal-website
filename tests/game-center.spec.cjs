@@ -32,7 +32,12 @@ async function setDropdownValue(page, container, label, value) {
 }
 
 async function expectDropdownValue(container, label, value) {
-  await expect(container.getByRole('combobox', { name: label, exact: true })).toHaveAttribute('data-value', value);
+  const trigger = container.getByRole('combobox', { name: label, exact: true });
+  if (await trigger.count()) {
+    await expect(trigger.first()).toHaveAttribute('data-value', value);
+    return;
+  }
+  await expect(container.locator(`.standard-select-native[data-game-option="${label}"]`)).toHaveValue(value);
 }
 
 async function setGameOption(page, app, label, value) {
@@ -44,7 +49,7 @@ async function setGameOption(page, app, label, value) {
 test('game settings selects use the shared stationary dropdown control', async ({ page }) => {
   const app = await openGame(page, 'chess');
   const settings = await openSettings(app);
-  const select = settings.locator('select.util-select').first();
+  const select = settings.locator('.standard-select-trigger').first();
   await expect(select).toBeVisible();
   await select.hover();
   const style = await select.evaluate(element => {
@@ -1236,12 +1241,12 @@ test('all three solitaire games deal, select, draw, undo, configure, and restart
     await app.getByRole('button', { name: 'New deal' }).click();
     await expect(app.locator('.game-status')).toContainText('0 moves');
     if (game === 'klondike') {
-      await setGameOption(app, 'Draw', '3');
+      await setGameOption(page, app, 'Draw', '3');
       await app.locator('.card-stock button').click();
       await expect(app.getByRole('button', { name: /Stock: 21 cards/ })).toBeVisible();
     }
     if (game === 'spider') {
-      await setGameOption(app, 'Suits', '4');
+      await setGameOption(page, app, 'Suits', '4');
       await expect(app.locator('.card-columns .playing-card')).toHaveCount(54);
     }
     await page.locator('#close-btn').click();
@@ -1782,10 +1787,13 @@ test('solitaire win animation can be fixed or random and is shared across card g
   }));
   const dialog = await openSettings(app);
   const animation = dialog.getByLabel('Win animation', { exact: true });
-  await expect(animation).toHaveValue('random');
-  await expect(animation.locator('option')).toHaveCount(8);
-  await expect(animation.locator('option[value="kitchen-sink"]')).toHaveText('Kitchen Sink');
-  await animation.selectOption('tornado');
+  await expect(animation).toHaveAttribute('data-value', 'random');
+  const animationPopupId = await animation.getAttribute('aria-controls');
+  await animation.click();
+  const animationOptions = page.locator(`[id="${animationPopupId}"] [role="option"]`);
+  await expect(animationOptions).toHaveCount(8);
+  await expect(animationOptions.filter({ hasText: 'Kitchen Sink' })).toBeVisible();
+  await chooseDropdownValue(page, animation, 'tornado');
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).solitaire))
     .toBe('tornado');
@@ -1799,8 +1807,8 @@ test('solitaire win animation can be fixed or random and is shared across card g
 
   const spider = await openGame(page, 'spider');
   const spiderSettings = await openSettings(spider);
-  await expect(spiderSettings.getByLabel('Win animation', { exact: true })).toHaveValue('tornado');
-  await spiderSettings.getByLabel('Win animation', { exact: true }).selectOption('random');
+  await expectDropdownValue(spiderSettings, 'Win animation', 'tornado');
+  await setDropdownValue(page, spiderSettings, 'Win animation', 'random');
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).solitaire))
     .toBe('random');
@@ -1810,9 +1818,11 @@ test('Chess and Reversi can use a fixed win animation or random selection', asyn
   const chess = await openGame(page, 'chess');
   const chessSettings = await openSettings(chess);
   const chessAnimation = chessSettings.getByLabel('Win animation', { exact: true });
-  await expect(chessAnimation).toHaveValue('random');
-  await expect(chessAnimation.locator('option')).toHaveCount(5);
-  await chessAnimation.selectOption('knock');
+  await expect(chessAnimation).toHaveAttribute('data-value', 'random');
+  const chessAnimationPopupId = await chessAnimation.getAttribute('aria-controls');
+  await chessAnimation.click();
+  await expect(page.locator(`[id="${chessAnimationPopupId}"] [role="option"]`)).toHaveCount(5);
+  await chooseDropdownValue(page, chessAnimation, 'knock');
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).chess))
     .toBe('knock');
@@ -1821,8 +1831,8 @@ test('Chess and Reversi can use a fixed win animation or random selection', asyn
   const reversi = await openGame(page, 'reversi');
   const reversiSettings = await openSettings(reversi);
   const reversiAnimation = reversiSettings.getByLabel('Win animation', { exact: true });
-  await expect(reversiAnimation).toHaveValue('random');
-  await reversiAnimation.selectOption('fade');
+  await expect(reversiAnimation).toHaveAttribute('data-value', 'random');
+  await chooseDropdownValue(page, reversiAnimation, 'fade');
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).reversi))
     .toBe('fade');
@@ -1838,7 +1848,7 @@ test('bounce, Kitchen Sink, and spiral win celebrations use floating card layers
   });
   for (const effect of ['bounce', 'kitchen-sink', 'spiral']) {
     const app = await restoreGame(page, winningDeal);
-    await setGameOption(app, 'Win animation', effect);
+    await setGameOption(page, app, 'Win animation', effect);
     await app.locator('[data-key="card-12"]').dblclick();
     const layer = page.locator('body > .solitaire-celebration-layer');
     await expect(layer).toHaveCount(1);
@@ -1969,7 +1979,7 @@ test('rain, wave, and tornado celebrations animate changing cards on the fixed l
   });
   for (const effect of ['rain', 'wave', 'tornado']) {
     const app = await restoreGame(page, winningDeal);
-    await setGameOption(app, 'Win animation', effect);
+    await setGameOption(page, app, 'Win animation', effect);
     await app.locator('[data-key="card-12"]').dblclick();
     const layer = page.locator('body > .solitaire-celebration-layer');
     await expect(layer).toHaveCount(1);
@@ -2073,10 +2083,10 @@ test('the win screen appears after the celebration and lets Klondike choose the 
   const screen = app.locator('.game-new-game-screen');
   await expect(screen).toBeVisible({ timeout: 6000 });
   await expect(screen.getByRole('heading', { name: 'Victory!' })).toBeVisible();
-  await screen.getByLabel('Draw', { exact: true }).selectOption('3');
+  await setDropdownValue(page, screen, 'Draw', '3');
   await screen.getByRole('button', { name: 'Start new game' }).click();
   await expect(screen).toHaveCount(0);
-  await expect(app.getByLabel('Draw', { exact: true })).toHaveValue('3');
+  await expectDropdownValue(app, 'Draw', '3');
   await expect(app.locator('.solitaire-table')).toBeVisible();
 });
 
@@ -2129,7 +2139,7 @@ test('Chess, Reversi, and every Minesweeper difficulty fit and center in their a
     const app = await openGame(page, game);
     const levels = game === 'minesweeper' ? ['beginner', 'intermediate', 'expert'] : [null];
     for (const level of levels) {
-      if (level) await setGameOption(app, 'Difficulty', level);
+      if (level) await setGameOption(page, app, 'Difficulty', level);
       for (const viewport of [
         { width: 1280, height: 800 }, { width: 900, height: 400 },
         { width: 390, height: 844 }, { width: 600, height: 320 },
@@ -2201,7 +2211,7 @@ test('solitaire tableau scrolls independently and reduced motion suppresses cele
   await expect(winningApp.locator('.celebration-particle-canvas')).toHaveCount(0);
   await expect(winningApp.locator('.solitaire-celebration-layer')).toHaveCount(0);
   await expect(winningApp.locator('.game-new-game-screen')).toBeVisible();
-  await expect(winningApp.locator('.game-new-game-screen').getByLabel('Draw', { exact: true })).toHaveValue('1');
+  await expectDropdownValue(winningApp.locator('.game-new-game-screen'), 'Draw', '1');
   expect(await page.evaluate(() => localStorage.getItem('game-center-solitaire-celebrations-v1'))).toBeNull();
 });
 
@@ -2224,9 +2234,9 @@ test('Minesweeper supports reveal, touch flag mode, keyboard flags, and all boar
   await expect(app.locator('.mine-cell').first()).toHaveClass(/flagged/);
   await page.keyboard.press('f');
   await expect(app.locator('.mine-cell').first()).not.toHaveClass(/flagged/);
-  await setGameOption(app, 'Difficulty', 'intermediate');
+  await setGameOption(page, app, 'Difficulty', 'intermediate');
   await expect(app.locator('.mine-cell')).toHaveCount(256);
-  await setGameOption(app, 'Difficulty', 'expert');
+  await setGameOption(page, app, 'Difficulty', 'expert');
   await expect(app.locator('.mine-cell')).toHaveCount(480);
   const expertBoardCentering = await app.evaluate(element => {
     const area = element.querySelector('.game-area').getBoundingClientRect();
@@ -2248,10 +2258,10 @@ test('Minesweeper win screen lets users change the next game difficulty', async 
   await expect(screen).toBeVisible({ timeout: 8000 });
   await expect(layer).toHaveCount(0);
   await expect(screen.getByRole('heading', { name: 'Minefield cleared!' })).toBeVisible();
-  await screen.getByLabel('Difficulty', { exact: true }).selectOption('intermediate');
+  await setDropdownValue(page, screen, 'Difficulty', 'intermediate');
   await screen.getByRole('button', { name: 'Start new game' }).click();
   await expect(app.locator('.mine-cell')).toHaveCount(256);
-  await expect(app.getByLabel('Difficulty', { exact: true })).toHaveValue('intermediate');
+  await expectDropdownValue(app, 'Difficulty', 'intermediate');
 });
 
 test('Minesweeper shows the exploded board during its mine-burst celebration', async ({ page }) => {
@@ -2268,7 +2278,7 @@ test('Minesweeper shows the exploded board during its mine-burst celebration', a
 test('Chess moves animate, and checkmate opens the opponent options for a new game', async ({ page }) => {
   const app = await openGame(page, 'chess');
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await setGameOption(app, 'Opponent', 'local');
+  await setGameOption(page, app, 'Opponent', 'local');
   const moves = [
     ['e2', 'e4'], ['e7', 'e5'], ['d1', 'h5'], ['b8', 'c6'],
     ['f1', 'c4'], ['g8', 'f6'], ['h5', 'f7'],
@@ -2284,13 +2294,13 @@ test('Chess moves animate, and checkmate opens the opponent options for a new ga
   const screen = app.locator('.game-new-game-screen');
   await expect(screen).toBeVisible({ timeout: 5000 });
   await expect(screen).toContainText('Checkmate');
-  await screen.getByLabel('Opponent', { exact: true }).selectOption('computer');
+  await setDropdownValue(page, screen, 'Opponent', 'computer');
   await expect(screen.getByLabel('Play as', { exact: true })).toBeVisible();
-  await screen.getByLabel('Play as', { exact: true }).selectOption('black');
+  await setDropdownValue(page, screen, 'Play as', 'black');
   await screen.getByRole('button', { name: 'Start new game' }).click();
   await expect(screen).toHaveCount(0);
   await expect(app.locator('.chess-piece')).toHaveCount(32);
-  await expect(app.getByLabel('Opponent', { exact: true })).toHaveValue('computer');
+  await expectDropdownValue(app, 'Opponent', 'computer');
   await expect(app.locator('.game-status')).toContainText('Black to move', { timeout: 10000 });
 });
 
@@ -2335,21 +2345,21 @@ test('Reversi terminal screen offers opponent options before starting again', as
   await app.locator(`[data-square="${file}${rank}"]`).click();
   const screen = app.locator('.game-new-game-screen');
   await expect(screen).toBeVisible({ timeout: 5000 });
-  await expect(screen.getByLabel('Opponent', { exact: true })).toHaveValue('local');
-  await screen.getByLabel('Opponent', { exact: true }).selectOption('computer');
+  await expectDropdownValue(screen, 'Opponent', 'local');
+  await setDropdownValue(page, screen, 'Opponent', 'computer');
   await expect(screen.getByLabel('Play as', { exact: true })).toBeVisible();
-  await screen.getByLabel('Play as', { exact: true }).selectOption('white');
+  await setDropdownValue(page, screen, 'Play as', 'white');
   await screen.getByRole('button', { name: 'Start new game' }).click();
   await expect(app.locator('.disc')).toHaveCount(5);
-  await expect(app.getByLabel('Opponent', { exact: true })).toHaveValue('computer');
+  await expectDropdownValue(app, 'Opponent', 'computer');
   await expect(app.locator('.game-status')).toContainText('White to move', { timeout: 5000 });
 });
 
 test('Chess and Reversi let computer players choose either color and save the choice', async ({ page }) => {
   const chess = await openGame(page, 'chess');
   let settings = await openSettings(chess);
-  await expect(settings.getByLabel('Play as', { exact: true })).toHaveValue('white');
-  await settings.getByLabel('Play as', { exact: true }).selectOption('black');
+  await expectDropdownValue(settings, 'Play as', 'white');
+  await setDropdownValue(page, settings, 'Play as', 'black');
   await expect(chess.locator('.game-status')).toContainText('Black to move', { timeout: 10000 });
   let savedColor = await page.evaluate(() => {
     const session = JSON.parse(localStorage.getItem('desktop-session-v2'));
@@ -2359,7 +2369,7 @@ test('Chess and Reversi let computer players choose either color and save the ch
   expect(savedColor).toBe('black');
 
   settings = await openSettings(chess);
-  await settings.getByLabel('Opponent', { exact: true }).selectOption('local');
+  await setDropdownValue(page, settings, 'Opponent', 'local');
   settings = await openSettings(chess);
   await expect(settings.getByLabel('Play as', { exact: true })).toBeHidden();
   await settings.getByRole('button', { name: 'Close settings' }).click();
@@ -2367,7 +2377,7 @@ test('Chess and Reversi let computer players choose either color and save the ch
 
   const reversi = await openGame(page, 'reversi');
   settings = await openSettings(reversi);
-  await settings.getByLabel('Play as', { exact: true }).selectOption('white');
+  await setDropdownValue(page, settings, 'Play as', 'white');
   await expect(reversi.locator('.game-status')).toContainText('White to move', { timeout: 5000 });
   await expect(reversi.locator('.disc')).toHaveCount(5);
   savedColor = await page.evaluate(() => {
@@ -2434,7 +2444,7 @@ test('Chess makes computer turns, undoes a round, and supports local two-player'
   await expect(app.locator('.piece-black')).toHaveCount(16);
   await app.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(app.locator('[data-square="e2"]')).toHaveAttribute('aria-label', /White Pawn/);
-  await setGameOption(app, 'Opponent', 'local');
+  await setGameOption(page, app, 'Opponent', 'local');
   await app.locator('[data-square="e2"]').click();
   await app.locator('[data-square="e4"]').click();
   await expect(app.locator('.game-status')).toContainText('Black to move');
@@ -2469,7 +2479,7 @@ test('Reversi flips discs, makes a computer move, undoes and supports local play
   await expect(app.locator('.disc')).toHaveCount(6);
   await app.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(app.locator('.disc')).toHaveCount(4);
-  await setGameOption(app, 'Opponent', 'local');
+  await setGameOption(page, app, 'Opponent', 'local');
   await app.locator('[data-square="d6"]').click();
   await expect(app.locator('[data-square="d6"] .disc')).toHaveClass(/disc-placed/);
   await expect(app.locator('[data-square="d5"] .disc')).toHaveClass(/disc-flipping/);
@@ -2492,7 +2502,7 @@ test('Glass Reversi pieces preserve their 3D flip and finish on the new side', a
   let dialog = await openSettings(app);
   await dialog.getByRole('radio', { name: 'Piece theme: Glass', exact: true }).click();
   await dialog.getByRole('button', { name: 'Close settings' }).click();
-  await setGameOption(app, 'Opponent', 'local');
+  await setGameOption(page, app, 'Opponent', 'local');
   await app.locator('[data-square="d6"]').click();
   const disc = app.locator('[data-square="d5"] .disc');
   await expect(disc).toHaveClass(/disc-flipping/);
@@ -2535,7 +2545,7 @@ test('game windows restore and closing a thinking computer does not leave errors
 
 test('unfinished solitaire and chess games offer resume and restore their rules and opponent mode', async ({ page }) => {
   const cards = await openGame(page, 'klondike');
-  await setGameOption(cards, 'Draw', '3');
+  await setGameOption(page, cards, 'Draw', '3');
   await cards.locator('.card-stock button').click();
   await expect(cards.getByRole('button', { name: /Stock: 21 cards/ })).toBeVisible();
   await page.reload();
@@ -2543,18 +2553,18 @@ test('unfinished solitaire and chess games offer resume and restore their rules 
   const restoredCards = page.locator('.app-window[data-type="klondike"]');
   await expect(restoredCards.getByRole('button', { name: 'Resume saved game' })).toBeVisible();
   await restoredCards.getByRole('button', { name: 'Resume saved game' }).click();
-  await expect(restoredCards.getByLabel('Draw', { exact: true })).toHaveValue('3');
+  await expectDropdownValue(restoredCards, 'Draw', '3');
   await expect(restoredCards.getByRole('button', { name: /Stock: 21 cards/ })).toBeVisible();
 
   const chess = await openGame(page, 'chess');
-  await setGameOption(chess, 'Opponent', 'local');
+  await setGameOption(page, chess, 'Opponent', 'local');
   await chess.locator('[data-square="e2"]').click();
   await chess.locator('[data-square="e4"]').click();
   await page.reload();
   await page.locator('#welcome-win-close').click();
   const restoredChess = page.locator('.app-window[data-type="chess"]');
   await restoredChess.getByRole('button', { name: 'Resume saved game' }).click();
-  await expect(restoredChess.getByLabel('Opponent', { exact: true })).toHaveValue('local');
+  await expectDropdownValue(restoredChess, 'Opponent', 'local');
   await expect(restoredChess.locator('[data-square="e4"]')).toHaveAttribute('aria-label', /White Pawn/);
 });
 
@@ -2562,7 +2572,7 @@ test('multiple game windows keep separate saved boards after refresh', async ({ 
   const first = await openGame(page, 'minesweeper');
   await first.locator('.mine-cell').first().click();
   const second = await openGame(page, 'minesweeper');
-  await setGameOption(second, 'Difficulty', 'intermediate');
+  await setGameOption(page, second, 'Difficulty', 'intermediate');
   await second.getByRole('switch', { name: 'Flag mode' }).click();
   await second.locator('.mine-cell').nth(40).click();
 
@@ -2591,7 +2601,7 @@ test('multiple game windows keep separate saved boards after refresh', async ({ 
 
 test('Reversi restores its board, local opponent choice, and available undo', async ({ page }) => {
   const app = await openGame(page, 'reversi');
-  await setGameOption(app, 'Opponent', 'local');
+  await setGameOption(page, app, 'Opponent', 'local');
   await app.locator('[data-square="d6"]').click();
   await expect(app.locator('.disc')).toHaveCount(5);
   await page.reload();
@@ -2599,7 +2609,7 @@ test('Reversi restores its board, local opponent choice, and available undo', as
   const restored = page.locator('.app-window[data-type="reversi"]');
   await restored.getByRole('button', { name: 'Resume saved game' }).click();
   await expect(restored.locator('.disc')).toHaveCount(5);
-  await expect(restored.getByLabel('Opponent', { exact: true })).toHaveValue('local');
+  await expectDropdownValue(restored, 'Opponent', 'local');
   await expect(restored.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled();
   await restored.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(restored.locator('.disc')).toHaveCount(4);
