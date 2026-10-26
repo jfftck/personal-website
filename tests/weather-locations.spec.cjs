@@ -4,6 +4,7 @@ const PREF_KEY = 'personal-desktop-weather-setup-v1';
 let forecastRequests;
 let errors;
 let forecastFailure;
+let incompleteNextForecast;
 let delayedForecastLatitude;
 let delayedForecastShouldFail;
 let releaseDelayedForecast;
@@ -14,6 +15,7 @@ test.beforeEach(async ({ page }) => {
   forecastRequests = [];
   errors = [];
   forecastFailure = false;
+  incompleteNextForecast = false;
   delayedForecastLatitude = null;
   delayedForecastShouldFail = false;
   releaseDelayedForecast = null;
@@ -55,6 +57,11 @@ test.beforeEach(async ({ page }) => {
     }
     if (forecastFailure) {
       await route.fulfill({ status: 503, body: 'Forecast unavailable' });
+      return;
+    }
+    if (incompleteNextForecast) {
+      incompleteNextForecast = false;
+      await route.fulfill({ json: { current: {} } });
       return;
     }
     const temperature = unit === 'fahrenheit' ? 72 : 22;
@@ -276,6 +283,32 @@ test('keeps the newer city and unit when an older background refresh fails', asy
       { location: 'Oslo', unit: 'celsius' },
     ],
   });
+});
+
+test('keeps the last forecast and unit visible when a background refresh omits forecast data', async ({ page }) => {
+  await page.clock.install();
+  await page.evaluate(({ key, prefs }) => localStorage.setItem(key, JSON.stringify(prefs)), {
+    key: PREF_KEY,
+    prefs: {
+      locations: [{ location: 'Seattle', unit: 'fahrenheit' }],
+      activeLocation: 'Seattle',
+      refreshMinutes: 5,
+    },
+  });
+  const weather = await openWeather(page);
+  await weather.locator('.weather-submit').click();
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+  await expect(weather.locator('.weather-hourly')).toContainText('72°F');
+
+  incompleteNextForecast = true;
+  await page.clock.fastForward(5 * 60 * 1000);
+
+  await expect(weather.locator('.weather-refresh-status'))
+    .toHaveText('The latest weather update did not include a forecast.');
+  await expect(weather.locator('.weather-location-select')).toHaveValue('Seattle');
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+  await expect(weather.locator('.weather-hourly')).toContainText('72°F');
+  await expect(weather.locator('.weather-daily')).toContainText('°F');
 });
 
 test('keeps settings and saved locations unchanged after failed writes, then saves them on retry', async ({ page }) => {
