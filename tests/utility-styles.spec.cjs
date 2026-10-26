@@ -46,6 +46,15 @@ test('calculator, calendar, and weather controls follow shared theme tokens', as
   expect(weatherFieldStyle.radius).toBe('10.4px');
   expect(weatherFieldStyle.border).toBe('1px');
   expect(weatherFieldStyle.background).not.toBe('rgba(0, 0, 0, 0)');
+  const weatherSelect = weather.locator('.weather-unit');
+  await expect(weatherSelect).toHaveClass(/util-select/);
+  const selectStyle = await weatherSelect.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { radius: style.borderRadius, border: style.borderTopWidth, transform: style.transform };
+  });
+  expect(selectStyle.radius).toBe('10.4px');
+  expect(selectStyle.border).toBe('1px');
+  expect(selectStyle.transform).toBe('none');
 });
 
 test('top-bar menu and view toggles share the same active appearance', async ({ page }) => {
@@ -86,6 +95,19 @@ test('World Clock search suggestions remain attached and fit a phone viewport', 
   const suggestions = clock.getByRole('listbox', { name: 'Place suggestions' });
   await search.fill('Springfield');
   await expect(suggestions.getByRole('option')).toHaveCount(1);
+  await expect(suggestions).toHaveClass(/menu-popover/);
+  const panelStyles = await suggestions.evaluate(element => {
+    const style = getComputedStyle(element);
+    return {
+      background: style.backgroundColor,
+      backdrop: style.backdropFilter,
+      border: style.borderColor,
+      radius: style.borderRadius,
+      shadow: style.boxShadow,
+    };
+  });
+  expect(panelStyles.backdrop).toContain('blur(');
+  expect(panelStyles.background).not.toBe('rgba(0, 0, 0, 0)');
 
   const [inputBox, popupBox] = await Promise.all([search.boundingBox(), suggestions.boundingBox()]);
   expect(Math.abs(popupBox.x - inputBox.x)).toBeLessThan(2);

@@ -113,7 +113,7 @@ export function buildWeather(id, ctx) {
     root.innerHTML = `<form class="weather-setup">
       <div><h2 style="margin:.15rem 0;font-size:1.35rem">Weather, where you are.</h2><p class="util-muted" style="margin:.25rem 0 0">Add a location and choose its temperature unit.</p></div>
       <label class="weather-location-label">Location<input class="weather-location util-field" type="text" autocomplete="off" placeholder="City or town" required></label>
-      <label>Temperature units<select class="weather-unit util-field" required><option value="" disabled>Choose a unit</option><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
+      <label>Temperature units<select class="weather-unit util-field util-select" required><option value="" disabled>Choose a unit</option><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
       <div class="weather-error" role="status" aria-live="polite"></div>
       <div class="weather-setup-actions">
         <button class="util-action weather-submit" type="submit">Show forecast</button>
@@ -232,10 +232,10 @@ export function buildWeather(id, ctx) {
     <dialog class="weather-settings-dialog" aria-labelledby="${settingsTitleId}">
       <form class="weather-settings-form">
         <div class="weather-settings-heading"><h2 id="${settingsTitleId}">Weather settings</h2><button class="weather-settings-close" type="button" aria-label="Close settings">×</button></div>
-        <label>Temperature units for selected location<select class="weather-settings-unit util-field" required><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
+        <label>Temperature units for selected location<select class="weather-settings-unit util-field util-select" required><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
         <div class="weather-add-location-row">
           <label>Add a location<input class="weather-settings-location util-field" type="text" autocomplete="off" placeholder="City or town"></label>
-          <label>Unit for new location<select class="weather-settings-new-unit util-field"><option value="celsius">°C</option><option value="fahrenheit">°F</option></select></label>
+          <label>Unit for new location<select class="weather-settings-new-unit util-field util-select"><option value="celsius">°C</option><option value="fahrenheit">°F</option></select></label>
           <button class="util-action weather-settings-add-location" type="button">Add</button>
         </div>
         <p class="weather-settings-hint">Add each place separately. The dialog stays open so you can add several.</p>

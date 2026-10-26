@@ -27,6 +27,25 @@ async function setGameOption(app, label, value) {
   if (await dialog.isVisible()) await dialog.getByRole('button', { name: 'Close settings' }).click();
 }
 
+test('game settings selects use the shared stationary dropdown control', async ({ page }) => {
+  const app = await openGame(page, 'chess');
+  const settings = await openSettings(app);
+  const select = settings.locator('select.util-select').first();
+  await expect(select).toBeVisible();
+  await select.hover();
+  const style = await select.evaluate(element => {
+    const computed = getComputedStyle(element);
+    return {
+      radius: computed.borderRadius,
+      border: computed.borderTopWidth,
+      transform: computed.transform,
+    };
+  });
+  expect(style.radius).toBe('10.4px');
+  expect(style.border).toBe('1px');
+  expect(style.transform).toBe('none');
+});
+
 function savedKlondike({ columns = [], foundations = {} } = {}) {
   const used = new Set();
   const makeCard = (rank, suit, up = true) => {

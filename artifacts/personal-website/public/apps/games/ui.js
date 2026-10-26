@@ -11,6 +11,7 @@ export function selectControl(text, options, value, onChange) {
   const label = document.createElement('label');
   label.append(`${text} `);
   const select = document.createElement('select');
+  select.className = 'util-select';
   select.setAttribute('aria-label', text);
   for (const [key, title] of options) {
     const option = document.createElement('option');

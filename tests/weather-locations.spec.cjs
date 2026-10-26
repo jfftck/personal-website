@@ -466,6 +466,8 @@ test('shows today’s high and low beside the current temperature and saves opti
   await expect(locationButton).toHaveAttribute('aria-haspopup', 'menu');
   await expect(locationButton).not.toContainText('Oslo');
   await expect(locationButton).not.toContainText('°C');
+  await locationButton.hover();
+  expect(await locationButton.evaluate(element => getComputedStyle(element).transform)).toBe('none');
   await locationButton.click();
   await expect(locationButton).toHaveAttribute('aria-expanded', 'true');
   const options = weather.locator('.weather-location-option');

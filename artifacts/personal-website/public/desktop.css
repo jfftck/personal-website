@@ -593,10 +593,10 @@ body {
   cursor: pointer;
   font-family: inherit;
   text-align: left;
-  transition: background-color 120ms ease, transform 100ms ease;
+  transition: background-color 120ms ease;
 }
 
-.app-file-btn:hover  { background-color: var(--btn-hover); transform: translateX(2px); }
+.app-file-btn:hover  { background-color: var(--btn-hover); }
 .app-file-btn:active { transform: none; }
 
 .app-file-btn:focus-visible {
@@ -762,7 +762,6 @@ body {
 
 .desktop-note-widget:hover {
   border-color: color-mix(in srgb, var(--sticky-note-accent) 78%, var(--app-border));
-  transform: translateY(-1px);
 }
 
 .desktop-note-widget:focus-visible {
@@ -1526,10 +1525,10 @@ body.mod-overview .app-window.focused {
   border-radius:.65rem;
   padding:.5rem .75rem;
   cursor:pointer;
-  transition:transform 140ms ease,background-color 140ms ease,border-color 140ms ease;
+  transition:background-color 140ms ease,border-color 140ms ease;
 }
-.util-action:hover { background:var(--util-surface-strong); transform:translateY(-1px); }
-.util-action:active { transform:translateY(0); }
+.util-action:hover { background:var(--util-surface-strong); }
+.util-action:active { background:var(--util-surface-strong); }
 .util-action:disabled { opacity:.45; cursor:default; pointer-events:none; }
 .util-field {
   min-width:0;
@@ -1540,6 +1539,17 @@ body.mod-overview .app-window.focused {
   background:var(--toolbar-bg);
   color:var(--app-text);
 }
+.util-select {
+  min-height:2.4rem;
+  border:1px solid var(--app-border);
+  border-radius:.65rem;
+  padding:.5rem .7rem;
+  background:var(--util-surface, color-mix(in srgb,var(--app-bg) 92%,var(--app-text) 8%));
+  color:var(--app-text);
+  cursor:pointer;
+}
+.util-select:hover { background:var(--util-surface-strong, var(--btn-hover)); }
+.util-select:disabled { opacity:.45;cursor:default; }
 .util-field::placeholder { color:var(--util-detail); opacity:1; }
 .util-field option { background:var(--app-bg); color:var(--app-text); }
 .util-action:focus-visible,.utility-app :focus-visible { outline:2px solid var(--focus-color); outline-offset:2px; }
@@ -1547,7 +1557,7 @@ body.mod-overview .app-window.focused {
 .cal-toolbar { flex:none; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:.55rem; padding:.55rem .75rem; border-bottom:1px solid var(--app-border); }
 .cal-toolbar-nav,.cal-toolbar-options { display:flex; align-items:center; gap:.35rem; min-width:0; }
 .cal-toolbar-options { justify-content:flex-end; }
-.cal-nav-button,.cal-today-button { min-width:2.4rem; min-height:2.4rem; display:inline-grid; place-items:center; padding:.35rem .6rem; border:1px solid var(--app-border); border-radius:.65rem; background:var(--util-surface); color:var(--app-text); cursor:pointer; transition:background-color 120ms ease,transform 120ms ease; }
+.cal-nav-button,.cal-today-button { min-width:2.4rem; min-height:2.4rem; display:inline-grid; place-items:center; padding:.35rem .6rem; border:1px solid var(--app-border); border-radius:.65rem; background:var(--util-surface); color:var(--app-text); cursor:pointer; transition:background-color 120ms ease; }
 .cal-nav-button { font-size:1.25rem; line-height:1; }
 .cal-nav-button:hover,.cal-today-button:hover { background:var(--util-surface-strong); }
 .cal-view-switch { justify-self:center; display:flex; align-items:center; gap:.15rem; padding:.2rem; border:1px solid var(--app-border); border-radius:.75rem; background:var(--toolbar-bg); }
@@ -1603,30 +1613,27 @@ body.mod-overview .app-window.focused {
   inset-inline:0;
   inset-block-start:calc(100% + .35rem);
   max-height:min(19rem,45dvh);
+  display:grid;
+  gap:1px;
   overflow:auto;
-  padding:.3rem;
-  border:1px solid var(--app-border);
-  border-radius:.75rem;
-  background:var(--overlay-bg);
-  color:var(--app-text);
-  box-shadow:0 .7rem 1.8rem rgba(0,0,0,.25);
-  -webkit-backdrop-filter:var(--backdrop);
-  backdrop-filter:var(--backdrop);
+  scrollbar-width:thin;
+  scrollbar-color:var(--scrollbar-thumb) transparent;
 }
 .clock-place-suggestions[hidden] { display:none; }
 .clock-place-option {
   display:grid;
   width:100%;
   gap:.12rem;
-  padding:.55rem .65rem;
+  padding:.4375rem .625rem;
   border:0;
-  border-radius:.5rem;
+  border-radius:.375rem;
   background:transparent;
   color:var(--app-text);
   text-align:left;
   cursor:pointer;
 }
-.clock-place-option:hover,.clock-place-option[aria-selected="true"] { background:var(--btn-hover); }
+.clock-place-option:hover { background:var(--btn-hover); }
+.clock-place-option[aria-selected="true"] { background:var(--btn-active); }
 .clock-place-name { font-size:.86rem; font-weight:650; }
 .clock-place-detail { color:var(--util-detail); font-size:.72rem; overflow-wrap:anywhere; }
 .clock-controls > .clock-add { flex:none; }
@@ -1646,8 +1653,8 @@ body.mod-overview .app-window.focused {
 .calc-expression { color:var(--util-detail);min-height:1.4em;font-size:.9rem; }
 .calc-value { color:var(--app-text);font-size:clamp(2.4rem,12vw,3.4rem);font-variant-numeric:tabular-nums;letter-spacing:-.06em;max-width:100%;overflow:hidden;text-overflow:ellipsis; }
 .calc-keys { display:grid;grid-template-columns:repeat(4,1fr);gap:.45rem; }
-.calc-key { min-height:52px;color:var(--app-text);border:1px solid var(--app-border);border-radius:.68rem;background:var(--util-surface);cursor:pointer;font-size:1.08rem;transition:background-color 120ms ease,transform 120ms ease; }
-.calc-key:hover { background:var(--util-surface-strong);transform:translateY(-1px); }
+.calc-key { min-height:52px;color:var(--app-text);border:1px solid var(--app-border);border-radius:.68rem;background:var(--util-surface);cursor:pointer;font-size:1.08rem;transition:background-color 120ms ease; }
+.calc-key:hover { background:var(--util-surface-strong); }
 .calc-key.operator { color:var(--util-teal);background:color-mix(in srgb,var(--util-teal) 14%,var(--util-surface)); }
 .calc-key.equals { border-color:var(--accent);background:var(--accent);color:#fff;font-weight:700; }
 .calc-key:focus-visible { outline:2px solid var(--focus-color); outline-offset:2px; }
@@ -1669,8 +1676,7 @@ body.mod-overview .app-window.focused {
 .note-color-options { display:flex;flex-wrap:wrap;gap:.35rem; }
 .note-color-choice { position:relative;display:grid;place-items:center;width:2rem;height:2rem;border-radius:50%;cursor:pointer; }
 .note-color-choice input { position:absolute;inset-inline-start:50%;inset-block-start:50%;width:1px;height:1px;margin:0;padding:0;border:0;opacity:0;transform:translate(-50%,-50%); }
-.note-color-swatch { width:1.35rem;height:1.35rem;border:1px solid color-mix(in srgb,var(--sticky-note-accent) 65%,var(--app-border));border-radius:50%;background:var(--sticky-note-accent);transition:transform 120ms ease,box-shadow 120ms ease; }
-.note-color-choice:hover .note-color-swatch { transform:scale(1.08); }
+.note-color-swatch { width:1.35rem;height:1.35rem;border:1px solid color-mix(in srgb,var(--sticky-note-accent) 65%,var(--app-border));border-radius:50%;background:var(--sticky-note-accent);transition:box-shadow 120ms ease; }
 .note-color-choice:focus-within .note-color-swatch { outline:2px solid var(--focus-color);outline-offset:2px; }
 .note-color-choice input:checked + .note-color-swatch { box-shadow:0 0 0 2px var(--app-bg),0 0 0 4px var(--focus-color); }
 .note-editor[data-note-color] { background:color-mix(in srgb,var(--sticky-note-accent) 34%,var(--app-bg));border-color:color-mix(in srgb,var(--sticky-note-accent) 52%,var(--app-border)); }
@@ -2430,7 +2436,7 @@ kbd {
   transition: background-color 140ms ease, transform 140ms ease;
 }
 
-.help-launch-btn:hover  { background-color: var(--btn-hover); transform: translateY(-1px); }
+.help-launch-btn:hover  { background-color: var(--btn-hover); }
 .help-launch-btn:active { transform: none; }
 .help-launch-btn:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 

@@ -227,7 +227,7 @@ export function buildWorldClock(id, ctx) {
       <input class="clock-zone-input util-field" type="text" role="combobox" aria-label="City or time zone"
         aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="${listId}"
         placeholder="Search any city, country, or time zone" autocomplete="off">
-      <div class="clock-place-suggestions" id="${listId}" role="listbox" aria-label="Place suggestions" hidden></div>
+      <div class="clock-place-suggestions menu-popover" id="${listId}" role="listbox" aria-label="Place suggestions" hidden></div>
     </div>
     <button type="button" class="util-action clock-add">Add clock</button>
     <span class="util-muted clock-search-status" role="status" aria-live="polite"></span>
