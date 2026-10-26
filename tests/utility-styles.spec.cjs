@@ -173,6 +173,103 @@ test('calculator graph settings keep modes and plot ranges independent', async (
   await expect(calculator.locator('.calc-graph-status')).toContainText('parametric');
 });
 
+test('calculator graph zoom and pan work in every mode without changing configured ranges', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  const plot = calculator.locator('.calc-plot-area');
+  const view = async () => plot.evaluate(element => JSON.parse(element.dataset.view));
+  await expect(plot).toHaveAttribute('aria-valuetext', 'x -10 to 10, y -10 to 10');
+  await expect(plot.locator('.calc-graph-grid').first()).toBeVisible();
+  await expect(plot.locator('.calc-graph-label').first()).toBeVisible();
+  const cartesianInitial = await view();
+  const box = await plot.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -120);
+  await expect.poll(async () => {
+    const current = await view();
+    return current.xMax - current.xMin;
+  }).toBeLessThan(cartesianInitial.xMax - cartesianInitial.xMin);
+
+  const beforeDrag = await view();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 36, box.y + box.height / 2 + 18);
+  await page.mouse.up();
+  await expect.poll(async () => (await view()).xMin).not.toBe(beforeDrag.xMin);
+
+  await plot.focus();
+  const beforeKeyboardPan = await view();
+  const expression = await calculator.locator('.calc-expression').inputValue();
+  await plot.press('ArrowRight');
+  await expect.poll(async () => (await view()).xMin).not.toBe(beforeKeyboardPan.xMin);
+  const beforeKeyboardZoom = await view();
+  await plot.press('Shift+=');
+  await expect.poll(async () => (await view()).xMax - (await view()).xMin)
+    .toBeLessThan(beforeKeyboardZoom.xMax - beforeKeyboardZoom.xMin);
+  await expect(calculator.locator('.calc-expression')).toHaveValue(expression);
+  await plot.press('Home');
+  await expect.poll(view).toEqual(cartesianInitial);
+
+  await plot.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const fire = (type, id, x, y) => element.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, pointerId: id, pointerType: 'touch', button: 0,
+      clientX: rect.left + x / 640 * rect.width, clientY: rect.top + y / 400 * rect.height,
+    }));
+    fire('pointerdown', 41, 260, 200);
+    fire('pointerdown', 42, 380, 200);
+    fire('pointermove', 42, 420, 200);
+    fire('pointerup', 41, 260, 200);
+    fire('pointerup', 42, 420, 200);
+  });
+  await expect.poll(async () => (await view()).xMax - (await view()).xMin)
+    .toBeLessThan(cartesianInitial.xMax - cartesianInitial.xMin);
+  await calculator.getByRole('button', { name: 'Reset view' }).click();
+  await expect.poll(view).toEqual(cartesianInitial);
+  await plot.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const fire = (type, x) => element.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, pointerId: 43, pointerType: 'touch', button: 0,
+      clientX: rect.left + x / 640 * rect.width, clientY: rect.top + rect.height / 2,
+    }));
+    fire('pointerdown', 300);
+    fire('pointermove', 340);
+    fire('pointerup', 340);
+  });
+  await expect.poll(async () => (await view()).xMin).not.toBe(cartesianInitial.xMin);
+  await calculator.getByRole('button', { name: 'Reset view' }).click();
+  await expect.poll(view).toEqual(cartesianInitial);
+
+  for (const [mode, label, xMin, xMax, yMin, yMax] of [
+    ['polar', /Polar/, 'Minimum theta', 'Maximum theta', 'Minimum r', 'Maximum r'],
+    ['parametric', /Parametric/, 'Minimum t', 'Maximum t', 'Minimum x', 'Maximum x'],
+  ]) {
+    await calculator.getByRole('button', { name: 'Graph settings' }).click();
+    const settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+    await settings.getByRole('combobox', { name: 'Graph mode' }).click();
+    await settings.getByRole('option', { name: label }).click();
+    await settings.getByRole('button', { name: 'Apply settings' }).click();
+    const configured = await view();
+    await calculator.getByRole('button', { name: 'Zoom in' }).click();
+    const zoomed = await view();
+    expect(JSON.stringify(zoomed)).not.toBe(JSON.stringify(configured));
+    await calculator.getByRole('button', { name: 'Reset view' }).click();
+    await expect.poll(view).toEqual(configured);
+    await calculator.getByRole('button', { name: 'Graph settings' }).click();
+    const rangeDialog = calculator.getByRole('dialog', { name: 'Graph settings' });
+    await expect(rangeDialog.getByLabel(xMin)).toHaveValue('0');
+    await expect(rangeDialog.getByLabel(xMax)).toHaveValue('6.283');
+    if (mode === 'polar') {
+      await expect(rangeDialog.getByLabel(yMin)).toHaveValue('0');
+      await expect(rangeDialog.getByLabel(yMax)).toHaveValue('10');
+    } else {
+      await expect(rangeDialog.getByLabel(yMin)).toHaveValue('-10');
+      await expect(rangeDialog.getByLabel(yMax)).toHaveValue('10');
+    }
+    await rangeDialog.getByRole('button', { name: 'Close graph settings' }).click();
+  }
+});
+
 test('graph mode uses the window height without calculator panels or vertical overflow', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
