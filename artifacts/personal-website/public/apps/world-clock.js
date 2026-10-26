@@ -2,7 +2,6 @@
 
 const KEY = 'personal-desktop-world-clock-v1';
 const DEFAULT_ZONES = ['UTC', 'America/New_York', 'Europe/London', 'Asia/Tokyo'];
-const ZONE_SUGGESTIONS = ['UTC', 'America/New_York', 'Europe/London', 'Europe/Paris', 'Asia/Tokyo', 'Australia/Sydney', 'Pacific/Honolulu'];
 export const CITY_OPTIONS = [
   { city: 'Abidjan', country: 'Côte d’Ivoire', zone: 'Africa/Abidjan' },
   { city: 'Accra', country: 'Ghana', zone: 'Africa/Accra' },
@@ -218,112 +217,177 @@ export function buildWorldClock(id, ctx) {
   root.className = 'utility-app clock-app';
   let prefs = readPrefs();
   let interval;
-  const listId = `clock-zones-${nextClockId++}`;
+  let searchTimer = null;
+  let searchController = null;
+  let searchRequest = 0;
+  let activeSuggestion = -1;
+  const listId = `clock-places-${nextClockId++}`;
   root.innerHTML = `<div class="clock-controls">
-    <input class="clock-zone-input" aria-label="City or time zone" placeholder="Search a city (e.g. Paris)">
-    <datalist></datalist>
+    <div class="clock-search">
+      <input class="clock-zone-input util-field" type="text" role="combobox" aria-label="City or time zone"
+        aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="${listId}"
+        placeholder="Search any city, country, or time zone" autocomplete="off">
+      <div class="clock-place-suggestions" id="${listId}" role="listbox" aria-label="Place suggestions" hidden></div>
+    </div>
     <button type="button" class="util-action clock-add">Add clock</button>
-    <div class="clock-city-suggestions" role="group" aria-label="Possible city matches" aria-live="polite" hidden></div>
-    <input class="clock-city-filter" type="search" aria-label="Filter cities by name" placeholder="Filter cities…">
-    <select class="clock-city-browser" aria-label="Browse cities by region">
-      <option value="">Browse cities by region…</option>
-    </select>
-    <span class="util-muted clock-city-empty" role="status" aria-live="polite" hidden>No cities match that search.</span>
+    <span class="util-muted clock-search-status" role="status" aria-live="polite"></span>
     <span class="util-muted" style="margin-left:auto">View</span>
     <button type="button" class="util-action clock-layout" aria-label="Change clock layout"></button>
     <button type="button" class="util-action clock-face-mode" aria-label="Change clock face"></button>
   </div><div class="clock-list"></div>`;
   const list = root.querySelector('.clock-list');
-  const suggestions = root.querySelector('datalist');
-  suggestions.id = listId;
   const addInput = root.querySelector('.clock-zone-input');
-  const citySuggestions = root.querySelector('.clock-city-suggestions');
-  addInput.setAttribute('list', listId);
-  const cityBrowser = root.querySelector('.clock-city-browser');
-  const cityFilter = root.querySelector('.clock-city-filter');
-  const cityEmptyMessage = root.querySelector('.clock-city-empty');
-  const citiesByRegion = new Map();
-  for (const city of CITY_OPTIONS) {
-    const region = getCityRegion(city.zone);
-    if (!citiesByRegion.has(region)) citiesByRegion.set(region, []);
-    citiesByRegion.get(region).push(city);
-  }
-  for (const [region, cities] of [...citiesByRegion].sort(([a], [b]) => a.localeCompare(b))) {
-    const group = document.createElement('optgroup');
-    group.label = region;
-    for (const { index, city } of cities
-      .map(city => ({ city, index: CITY_OPTIONS.indexOf(city) }))
-      .sort((a, b) => a.city.city.localeCompare(b.city.city))) {
-      const option = document.createElement('option');
-      option.value = String(index);
-      option.textContent = `${city.city} · ${city.country}`;
-      option.dataset.city = city.city;
-      group.append(option);
-    }
-    cityBrowser.append(group);
-  }
-  cityFilter.addEventListener('input', () => {
-    const query = normalizeCity(cityFilter.value.trim());
-    let matchingCities = 0;
-    for (const group of cityBrowser.querySelectorAll('optgroup')) {
-      let groupMatches = 0;
-      for (const option of group.querySelectorAll('option')) {
-        const matches = normalizeCity(option.dataset.city).includes(query);
-        option.hidden = !matches;
-        if (matches) groupMatches += 1;
-      }
-      group.hidden = groupMatches === 0;
-      matchingCities += groupMatches;
-    }
-    cityEmptyMessage.hidden = query.length === 0 || matchingCities > 0;
-  });
-  const zoneOptions = new Set(CITY_OPTIONS.map(option => option.zone));
-  for (const zone of ZONE_SUGGESTIONS) {
-    if (zoneOptions.has(zone)) continue;
-    const option = document.createElement('option');
-    option.value = zone;
-    option.label = zone === 'UTC' ? 'Coordinated Universal Time' : 'Time zone';
-    suggestions.append(option);
-  }
-  for (const { city, country, zone, aliases = [] } of [...CITY_OPTIONS].sort((a, b) => a.city.localeCompare(b.city))) {
-    const suggestedNames = new Set();
-    for (const name of [city, ...aliases]) {
-      const suggestionKey = name.trim().toLocaleLowerCase();
-      if (suggestedNames.has(suggestionKey)) continue;
-      suggestedNames.add(suggestionKey);
-      const option = document.createElement('option');
-      option.value = name;
-      option.label = name === city
-        ? `${country} · ${zone}`
-        : `Also known as ${city} · ${country} · ${zone}`;
-      suggestions.append(option);
-    }
-  }
+  const placeSuggestions = root.querySelector('.clock-place-suggestions');
+  const searchStatus = root.querySelector('.clock-search-status');
+  let currentPlaces = [];
   const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch {} };
-  const updateCitySuggestions = () => {
-    const query = addInput.value.trim();
-    const matches = resolveCity(query) ? [] : findCitySuggestions(query);
-    citySuggestions.replaceChildren();
-    citySuggestions.hidden = matches.length === 0;
-    if (!matches.length) return;
-
-    const prompt = document.createElement('span');
-    prompt.className = 'util-muted';
-    prompt.textContent = 'Possible matches — choose one:';
-    citySuggestions.append(prompt);
-    for (const city of matches) {
+  const closeSuggestions = () => {
+    placeSuggestions.hidden = true;
+    addInput.setAttribute('aria-expanded', 'false');
+    addInput.removeAttribute('aria-activedescendant');
+    activeSuggestion = -1;
+  };
+  const setActiveSuggestion = index => {
+    const options = [...placeSuggestions.querySelectorAll('[role="option"]')];
+    if (!options.length) return;
+    activeSuggestion = (index + options.length) % options.length;
+    options.forEach((option, optionIndex) => {
+      const active = optionIndex === activeSuggestion;
+      option.setAttribute('aria-selected', String(active));
+      if (active) {
+        addInput.setAttribute('aria-activedescendant', option.id);
+        option.scrollIntoView({ block: 'nearest' });
+      }
+    });
+  };
+  const formatPlaceDetail = place => [place.admin1, place.country, place.zone]
+    .filter((part, index, parts) => part && parts.indexOf(part) === index)
+    .join(' · ');
+  const localPlaceMatches = query => {
+    const normalizedQuery = normalizeCity(query);
+    if (normalizedQuery.length < 2) return [];
+    const matches = CITY_OPTIONS.map(city => {
+      const names = [city.city, ...(city.aliases || [])];
+      const exact = names.some(name => normalizeCity(name) === normalizedQuery);
+      const nameMatch = names.some(name => normalizeCity(name).includes(normalizedQuery));
+      const countryMatch = normalizeCity(city.country).includes(normalizedQuery);
+      if (!exact && !nameMatch && !countryMatch) return null;
+      return {
+        city: city.city,
+        country: city.country,
+        zone: city.zone,
+        admin1: '',
+        rank: exact ? 0 : nameMatch ? 1 : 2,
+      };
+    }).filter(Boolean);
+    if (!matches.length) {
+      return findCitySuggestions(query).map(city => ({
+        city: city.city, country: city.country, zone: city.zone, admin1: '', rank: 3,
+      }));
+    }
+    return matches.sort((a, b) => a.rank - b.rank || a.city.localeCompare(b.city)).slice(0, 8);
+  };
+  const mergePlaces = (local, remote) => {
+    const results = [];
+    const seen = new Set();
+    for (const place of [...local, ...remote]) {
+      if (!place?.city || !place?.zone) continue;
+      const key = `${normalizeCity(place.city)}|${normalizeCity(place.country || '')}|${place.zone}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push(place);
+    }
+    return results.slice(0, 10);
+  };
+  const renderPlaceSuggestions = places => {
+    currentPlaces = places;
+    activeSuggestion = -1;
+    placeSuggestions.replaceChildren();
+    places.forEach((place, index) => {
       const option = document.createElement('button');
       option.type = 'button';
-      option.className = 'util-action clock-city-suggestion';
-      option.textContent = `${city.city} · ${city.country} · ${city.zone}`;
+      option.id = `${listId}-option-${index}`;
+      option.className = 'clock-place-option';
+      option.setAttribute('role', 'option');
+      option.setAttribute('aria-selected', 'false');
+      const name = document.createElement('span');
+      name.className = 'clock-place-name';
+      name.textContent = place.city;
+      const detail = document.createElement('span');
+      detail.className = 'clock-place-detail';
+      detail.textContent = formatPlaceDetail(place);
+      option.append(name, detail);
+      option.addEventListener('pointerdown', event => event.preventDefault());
       option.addEventListener('click', () => {
-        addClock(city);
+        addClock(place);
         addInput.value = '';
-        citySuggestions.hidden = true;
-        addInput.focus();
+        closeSuggestions();
+        searchStatus.textContent = '';
+        addInput.focus({ preventScroll: true });
       });
-      citySuggestions.append(option);
+      placeSuggestions.append(option);
+    });
+    placeSuggestions.hidden = places.length === 0;
+    addInput.setAttribute('aria-expanded', String(places.length > 0));
+    addInput.removeAttribute('aria-activedescendant');
+  };
+  const searchPlaces = async query => {
+    const request = ++searchRequest;
+    searchController?.abort();
+    searchController = new AbortController();
+    const localMatches = localPlaceMatches(query);
+    renderPlaceSuggestions(localMatches);
+    searchStatus.textContent = localMatches.length ? 'Searching more places…' : 'Searching places…';
+
+    const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
+    url.search = new URLSearchParams({ name: query, count: '10', language: 'en', format: 'json' });
+    try {
+      const response = await fetch(url, { signal: searchController.signal });
+      if (!response.ok) throw new Error('Place search is unavailable.');
+      const data = await response.json();
+      if (request !== searchRequest) return;
+      const remoteMatches = (Array.isArray(data.results) ? data.results : [])
+        .filter(place => typeof place.timezone === 'string' && place.timezone)
+        .map(place => ({
+          city: place.name,
+          country: place.country || '',
+          admin1: place.admin1 || '',
+          zone: place.timezone,
+        }));
+      const places = mergePlaces(localMatches, remoteMatches);
+      renderPlaceSuggestions(places);
+      searchStatus.textContent = places.length
+        ? `${places.length} place${places.length === 1 ? '' : 's'} found.`
+        : 'No places found. You can enter a valid IANA time zone.';
+    } catch (error) {
+      if (error.name === 'AbortError' || request !== searchRequest) return;
+      renderPlaceSuggestions(localMatches);
+      searchStatus.textContent = localMatches.length
+        ? 'Online place lookup is unavailable; showing matching known places.'
+        : 'Place lookup is unavailable. You can still enter a valid IANA time zone.';
     }
+  };
+  const schedulePlaceSearch = () => {
+    clearTimeout(searchTimer);
+    searchController?.abort();
+    searchRequest++;
+    const query = addInput.value.trim();
+    const normalizedQuery = normalizeCity(query);
+    if (normalizedQuery.length < 2) {
+      closeSuggestions();
+      searchStatus.textContent = '';
+      return;
+    }
+    const exactCity = resolveCity(query);
+    if (exactCity && normalizeCity(exactCity.city) === normalizedQuery) {
+      renderPlaceSuggestions([{
+        city: exactCity.city, country: exactCity.country, zone: exactCity.zone, admin1: '',
+      }]);
+      searchStatus.textContent = 'Press Enter or choose the place to add its clock.';
+      return;
+    }
+    searchStatus.textContent = 'Searching places…';
+    searchTimer = setTimeout(() => searchPlaces(query), 240);
   };
   const formatDigitalTime = (date, zone) => {
     const use24HourTime = Boolean(ctx?.is24HourTime?.());
@@ -398,29 +462,64 @@ export function buildWorldClock(id, ctx) {
     const city = typeof entry === 'string' ? resolveCity(entry) : entry;
     const zone = city?.zone || entry;
     try { new Intl.DateTimeFormat(undefined, { timeZone: zone }); }
-    catch { input.setCustomValidity('Choose a city from the suggestions or enter a valid IANA time zone.'); input.reportValidity(); return; }
+    catch {
+      input.setCustomValidity('Choose a place from the suggestions or enter a valid IANA time zone.');
+      input.reportValidity();
+      return;
+    }
     input.setCustomValidity('');
+    clearTimeout(searchTimer);
+    searchController?.abort();
+    searchRequest++;
     if (!prefs.zones.includes(zone)) prefs.zones.push(zone);
-    if (city) prefs.cityLabels[zone] = city.city;
-    if (typeof entry === 'string') input.value = '';
+    if (city?.city) prefs.cityLabels[zone] = city.city;
+    input.value = '';
+    closeSuggestions();
+    searchStatus.textContent = '';
     persist(); render();
   };
   root.querySelector('.clock-add').addEventListener('click', () => {
     addClock(root.querySelector('.clock-zone-input').value);
   });
-  cityBrowser.addEventListener('change', () => {
-    const city = CITY_OPTIONS[Number(cityBrowser.value)];
-    if (city) addClock(city);
-    cityBrowser.value = '';
-  });
   addInput.addEventListener('input', () => {
     addInput.setCustomValidity('');
-    updateCitySuggestions();
+    schedulePlaceSearch();
   });
-  addInput.addEventListener('keydown', e => { if (e.key === 'Enter') root.querySelector('.clock-add').click(); });
+  addInput.addEventListener('focus', () => {
+    if (addInput.value.trim().length >= 2) schedulePlaceSearch();
+  });
+  addInput.addEventListener('keydown', event => {
+    if (event.key === 'ArrowDown' && !placeSuggestions.hidden) {
+      event.preventDefault();
+      setActiveSuggestion(activeSuggestion + 1);
+    } else if (event.key === 'ArrowUp' && !placeSuggestions.hidden) {
+      event.preventDefault();
+      setActiveSuggestion(activeSuggestion < 0 ? currentPlaces.length - 1 : activeSuggestion - 1);
+    } else if (event.key === 'Escape') {
+      closeSuggestions();
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (activeSuggestion >= 0 && currentPlaces[activeSuggestion]) {
+        addClock(currentPlaces[activeSuggestion]);
+        closeSuggestions();
+        searchStatus.textContent = '';
+      } else {
+        root.querySelector('.clock-add').click();
+      }
+    }
+  });
+  const closeOnOutsidePointer = event => {
+    if (!root.contains(event.target)) closeSuggestions();
+  };
+  document.addEventListener('pointerdown', closeOnOutsidePointer);
   root.querySelector('.clock-layout').addEventListener('click', () => { prefs.layout = prefs.layout === 'grid' ? 'list' : 'grid'; persist(); render(); });
   root.querySelector('.clock-face-mode').addEventListener('click', () => { prefs.face = prefs.face === 'analog' ? 'digital' : 'analog'; persist(); render(); });
-  if (ctx?.appApis && id) ctx.appApis[id] = { destroy: () => clearInterval(interval) };
+  if (ctx?.appApis && id) ctx.appApis[id] = { destroy: () => {
+    clearInterval(interval);
+    clearTimeout(searchTimer);
+    searchController?.abort();
+    document.removeEventListener('pointerdown', closeOnOutsidePointer);
+  } };
   render();
   return root;
 }
@@ -431,15 +530,6 @@ export function normalizeCity(value) {
     .replace(/\p{Diacritic}/gu, '')
     .toLocaleLowerCase()
     .replace(/[\p{P}\p{Z}\s]+/gu, '');
-}
-
-function getCityRegion(zone) {
-  if (zone.startsWith('America/')) return 'Americas';
-  if (zone.startsWith('Africa/')) return 'Africa';
-  if (zone.startsWith('Asia/')) return 'Asia';
-  if (zone.startsWith('Europe/') || zone.startsWith('Atlantic/')) return 'Europe';
-  if (zone.startsWith('Australia/') || zone.startsWith('Pacific/')) return 'Oceania';
-  return 'Other';
 }
 
 function readPrefs() {

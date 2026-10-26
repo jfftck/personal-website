@@ -147,6 +147,13 @@ test('warns when a new location cannot be saved and accepts it after storage rec
   await setWeatherStorageFailure(page, false);
   await weather.locator('.weather-submit').click();
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
+  const locationSelectStyle = await weather.locator('.weather-location-select').evaluate(element => {
+    const style = getComputedStyle(element);
+    return { radius: style.borderRadius, border: style.borderTopWidth, background: style.backgroundColor };
+  });
+  expect(locationSelectStyle.radius).toBe('10.4px');
+  expect(locationSelectStyle.border).toBe('1px');
+  expect(locationSelectStyle.background).not.toBe('rgba(0, 0, 0, 0)');
   await expect.poll(() => savedPrefs(page)).toEqual({
     locations: [{ location: 'Seattle', unit: 'fahrenheit' }],
     activeLocation: 'Seattle',

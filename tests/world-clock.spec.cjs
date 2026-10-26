@@ -6,6 +6,10 @@ let errors;
 test.beforeEach(async ({ page }) => {
   errors = [];
   page.on('pageerror', error => errors.push(error.message));
+  await page.route('https://geocoding-api.open-meteo.com/v1/search**', route => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ results: [] }),
+  }));
   await page.goto('/');
   await page.evaluate(key => localStorage.removeItem(key), PREF_KEY);
   await page.locator('#welcome-win-close').click();
@@ -65,55 +69,37 @@ test('offers clear typo matches without adding a city until the user chooses one
   const cityInput = clock.getByLabel('City or time zone');
 
   await cityInput.fill('Pariss');
-  const suggestions = clock.getByRole('group', { name: 'Possible city matches' });
+  const suggestions = clock.getByRole('listbox', { name: 'Place suggestions' });
   await expect(suggestions).toBeVisible();
-  await expect(suggestions.getByRole('button')).toHaveText([
-    'Paris · France · Europe/Paris',
-  ]);
+  await expect(suggestions.getByRole('option')).toHaveCount(1);
+  await expect(suggestions.getByRole('option').first()).toContainText('Paris');
+  await expect(suggestions.getByRole('option').first()).toContainText('France');
+  await expect(suggestions.getByRole('option').first()).toContainText('Europe/Paris');
   await expect(clock.locator('.clock-item[data-zone="Europe/Paris"]')).toHaveCount(0);
 
-  await suggestions.getByRole('button', { name: 'Paris · France · Europe/Paris' }).click();
+  await suggestions.getByRole('option').first().click();
   await expect(clock.locator('.clock-item[data-zone="Europe/Paris"] strong')).toHaveText('Paris');
   await expect(cityInput).toHaveValue('');
   await expect(suggestions).toBeHidden();
 });
 
-test('groups cities by their IANA region and adds the selected city time zone', async ({ page }) => {
+test('the unified search includes country and alternate-name matches', async ({ page }) => {
   const clock = await openWorldClock(page);
-  const browser = clock.getByLabel('Browse cities by region');
+  const search = clock.getByLabel('City or time zone');
+  const suggestions = clock.getByRole('listbox', { name: 'Place suggestions' });
 
-  const groups = await browser.locator('optgroup').evaluateAll(elements =>
-    elements.map(element => element.label).sort()
-  );
-  expect(groups).toEqual(['Africa', 'Americas', 'Asia', 'Europe', 'Oceania']);
+  await search.fill('India');
+  await expect(suggestions).toBeVisible();
+  await expect.poll(() => suggestions.locator('[role="option"]').evaluateAll(options =>
+    options.some(option => option.textContent.includes('India'))
+  )).toBe(true);
 
-  const representativeCities = {
-    Africa: 'Accra · Ghana',
-    Americas: 'Bogotá · Colombia',
-    Asia: 'Tokyo · Japan',
-    Europe: 'London · United Kingdom',
-    Oceania: 'Sydney · Australia',
-  };
-  for (const [region, city] of Object.entries(representativeCities)) {
-    await expect(browser.locator(`optgroup[label="${region}"] option`, { hasText: city })).toHaveCount(1);
-  }
-  await expect(browser.locator('optgroup[label="Europe"] option', { hasText: 'Reykjavík · Iceland' }))
-    .toHaveCount(1);
-
-  await browser.selectOption({ label: 'Tokyo · Japan' });
-
-  const tokyo = clock.locator('.clock-item[data-zone="Asia/Tokyo"]');
-  await expect(tokyo.locator('strong')).toHaveText('Tokyo');
-  await browser.selectOption({ label: 'Reykjavík · Iceland' });
-
-  const reykjavik = clock.locator('.clock-item[data-zone="Atlantic/Reykjavik"]');
-  await expect(reykjavik.locator('strong')).toHaveText('Reykjavík');
-  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), PREF_KEY))
-    .toMatchObject({
-      zones: expect.arrayContaining(['Asia/Tokyo', 'Atlantic/Reykjavik']),
-      cityLabels: { 'Asia/Tokyo': 'Tokyo', 'Atlantic/Reykjavik': 'Reykjavík' },
-    });
-  await expect(browser).toHaveValue('');
+  await search.fill('Saigon');
+  await expect(suggestions.getByRole('option').first()).toContainText('Ho Chi Minh City');
+  await expect(suggestions.getByRole('option').first()).toContainText('Asia/Ho_Chi_Minh');
+  await suggestions.getByRole('option').first().click();
+  await expect(clock.locator('.clock-item[data-zone="Asia/Ho_Chi_Minh"] strong'))
+    .toHaveText('Ho Chi Minh City');
 });
 
 test('every curated city uses a time zone accepted by the browser runtime', async ({ page }) => {
@@ -136,47 +122,50 @@ test('every curated city uses a time zone accepted by the browser runtime', asyn
   ).toEqual([]);
 });
 
-test('filters the regional browser by city name, keeps selection working, and explains empty results', async ({ page }) => {
+test('search suggestions stay attached to the field and support keyboard selection of remote places', async ({ page }) => {
+  await page.route('https://geocoding-api.open-meteo.com/v1/search**', route => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      results: [
+        { name: 'Springfield', admin1: 'Illinois', country: 'United States', timezone: 'America/Chicago' },
+        { name: 'Springfield', admin1: 'Massachusetts', country: 'United States', timezone: 'America/New_York' },
+      ],
+    }),
+  }));
   const clock = await openWorldClock(page);
-  const browser = clock.getByLabel('Browse cities by region');
-  const filter = clock.getByLabel('Filter cities by name');
+  const search = clock.getByLabel('City or time zone');
+  const suggestions = clock.getByRole('listbox', { name: 'Place suggestions' });
+  await search.fill('Springfield');
+  await expect(suggestions.getByRole('option')).toHaveCount(2);
+  await expect(suggestions.getByRole('option').nth(0)).toContainText('Illinois');
+  await expect(suggestions.getByRole('option').nth(1)).toContainText('Massachusetts');
+  const inputBox = await search.boundingBox();
+  const popupBox = await suggestions.boundingBox();
+  expect(popupBox.y).toBeGreaterThanOrEqual(inputBox.y + inputBox.height - 1);
+  expect(Math.abs(popupBox.x - inputBox.x)).toBeLessThan(2);
 
-  await filter.fill('bogota');
-  const visibleGroups = await browser.locator('optgroup').evaluateAll(elements =>
-    elements.filter(element => !element.hidden).map(element => element.label)
-  );
-  expect(visibleGroups).toEqual(['Americas']);
-  await expect(browser.locator('optgroup[label="Americas"] option:not([hidden])'))
-    .toHaveText(['Bogotá · Colombia']);
-  await expect(clock.getByRole('status')).toBeHidden();
-
-  await browser.selectOption({ label: 'Bogotá · Colombia' });
-  await expect(clock.locator('.clock-item[data-zone="America/Bogota"] strong')).toHaveText('Bogotá');
-  await expect(browser).toHaveValue('');
-
-  await filter.fill('Atlantis');
-  await expect(clock.getByRole('status')).toHaveText('No cities match that search.');
-  await expect(clock.getByRole('status')).toBeVisible();
-  await expect(browser.locator('optgroup:not([hidden])')).toHaveCount(0);
-
-  await filter.clear();
-  await expect(clock.getByRole('status')).toBeHidden();
-  await expect(browser.locator('optgroup:not([hidden])')).toHaveCount(5);
+  await search.press('ArrowDown');
+  await expect(search).toHaveAttribute('aria-activedescendant', /option-0$/);
+  await search.press('Enter');
+  await expect(clock.locator('.clock-item[data-zone="America/Chicago"] strong')).toHaveText('Springfield');
 });
 
 test('updates the displayed city for a shared time zone and keeps both clocks after reload', async ({ page }) => {
   let clock = await openWorldClock(page);
-  const browser = clock.getByLabel('Browse cities by region');
+  const search = clock.getByLabel('City or time zone');
 
-  await browser.selectOption({ label: 'Dallas · United States' });
+  await search.fill('Dallas');
+  await clock.getByRole('button', { name: 'Add clock' }).click();
   await expect(clock.locator('.clock-item[data-zone="America/Chicago"] strong')).toHaveText('Dallas');
 
-  await browser.selectOption({ label: 'Chicago · United States' });
+  await search.fill('Chicago');
+  await clock.getByRole('button', { name: 'Add clock' }).click();
   const chicagoZoneClocks = clock.locator('.clock-item[data-zone="America/Chicago"]');
   await expect(chicagoZoneClocks).toHaveCount(1);
   await expect(chicagoZoneClocks.locator('strong')).toHaveText('Chicago');
 
-  await browser.selectOption({ label: 'Sydney · Australia' });
+  await search.fill('Sydney');
+  await clock.getByRole('button', { name: 'Add clock' }).click();
   await expect(clock.locator('.clock-item[data-zone="Australia/Sydney"] strong')).toHaveText('Sydney');
   await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), PREF_KEY))
     .toMatchObject({
@@ -194,7 +183,8 @@ test('updates the displayed city for a shared time zone and keeps both clocks af
 
 test('keeps the selected city name when its existing time zone is added directly', async ({ page }) => {
   let clock = await openWorldClock(page);
-  await clock.getByLabel('Browse cities by region').selectOption({ label: 'Bengaluru · India' });
+  await clock.getByLabel('City or time zone').fill('Bengaluru');
+  await clock.getByRole('button', { name: 'Add clock' }).click();
 
   const bengaluru = clock.locator('.clock-item[data-zone="Asia/Kolkata"]');
   await expect(bengaluru.locator('strong')).toHaveText('Bengaluru');

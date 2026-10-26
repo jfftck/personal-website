@@ -66,11 +66,11 @@ export function buildWeather(id, ctx) {
     root.innerHTML = `<form class="weather-setup">
       <div><span class="util-muted">Saved on this device</span><h2 style="margin:.15rem 0;font-size:1.35rem">Weather, where you are.</h2><p class="util-muted" style="margin:.25rem 0 0">Choose a saved place or add another location.</p></div>
       <div class="weather-saved-row">
-        <label class="weather-saved-label">Saved location<select class="weather-saved-location"></select></label>
+        <label class="weather-saved-label">Saved location<select class="weather-saved-location util-field"></select></label>
         <button class="util-action weather-remove" type="button">Remove saved location</button>
       </div>
-      <label class="weather-location-label">New location<input class="weather-location" type="text" autocomplete="off" placeholder="City or town"></label>
-      <label>Temperature units<select class="weather-unit" required><option value="" disabled>Choose a unit</option><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
+      <label class="weather-location-label">New location<input class="weather-location util-field" type="text" autocomplete="off" placeholder="City or town"></label>
+      <label>Temperature units<select class="weather-unit util-field" required><option value="" disabled>Choose a unit</option><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
       <div class="weather-error" role="status" aria-live="polite"></div>
       <div class="weather-setup-actions">
         <button class="util-action weather-submit" type="submit" style="background:rgba(183,205,118,.19)">Show forecast</button>
@@ -222,7 +222,7 @@ export function buildWeather(id, ctx) {
     const condition = CONDITIONS[current.weather_code] || 'Current conditions';
     root.innerHTML = `<header class="weather-top">
       <div class="weather-top-tools">
-        <select class="weather-location-select" aria-label="Weather location"></select>
+        <select class="weather-location-select util-field" aria-label="Weather location"></select>
         <button class="util-action weather-remove-current" type="button" aria-label="Remove current location">Remove</button>
         <button class="weather-settings-button" type="button" aria-label="Weather settings" title="Settings">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Zm9 4.8a9.2 9.2 0 0 0 0-2l2-1.5-2-3.5-2.4 1a8.2 8.2 0 0 0-1.7-1L16.5 3h-4l-.4 2.7a8.2 8.2 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a9.2 9.2 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a8.2 8.2 0 0 0 1.7 1l.4 2.7h4l.4-2.7a8.2 8.2 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5Z"/></svg>
@@ -240,14 +240,14 @@ export function buildWeather(id, ctx) {
     <dialog class="weather-settings-dialog" aria-labelledby="${settingsTitleId}">
       <form class="weather-settings-form">
         <div class="weather-settings-heading"><h2 id="${settingsTitleId}">Weather settings</h2><button class="weather-settings-close" type="button" aria-label="Close settings">×</button></div>
-        <label>Temperature units<select class="weather-settings-unit" required><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
-        <label>Add a location<input class="weather-settings-location" type="text" autocomplete="off" placeholder="City or town"></label>
+        <label>Temperature units<select class="weather-settings-unit util-field" required><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
+        <label>Add a location<input class="weather-settings-location util-field" type="text" autocomplete="off" placeholder="City or town"></label>
         <p class="weather-settings-hint">Leave the location blank to update the selected place.</p>
         <section class="weather-settings-saved" aria-label="Saved locations">
           <h3>Saved locations</h3>
           <div class="weather-settings-locations"></div>
         </section>
-        <label>Update weather every <span class="weather-interval-field"><input class="weather-refresh-interval" type="number" min="5" max="1440" step="5" required><span>minutes</span></span></label>
+        <label>Update weather every <span class="weather-interval-field"><input class="weather-refresh-interval util-field" type="number" min="5" max="1440" step="5" required><span>minutes</span></span></label>
         <p class="weather-settings-error" role="status" aria-live="polite"></p>
         <div class="weather-settings-actions"><button class="util-action weather-settings-cancel" type="button">Cancel</button><button class="util-action weather-settings-save" type="submit">Save settings</button></div>
       </form>
