@@ -44,7 +44,9 @@ export function buildWeather(id, ctx) {
     }
   }
   const dismissLocationMenu = event => {
-    if (locationMenu && !root.contains(event.target)) setLocationMenuOpen(false);
+    if (locationMenu && !(event.target instanceof Element && event.target.closest('.weather-location-picker'))) {
+      setLocationMenuOpen(false);
+    }
   };
   document.addEventListener('pointerdown', dismissLocationMenu, true);
   const initialLocation = prefs.locations.find(item => item.location === prefs.activeLocation)

@@ -125,7 +125,8 @@ async function rawWeatherPrefs(page) {
 }
 
 async function selectWeatherLocation(weather, location) {
-  await weather.locator('.weather-location-button').click();
+  const menu = weather.locator('.weather-location-menu');
+  if (await menu.isHidden()) await weather.locator('.weather-location-button').click();
   await weather.locator('.weather-location-option').filter({ hasText: location }).click();
 }
 
@@ -417,6 +418,72 @@ test('migrates the previous single-location preference when its forecast is open
   });
 });
 
+test('shows location units and today’s high and low, with optional details saved per device', async ({ page }) => {
+  await page.evaluate(({ key, prefs }) => localStorage.setItem(key, JSON.stringify(prefs)), {
+    key: PREF_KEY,
+    prefs: {
+      locations: [
+        { location: 'Seattle', unit: 'fahrenheit' },
+        { location: 'Oslo', unit: 'celsius' },
+      ],
+      activeLocation: 'Oslo',
+      refreshMinutes: 60,
+    },
+  });
+
+  let weather = await openWeather(page);
+  await expect(weather.locator('.weather-current')).toHaveText('22°C');
+  await expect(weather.locator('.weather-high-low')).toHaveText('High 24°C · Low 20°C');
+  await expect(weather.locator('.weather-location-unit')).toHaveText('°C');
+  await weather.locator('.weather-location-button').click();
+  const options = weather.locator('.weather-location-option');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0).locator('.weather-location-option-unit')).toHaveText('°F');
+  await expect(options.nth(1).locator('.weather-location-option-unit')).toHaveText('°C');
+  const locationButton = weather.locator('.weather-location-button');
+  await locationButton.press('ArrowDown');
+  await expect(options.nth(0)).toBeFocused();
+  await options.nth(0).press('ArrowDown');
+  await expect(options.nth(1)).toBeFocused();
+  await options.nth(1).press('Escape');
+  await expect(weather.locator('.weather-location-menu')).toBeHidden();
+  await expect(locationButton).toBeFocused();
+
+  await selectWeatherLocation(weather, 'Seattle');
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+  await expect(weather.locator('.weather-high-low')).toHaveText('High 74°F · Low 70°F');
+  await expect(weather.locator('.weather-location-unit')).toHaveText('°F');
+  await expect(weather.locator('.weather-location-menu')).toBeHidden();
+
+  await weather.locator('.weather-settings-button').click();
+  const settings = weather.locator('.weather-settings-dialog');
+  for (const label of ['Feels-like temperature', 'Humidity', 'Wind speed', 'Precipitation', 'Hourly rain chance']) {
+    await settings.getByLabel(label).uncheck();
+  }
+  await settings.locator('.weather-settings-save').click();
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+  await expect(weather.locator('.weather-meta span')).toHaveText(['Clear sky']);
+  await expect(weather.locator('.weather-hourly .weather-row').first().locator('span').last()).toHaveText('Clear sky');
+  await expect.poll(() => rawWeatherPrefs(page)).toMatchObject({
+    activeLocation: 'Seattle',
+    details: {
+      feelsLike: false,
+      humidity: false,
+      wind: false,
+      precipitation: false,
+      rainChance: false,
+    },
+  });
+
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  weather = await openWeather(page);
+  await expect(weather.locator('.weather-current')).toHaveText('72°F');
+  await expect(weather.locator('.weather-location-button')).toHaveAttribute('data-location', 'Seattle');
+  await expect(weather.locator('.weather-location-unit')).toHaveText('°F');
+  await expect(weather.locator('.weather-meta span')).toHaveText(['Clear sky']);
+});
+
 test('keeps each saved city paired with its unit after selection and opening a new Weather window', async ({ page }) => {
   let weather = await openWeather(page);
   await weather.locator('.weather-location').fill('Seattle');
@@ -439,7 +506,7 @@ test('keeps each saved city paired with its unit after selection and opening a n
   await expect(settings.locator('.weather-settings-unit')).toHaveValue('fahrenheit');
   await settings.locator('.weather-settings-close').click();
 
-  await locationSelect.selectOption('Oslo');
+  await selectWeatherLocation(weather, 'Oslo');
   await expect(weather.locator('.weather-current')).toHaveText('22°C');
   await expect.poll(() => forecastRequests.at(-1)?.temperatureUnit).toBe('celsius');
   await weather.locator('.weather-settings-button').click();
@@ -459,7 +526,7 @@ test('keeps each saved city paired with its unit after selection and opening a n
   await expect(page.locator('.app-window[data-type="weather"]')).toHaveCount(0);
   weather = await openWeather(page);
   await expect(weather.locator('.weather-current')).toHaveText('22°C');
-  await expect(weather.locator('.weather-location-select')).toHaveValue('Oslo');
+  await expect(weather.locator('.weather-location-button')).toHaveAttribute('data-location', 'Oslo');
   await selectWeatherLocation(weather, 'Seattle');
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
   await expect.poll(() => forecastRequests.at(-1)?.temperatureUnit).toBe('fahrenheit');
@@ -491,7 +558,7 @@ test('changing a saved city unit preserves the other city after switching and re
     refreshMinutes: 60,
   });
 
-  await weather.locator('.weather-location-select').selectOption('Seattle');
+  await selectWeatherLocation(weather, 'Seattle');
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
   await expect.poll(() => forecastRequests.at(-1)).toEqual({
     latitude: '47.6062',
@@ -578,7 +645,7 @@ test('keeps saved locations and units available after a forecast failure and reo
   });
 
   forecastFailure = true;
-  await weather.locator('.weather-location-select').selectOption('Seattle');
+  await selectWeatherLocation(weather, 'Seattle');
   await expect(weather.locator('.weather-error'))
     .toContainText('The weather service could not be reached');
   await expect(weather.locator('.weather-retry')).toBeVisible();
@@ -604,7 +671,7 @@ test('keeps saved locations and units available after a forecast failure and reo
   forecastFailure = false;
   weather = await openWeather(page);
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
-  await expect(weather.locator('.weather-location-select')).toHaveValue('Seattle');
+  await expect(weather.locator('.weather-location-button')).toHaveAttribute('data-location', 'Seattle');
   await weather.locator('.weather-settings-button').click();
   await expect(settings.getByRole('button', { name: 'Remove Seattle' })).toBeVisible();
   await expect(settings.getByRole('button', { name: 'Remove Oslo' })).toBeVisible();
@@ -646,7 +713,7 @@ test('canceling removal changes nothing, and removing an inactive place keeps th
     activeLocation: 'Seattle',
     refreshMinutes: 45,
   });
-  await expect(weather.locator('.weather-location-select')).toHaveValue('Seattle');
+  await expect(weather.locator('.weather-location-button')).toHaveAttribute('data-location', 'Seattle');
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
 });
 
@@ -680,7 +747,7 @@ test('removing the active place selects another saved place and preserves prefer
     refreshMinutes: 35,
   };
   await expect.poll(() => savedPrefs(page)).toEqual(remainingPrefs);
-  await expect(weather.locator('.weather-location-select')).toHaveValue('Seattle');
+  await expect(weather.locator('.weather-location-button')).toHaveAttribute('data-location', 'Seattle');
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
 
   await page.reload();
@@ -688,8 +755,12 @@ test('removing the active place selects another saved place and preserves prefer
   if (await welcomeClose.isVisible()) await welcomeClose.click();
   weather = await openWeather(page);
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
-  await expect(weather.locator('.weather-location-select option'))
-    .toHaveText(['Seattle, Test Region, Test Country', 'Lisbon']);
+  await weather.locator('.weather-location-button').click();
+  const locationOptions = weather.locator('.weather-location-option');
+  await expect(locationOptions).toHaveCount(2);
+  await expect(locationOptions.nth(0)).toContainText('Seattle, Test Region, Test Country');
+  await expect(locationOptions.nth(0).locator('.weather-location-option-unit')).toHaveText('°F');
+  await expect(locationOptions.nth(1).locator('.weather-location-option-unit')).toHaveText('°F');
   await expect.poll(() => savedPrefs(page)).toEqual(remainingPrefs);
 });
 
@@ -751,7 +822,7 @@ test('removing the active forecast location loads the next saved place with its 
   await settings.getByRole('button', { name: 'Remove Oslo' }).click();
 
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
-  await expect(weather.locator('.weather-location-select')).toHaveValue('Seattle');
+  await expect(weather.locator('.weather-location-button')).toHaveAttribute('data-location', 'Seattle');
   await expect.poll(() => forecastRequests.at(-1)?.temperatureUnit).toBe('fahrenheit');
   await expect.poll(() => savedPrefs(page)).toEqual({
     locations: [{ location: 'Seattle', unit: 'fahrenheit' }],
@@ -791,8 +862,8 @@ test('the main forecast has no remove button and settings can remove an inactive
   page.once('dialog', dialog => dialog.accept());
   await settings.getByRole('button', { name: 'Remove Oslo' }).click();
   await expect(settings.locator('.weather-settings-locations')).not.toContainText('Oslo');
-  await expect(weather.locator('.weather-location-select option'))
-    .toHaveText(['Seattle, Test Region, Test Country']);
+  await expect(weather.locator('.weather-location-option')).toHaveCount(1);
+  await expect(weather.locator('.weather-location-option-unit')).toHaveText('°F');
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
   await expect.poll(() => forecastRequests.length).toBe(activeRequests);
   await expect.poll(() => savedPrefs(page)).toEqual({

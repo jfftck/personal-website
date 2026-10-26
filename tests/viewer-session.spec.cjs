@@ -70,6 +70,25 @@ test('browsing documents and photos saves the new selection and reloads both', a
   await expect(page.locator('.app-col')).toHaveAttribute('data-width', 'half');
 });
 
+test('the selected window remains focused after a page refresh', async ({ page }) => {
+  await seed(page, [{ type: 'doc-viewer' }, { type: 'img-viewer' }]);
+  const doc = page.locator('.app-window[data-type="doc-viewer"]');
+  const image = page.locator('.app-window[data-type="img-viewer"]');
+  await expect(doc.locator('.doc-body')).toContainText('First document');
+  await doc.locator('.doc-body').click();
+  await expect(doc).toHaveClass(/focused/);
+  await expect(image).not.toHaveClass(/focused/);
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)).focused, KEY))
+    .toEqual({ columnIndex: 0, appIndex: 0 });
+
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  const restoredDoc = page.locator('.app-window[data-type="doc-viewer"]');
+  const restoredImage = page.locator('.app-window[data-type="img-viewer"]');
+  await expect(restoredDoc).toHaveClass(/focused/);
+  await expect(restoredImage).not.toHaveClass(/focused/);
+});
+
 test('each document window restores independently, including PDFs', async ({ page }) => {
   await seed(page, [
     { type: 'doc-viewer', state: { url: docs[1].url } },
