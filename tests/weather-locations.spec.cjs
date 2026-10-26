@@ -433,14 +433,45 @@ test('shows location units and today’s high and low, with optional details sav
 
   let weather = await openWeather(page);
   await expect(weather.locator('.weather-current')).toHaveText('22°C');
-  await expect(weather.locator('.weather-high-low')).toHaveText('High 24°C · Low 20°C');
+  await expect(weather.locator('.weather-place')).toContainText('Oslo');
+  await expect(weather.locator('.weather-high-value')).toHaveText('24°C');
+  await expect(weather.locator('.weather-low-value')).toHaveText('20°C');
+  const temperatureLayout = await weather.evaluate(root => {
+    const current = root.querySelector('.weather-current');
+    const extremes = root.querySelector('.weather-high-low');
+    const currentBox = current.getBoundingClientRect();
+    const extremesBox = extremes.getBoundingClientRect();
+    return {
+      currentSize: parseFloat(getComputedStyle(current).fontSize),
+      extremesSize: parseFloat(getComputedStyle(extremes).fontSize),
+      currentRight: currentBox.right,
+      extremesLeft: extremesBox.left,
+    };
+  });
+  expect(temperatureLayout.extremesLeft).toBeGreaterThan(temperatureLayout.currentRight);
+  expect(temperatureLayout.extremesSize / temperatureLayout.currentSize).toBeCloseTo(0.5, 1);
   await expect(weather.locator('.weather-location-unit')).toHaveText('°C');
-  await weather.locator('.weather-location-button').click();
+  const locationButton = weather.locator('.weather-location-button');
+  await expect(locationButton).not.toContainText('Oslo');
+  await locationButton.click();
   const options = weather.locator('.weather-location-option');
   await expect(options).toHaveCount(2);
   await expect(options.nth(0).locator('.weather-location-option-unit')).toHaveText('°F');
   await expect(options.nth(1).locator('.weather-location-option-unit')).toHaveText('°C');
-  const locationButton = weather.locator('.weather-location-button');
+  const popupLayers = await page.evaluate(() => {
+    const menu = document.querySelector('.weather-location-menu');
+    const credit = document.querySelector('.weather-credit');
+    const menuRect = menu.getBoundingClientRect();
+    const creditRect = credit.getBoundingClientRect();
+    const left = Math.max(menuRect.left, creditRect.left);
+    const right = Math.min(menuRect.right, creditRect.right);
+    const top = Math.max(menuRect.top, creditRect.top);
+    const bottom = Math.min(menuRect.bottom, creditRect.bottom);
+    if (left >= right || top >= bottom) return { overlaps: false, menuOnTop: false };
+    const topElement = document.elementFromPoint((left + right) / 2, (top + bottom) / 2);
+    return { overlaps: true, menuOnTop: menu.contains(topElement) };
+  });
+  expect(popupLayers).toEqual({ overlaps: true, menuOnTop: true });
   await locationButton.press('ArrowDown');
   await expect(options.nth(0)).toBeFocused();
   await options.nth(0).press('ArrowDown');
@@ -451,7 +482,8 @@ test('shows location units and today’s high and low, with optional details sav
 
   await selectWeatherLocation(weather, 'Seattle');
   await expect(weather.locator('.weather-current')).toHaveText('72°F');
-  await expect(weather.locator('.weather-high-low')).toHaveText('High 74°F · Low 70°F');
+  await expect(weather.locator('.weather-high-value')).toHaveText('74°F');
+  await expect(weather.locator('.weather-low-value')).toHaveText('70°F');
   await expect(weather.locator('.weather-location-unit')).toHaveText('°F');
   await expect(weather.locator('.weather-location-menu')).toBeHidden();
 

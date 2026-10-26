@@ -201,7 +201,7 @@ export function buildWeather(id, ctx) {
         <div class="weather-location-picker">
           <button class="weather-location-button util-action" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="${id || 'weather'}-location-menu">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-7.2 8-13a8 8 0 1 0-16 0c0 5.8 8 13 8 13Zm0-10.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg>
-            <span class="weather-location-current"></span><span class="weather-location-unit"></span>
+            <span class="weather-location-unit"></span>
             <svg class="weather-location-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
           </button>
           <div class="weather-location-menu" id="${id || 'weather'}-location-menu" role="menu" aria-label="Saved weather locations" hidden></div>
@@ -213,7 +213,14 @@ export function buildWeather(id, ctx) {
       </div>
       <a class="weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Weather data by Open-Meteo</a>
       <p class="weather-save-status weather-error" role="status" aria-live="polite"></p>
-      <div class="weather-current"></div><div class="weather-place"></div><div class="weather-high-low" aria-label="Today's high and low"></div><div class="weather-meta"></div>
+      <div class="weather-temp-row">
+        <div class="weather-current"></div>
+        <div class="weather-high-low">
+          <span class="weather-high"><span class="sr-only">High </span><span class="weather-high-value"></span></span>
+          <span class="weather-low"><span class="sr-only">Low </span><span class="weather-low-value"></span></span>
+        </div>
+      </div>
+      <div class="weather-place"></div><div class="weather-meta"></div>
       <div class="weather-refresh-status sr-only" role="status" aria-live="polite"></div>
     </header><div class="weather-panels">
       <section class="weather-panel"><h3>Hourly outlook</h3><div class="weather-list weather-hourly"></div></section>
@@ -242,7 +249,8 @@ export function buildWeather(id, ctx) {
     const todayHigh = data.daily.temperature_2m_max?.[0];
     const todayLow = data.daily.temperature_2m_min?.[0];
     if (Number.isFinite(todayHigh) && Number.isFinite(todayLow)) {
-      root.querySelector('.weather-high-low').textContent = `High ${Math.round(todayHigh)}${degrees} · Low ${Math.round(todayLow)}${degrees}`;
+      root.querySelector('.weather-high-value').textContent = `${Math.round(todayHigh)}${degrees}`;
+      root.querySelector('.weather-low-value').textContent = `${Math.round(todayLow)}${degrees}`;
     } else {
       root.querySelector('.weather-high-low').hidden = true;
     }
@@ -250,8 +258,6 @@ export function buildWeather(id, ctx) {
     locationMenu = root.querySelector('.weather-location-menu');
     locationButton.dataset.location = prefs.activeLocation;
     locationButton.setAttribute('aria-label', `Switch weather location; currently ${displayName}, ${degrees}`);
-    locationButton.title = `${displayName} · ${degrees}`;
-    locationButton.querySelector('.weather-location-current').textContent = displayName;
     locationButton.querySelector('.weather-location-unit').textContent = degrees;
     const savedLocations = root.querySelector('.weather-settings-locations');
     function updateSavedLocationControls() {
