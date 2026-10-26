@@ -73,6 +73,61 @@ test('calculator, calendar, and weather controls follow shared theme tokens', as
   expect(Math.abs(popupBox.x - triggerBox.x)).toBeLessThan(2);
 });
 
+test('calculator supports scientific calculations, reusable history, and graphing', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  const output = calculator.locator('.calc-value');
+
+  await calculator.getByRole('button', { name: '7', exact: true }).click();
+  await calculator.getByRole('button', { name: '+', exact: true }).click();
+  await calculator.getByRole('button', { name: '3', exact: true }).click();
+  await calculator.getByRole('button', { name: '=', exact: true }).click();
+  await expect(output).toHaveText('10');
+  const historyEntry = calculator.getByRole('button', { name: 'Reuse result 10 from 7+3' });
+  await expect(historyEntry).toBeVisible();
+  await historyEntry.click();
+  await expect(calculator.getByRole('textbox', { name: 'Expression' })).toHaveValue('10');
+
+  await calculator.getByRole('button', { name: 'Scientific' }).click();
+  await calculator.locator('.calc-science-key').filter({ hasText: '√(' }).click();
+  await calculator.getByRole('button', { name: '9', exact: true }).click();
+  await calculator.locator('.calc-science-key').filter({ hasText: ')' }).click();
+  await calculator.getByRole('button', { name: '=', exact: true }).click();
+  await expect(output).toHaveText('3');
+
+  await calculator.getByRole('button', { name: 'Graph' }).click();
+  await calculator.getByRole('button', { name: 'Plot' }).click();
+  await expect(calculator.locator('.calc-graph-line')).toHaveAttribute('d', /M/);
+  await expect(calculator.locator('.calc-graph-status')).toContainText('Plotted');
+  await calculator.getByLabel('Function of x').fill('window.alert(1)');
+  await calculator.getByRole('button', { name: 'Plot' }).click();
+  await expect(calculator.locator('.calc-graph-status')).toContainText('Cannot plot');
+  await expect(calculator.locator('.calc-graph-line')).toHaveCount(0);
+});
+
+test('utility app layouts respond to their own narrow window width', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await calculator.evaluate(element => {
+    element.style.width = '360px';
+    element.style.flex = '0 0 360px';
+  });
+  await expect.poll(() => calculator.locator('.calc-workspace').evaluate(element => {
+    const history = element.querySelector('.calc-history').getBoundingClientRect();
+    const main = element.querySelector('.calc-main').getBoundingClientRect();
+    return history.top > main.top;
+  })).toBe(true);
+
+  const calendar = await openUtility(page, 'calendar');
+  await calendar.evaluate(element => {
+    element.style.width = '320px';
+    element.style.flex = '0 0 320px';
+  });
+  await calendar.getByRole('button', { name: 'Week', exact: true }).click();
+  await calendar.locator('.cal-weekend-control input').check();
+  const columns = await calendar.locator('.cal-week-grid').evaluate(element =>
+    getComputedStyle(element).gridTemplateColumns.split(' ').length);
+  expect(columns).toBe(2);
+});
+
 test('custom dropdown keeps working without Popover or CSS Anchor support', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(HTMLElement.prototype, 'showPopover', { configurable: true, value: undefined });

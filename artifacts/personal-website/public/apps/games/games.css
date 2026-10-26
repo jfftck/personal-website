@@ -49,6 +49,8 @@
   --mine-flag-stem: #303944;
 
   display: flex;
+  container-type: inline-size;
+  container-name: game-window;
   flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
@@ -1676,12 +1678,12 @@
 }
 .mine-cell.exploded { background: #c8493d; color: #fff; }
 
-@container (max-width: 520px) {
+@container game-window (width < 520px) {
   .card-top-row { gap: 0.3rem; }
   .card-field-group-label { font-size: 0.53rem; letter-spacing: 0.06em; }
 }
 
-@media (max-width: 520px) {
+@container game-window (width < 520px) {
   .game-toolbar {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.35rem;
@@ -1698,6 +1700,15 @@
   .reversi-board { align-self: center; width: min(100%, 68vh); }
   .game-options { justify-content: flex-start; }
   .solitaire-table { min-width: 100%; }
+}
+
+@container game-window (width < 360px) {
+  .game-toolbar { grid-template-columns:minmax(0,1fr) auto; padding:.35rem; }
+  .game-toolbar .game-instructions-toggle { gap:.25rem; }
+  .game-toolbar .game-instructions-toggle span:last-child { display:none; }
+  .game-toolbar button,.game-toolbar select { padding:.3rem .4rem; font-size:.72rem; }
+  .game-area { padding:.45rem; }
+  .game-settings-overlay { padding:.35rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1800,6 +1811,6 @@
   100% { transform: rotateY(180deg); }
 }
 
-@media (max-width: 640px) {
+@container game-window (width < 640px) {
   .solitaire-game-area > .solitaire-table { min-width: 100%; }
 }
