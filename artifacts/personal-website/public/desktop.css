@@ -2633,6 +2633,9 @@ kbd {
 .calc-graph-label { fill:var(--util-detail); font:10px ui-monospace,monospace; pointer-events:none; }
 .calc-graph-line { stroke:var(--function-color,var(--util-teal)); }
 .calc-graph-status { flex:none; margin:0; }
+.calc-storage-recovery { display:flex; align-items:center; justify-content:space-between; gap:.6rem; padding:.45rem .6rem; border:1px solid color-mix(in srgb,var(--util-detail) 35%,var(--app-border)); border-radius:.55rem; color:var(--util-detail); font-size:.75rem; }
+.calc-storage-recovery[hidden] { display:none; }
+.calc-storage-recovery button { flex:none; min-height:2rem; padding:.3rem .55rem; border:1px solid var(--app-border); border-radius:.45rem; background:var(--util-surface); color:var(--app-text); }
 .calc-graph-mode .calc-workspace { display:block; }
 .calc-graph-mode .calc-main { width:100%; height:100%; }
 .calc-display[hidden] { display:none; }

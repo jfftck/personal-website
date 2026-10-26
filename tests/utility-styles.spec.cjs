@@ -173,6 +173,96 @@ test('calculator graph settings keep modes and plot ranges independent', async (
   await expect(calculator.locator('.calc-graph-status')).toContainText('parametric');
 });
 
+test('calculator graph functions, colors, visibility, mode, and ranges persist across reopen and refresh', async ({ page }) => {
+  let calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  let settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByLabel('Minimum x').fill('-4');
+  await settings.getByLabel('Maximum x').fill('4');
+  await settings.getByLabel('Minimum y').fill('-5');
+  await settings.getByLabel('Maximum y').fill('5');
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  const graphMode = settings.getByRole('combobox', { name: 'Graph mode' });
+  await graphMode.click();
+  await settings.getByRole('option', { name: /Polar/ }).click();
+  await settings.getByLabel('Minimum theta').fill('-1');
+  await settings.getByLabel('Maximum theta').fill('7');
+  await settings.getByLabel('Minimum r').fill('-2');
+  await settings.getByLabel('Maximum r').fill('6');
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  let editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await editor.getByLabel('Function expression').fill('sin(theta)');
+  await editor.locator('.note-color-choice[data-note-color="orange"]').click();
+  await editor.getByRole('button', { name: 'Add function' }).click();
+  await editor.getByLabel('Function expression').fill('cos(2*theta)');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await calculator.getByRole('button', { name: /Hide function/ }).first().click();
+  await expect(calculator.locator('.calc-function-item')).toHaveCount(2);
+  await expect(calculator.locator('.calc-plot-area')).toHaveAttribute('aria-valuetext', /theta -1 to 7/);
+
+  await page.locator('#close-btn').click();
+  calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await expect(calculator.locator('.calc-mode-label')).toHaveText('POLAR');
+  await expect(calculator.locator('.calc-function-item')).toHaveCount(2);
+  await expect(calculator.locator('.calc-function-toggle[aria-pressed="false"]')).toHaveCount(1);
+  await expect.poll(() => calculator.locator('.calc-function-swatch').first().evaluate(element => element.style.getPropertyValue('--function-color'))).toBe('#e47b27');
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await expect(settings.getByLabel('Minimum theta')).toHaveValue('-1');
+  await expect(settings.getByLabel('Maximum theta')).toHaveValue('7');
+  await expect(settings.getByLabel('Minimum r')).toHaveValue('-2');
+  await expect(settings.getByLabel('Maximum r')).toHaveValue('6');
+  await settings.getByRole('combobox', { name: 'Graph mode' }).click();
+  await settings.getByRole('option', { name: /Cartesian/ }).click();
+  await expect(settings.getByLabel('Minimum x')).toHaveValue('-4');
+  await expect(settings.getByLabel('Maximum x')).toHaveValue('4');
+  await expect(settings.getByLabel('Minimum y')).toHaveValue('-5');
+  await expect(settings.getByLabel('Maximum y')).toHaveValue('5');
+  await settings.getByRole('button', { name: 'Close graph settings' }).click();
+
+  await page.reload();
+  const welcome = page.getByRole('button', { name: 'Get started', exact: true });
+  if (await welcome.isVisible().catch(() => false)) await welcome.click();
+  calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await expect(calculator.locator('.calc-mode-label')).toHaveText('POLAR');
+  await expect(calculator.locator('.calc-function-item')).toHaveCount(2);
+  await expect(calculator.locator('.calc-function-toggle[aria-pressed="false"]')).toHaveCount(1);
+  await expect.poll(() => calculator.locator('.calc-function-swatch').first().evaluate(element => element.style.getPropertyValue('--function-color'))).toBe('#e47b27');
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await expect(settings.getByLabel('Minimum theta')).toHaveValue('-1');
+  await expect(settings.getByLabel('Maximum theta')).toHaveValue('7');
+  await settings.getByRole('combobox', { name: 'Graph mode' }).click();
+  await settings.getByRole('option', { name: /Cartesian/ }).click();
+  await expect(settings.getByLabel('Minimum x')).toHaveValue('-4');
+  await expect(settings.getByLabel('Maximum x')).toHaveValue('4');
+});
+
+test('calculator safely resets malformed or outdated saved graph settings', async ({ page }) => {
+  for (const saved of ['{broken', JSON.stringify({ version: 0, graphMode: 'cartesian' })]) {
+    await page.evaluate(value => localStorage.setItem('personal-desktop-calculator-graph-v1', value), saved);
+    const calculator = await openUtility(page, 'calculator');
+    await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+    const recovery = calculator.locator('.calc-storage-recovery');
+    await expect(recovery).toBeVisible();
+    await expect(recovery).toContainText('Defaults are active.');
+    await recovery.getByRole('button', { name: 'Reset saved graph' }).click();
+    await expect(recovery).toBeHidden();
+    await expect(calculator.locator('.calc-function-item')).toHaveCount(1);
+    await expect(calculator.locator('.calc-mode-label')).toHaveText('CARTESIAN');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('personal-desktop-calculator-graph-v1'))).toBeNull();
+    await page.locator('#close-btn').click();
+  }
+});
+
 test('calculator graph zoom and pan work in every mode without changing configured ranges', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   await calculator.getByRole('button', { name: 'Graph', exact: true }).click();

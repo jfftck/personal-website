@@ -20,7 +20,103 @@ const GRAPH_KEYS = [
   '0', 'Clear', '⌫',
 ];
 const HISTORY_LIMIT = 24;
+const GRAPH_SETTINGS_KEY = 'personal-desktop-calculator-graph-v1';
+const GRAPH_SETTINGS_VERSION = 1;
+const GRAPH_MODES = ['cartesian', 'polar', 'parametric'];
+const RANGE_KEYS = ['xMin', 'xMax', 'yMin', 'yMax', 'thetaMin', 'thetaMax', 'rMin', 'rMax', 'tMin', 'tMax'];
+const DEFAULT_GRAPH_RANGES = {
+  xMin: '-10', xMax: '10', yMin: '-10', yMax: '10',
+  thetaMin: '0', thetaMax: '6.283', rMin: '0', rMax: '10',
+  tMin: '0', tMax: '6.283',
+};
+const VIEW_RANGE_KEYS = {
+  cartesian: ['xMin', 'xMax', 'yMin', 'yMax'],
+  polar: ['thetaMin', 'thetaMax', 'rMin', 'rMax'],
+  parametric: ['tMin', 'tMax', 'xMin', 'xMax', 'yMin', 'yMax'],
+};
 let nextFunctionId = 1;
+
+function validRangePair(min, max) {
+  return Number.isFinite(Number(min)) && Number.isFinite(Number(max)) &&
+    Number.isFinite(Number(max) - Number(min)) && Number(min) < Number(max);
+}
+
+function readSavedGraphSettings() {
+  let raw;
+  try { raw = localStorage.getItem(GRAPH_SETTINGS_KEY); }
+  catch { return { status: 'unavailable' }; }
+  if (raw === null) return { status: 'empty' };
+
+  try {
+    const saved = JSON.parse(raw);
+    if (!saved || saved.version !== GRAPH_SETTINGS_VERSION || !GRAPH_MODES.includes(saved.graphMode) ||
+        !saved.ranges || typeof saved.ranges !== 'object' || Array.isArray(saved.ranges) ||
+        !Array.isArray(saved.functions) || saved.functions.length < 1 || saved.functions.length > 20) {
+      return { status: 'invalid' };
+    }
+
+    const ranges = {};
+    for (const key of RANGE_KEYS) {
+      const value = saved.ranges[key];
+      if ((typeof value !== 'string' && typeof value !== 'number') || !String(value).trim() || !Number.isFinite(Number(value))) {
+        return { status: 'invalid' };
+      }
+      ranges[key] = String(value);
+    }
+    const rangePairs = [
+      ['xMin', 'xMax'], ['yMin', 'yMax'], ['thetaMin', 'thetaMax'],
+      ['rMin', 'rMax'], ['tMin', 'tMax'],
+    ];
+    if (rangePairs.some(([min, max]) => !validRangePair(ranges[min], ranges[max]))) return { status: 'invalid' };
+
+    const ids = new Set();
+    const functions = saved.functions.map(fn => {
+      if (!fn || typeof fn !== 'object' || typeof fn.id !== 'string' || !/^fn-\d+$/.test(fn.id) || ids.has(fn.id) ||
+          typeof fn.expression !== 'string' || !fn.expression.trim() || fn.expression.length > 180 ||
+          typeof fn.xExpression !== 'string' || !fn.xExpression.trim() || fn.xExpression.length > 180 ||
+          typeof fn.yExpression !== 'string' || !fn.yExpression.trim() || fn.yExpression.length > 180 ||
+          typeof fn.visible !== 'boolean' || !NOTE_COLORS.some(color => color.hex === fn.color)) return null;
+      ids.add(fn.id);
+      return { id: fn.id, expression: fn.expression, xExpression: fn.xExpression, yExpression: fn.yExpression, color: fn.color, visible: fn.visible, path: '' };
+    });
+    if (functions.some(fn => !fn)) return { status: 'invalid' };
+    const acceptsExpression = (expression, variable) => {
+      for (const probe of [0, 1, -1, 2, 0.5]) {
+        try { evaluateExpression(expression, { [variable]: probe }); return true; } catch {}
+      }
+      return false;
+    };
+    if (functions.some(fn => saved.graphMode === 'parametric'
+      ? !acceptsExpression(fn.xExpression, 't') || !acceptsExpression(fn.yExpression, 't')
+      : !acceptsExpression(fn.expression, saved.graphMode === 'polar' ? 'theta' : 'x'))) return { status: 'invalid' };
+
+    const viewRanges = {};
+    if (saved.viewRanges !== null && saved.viewRanges !== undefined) {
+      if (!saved.viewRanges || typeof saved.viewRanges !== 'object' || Array.isArray(saved.viewRanges)) return { status: 'invalid' };
+      for (const graphMode of GRAPH_MODES) {
+        const view = saved.viewRanges[graphMode];
+        if (view === undefined) continue;
+        if (!view || typeof view !== 'object' || Array.isArray(view)) return { status: 'invalid' };
+        const validated = {};
+        for (const key of VIEW_RANGE_KEYS[graphMode]) {
+          const value = view[key];
+          if (typeof value !== 'number' || !Number.isFinite(value)) return { status: 'invalid' };
+          validated[key] = value;
+        }
+        const pairs = graphMode === 'polar'
+          ? [['thetaMin', 'thetaMax'], ['rMin', 'rMax']]
+          : graphMode === 'parametric'
+            ? [['tMin', 'tMax'], ['xMin', 'xMax'], ['yMin', 'yMax']]
+            : [['xMin', 'xMax'], ['yMin', 'yMax']];
+        if (pairs.some(([min, max]) => !validRangePair(validated[min], validated[max]))) return { status: 'invalid' };
+        viewRanges[graphMode] = validated;
+      }
+    }
+    return { status: 'valid', graphMode: saved.graphMode, ranges, functions, viewRanges };
+  } catch {
+    return { status: 'invalid' };
+  }
+}
 
 export function buildCalculator(id, ctx) {
   const root = document.createElement('section');
@@ -59,6 +155,7 @@ export function buildCalculator(id, ctx) {
             </div>
             <svg class="calc-plot-area" role="application" aria-label="Function graph. Drag to pan, use the mouse wheel or plus and minus to zoom, and use arrow keys to pan. Press Home to reset the view." tabindex="0" viewBox="0 0 640 400" preserveAspectRatio="none"></svg>
             <p class="calc-graph-status" role="status" aria-live="polite">Add a function, then choose Plot.</p>
+            <div class="calc-storage-recovery" role="alert" hidden><span></span><button type="button" class="calc-reset-saved">Reset saved graph</button></div>
           </section>
         </main>
         <aside class="calc-history" aria-label="Calculation history">
@@ -122,11 +219,64 @@ export function buildCalculator(id, ctx) {
   let resultFresh = false;
   let graphMode = 'cartesian';
   let settingsMode = graphMode;
-  let ranges = { xMin: '-10', xMax: '10', yMin: '-10', yMax: '10', thetaMin: '0', thetaMax: '6.283', rMin: '0', rMax: '10', tMin: '0', tMax: '6.283' };
+  let ranges = { ...DEFAULT_GRAPH_RANGES };
   let viewRanges = null;
   let functions = [makeFunction('sin(x)')];
   let activeFunctionId = functions[0].id;
   let editorDraft = [];
+  const recoveryNotice = $('.calc-storage-recovery');
+  const recoveryMessage = recoveryNotice.querySelector('span');
+  const savedGraph = readSavedGraphSettings();
+  if (savedGraph.status === 'valid') {
+    graphMode = savedGraph.graphMode;
+    ranges = savedGraph.ranges;
+    functions = savedGraph.functions;
+    viewRanges = Object.keys(savedGraph.viewRanges).length ? savedGraph.viewRanges : null;
+    activeFunctionId = functions[0].id;
+    nextFunctionId = Math.max(nextFunctionId, ...functions.map(fn => Number(fn.id.slice(3)) + 1));
+  } else if (savedGraph.status === 'invalid') {
+    recoveryMessage.textContent = 'Saved graph settings could not be restored. Defaults are active.';
+    recoveryNotice.hidden = false;
+  } else if (savedGraph.status === 'unavailable') {
+    graphStatus.textContent = 'This browser could not read saved graph settings. Changes may not persist.';
+  }
+  $('.calc-mode-label').textContent = graphMode.toUpperCase();
+
+  function persistGraphSettings() {
+    try {
+      localStorage.setItem(GRAPH_SETTINGS_KEY, JSON.stringify({
+        version: GRAPH_SETTINGS_VERSION,
+        graphMode,
+        ranges,
+        functions: functions.map(({ id: functionId, expression, xExpression, yExpression, color, visible }) => ({
+          id: functionId, expression, xExpression, yExpression, color, visible,
+        })),
+        viewRanges,
+      }));
+    } catch {
+      graphStatus.textContent = 'Graph settings could not be saved in this browser.';
+    }
+  }
+
+  function resetSavedGraph() {
+    try {
+      localStorage.removeItem(GRAPH_SETTINGS_KEY);
+      graphMode = 'cartesian';
+      settingsMode = graphMode;
+      ranges = { ...DEFAULT_GRAPH_RANGES };
+      viewRanges = null;
+      functions = [makeFunction('sin(x)')];
+      activeFunctionId = functions[0].id;
+      $('.calc-mode-label').textContent = graphMode.toUpperCase();
+      recoveryNotice.hidden = true;
+      renderFunctions();
+      plot();
+      graphStatus.textContent = 'Saved graph reset to defaults.';
+    } catch {
+      recoveryMessage.textContent = 'Saved graph settings could not be cleared. Check this browser’s storage settings and try again.';
+      recoveryNotice.hidden = false;
+    }
+  }
 
   function makeFunction(expression) {
     const color = nextFunctionId === 1
@@ -224,9 +374,10 @@ export function buildCalculator(id, ctx) {
     if (event.key === 'Escape') clear();
   });
   root.querySelector('.calc-plot').addEventListener('click', plot);
-  $('.calc-zoom-in').addEventListener('click', () => zoomView(0.8));
-  $('.calc-zoom-out').addEventListener('click', () => zoomView(1.25));
+  $('.calc-zoom-in').addEventListener('click', () => { zoomView(0.8); persistGraphSettings(); });
+  $('.calc-zoom-out').addEventListener('click', () => { zoomView(1.25); persistGraphSettings(); });
   $('.calc-reset-view').addEventListener('click', resetView);
+  $('.calc-reset-saved').addEventListener('click', resetSavedGraph);
   $('.calc-open-editor').addEventListener('click', openEditor);
   $('.calc-open-settings').addEventListener('click', openSettings);
   root.querySelectorAll('.calc-dialog-close').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
@@ -240,13 +391,13 @@ export function buildCalculator(id, ctx) {
       label.textContent = graphMode === 'parametric' ? `x(t)=${fn.xExpression} · y(t)=${fn.yExpression}` : `${graphMode === 'polar' ? 'r(θ)' : 'y'} = ${fn.expression}`;
       const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'calc-function-toggle';
       toggle.setAttribute('aria-pressed', String(fn.visible)); toggle.setAttribute('aria-label', `${fn.visible ? 'Hide' : 'Show'} function ${fn.id}`); toggle.textContent = fn.visible ? 'Visible' : 'Hidden';
-      toggle.addEventListener('click', () => { fn.visible = !fn.visible; renderFunctions(); plot(); });
+      toggle.addEventListener('click', () => { fn.visible = !fn.visible; renderFunctions(); plot(); persistGraphSettings(); });
       const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'calc-function-remove'; remove.setAttribute('aria-label', `Remove function ${fn.id}`); remove.textContent = 'Remove';
       remove.addEventListener('click', () => {
         if (functions.length === 1) { graphStatus.textContent = 'Keep at least one function in the graph.'; return; }
         functions = functions.filter(item => item.id !== fn.id);
         if (activeFunctionId === fn.id) activeFunctionId = functions[0].id;
-        renderFunctions(); plot();
+        renderFunctions(); plot(); persistGraphSettings();
       });
       row.append(swatch, label, toggle, remove); list.append(row);
     });
@@ -286,7 +437,7 @@ export function buildCalculator(id, ctx) {
     if (error) { $('.calc-settings-error').textContent = error; return; }
     ranges = nextRanges; graphMode = settingsMode;
     viewRanges = null;
-    $('.calc-mode-label').textContent = graphMode.toUpperCase(); renderFunctions(); settingsDialog.close(); plot();
+    $('.calc-mode-label').textContent = graphMode.toUpperCase(); renderFunctions(); settingsDialog.close(); plot(); persistGraphSettings();
   });
 
   function renderEditorNav() {
@@ -367,7 +518,7 @@ export function buildCalculator(id, ctx) {
     });
     if (bad) return;
     functions = editorDraft.map(fn => ({ ...fn }));
-    $('.calc-editor-error').textContent = ''; editorDialog.close(); renderFunctions(); plot();
+    $('.calc-editor-error').textContent = ''; editorDialog.close(); renderFunctions(); plot(); persistGraphSettings();
   });
   GRAPH_KEYS.forEach(key => {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'calc-function-key'; button.textContent = key;
@@ -412,7 +563,7 @@ export function buildCalculator(id, ctx) {
   }
   function resetView() {
     if (viewRanges) delete viewRanges[graphMode];
-    plot();
+    plot(); persistGraphSettings();
   }
   function changeView({ scale = 1, anchorX = 332, anchorY = 200, panX = 0, panY = 0 } = {}) {
     const current = getViewRanges();
@@ -585,6 +736,7 @@ export function buildCalculator(id, ctx) {
     event.preventDefault();
     const point = eventPoint(event);
     zoomView(Math.exp(Math.max(-2, Math.min(2, event.deltaY * 0.0015))), point);
+    persistGraphSettings();
   }, { passive: false });
   plotArea.addEventListener('pointerdown', event => {
     if (event.button !== 0 && event.pointerType !== 'touch') return;
@@ -610,14 +762,15 @@ export function buildCalculator(id, ctx) {
     pointers.delete(event.pointerId);
     if (!pointers.size) plotArea.classList.remove('is-panning');
     try { if (plotArea.hasPointerCapture(event.pointerId)) plotArea.releasePointerCapture(event.pointerId); } catch {}
+    persistGraphSettings();
   };
   plotArea.addEventListener('pointerup', endPointer);
   plotArea.addEventListener('pointercancel', endPointer);
   plotArea.addEventListener('keydown', event => {
     const pan = { ArrowLeft: [-48, 0], ArrowRight: [48, 0], ArrowUp: [0, -36], ArrowDown: [0, 36] };
-    if (pan[event.key]) { event.preventDefault(); changeView({ panX: pan[event.key][0], panY: pan[event.key][1] }); }
-    else if (event.key === '+' || event.key === '=') { event.preventDefault(); zoomView(0.8); }
-    else if (event.key === '-') { event.preventDefault(); zoomView(1.25); }
+    if (pan[event.key]) { event.preventDefault(); changeView({ panX: pan[event.key][0], panY: pan[event.key][1] }); persistGraphSettings(); }
+    else if (event.key === '+' || event.key === '=') { event.preventDefault(); zoomView(0.8); persistGraphSettings(); }
+    else if (event.key === '-') { event.preventDefault(); zoomView(1.25); persistGraphSettings(); }
     else if (event.key === 'Home') { event.preventDefault(); resetView(); }
   });
   renderFunctions();
