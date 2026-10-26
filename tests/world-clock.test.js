@@ -3,9 +3,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const cityZoneReference = require('./fixtures/world-clock-city-zones.json');
 
-let CITY_OPTIONS, normalizeCity, resolveCity;
+let CITY_OPTIONS, createCityLookup, normalizeCity, resolveCity;
 test.before(async () => {
-  ({ CITY_OPTIONS, normalizeCity, resolveCity } = await import(
+  ({ CITY_OPTIONS, createCityLookup, normalizeCity, resolveCity } = await import(
     '../artifacts/personal-website/public/apps/world-clock.js'
   ));
 });
@@ -104,6 +104,16 @@ test('normalized city names never point to conflicting time zones', () => {
       zonesByName.set(key, zone);
     }
   }
+});
+
+test('city lookup rejects names that normalize to different time zones', () => {
+  assert.throws(
+    () => createCityLookup([
+      { city: 'New-York', zone: 'America/New_York' },
+      { city: 'New York', zone: 'Europe/London' },
+    ]),
+    /Conflicting time zones for normalized city name "newyork": America\/New_York and Europe\/London/,
+  );
 });
 
 test('city search ignores spacing and punctuation variants', () => {

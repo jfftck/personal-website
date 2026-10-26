@@ -141,19 +141,24 @@ export const CITY_OPTIONS = [
   { city: 'Zagreb', country: 'Croatia', zone: 'Europe/Zagreb' },
 ];
 
-const CITY_LOOKUP = new Map();
-for (const option of CITY_OPTIONS) {
-  for (const name of [option.city, ...(option.aliases || [])]) {
-    const key = normalizeCity(name);
-    const existing = CITY_LOOKUP.get(key);
-    if (existing && existing.zone !== option.zone) {
-      throw new Error(
-        `Conflicting time zones for normalized city name "${key}": ${existing.zone} and ${option.zone}`,
-      );
+export function createCityLookup(options) {
+  const lookup = new Map();
+  for (const option of options) {
+    for (const name of [option.city, ...(option.aliases || [])]) {
+      const key = normalizeCity(name);
+      const existing = lookup.get(key);
+      if (existing && existing.zone !== option.zone) {
+        throw new Error(
+          `Conflicting time zones for normalized city name "${key}": ${existing.zone} and ${option.zone}`,
+        );
+      }
+      if (!existing) lookup.set(key, option);
     }
-    if (!existing) CITY_LOOKUP.set(key, option);
   }
+  return lookup;
 }
+
+const CITY_LOOKUP = createCityLookup(CITY_OPTIONS);
 
 export function resolveCity(value) {
   return CITY_LOOKUP.get(normalizeCity(value));
