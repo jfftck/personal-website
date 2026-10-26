@@ -1,0 +1,1241 @@
+{
+  "source": {
+    "name": "GeoNames city records interpreted with the IANA Time Zone Database",
+    "geonamesDataset": "cities5000.zip",
+    "geonamesSnapshotDate": "2026-10-25",
+    "geonamesUrl": "https://download.geonames.org/export/dump/cities5000.zip",
+    "ianaTzdbVersion": "2026e",
+    "ianaResolver": "@vvo/tzdb generator, pinned to 4392b1bded93657aa76a592849715a613cd28ebe; its zoneOfCity logic chooses a same-clock zone in the city’s own country when GeoNames supplies a foreign-country zone.",
+    "ianaResolverUrl": "https://github.com/vvo/tzdb/blob/4392b1bded93657aa76a592849715a613cd28ebe/scripts/generate.ts",
+    "license": "GeoNames data: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)."
+  },
+  "ianaZoneAliases": {
+    "Asia/Tel_Aviv": "Asia/Jerusalem"
+  },
+  "referenceOverrides": [
+    {
+      "geonameId": 1581130,
+      "city": "Hanoi",
+      "sourceZone": "Asia/Bangkok",
+      "expectedZone": "Asia/Ho_Chi_Minh",
+      "reason": "GeoNames assigns a foreign-country zone; the pinned IANA resolver selects Vietnam’s matching-clock zone."
+    }
+  ],
+  "cities": [
+    {
+      "city": "Abidjan",
+      "country": "Côte d’Ivoire",
+      "countryCode": "CI",
+      "geonameId": 2293538,
+      "geonamesCity": "Abidjan",
+      "geonamesZone": "Africa/Abidjan",
+      "expectedZone": "Africa/Abidjan"
+    },
+    {
+      "city": "Accra",
+      "country": "Ghana",
+      "countryCode": "GH",
+      "geonameId": 2306104,
+      "geonamesCity": "Accra",
+      "geonamesZone": "Africa/Accra",
+      "expectedZone": "Africa/Accra"
+    },
+    {
+      "city": "Anchorage",
+      "country": "United States",
+      "countryCode": "US",
+      "geonameId": 5879400,
+      "geonamesCity": "Anchorage",
+      "geonamesZone": "America/Anchorage",
+      "expectedZone": "America/Anchorage"
+    },
+    {
+      "city": "Addis Ababa",
+      "country": "Ethiopia",
+      "countryCode": "ET",
+      "geonameId": 344979,
+      "geonamesCity": "Addis Ababa",
+      "geonamesZone": "Africa/Addis_Ababa",
+      "expectedZone": "Africa/Addis_Ababa"
+    },
+    {
+      "city": "Adelaide",
+      "country": "Australia",
+      "countryCode": "AU",
+      "geonameId": 2078025,
+      "geonamesCity": "Adelaide",
+      "geonamesZone": "Australia/Adelaide",
+      "expectedZone": "Australia/Adelaide"
+    },
+    {
+      "city": "Algiers",
+      "country": "Algeria",
+      "countryCode": "DZ",
+      "geonameId": 2507480,
+      "geonamesCity": "Algiers",
+      "geonamesZone": "Africa/Algiers",
+      "expectedZone": "Africa/Algiers"
+    },
+    {
+      "city": "Almaty",
+      "country": "Kazakhstan",
+      "countryCode": "KZ",
+      "geonameId": 1526384,
+      "geonamesCity": "Almaty",
+      "geonamesZone": "Asia/Almaty",
+      "expectedZone": "Asia/Almaty"
+    },
+    {
+      "city": "Amsterdam",
+      "country": "Netherlands",
+      "countryCode": "NL",
+      "geonameId": 2759794,
+      "geonamesCity": "Amsterdam",
+      "geonamesZone": "Europe/Amsterdam",
+      "expectedZone": "Europe/Amsterdam"
+    },
+    {
+      "city": "Amman",
+      "country": "Jordan",
+      "countryCode": "JO",
+      "geonameId": 250441,
+      "geonamesCity": "Amman",
+      "geonamesZone": "Asia/Amman",
+      "expectedZone": "Asia/Amman"
+    },
+    {
+      "city": "Asunción",
+      "country": "Paraguay",
+      "countryCode": "PY",
+      "geonameId": 3439389,
+      "geonamesCity": "Asunción",
+      "geonamesZone": "America/Asuncion",
+      "expectedZone": "America/Asuncion"
+    },
+    {
+      "city": "Athens",
+      "country": "Greece",
+      "countryCode": "GR",
+      "geonameId": 264371,
+      "geonamesCity": "Athens",
+      "geonamesZone": "Europe/Athens",
+      "expectedZone": "Europe/Athens"
+    },
+    {
+      "city": "Auckland",
+      "country": "New Zealand",
+      "countryCode": "NZ",
+      "geonameId": 2193733,
+      "geonamesCity": "Auckland",
+      "geonamesZone": "Pacific/Auckland",
+      "expectedZone": "Pacific/Auckland"
+    },
+    {
+      "city": "Baku",
+      "country": "Azerbaijan",
+      "countryCode": "AZ",
+      "geonameId": 587084,
+      "geonamesCity": "Baku",
+      "geonamesZone": "Asia/Baku",
+      "expectedZone": "Asia/Baku"
+    },
+    {
+      "city": "Baghdad",
+      "country": "Iraq",
+      "countryCode": "IQ",
+      "geonameId": 98182,
+      "geonamesCity": "Baghdad",
+      "geonamesZone": "Asia/Baghdad",
+      "expectedZone": "Asia/Baghdad"
+    },
+    {
+      "city": "Bangkok",
+      "country": "Thailand",
+      "countryCode": "TH",
+      "geonameId": 1609350,
+      "geonamesCity": "Bangkok",
+      "geonamesZone": "Asia/Bangkok",
+      "expectedZone": "Asia/Bangkok"
+    },
+    {
+      "city": "Beijing",
+      "country": "China",
+      "countryCode": "CN",
+      "geonameId": 1816670,
+      "geonamesCity": "Beijing",
+      "geonamesZone": "Asia/Shanghai",
+      "expectedZone": "Asia/Shanghai"
+    },
+    {
+      "city": "Beirut",
+      "country": "Lebanon",
+      "countryCode": "LB",
+      "geonameId": 276781,
+      "geonamesCity": "Beirut",
+      "geonamesZone": "Asia/Beirut",
+      "expectedZone": "Asia/Beirut"
+    },
+    {
+      "city": "Belgrade",
+      "country": "Serbia",
+      "countryCode": "RS",
+      "geonameId": 792680,
+      "geonamesCity": "Belgrade",
+      "geonamesZone": "Europe/Belgrade",
+      "expectedZone": "Europe/Belgrade"
+    },
+    {
+      "city": "Bengaluru",
+      "country": "India",
+      "countryCode": "IN",
+      "geonameId": 1277333,
+      "geonamesCity": "Bengaluru",
+      "geonamesZone": "Asia/Kolkata",
+      "expectedZone": "Asia/Kolkata"
+    },
+    {
+      "city": "Bishkek",
+      "country": "Kyrgyzstan",
+      "countryCode": "KG",
+      "geonameId": 1528675,
+      "geonamesCity": "Bishkek",
+      "geonamesZone": "Asia/Bishkek",
+      "expectedZone": "Asia/Bishkek"
+    },
+    {
+      "city": "Bogotá",
+      "country": "Colombia",
+      "countryCode": "CO",
+      "geonameId": 3688689,
+      "geonamesCity": "Bogotá",
+      "geonamesZone": "America/Bogota",
+      "expectedZone": "America/Bogota"
+    },
+    {
+      "city": "Brisbane",
+      "country": "Australia",
+      "countryCode": "AU",
+      "geonameId": 2174003,
+      "geonamesCity": "Brisbane",
+      "geonamesZone": "Australia/Brisbane",
+      "expectedZone": "Australia/Brisbane"
+    },
+    {
+      "city": "Brussels",
+      "country": "Belgium",
+      "countryCode": "BE",
+      "geonameId": 2800866,
+      "geonamesCity": "Brussels",
+      "geonamesZone": "Europe/Brussels",
+      "expectedZone": "Europe/Brussels"
+    },
+    {
+      "city": "Bucharest",
+      "country": "Romania",
+      "countryCode": "RO",
+      "geonameId": 683506,
+      "geonamesCity": "Bucharest",
+      "geonamesZone": "Europe/Bucharest",
+      "expectedZone": "Europe/Bucharest"
+    },
+    {
+      "city": "Budapest",
+      "country": "Hungary",
+      "countryCode": "HU",
+      "geonameId": 3054643,
+      "geonamesCity": "Budapest",
+      "geonamesZone": "Europe/Budapest",
+      "expectedZone": "Europe/Budapest"
+    },
+    {
+      "city": "Buenos Aires",
+      "country": "Argentina",
+      "countryCode": "AR",
+      "geonameId": 3435910,
+      "geonamesCity": "Buenos Aires",
+      "geonamesZone": "America/Argentina/Buenos_Aires",
+      "expectedZone": "America/Argentina/Buenos_Aires"
+    },
+    {
+      "city": "Cairo",
+      "country": "Egypt",
+      "countryCode": "EG",
+      "geonameId": 360630,
+      "geonamesCity": "Cairo",
+      "geonamesZone": "Africa/Cairo",
+      "expectedZone": "Africa/Cairo"
+    },
+    {
+      "city": "Cape Town",
+      "country": "South Africa",
+      "countryCode": "ZA",
+      "geonameId": 3369157,
+      "geonamesCity": "Cape Town",
+      "geonamesZone": "Africa/Johannesburg",
+      "expectedZone": "Africa/Johannesburg"
+    },
+    {
+      "city": "Casablanca",
+      "country": "Morocco",
+      "countryCode": "MA",
+      "geonameId": 2553604,
+      "geonamesCity": "Casablanca",
+      "geonamesZone": "Africa/Casablanca",
+      "expectedZone": "Africa/Casablanca"
+    },
+    {
+      "city": "Caracas",
+      "country": "Venezuela",
+      "countryCode": "VE",
+      "geonameId": 3646738,
+      "geonamesCity": "Caracas",
+      "geonamesZone": "America/Caracas",
+      "expectedZone": "America/Caracas"
+    },
+    {
+      "city": "Chennai",
+      "country": "India",
+      "countryCode": "IN",
+      "geonameId": 1264527,
+      "geonamesCity": "Chennai",
+      "geonamesZone": "Asia/Kolkata",
+      "expectedZone": "Asia/Kolkata"
+    },
+    {
+      "city": "Chicago",
+      "country": "United States",
+      "countryCode": "US",
+      "geonameId": 4887398,
+      "geonamesCity": "Chicago",
+      "geonamesZone": "America/Chicago",
+      "expectedZone": "America/Chicago"
+    },
+    {
+      "city": "Colombo",
+      "country": "Sri Lanka",
+      "countryCode": "LK",
+      "geonameId": 1248991,
+      "geonamesCity": "Colombo",
+      "geonamesZone": "Asia/Colombo",
+      "expectedZone": "Asia/Colombo"
+    },
+    {
+      "city": "Copenhagen",
+      "country": "Denmark",
+      "countryCode": "DK",
+      "geonameId": 2618425,
+      "geonamesCity": "Copenhagen",
+      "geonamesZone": "Europe/Copenhagen",
+      "expectedZone": "Europe/Copenhagen"
+    },
+    {
+      "city": "Dakar",
+      "country": "Senegal",
+      "countryCode": "SN",
+      "geonameId": 2253354,
+      "geonamesCity": "Dakar",
+      "geonamesZone": "Africa/Dakar",
+      "expectedZone": "Africa/Dakar"
+    },
+    {
+      "city": "Dallas",
+      "country": "United States",
+      "countryCode": "US",
+      "geonameId": 4684888,
+      "geonamesCity": "Dallas",
+      "geonamesZone": "America/Chicago",
+      "expectedZone": "America/Chicago"
+    },
+    {
+      "city": "Denver",
+      "country": "United States",
+      "countryCode": "US",
+      "geonameId": 5419384,
+      "geonamesCity": "Denver",
+      "geonamesZone": "America/Denver",
+      "expectedZone": "America/Denver"
+    },
+    {
+      "city": "Dar es Salaam",
+      "country": "Tanzania",
+      "countryCode": "TZ",
+      "geonameId": 160263,
+      "geonamesCity": "Dar es Salaam",
+      "geonamesZone": "Africa/Dar_es_Salaam",
+      "expectedZone": "Africa/Dar_es_Salaam"
+    },
+    {
+      "city": "Dhaka",
+      "country": "Bangladesh",
+      "countryCode": "BD",
+      "geonameId": 1185241,
+      "geonamesCity": "Dhaka",
+      "geonamesZone": "Asia/Dhaka",
+      "expectedZone": "Asia/Dhaka"
+    },
+    {
+      "city": "Dushanbe",
+      "country": "Tajikistan",
+      "countryCode": "TJ",
+      "geonameId": 1221874,
+      "geonamesCity": "Dushanbe",
+      "geonamesZone": "Asia/Dushanbe",
+      "expectedZone": "Asia/Dushanbe"
+    },
+    {
+      "city": "Dubai",
+      "country": "United Arab Emirates",
+      "countryCode": "AE",
+      "geonameId": 292223,
+      "geonamesCity": "Dubai",
+      "geonamesZone": "Asia/Dubai",
+      "expectedZone": "Asia/Dubai"
+    },
+    {
+      "city": "Dublin",
+      "country": "Ireland",
+      "countryCode": "IE",
+      "geonameId": 2964574,
+      "geonamesCity": "Dublin",
+      "geonamesZone": "Europe/Dublin",
+      "expectedZone": "Europe/Dublin"
+    },
+    {
+      "city": "Georgetown",
+      "country": "Guyana",
+      "countryCode": "GY",
+      "geonameId": 3378644,
+      "geonamesCity": "Georgetown",
+      "geonamesZone": "America/Guyana",
+      "expectedZone": "America/Guyana"
+    },
+    {
+      "city": "Guatemala City",
+      "country": "Guatemala",
+      "countryCode": "GT",
+      "geonameId": 3598132,
+      "geonamesCity": "Guatemala City",
+      "geonamesZone": "America/Guatemala",
+      "expectedZone": "America/Guatemala"
+    },
+    {
+      "city": "Harare",
+      "country": "Zimbabwe",
+      "countryCode": "ZW",
+      "geonameId": 890299,
+      "geonamesCity": "Harare",
+      "geonamesZone": "Africa/Harare",
+      "expectedZone": "Africa/Harare"
+    },
+    {
+      "city": "Havana",
+      "country": "Cuba",
+      "countryCode": "CU",
+      "geonameId": 3553478,
+      "geonamesCity": "Havana",
+      "geonamesZone": "America/Havana",
+      "expectedZone": "America/Havana"
+    },
+    {
+      "city": "Hanoi",
+      "country": "Vietnam",
+      "countryCode": "VN",
+      "geonameId": 1581130,
+      "geonamesCity": "Hanoi",
+      "geonamesZone": "Asia/Bangkok",
+      "expectedZone": "Asia/Ho_Chi_Minh"
+    },
+    {
+      "city": "Ho Chi Minh City",
+      "country": "Vietnam",
+      "countryCode": "VN",
+      "geonameId": 1566083,
+      "geonamesCity": "Ho Chi Minh City",
+      "geonamesZone": "Asia/Ho_Chi_Minh",
+      "expectedZone": "Asia/Ho_Chi_Minh"
+    },
+    {
+      "city": "Helsinki",
+      "country": "Finland",
+      "countryCode": "FI",
+      "geonameId": 658225,
+      "geonamesCity": "Helsinki",
+      "geonamesZone": "Europe/Helsinki",
+      "expectedZone": "Europe/Helsinki"
+    },
+    {
+      "city": "Hong Kong",
+      "country": "China",
+      "countryCode": "HK",
+      "geonameId": 1819729,
+      "geonamesCity": "Hong Kong",
+      "geonamesZone": "Asia/Hong_Kong",
+      "expectedZone": "Asia/Hong_Kong"
+    },
+    {
+      "city": "Honolulu",
+      "country": "United States",
+      "countryCode": "US",
+      "geonameId": 5856195,
+      "geonamesCity": "Honolulu",
+      "geonamesZone": "Pacific/Honolulu",
+      "expectedZone": "Pacific/Honolulu"
+    },
+    {
+      "city": "Islamabad",
+      "country": "Pakistan",
+      "countryCode": "PK",
+      "geonameId": 1176615,
+      "geonamesCity": "Islamabad",
+      "geonamesZone": "Asia/Karachi",
+      "expectedZone": "Asia/Karachi"
+    },
+    {
+      "city": "Istanbul",
+      "country": "Türkiye",
+      "countryCode": "TR",
+      "geonameId": 745044,
+      "geonamesCity": "Istanbul",
+      "geonamesZone": "Europe/Istanbul",
+      "expectedZone": "Europe/Istanbul"
+    },
+    {
+      "city": "Jakarta",
+      "country": "Indonesia",
+      "countryCode": "ID",
+      "geonameId": 1642911,
+      "geonamesCity": "Jakarta",
+      "geonamesZone": "Asia/Jakarta",
+      "expectedZone": "Asia/Jakarta"
+    },
+    {
+      "city": "Johannesburg",
+      "country": "South Africa",
+      "countryCode": "ZA",
+      "geonameId": 993800,
+      "geonamesCity": "Johannesburg",
+      "geonamesZone": "Africa/Johannesburg",
+      "expectedZone": "Africa/Johannesburg"
+    },
+    {
+      "city": "Kampala",
+      "country": "Uganda",
+      "countryCode": "UG",
+      "geonameId": 232422,
+      "geonamesCity": "Kampala",
+      "geonamesZone": "Africa/Kampala",
+      "expectedZone": "Africa/Kampala"
+    },
+    {
+      "city": "Karachi",
+      "country": "Pakistan",
+      "countryCode": "PK",
+      "geonameId": 1174872,
+      "geonamesCity": "Karachi",
+      "geonamesZone": "Asia/Karachi",
+      "expectedZone": "Asia/Karachi"
+    },
+    {
+      "city": "Kathmandu",
+      "country": "Nepal",
+      "countryCode": "NP",
+      "geonameId": 1283240,
+      "geonamesCity": "Kathmandu",
+      "geonamesZone": "Asia/Kathmandu",
+      "expectedZone": "Asia/Kathmandu"
+    },
+    {
+      "city": "Khartoum",
+      "country": "Sudan",
+      "countryCode": "SD",
+      "geonameId": 379252,
+      "geonamesCity": "Khartoum",
+      "geonamesZone": "Africa/Khartoum",
+      "expectedZone": "Africa/Khartoum"
+    },
+    {
+      "city": "Kinshasa",
+      "country": "Democratic Republic of the Congo",
+      "countryCode": "CD",
+      "geonameId": 2314302,
+      "geonamesCity": "Kinshasa",
+      "geonamesZone": "Africa/Kinshasa",
+      "expectedZone": "Africa/Kinshasa"
+    },
+    {
+      "city": "Kolkata",
+      "country": "India",
+      "countryCode": "IN",
+      "geonameId": 1275004,
+      "geonamesCity": "Kolkata",
+      "geonamesZone": "Asia/Kolkata",
+      "expectedZone": "Asia/Kolkata"
+    },
+    {
+      "city": "Kuwait City",
+      "country": "Kuwait",
+      "countryCode": "KW",
+      "geonameId": 285787,
+      "geonamesCity": "Kuwait City",
+      "geonamesZone": "Asia/Kuwait",
+      "expectedZone": "Asia/Kuwait"
+    },
+    {
+      "city": "Kuala Lumpur",
+      "country": "Malaysia",
+      "countryCode": "MY",
+      "geonameId": 1735161,
+      "geonamesCity": "Kuala Lumpur",
+      "geonamesZone": "Asia/Kuala_Lumpur",
+      "expectedZone": "Asia/Kuala_Lumpur"
+    },
+    {
+      "city": "Kyiv",
+      "country": "Ukraine",
+      "countryCode": "UA",
+      "geonameId": 703448,
+      "geonamesCity": "Kyiv",
+      "geonamesZone": "Europe/Kyiv",
+      "expectedZone": "Europe/Kyiv"
+    },
+    {
+      "city": "La Paz",
+      "country": "Bolivia",
+      "countryCode": "BO",
+      "geonameId": 3911925,
+      "geonamesCity": "La Paz",
+      "geonamesZone": "America/La_Paz",
+      "expectedZone": "America/La_Paz"
+    },
+    {
+      "city": "Lagos",
+      "country": "Nigeria",
+      "countryCode": "NG",
+      "geonameId": 2332459,
+      "geonamesCity": "Lagos",
+      "geonamesZone": "Africa/Lagos",
+      "expectedZone": "Africa/Lagos"
+    },
+    {
+      "city": "Lima",
+      "country": "Peru",
+      "countryCode": "PE",
+      "geonameId": 3936456,
+      "geonamesCity": "Lima",
+      "geonamesZone": "America/Lima",
+      "expectedZone": "America/Lima"
+    },
+    {
+      "city": "Lisbon",
+      "country": "Portugal",
+      "countryCode": "PT",
+      "geonameId": 2267057,
+      "geonamesCity": "Lisbon",
+      "geonamesZone": "Europe/Lisbon",
+      "expectedZone": "Europe/Lisbon"
+    },
+    {
+      "city": "Luanda",
+      "country": "Angola",
+      "countryCode": "AO",
+      "geonameId": 2240449,
+      "geonamesCity": "Luanda",
+      "geonamesZone": "Africa/Luanda",
+      "expectedZone": "Africa/Luanda"
+    },
+    {
+      "city": "London",
+      "country": "United Kingdom",
+      "countryCode": "GB",
+      "geonameId": 2643743,
+      "geonamesCity": "London",
+      "geonamesZone": "Europe/London",
+      "expectedZone": "Europe/London"
+    },
+    {
+      "city": "Los Angeles",
+      "country": "United States",
+      "countryCode": "US",
+      "geonameId": 5368361,
+      "geonamesCity": "Los Angeles",
+      "geonamesZone": "America/Los_Angeles",
+      "expectedZone": "America/Los_Angeles"
+    },
+    {
+      "city": "Lusaka",
+      "country": "Zambia",
+      "countryCode": "ZM",
+      "geonameId": 909137,
+      "geonamesCity": "Lusaka",
+      "geonamesZone": "Africa/Lusaka",
+      "expectedZone": "Africa/Lusaka"
+    },
+    {
+      "city": "Managua",
+      "country": "Nicaragua",
+      "countryCode": "NI",
+      "geonameId": 3617763,
+      "geonamesCity": "Managua",
+      "geonamesZone": "America/Managua",
+      "expectedZone": "America/Managua"
+    },
+    {
+      "city": "Madrid",
+      "country": "Spain",
+      "countryCode": "ES",
+      "geonameId": 3117735,
+      "geonamesCity": "Madrid",
+      "geonamesZone": "Europe/Madrid",
+      "expectedZone": "Europe/Madrid"
+    },
+    {
+      "city": "Manila",
+      "country": "Philippines",
+      "countryCode": "PH",
+      "geonameId": 1701668,
+      "geonamesCity": "Manila",
+      "geonamesZone": "Asia/Manila",
+      "expectedZone": "Asia/Manila"
+    },
+    {
+      "city": "Maputo",
+      "country": "Mozambique",
+      "countryCode": "MZ",
+      "geonameId": 1040652,
+      "geonamesCity": "Maputo",
+      "geonamesZone": "Africa/Maputo",
+      "expectedZone": "Africa/Maputo"
+    },
+    {
+      "city": "Melbourne",
+      "country": "Australia",
+      "countryCode": "AU",
+      "geonameId": 2158177,
+      "geonamesCity": "Melbourne",
+      "geonamesZone": "Australia/Melbourne",
+      "expectedZone": "Australia/Melbourne"
+    },
+    {
+      "city": "Mexico City",
+      "country": "Mexico",
+      "countryCode": "MX",
+      "geonameId": 3530597,
+      "geonamesCity": "Mexico City",
+      "geonamesZone": "America/Mexico_City",
+      "expectedZone": "America/Mexico_City"
+    },
+    {
+      "city": "Miami",
+      "country": "United States",
+      "countryCode": "US",
+      "geonameId": 4164138,
+      "geonamesCity": "Miami",
+      "geonamesZone": "America/New_York",
+      "expectedZone": "America/New_York"
+    },
+    {
+      "city": "Milan",
+      "country": "Italy",
+      "countryCode": "IT",
+      "geonameId": 3173435,
+      "geonamesCity": "Milan",
+      "geonamesZone": "Europe/Rome",
+      "expectedZone": "Europe/Rome"
+    },
+    {
+      "city": "Mogadishu",
+      "country": "Somalia",
+      "countryCode": "SO",
+      "geonameId": 53654,
+      "geonamesCity": "Mogadishu",
+      "geonamesZone": "Africa/Mogadishu",
+      "expectedZone": "Africa/Mogadishu"
+    },
+    {
+      "city": "Monrovia",
+      "country": "Liberia",
+      "countryCode": "LR",
+      "geonameId": 2274895,
+      "geonamesCity": "Monrovia",
+      "geonamesZone": "Africa/Monrovia",
+      "expectedZone": "Africa/Monrovia"
+    },
+    {
+      "city": "Montevideo",
+      "country": "Uruguay",
+      "countryCode": "UY",
+      "geonameId": 3441575,
+      "geonamesCity": "Montevideo",
+      "geonamesZone": "America/Montevideo",
+      "expectedZone": "America/Montevideo"
+    },
+    {
+      "city": "Montreal",
+      "country": "Canada",
+      "countryCode": "CA",
+      "geonameId": 6077243,
+      "geonamesCity": "Montréal",
+      "geonamesZone": "America/Toronto",
+      "expectedZone": "America/Toronto"
+    },
+    {
+      "city": "Moscow",
+      "country": "Russia",
+      "countryCode": "RU",
+      "geonameId": 524901,
+      "geonamesCity": "Moscow",
+      "geonamesZone": "Europe/Moscow",
+      "expectedZone": "Europe/Moscow"
+    },
+    {
+      "city": "Mumbai",
+      "country": "India",
+      "countryCode": "IN",
+      "geonameId": 1275339,
+      "geonamesCity": "Mumbai",
+      "geonamesZone": "Asia/Kolkata",
+      "expectedZone": "Asia/Kolkata"
+    },
+    {
+      "city": "Munich",
+      "country": "Germany",
+      "countryCode": "DE",
+      "geonameId": 2867714,
+      "geonamesCity": "Munich",
+      "geonamesZone": "Europe/Berlin",
+      "expectedZone": "Europe/Berlin"
+    },
+    {
+      "city": "Muscat",
+      "country": "Oman",
+      "countryCode": "OM",
+      "geonameId": 287286,
+      "geonamesCity": "Muscat",
+      "geonamesZone": "Asia/Muscat",
+      "expectedZone": "Asia/Muscat"
+    },
+    {
+      "city": "Nairobi",
+      "country": "Kenya",
+      "countryCode": "KE",
+      "geonameId": 184745,
+      "geonamesCity": "Nairobi",
+      "geonamesZone": "Africa/Nairobi",
+      "expectedZone": "Africa/Nairobi"
+    },
+    {
+      "city": "New Delhi",
+      "country": "India",
+      "countryCode": "IN",
+      "geonameId": 1261481,
+      "geonamesCity": "New Delhi",
+      "geonamesZone": "Asia/Kolkata",
+      "expectedZone": "Asia/Kolkata"
+    },
+    {
+      "city": "New York",
+      "country": "United States",
+      "countryCode": "US",
+      "geonameId": 5128581,
+      "geonamesCity": "New York City",
+      "geonamesZone": "America/New_York",
+      "expectedZone": "America/New_York"
+    },
+    {
+      "city": "Osaka",
+      "country": "Japan",
+      "countryCode": "JP",
+      "geonameId": 1853909,
+      "geonamesCity": "Osaka",
+      "geonamesZone": "Asia/Tokyo",
+      "expectedZone": "Asia/Tokyo"
+    },
+    {
+      "city": "Oslo",
+      "country": "Norway",
+      "countryCode": "NO",
+      "geonameId": 3143244,
+      "geonamesCity": "Oslo",
+      "geonamesZone": "Europe/Oslo",
+      "expectedZone": "Europe/Oslo"
+    },
+    {
+      "city": "Panama City",
+      "country": "Panama",
+      "countryCode": "PA",
+      "geonameId": 3703443,
+      "geonamesCity": "Panama City",
+      "geonamesZone": "America/Panama",
+      "expectedZone": "America/Panama"
+    },
+    {
+      "city": "Paris",
+      "country": "France",
+      "countryCode": "FR",
+      "geonameId": 2988507,
+      "geonamesCity": "Paris",
+      "geonamesZone": "Europe/Paris",
+      "expectedZone": "Europe/Paris"
+    },
+    {
+      "city": "Perth",
+      "country": "Australia",
+      "countryCode": "AU",
+      "geonameId": 2063523,
+      "geonamesCity": "Perth",
+      "geonamesZone": "Australia/Perth",
+      "expectedZone": "Australia/Perth"
+    },
+    {
+      "city": "Phnom Penh",
+      "country": "Cambodia",
+      "countryCode": "KH",
+      "geonameId": 1821306,
+      "geonamesCity": "Phnom Penh",
+      "geonamesZone": "Asia/Phnom_Penh",
+      "expectedZone": "Asia/Phnom_Penh"
+    },
+    {
+      "city": "Prague",
+      "country": "Czechia",
+      "countryCode": "CZ",
+      "geonameId": 3067696,
+      "geonamesCity": "Prague",
+      "geonamesZone": "Europe/Prague",
+      "expectedZone": "Europe/Prague"
+    },
+    {
+      "city": "Quito",
+      "country": "Ecuador",
+      "countryCode": "EC",
+      "geonameId": 3652462,
+      "geonamesCity": "Quito",
+      "geonamesZone": "America/Guayaquil",
+      "expectedZone": "America/Guayaquil"
+    },
+    {
+      "city": "Reykjavík",
+      "country": "Iceland",
+      "countryCode": "IS",
+      "geonameId": 3413829,
+      "geonamesCity": "Reykjavík",
+      "geonamesZone": "Atlantic/Reykjavik",
+      "expectedZone": "Atlantic/Reykjavik"
+    },
+    {
+      "city": "Rio de Janeiro",
+      "country": "Brazil",
+      "countryCode": "BR",
+      "geonameId": 3451190,
+      "geonamesCity": "Rio de Janeiro",
+      "geonamesZone": "America/Sao_Paulo",
+      "expectedZone": "America/Sao_Paulo"
+    },
+    {
+      "city": "Riyadh",
+      "country": "Saudi Arabia",
+      "countryCode": "SA",
+      "geonameId": 108410,
+      "geonamesCity": "Riyadh",
+      "geonamesZone": "Asia/Riyadh",
+      "expectedZone": "Asia/Riyadh"
+    },
+    {
+      "city": "Rome",
+      "country": "Italy",
+      "countryCode": "IT",
+      "geonameId": 3169070,
+      "geonamesCity": "Rome",
+      "geonamesZone": "Europe/Rome",
+      "expectedZone": "Europe/Rome"
+    },
+    {
+      "city": "San José",
+      "country": "Costa Rica",
+      "countryCode": "CR",
+      "geonameId": 3621849,
+      "geonamesCity": "San José",
+      "geonamesZone": "America/Costa_Rica",
+      "expectedZone": "America/Costa_Rica"
+    },
+    {
+      "city": "San Salvador",
+      "country": "El Salvador",
+      "countryCode": "SV",
+      "geonameId": 3583361,
+      "geonamesCity": "San Salvador",
+      "geonamesZone": "America/El_Salvador",
+      "expectedZone": "America/El_Salvador"
+    },
+    {
+      "city": "San Francisco",
+      "country": "United States",
+      "countryCode": "US",
+      "geonameId": 5391959,
+      "geonamesCity": "San Francisco",
+      "geonamesZone": "America/Los_Angeles",
+      "expectedZone": "America/Los_Angeles"
+    },
+    {
+      "city": "Santiago",
+      "country": "Chile",
+      "countryCode": "CL",
+      "geonameId": 3871336,
+      "geonamesCity": "Santiago",
+      "geonamesZone": "America/Santiago",
+      "expectedZone": "America/Santiago"
+    },
+    {
+      "city": "São Paulo",
+      "country": "Brazil",
+      "countryCode": "BR",
+      "geonameId": 3448439,
+      "geonamesCity": "São Paulo",
+      "geonamesZone": "America/Sao_Paulo",
+      "expectedZone": "America/Sao_Paulo"
+    },
+    {
+      "city": "Seoul",
+      "country": "South Korea",
+      "countryCode": "KR",
+      "geonameId": 1835848,
+      "geonamesCity": "Seoul",
+      "geonamesZone": "Asia/Seoul",
+      "expectedZone": "Asia/Seoul"
+    },
+    {
+      "city": "Shanghai",
+      "country": "China",
+      "countryCode": "CN",
+      "geonameId": 1796236,
+      "geonamesCity": "Shanghai",
+      "geonamesZone": "Asia/Shanghai",
+      "expectedZone": "Asia/Shanghai"
+    },
+    {
+      "city": "Singapore",
+      "country": "Singapore",
+      "countryCode": "SG",
+      "geonameId": 1880252,
+      "geonamesCity": "Singapore",
+      "geonamesZone": "Asia/Singapore",
+      "expectedZone": "Asia/Singapore"
+    },
+    {
+      "city": "Sapporo",
+      "country": "Japan",
+      "countryCode": "JP",
+      "geonameId": 2128295,
+      "geonamesCity": "Sapporo",
+      "geonamesZone": "Asia/Tokyo",
+      "expectedZone": "Asia/Tokyo"
+    },
+    {
+      "city": "Stockholm",
+      "country": "Sweden",
+      "countryCode": "SE",
+      "geonameId": 2673730,
+      "geonamesCity": "Stockholm",
+      "geonamesZone": "Europe/Stockholm",
+      "expectedZone": "Europe/Stockholm"
+    },
+    {
+      "city": "Sydney",
+      "country": "Australia",
+      "countryCode": "AU",
+      "geonameId": 2147714,
+      "geonamesCity": "Sydney",
+      "geonamesZone": "Australia/Sydney",
+      "expectedZone": "Australia/Sydney"
+    },
+    {
+      "city": "Taipei",
+      "country": "Taiwan",
+      "countryCode": "TW",
+      "geonameId": 1668341,
+      "geonamesCity": "Taipei",
+      "geonamesZone": "Asia/Taipei",
+      "expectedZone": "Asia/Taipei"
+    },
+    {
+      "city": "Tashkent",
+      "country": "Uzbekistan",
+      "countryCode": "UZ",
+      "geonameId": 1512569,
+      "geonamesCity": "Tashkent",
+      "geonamesZone": "Asia/Tashkent",
+      "expectedZone": "Asia/Tashkent"
+    },
+    {
+      "city": "Tbilisi",
+      "country": "Georgia",
+      "countryCode": "GE",
+      "geonameId": 611717,
+      "geonamesCity": "Tbilisi",
+      "geonamesZone": "Asia/Tbilisi",
+      "expectedZone": "Asia/Tbilisi"
+    },
+    {
+      "city": "Tehran",
+      "country": "Iran",
+      "countryCode": "IR",
+      "geonameId": 112931,
+      "geonamesCity": "Tehran",
+      "geonamesZone": "Asia/Tehran",
+      "expectedZone": "Asia/Tehran"
+    },
+    {
+      "city": "Tel Aviv",
+      "country": "Israel",
+      "countryCode": "IL",
+      "geonameId": 293397,
+      "geonamesCity": "Tel Aviv",
+      "geonamesZone": "Asia/Jerusalem",
+      "expectedZone": "Asia/Jerusalem"
+    },
+    {
+      "city": "Tokyo",
+      "country": "Japan",
+      "countryCode": "JP",
+      "geonameId": 1850147,
+      "geonamesCity": "Tokyo",
+      "geonamesZone": "Asia/Tokyo",
+      "expectedZone": "Asia/Tokyo"
+    },
+    {
+      "city": "Toronto",
+      "country": "Canada",
+      "countryCode": "CA",
+      "geonameId": 6167865,
+      "geonamesCity": "Toronto",
+      "geonamesZone": "America/Toronto",
+      "expectedZone": "America/Toronto"
+    },
+    {
+      "city": "Tunis",
+      "country": "Tunisia",
+      "countryCode": "TN",
+      "geonameId": 2464470,
+      "geonamesCity": "Tunis",
+      "geonamesZone": "Africa/Tunis",
+      "expectedZone": "Africa/Tunis"
+    },
+    {
+      "city": "Ulaanbaatar",
+      "country": "Mongolia",
+      "countryCode": "MN",
+      "geonameId": 2028462,
+      "geonamesCity": "Ulan Bator",
+      "geonamesZone": "Asia/Ulaanbaatar",
+      "expectedZone": "Asia/Ulaanbaatar"
+    },
+    {
+      "city": "Vancouver",
+      "country": "Canada",
+      "countryCode": "CA",
+      "geonameId": 6173331,
+      "geonamesCity": "Vancouver",
+      "geonamesZone": "America/Vancouver",
+      "expectedZone": "America/Vancouver"
+    },
+    {
+      "city": "Vienna",
+      "country": "Austria",
+      "countryCode": "AT",
+      "geonameId": 2761369,
+      "geonamesCity": "Vienna",
+      "geonamesZone": "Europe/Vienna",
+      "expectedZone": "Europe/Vienna"
+    },
+    {
+      "city": "Vientiane",
+      "country": "Laos",
+      "countryCode": "LA",
+      "geonameId": 1651944,
+      "geonamesCity": "Vientiane",
+      "geonamesZone": "Asia/Vientiane",
+      "expectedZone": "Asia/Vientiane"
+    },
+    {
+      "city": "Warsaw",
+      "country": "Poland",
+      "countryCode": "PL",
+      "geonameId": 756135,
+      "geonamesCity": "Warsaw",
+      "geonamesZone": "Europe/Warsaw",
+      "expectedZone": "Europe/Warsaw"
+    },
+    {
+      "city": "Windhoek",
+      "country": "Namibia",
+      "countryCode": "NA",
+      "geonameId": 3352136,
+      "geonamesCity": "Windhoek",
+      "geonamesZone": "Africa/Windhoek",
+      "expectedZone": "Africa/Windhoek"
+    },
+    {
+      "city": "Yangon",
+      "country": "Myanmar",
+      "countryCode": "MM",
+      "geonameId": 1298824,
+      "geonamesCity": "Yangon",
+      "geonamesZone": "Asia/Yangon",
+      "expectedZone": "Asia/Yangon"
+    },
+    {
+      "city": "Yerevan",
+      "country": "Armenia",
+      "countryCode": "AM",
+      "geonameId": 616052,
+      "geonamesCity": "Yerevan",
+      "geonamesZone": "Asia/Yerevan",
+      "expectedZone": "Asia/Yerevan"
+    },
+    {
+      "city": "Zürich",
+      "country": "Switzerland",
+      "countryCode": "CH",
+      "geonameId": 2657896,
+      "geonamesCity": "Zürich",
+      "geonamesZone": "Europe/Zurich",
+      "expectedZone": "Europe/Zurich"
+    },
+    {
+      "city": "Benghazi",
+      "country": "Libya",
+      "countryCode": "LY",
+      "geonameId": 88319,
+      "geonamesCity": "Benghazi",
+      "geonamesZone": "Africa/Tripoli",
+      "expectedZone": "Africa/Tripoli"
+    },
+    {
+      "city": "Kigali",
+      "country": "Rwanda",
+      "countryCode": "RW",
+      "geonameId": 202061,
+      "geonamesCity": "Kigali",
+      "geonamesZone": "Africa/Kigali",
+      "expectedZone": "Africa/Kigali"
+    },
+    {
+      "city": "Tripoli",
+      "country": "Libya",
+      "countryCode": "LY",
+      "geonameId": 2210247,
+      "geonamesCity": "Tripoli",
+      "geonamesZone": "Africa/Tripoli",
+      "expectedZone": "Africa/Tripoli"
+    },
+    {
+      "city": "Zagreb",
+      "country": "Croatia",
+      "countryCode": "HR",
+      "geonameId": 3186886,
+      "geonamesCity": "Zagreb",
+      "geonamesZone": "Europe/Zagreb",
+      "expectedZone": "Europe/Zagreb"
+    }
+  ]
+}
