@@ -10,6 +10,20 @@ const CONDITIONS = {
   80: 'Rain showers', 81: 'Rain showers', 82: 'Heavy rain showers',
   85: 'Snow showers', 86: 'Heavy snow showers', 95: 'Thunderstorm', 96: 'Thunderstorm with hail', 99: 'Thunderstorm with hail',
 };
+const WEATHER_DETAIL_OPTIONS = [
+  { key: 'feelsLike', label: 'Feels-like temperature' },
+  { key: 'humidity', label: 'Humidity' },
+  { key: 'wind', label: 'Wind speed' },
+  { key: 'precipitation', label: 'Precipitation' },
+  { key: 'rainChance', label: 'Hourly rain chance' },
+];
+
+function readWeatherDetails(source) {
+  return Object.fromEntries(WEATHER_DETAIL_OPTIONS.map(({ key }) => [
+    key,
+    typeof source?.[key] === 'boolean' ? source[key] : true,
+  ]));
+}
 
 export function buildWeather(id, ctx) {
   const root = document.createElement('section');
@@ -17,8 +31,30 @@ export function buildWeather(id, ctx) {
   let prefs = readPrefs();
   let requestToken = 0;
   let refreshTimer = null;
+  let locationMenu = null;
+  let locationButton = null;
   const settingsTitleId = `${id || 'weather'}-settings-title`;
-  showSetup();
+  function setLocationMenuOpen(open, focusIndex = null) {
+    if (!locationMenu || !locationButton) return;
+    locationMenu.hidden = !open;
+    locationButton.setAttribute('aria-expanded', String(open));
+    if (open && focusIndex !== null) {
+      const options = locationMenu.querySelectorAll('.weather-location-option');
+      options[Math.max(0, Math.min(focusIndex, options.length - 1))]?.focus({ preventScroll: true });
+    }
+  }
+  const dismissLocationMenu = event => {
+    if (locationMenu && !root.contains(event.target)) setLocationMenuOpen(false);
+  };
+  document.addEventListener('pointerdown', dismissLocationMenu, true);
+  const initialLocation = prefs.locations.find(item => item.location === prefs.activeLocation)
+    || prefs.locations[0];
+  if (initialLocation && ['celsius', 'fahrenheit'].includes(initialLocation.unit)) {
+    savePrefs(prefs);
+    loadForecast(initialLocation.location, initialLocation.unit);
+  } else {
+    showSetup();
+  }
 
   function stopRefreshTimer() {
     clearTimeout(refreshTimer);
@@ -59,89 +95,26 @@ export function buildWeather(id, ctx) {
 
   function showSetup(message = '') {
     stopRefreshTimer();
+    setLocationMenuOpen(false);
+    locationMenu = null;
+    locationButton = null;
     requestToken++;
-    const hasLocations = prefs.locations.length > 0;
-    const selectedLocation = prefs.locations.find(item => item.location === prefs.activeLocation) || prefs.locations[0];
-    let addingLocation = !hasLocations;
     root.innerHTML = `<form class="weather-setup">
-      <div><span class="util-muted">Saved on this device</span><h2 style="margin:.15rem 0;font-size:1.35rem">Weather, where you are.</h2><p class="util-muted" style="margin:.25rem 0 0">Choose a saved place or add another location.</p></div>
-      <div class="weather-saved-row">
-        <label class="weather-saved-label">Saved location<select class="weather-saved-location util-field"></select></label>
-        <button class="util-action weather-remove" type="button">Remove saved location</button>
-      </div>
-      <label class="weather-location-label">New location<input class="weather-location util-field" type="text" autocomplete="off" placeholder="City or town"></label>
+      <div><h2 style="margin:.15rem 0;font-size:1.35rem">Weather, where you are.</h2><p class="util-muted" style="margin:.25rem 0 0">Add a location and choose its temperature unit.</p></div>
+      <label class="weather-location-label">Location<input class="weather-location util-field" type="text" autocomplete="off" placeholder="City or town" required></label>
       <label>Temperature units<select class="weather-unit util-field" required><option value="" disabled>Choose a unit</option><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
       <div class="weather-error" role="status" aria-live="polite"></div>
       <div class="weather-setup-actions">
-        <button class="util-action weather-submit" type="submit" style="background:rgba(183,205,118,.19)">Show forecast</button>
-        <button class="util-action weather-add" type="button">Add another location</button>
-        <button class="util-action weather-back" type="button">Back to saved locations</button>
+        <button class="util-action weather-submit" type="submit">Show forecast</button>
       </div>
     </form>`;
     const form = root.querySelector('form');
-    const savedRow = form.querySelector('.weather-saved-row');
-    const savedSelect = form.querySelector('.weather-saved-location');
-    const locationLabel = form.querySelector('.weather-location-label');
     const locationInput = form.querySelector('.weather-location');
-    const addButton = form.querySelector('.weather-add');
-    const backButton = form.querySelector('.weather-back');
-    const removeButton = form.querySelector('.weather-remove');
     const unitSelect = form.querySelector('.weather-unit');
-    prefs.locations.forEach(item => {
-      const option = document.createElement('option');
-      option.value = item.location;
-      option.textContent = item.location;
-      savedSelect.append(option);
-    });
-    if (selectedLocation) {
-      savedSelect.value = selectedLocation.location;
-      unitSelect.value = selectedLocation.unit;
-    } else {
-      unitSelect.value = '';
-    }
-    function renderLocationMode() {
-      savedRow.hidden = addingLocation || !hasLocations;
-      locationLabel.hidden = !addingLocation;
-      locationInput.required = addingLocation;
-      savedSelect.required = !addingLocation && hasLocations;
-      addButton.hidden = addingLocation || !hasLocations;
-      backButton.hidden = !addingLocation || !hasLocations;
-      form.querySelector('.weather-submit').textContent = addingLocation ? 'Add & show forecast' : 'Show forecast';
-    }
-    function updateUnitForSelection() {
-      const item = prefs.locations.find(place => place.location === savedSelect.value);
-      unitSelect.value = item?.unit || '';
-    }
-    savedSelect.addEventListener('change', updateUnitForSelection);
-    removeButton.addEventListener('click', () => {
-      const removed = removeSavedLocation(savedSelect.value);
-      if (!removed) return;
-      if (removed.failed) {
-        form.querySelector('.weather-error').textContent = 'Your location change was not saved. Browser storage is unavailable; try again.';
-        return;
-      }
-      showSetup(prefs.locations.length
-        ? `Removed ${removed.location} from saved locations.`
-        : `Removed ${removed.location}. Add a new location to see its forecast.`);
-    });
-    addButton.addEventListener('click', () => {
-      addingLocation = true;
-      locationInput.value = '';
-      unitSelect.value = '';
-      renderLocationMode();
-      locationInput.focus({ preventScroll: true });
-    });
-    backButton.addEventListener('click', () => {
-      addingLocation = false;
-      updateUnitForSelection();
-      renderLocationMode();
-      savedSelect.focus({ preventScroll: true });
-    });
-    renderLocationMode();
     form.querySelector('.weather-error').textContent = message;
     form.addEventListener('submit', async event => {
       event.preventDefault();
-      const location = addingLocation ? locationInput.value.trim() : savedSelect.value;
+      const location = locationInput.value.trim();
       const unit = unitSelect.value;
       if (!location) return;
       const nextPrefs = {
@@ -163,11 +136,12 @@ export function buildWeather(id, ctx) {
       prefs = nextPrefs;
       await loadForecast(location, unit);
     });
-    (addingLocation ? locationInput : savedSelect).focus({ preventScroll: true });
+    locationInput.focus({ preventScroll: true });
   }
 
   async function loadForecast(location, unit, { background = false } = {}) {
     stopRefreshTimer();
+    setLocationMenuOpen(false);
     const token = ++requestToken;
     if (!background) root.innerHTML = `<div class="weather-loading" role="status" aria-label="Loading forecast">
       <div class="weather-loading-top"><div class="weather-skeleton weather-skeleton-temp"></div><div class="weather-skeleton weather-skeleton-line"></div><div class="weather-skeleton weather-skeleton-meta"></div></div>
@@ -222,8 +196,14 @@ export function buildWeather(id, ctx) {
     const condition = CONDITIONS[current.weather_code] || 'Current conditions';
     root.innerHTML = `<header class="weather-top">
       <div class="weather-top-tools">
-        <select class="weather-location-select util-field" aria-label="Weather location"></select>
-        <button class="util-action weather-remove-current" type="button" aria-label="Remove current location">Remove</button>
+        <div class="weather-location-picker">
+          <button class="weather-location-button util-action" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="${id || 'weather'}-location-menu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-7.2 8-13a8 8 0 1 0-16 0c0 5.8 8 13 8 13Zm0-10.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg>
+            <span class="weather-location-current"></span><span class="weather-location-unit"></span>
+            <svg class="weather-location-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="weather-location-menu" id="${id || 'weather'}-location-menu" role="menu" aria-label="Saved weather locations" hidden></div>
+        </div>
         <button class="weather-settings-button" type="button" aria-label="Weather settings" title="Settings">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Zm9 4.8a9.2 9.2 0 0 0 0-2l2-1.5-2-3.5-2.4 1a8.2 8.2 0 0 0-1.7-1L16.5 3h-4l-.4 2.7a8.2 8.2 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a9.2 9.2 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a8.2 8.2 0 0 0 1.7 1l.4 2.7h4l.4-2.7a8.2 8.2 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5Z"/></svg>
           <span class="sr-only">Settings</span>
@@ -231,7 +211,7 @@ export function buildWeather(id, ctx) {
       </div>
       <a class="weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Weather data by Open-Meteo</a>
       <p class="weather-save-status weather-error" role="status" aria-live="polite"></p>
-      <div class="weather-current"></div><div class="weather-place"></div><div class="weather-meta"></div>
+      <div class="weather-current"></div><div class="weather-place"></div><div class="weather-high-low" aria-label="Today's high and low"></div><div class="weather-meta"></div>
       <div class="weather-refresh-status sr-only" role="status" aria-live="polite"></div>
     </header><div class="weather-panels">
       <section class="weather-panel"><h3>Hourly outlook</h3><div class="weather-list weather-hourly"></div></section>
@@ -243,6 +223,9 @@ export function buildWeather(id, ctx) {
         <label>Temperature units<select class="weather-settings-unit util-field" required><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></label>
         <label>Add a location<input class="weather-settings-location util-field" type="text" autocomplete="off" placeholder="City or town"></label>
         <p class="weather-settings-hint">Leave the location blank to update the selected place.</p>
+        <fieldset class="weather-detail-settings"><legend>Additional weather details</legend>
+          ${WEATHER_DETAIL_OPTIONS.map(({ key, label }) => `<label><input class="weather-detail-toggle" type="checkbox" data-weather-detail="${key}"> ${label}</label>`).join('')}
+        </fieldset>
         <section class="weather-settings-saved" aria-label="Saved locations">
           <h3>Saved locations</h3>
           <div class="weather-settings-locations"></div>
@@ -254,21 +237,44 @@ export function buildWeather(id, ctx) {
     </dialog>`;
     root.querySelector('.weather-current').textContent = `${Math.round(current.temperature_2m)}${degrees}`;
     root.querySelector('.weather-place').textContent = displayName;
-    const locationSelect = root.querySelector('.weather-location-select');
+    const todayHigh = data.daily.temperature_2m_max?.[0];
+    const todayLow = data.daily.temperature_2m_min?.[0];
+    if (Number.isFinite(todayHigh) && Number.isFinite(todayLow)) {
+      root.querySelector('.weather-high-low').textContent = `High ${Math.round(todayHigh)}${degrees} · Low ${Math.round(todayLow)}${degrees}`;
+    } else {
+      root.querySelector('.weather-high-low').hidden = true;
+    }
+    locationButton = root.querySelector('.weather-location-button');
+    locationMenu = root.querySelector('.weather-location-menu');
+    locationButton.dataset.location = prefs.activeLocation;
+    locationButton.setAttribute('aria-label', `Switch weather location; currently ${displayName}, ${degrees}`);
+    locationButton.title = `${displayName} · ${degrees}`;
+    locationButton.querySelector('.weather-location-current').textContent = displayName;
+    locationButton.querySelector('.weather-location-unit').textContent = degrees;
     const savedLocations = root.querySelector('.weather-settings-locations');
     function updateSavedLocationControls() {
-      locationSelect.replaceChildren();
+      locationMenu.replaceChildren();
       savedLocations.replaceChildren();
       prefs.locations.forEach(item => {
-        const option = document.createElement('option');
-        option.value = item.location;
-        option.textContent = item.location === prefs.activeLocation ? displayName : item.location;
-        locationSelect.append(option);
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.className = 'weather-location-option';
+        option.setAttribute('role', 'menuitemradio');
+        option.setAttribute('aria-checked', String(item.location === prefs.activeLocation));
+        option.dataset.location = item.location;
+        const optionName = document.createElement('span');
+        optionName.className = 'weather-location-option-name';
+        optionName.textContent = item.location === prefs.activeLocation ? displayName : item.location;
+        const optionUnit = document.createElement('span');
+        optionUnit.className = 'weather-location-option-unit';
+        optionUnit.textContent = item.unit === 'fahrenheit' ? '°F' : '°C';
+        option.append(optionName, optionUnit);
+        locationMenu.append(option);
 
         const row = document.createElement('div');
         row.className = 'weather-settings-location-row';
         const name = document.createElement('span');
-        name.textContent = item.location;
+        name.textContent = `${item.location} · ${item.unit === 'fahrenheit' ? '°F' : '°C'}`;
         const removeButton = document.createElement('button');
         removeButton.type = 'button';
         removeButton.className = 'util-action weather-remove weather-settings-remove';
@@ -278,21 +284,52 @@ export function buildWeather(id, ctx) {
         row.append(name, removeButton);
         savedLocations.append(row);
       });
-      locationSelect.value = prefs.activeLocation;
     }
     updateSavedLocationControls();
-    locationSelect.addEventListener('change', () => {
-      const selected = prefs.locations.find(item => item.location === locationSelect.value);
+    function chooseWeatherLocation(location) {
+      const selected = prefs.locations.find(item => item.location === location);
       if (!selected) return;
       const previousLocation = prefs.activeLocation;
       const nextPrefs = { ...prefs, activeLocation: selected.location };
       if (!savePrefs(nextPrefs)) {
-        locationSelect.value = previousLocation;
         setSaveStatus('Your location change was not saved. Browser storage is unavailable; try again.');
         return;
       }
       prefs = nextPrefs;
+      setSaveStatus('');
+      setLocationMenuOpen(false);
       loadForecast(selected.location, selected.unit);
+    }
+    locationButton.addEventListener('click', () => setLocationMenuOpen(locationMenu.hidden));
+    locationButton.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        setLocationMenuOpen(true, 0);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setLocationMenuOpen(true, locationMenu.querySelectorAll('.weather-location-option').length - 1);
+      } else if (event.key === 'Escape') {
+        setLocationMenuOpen(false);
+      }
+    });
+    locationMenu.addEventListener('click', event => {
+      const option = event.target.closest('.weather-location-option');
+      if (option && locationMenu.contains(option)) chooseWeatherLocation(option.dataset.location);
+    });
+    locationMenu.addEventListener('keydown', event => {
+      const options = [...locationMenu.querySelectorAll('.weather-location-option')];
+      const currentIndex = options.indexOf(document.activeElement);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setLocationMenuOpen(false);
+        locationButton.focus({ preventScroll: true });
+      } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
+        event.preventDefault();
+        const nextIndex = event.key === 'Home' ? 0
+          : event.key === 'End' ? options.length - 1
+            : (currentIndex + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+        options[nextIndex]?.focus({ preventScroll: true });
+      }
     });
     function removeFromForecast(location) {
       const removed = removeSavedLocation(location);
@@ -315,14 +352,15 @@ export function buildWeather(id, ctx) {
       }
       updateSavedLocationControls();
     }
-    root.querySelector('.weather-remove-current').addEventListener('click', () => {
-      removeFromForecast(prefs.activeLocation);
-    });
     const dialog = root.querySelector('.weather-settings-dialog');
     root.querySelector('.weather-settings-button').addEventListener('click', () => {
+      setLocationMenuOpen(false);
       stopRefreshTimer();
       const selected = prefs.locations.find(item => item.location === prefs.activeLocation);
       dialog.querySelector('.weather-settings-unit').value = selected?.unit || unit;
+      dialog.querySelectorAll('[data-weather-detail]').forEach(input => {
+        input.checked = prefs.details[input.dataset.weatherDetail] !== false;
+      });
       dialog.querySelector('.weather-refresh-interval').value = String(prefs.refreshMinutes);
       dialog.querySelector('.weather-settings-location').value = '';
       dialog.querySelector('.weather-settings-error').textContent = '';
@@ -344,6 +382,8 @@ export function buildWeather(id, ctx) {
       }
       const nextPrefs = {
         ...prefs,
+        details: Object.fromEntries([...dialog.querySelectorAll('[data-weather-detail]')]
+          .map(input => [input.dataset.weatherDetail, input.checked])),
         locations: prefs.locations.map(item => ({ ...item })),
       };
       let selected = nextPrefs.locations.find(item => item.location === nextPrefs.activeLocation) || nextPrefs.locations[0];
@@ -367,19 +407,20 @@ export function buildWeather(id, ctx) {
       loadForecast(selected.location, selected.unit);
     });
     const meta = root.querySelector('.weather-meta');
-    [
-      condition,
-      `Feels like ${Math.round(current.apparent_temperature)}${degrees}`,
-      `${Math.round(current.relative_humidity_2m)}% humidity`,
-      `${Math.round(current.wind_speed_10m)} ${unitWind} wind`,
-      `${current.precipitation} ${data.current_units?.precipitation || 'mm'} precipitation`,
-    ].forEach(text => { const span = document.createElement('span'); span.textContent = text; meta.append(span); });
+    const metaDetails = [condition];
+    if (prefs.details.feelsLike) metaDetails.push(`Feels like ${Math.round(current.apparent_temperature)}${degrees}`);
+    if (prefs.details.humidity) metaDetails.push(`${Math.round(current.relative_humidity_2m)}% humidity`);
+    if (prefs.details.wind) metaDetails.push(`${Math.round(current.wind_speed_10m)} ${unitWind} wind`);
+    if (prefs.details.precipitation) metaDetails.push(`${current.precipitation} ${data.current_units?.precipitation || 'mm'} precipitation`);
+    metaDetails.forEach(text => { const span = document.createElement('span'); span.textContent = text; meta.append(span); });
     const hourly = root.querySelector('.weather-hourly');
     let start = data.hourly.time.findIndex(time => time >= current.time);
     if (start < 0) start = 0;
     const hourFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' });
     for (let i = start; i < Math.min(start + 24, data.hourly.time.length); i++) {
-      appendRow(hourly, hourFormat.format(parseLocalTimestamp(data.hourly.time[i])), `${Math.round(data.hourly.temperature_2m[i])}${degrees}`, `${CONDITIONS[data.hourly.weather_code[i]] || '—'} · ${data.hourly.precipitation_probability?.[i] ?? '—'}% rain`);
+      const hourlyDetails = [CONDITIONS[data.hourly.weather_code[i]] || '—'];
+      if (prefs.details.rainChance) hourlyDetails.push(`${data.hourly.precipitation_probability?.[i] ?? '—'}% rain`);
+      appendRow(hourly, hourFormat.format(parseLocalTimestamp(data.hourly.time[i])), `${Math.round(data.hourly.temperature_2m[i])}${degrees}`, hourlyDetails.join(' · '));
     }
     const daily = root.querySelector('.weather-daily');
     const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -401,12 +442,21 @@ export function buildWeather(id, ctx) {
 
   function showErrorState(message, location, unit) {
     stopRefreshTimer();
+    setLocationMenuOpen(false);
+    locationMenu = null;
+    locationButton = null;
     root.innerHTML = `<div class="weather-state"><p class="weather-error"></p><p class="util-muted">Your saved location and unit are still available.</p><div style="display:flex;justify-content:center;gap:.5rem"><button class="util-action weather-retry" type="button">Try again</button><button class="util-action weather-change" type="button">Change setup</button></div></div>`;
     root.querySelector('.weather-error').textContent = message;
     root.querySelector('.weather-retry').addEventListener('click', () => loadForecast(location, unit));
     root.querySelector('.weather-change').addEventListener('click', () => showSetup());
   }
-  if (ctx?.appApis && id) ctx.appApis[id] = { destroy: () => { stopRefreshTimer(); requestToken++; } };
+  if (ctx?.appApis && id) ctx.appApis[id] = {
+    destroy: () => {
+      stopRefreshTimer();
+      requestToken++;
+      document.removeEventListener('pointerdown', dismissLocationMenu, true);
+    },
+  };
   return root;
 }
 
@@ -426,23 +476,25 @@ function readPrefs() {
   try {
     const data = JSON.parse(localStorage.getItem(PREF_KEY));
     const refreshMinutes = Number.isInteger(data?.refreshMinutes) && data.refreshMinutes >= 5 && data.refreshMinutes <= 1440 ? data.refreshMinutes : 60;
+    const details = readWeatherDetails(data?.details);
     if (Array.isArray(data?.locations)) {
       const locations = data.locations
         .filter(item => item && typeof item.location === 'string' && item.location.trim())
         .map(item => ({ location: item.location.trim(), unit: ['fahrenheit', 'celsius'].includes(item.unit) ? item.unit : '' }))
         .filter((item, index, items) => items.findIndex(other => other.location.toLocaleLowerCase() === item.location.toLocaleLowerCase()) === index);
       const activeLocation = locations.some(item => item.location === data.activeLocation) ? data.activeLocation : locations[0]?.location || '';
-      return { locations, activeLocation, refreshMinutes };
+      return { locations, activeLocation, refreshMinutes, details };
     }
     if (data && typeof data.location === 'string' && data.location.trim()) {
       return {
         locations: [{ location: data.location.trim(), unit: ['fahrenheit', 'celsius'].includes(data.unit) ? data.unit : '' }],
         activeLocation: data.location.trim(),
         refreshMinutes,
+        details,
       };
     }
   } catch {}
-  return { locations: [], activeLocation: '', refreshMinutes: 60 };
+  return { locations: [], activeLocation: '', refreshMinutes: 60, details: readWeatherDetails() };
 }
 
 function savePrefs(prefs) {

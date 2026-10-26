@@ -397,8 +397,14 @@ const SESSION_KEY_V1 = 'desktop-session-v1';
 function saveSession() {
   if (S._skipSave) return;
   try {
+    const focusedColumnIndex = S.columns.findIndex(col => col.appIds.includes(S.focusedId));
+    const focusedPosition = focusedColumnIndex < 0 ? null : {
+      columnIndex: focusedColumnIndex,
+      appIndex: S.columns[focusedColumnIndex].appIds.indexOf(S.focusedId),
+    };
     localStorage.setItem(SESSION_KEY, JSON.stringify({
       v: 2,
+      focused: focusedPosition,
       columns: S.columns.map(col => ({
         widthPreset: col.widthPreset,
         apps: col.appIds.map(appId => {
@@ -548,6 +554,7 @@ function focusApp(id) {
   if (document.body.classList.contains('mod-overview')) {
     requestAnimationFrame(() => positionOverview());
   }
+  if (!S._skipSave) saveSession();
 }
 
 function scrollToApp(id) {
@@ -1422,6 +1429,13 @@ function restoreSession() {
           }
         }
       }
+    }
+
+    if (!isV1 && data.v === 2
+      && Number.isInteger(data.focused?.columnIndex)
+      && Number.isInteger(data.focused?.appIndex)) {
+      const focusedAppId = S.columns[data.focused.columnIndex]?.appIds[data.focused.appIndex];
+      if (focusedAppId) focusApp(focusedAppId);
     }
 
     S._skipSave = false;

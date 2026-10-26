@@ -38,7 +38,7 @@ test('calculator, calendar, and weather controls follow shared theme tokens', as
 
   const weather = await openUtility(page, 'weather');
   const fields = weather.locator('.weather-setup .util-field');
-  await expect(fields).toHaveCount(3);
+  await expect(fields).toHaveCount(2);
   const weatherFieldStyle = await fields.first().evaluate(element => {
     const style = getComputedStyle(element);
     return { radius: style.borderRadius, border: style.borderTopWidth, background: style.backgroundColor };
