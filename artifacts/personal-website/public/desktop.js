@@ -763,6 +763,7 @@ function updateTopBar() {
   closeBtn.disabled    = !hasFocus;
   overviewBtn.disabled = S.apps.length === 0;
   winMenuBtn.disabled  = !hasFocus;
+  showDesktopBtn.disabled = S.apps.length === 0 && desktopWidgetNotes.length === 0;
 }
 
 function updateWidthButtons() { /* width buttons now live in the per-window ⋮ menu */ }
@@ -779,7 +780,6 @@ function updateStripLayout() {
 let desktopWidgetNotes = [];
 
 function setShowDesktop(show) {
-  if (show && desktopWidgetNotes.length === 0) return;
   if (show && document.body.classList.contains('mod-overview')) exitOverview();
   document.body.classList.toggle('mod-show-desktop', show);
   showDesktopBtn.setAttribute('aria-pressed', String(show));
@@ -803,8 +803,8 @@ function updateDesktopNotes(notes) {
     widget.addEventListener('click', () => openStickyNote(note.id));
     desktopWidgets.append(widget);
   }
-  showDesktopBtn.disabled = desktopWidgetNotes.length === 0;
-  if (desktopWidgetNotes.length === 0) setShowDesktop(false);
+  showDesktopBtn.disabled = S.apps.length === 0 && desktopWidgetNotes.length === 0;
+  if (desktopWidgetNotes.length === 0 && S.apps.length === 0) setShowDesktop(false);
 }
 
 function openStickyNote(noteId) {

@@ -252,6 +252,11 @@ export function showNewGameScreen(area, id, headingText, messageText, options, o
   const settings = {};
   const optionControls = new Map();
   const savedInert = [];
+  const toolbar = game?.querySelector(':scope > .game-toolbar');
+  const settingsOverlay = game?.querySelector(':scope > .game-settings-overlay');
+  const savedToolbarDisabled = [...(toolbar?.querySelectorAll('button, select, input') || [])]
+    .filter(control => !control.classList.contains('game-settings-toggle'))
+    .map(control => ({ control, disabled: control.disabled }));
   const screenId = `new-game-${String(id).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   let active = true;
   const priorFocus = document.activeElement;
@@ -307,11 +312,14 @@ export function showNewGameScreen(area, id, headingText, messageText, options, o
   if (fieldset) screen.append(fieldset);
   screen.append(actions);
 
-  const siblings = [...(game?.children || [])].filter(child => !child.contains(area));
+  const siblings = [...(game?.children || [])].filter(child =>
+    !child.contains(area) && child !== toolbar && child !== settingsOverlay
+  );
   for (const node of [...siblings, ...area.children]) {
     savedInert.push({ node, inert: node.inert });
     node.inert = true;
   }
+  savedToolbarDisabled.forEach(({ control }) => { control.disabled = true; });
   area.style.position = 'relative';
   area.append(screen);
 
@@ -320,6 +328,7 @@ export function showNewGameScreen(area, id, headingText, messageText, options, o
     active = false;
     screen.remove();
     savedInert.forEach(({ node, inert }) => { node.inert = inert; });
+    savedToolbarDisabled.forEach(({ control, disabled }) => { control.disabled = disabled; });
     if (restoreFocus && priorFocus?.isConnected) priorFocus.focus({ preventScroll: true });
   }
 
