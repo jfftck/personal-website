@@ -725,6 +725,10 @@ body {
   align-content: start;
   gap: 1rem;
   visibility: hidden;
+  opacity: 0;
+  transform: scale(0.97);
+  transform-origin: top left;
+  transition: opacity 240ms ease, transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 280ms;
   pointer-events: none;
 }
 
@@ -778,11 +782,27 @@ body {
 body.mod-show-desktop #desktop-widgets {
   z-index: 2;
   visibility: visible;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 240ms ease, transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s;
   pointer-events: auto;
 }
 
-body.mod-show-desktop #desktop-search,
-body.mod-show-desktop #app-strip-wrapper,
+body.mod-show-desktop #desktop-search {
+  z-index: 3;
+}
+
+body.mod-show-desktop #app-strip-wrapper {
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s linear 300ms;
+}
+
+body.mod-show-desktop #app-strip-wrapper .app-window {
+  opacity: 0;
+  transform: scale(1.06);
+}
+
 body.mod-show-desktop #empty-state {
   visibility: hidden;
   pointer-events: none;
@@ -955,6 +975,7 @@ body.mod-show-desktop #empty-state {
 
 #app-strip-wrapper {
   position: relative;
+  transition: visibility 0s;
 }
 
 .app-window {
@@ -1331,7 +1352,8 @@ body.mod-overview .app-window.focused {
   overflow: hidden;
   outline: 0.25rem solid transparent;
   outline-offset: 0;
-  transition: box-shadow 200ms ease, outline-color 200ms ease;
+  transform-origin: center center;
+  transition: box-shadow 200ms ease, outline-color 200ms ease, opacity 280ms ease, transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
   position: relative;
   container-type: inline-size;
 }
@@ -1339,6 +1361,14 @@ body.mod-overview .app-window.focused {
 .app-window.focused {
   outline-color: var(--focus-color);
   box-shadow: 0 0.5rem 2.5rem rgba(0, 170, 255, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #desktop-widgets,
+  #app-strip-wrapper,
+  .app-window {
+    transition: none !important;
+  }
 }
 
 @media (max-width: 640px) and (orientation: portrait) {

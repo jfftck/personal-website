@@ -28,6 +28,7 @@ const winMenuBtn       = $('win-menu-btn');
 const systemTimeBtn    = $('system-time-btn');
 const systemPanel      = $('system-panel');
 const appStrip         = $('app-strip');
+const appStripWrapper  = $('app-strip-wrapper');
 const emptyState       = $('empty-state');
 const desktopWidgets   = $('desktop-widgets');
 const showDesktopBtn   = $('show-desktop-btn');
@@ -781,6 +782,7 @@ let desktopWidgetNotes = [];
 
 function setShowDesktop(show) {
   if (show && document.body.classList.contains('mod-overview')) exitOverview();
+  appStripWrapper.inert = show;
   document.body.classList.toggle('mod-show-desktop', show);
   showDesktopBtn.setAttribute('aria-pressed', String(show));
   showDesktopBtn.setAttribute('aria-label', show ? 'Return to apps' : 'Show desktop');
