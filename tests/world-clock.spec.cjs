@@ -98,6 +98,26 @@ test('groups cities by their IANA region and adds the selected city time zone', 
   await expect(browser).toHaveValue('');
 });
 
+test('every curated city uses a time zone accepted by the browser runtime', async ({ page }) => {
+  const invalidCities = await page.evaluate(async () => {
+    const { CITY_OPTIONS } = await import(new URL('apps/world-clock.js', document.baseURI).href);
+    return CITY_OPTIONS.filter(({ zone }) => {
+      if (typeof zone !== 'string' || zone.length === 0) return true;
+      try {
+        new Intl.DateTimeFormat('en', { timeZone: zone });
+        return false;
+      } catch {
+        return true;
+      }
+    }).map(({ city, country, zone }) => ({ city, country, zone }));
+  });
+
+  expect(
+    invalidCities,
+    `Invalid IANA time zone(s): ${invalidCities.map(({ city, country, zone }) => `${city} · ${country}: ${zone}`).join('; ')}`,
+  ).toEqual([]);
+});
+
 test('filters the regional browser by city name, keeps selection working, and explains empty results', async ({ page }) => {
   const clock = await openWorldClock(page);
   const browser = clock.getByLabel('Browse cities by region');
