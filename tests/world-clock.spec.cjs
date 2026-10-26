@@ -126,6 +126,40 @@ test('updates the displayed city for a shared time zone and keeps both clocks af
   await expect(clock.locator('.clock-item[data-zone="America/Chicago"]')).toHaveCount(1);
 });
 
+test('keeps the selected city name when its existing time zone is added directly', async ({ page }) => {
+  let clock = await openWorldClock(page);
+  await clock.getByLabel('Browse cities by region').selectOption({ label: 'Bengaluru · India' });
+
+  const bengaluru = clock.locator('.clock-item[data-zone="Asia/Kolkata"]');
+  await expect(bengaluru.locator('strong')).toHaveText('Bengaluru');
+  const savedZones = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).zones, PREF_KEY);
+
+  await clock.getByLabel('City or time zone').fill('Asia/Kolkata');
+  await clock.getByRole('button', { name: 'Add clock' }).click();
+
+  await expect(clock.locator('.clock-item[data-zone="Asia/Kolkata"]')).toHaveCount(1);
+  await expect(bengaluru.locator('strong')).toHaveText('Bengaluru');
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), PREF_KEY))
+    .toMatchObject({
+      cityLabels: { 'Asia/Kolkata': 'Bengaluru' },
+    });
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)).zones, PREF_KEY))
+    .toEqual(savedZones);
+
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  clock = await getWorldClock(page);
+
+  const restoredBengaluru = clock.locator('.clock-item[data-zone="Asia/Kolkata"]');
+  await expect(restoredBengaluru).toHaveCount(1);
+  await expect(restoredBengaluru.locator('strong')).toHaveText('Bengaluru');
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), PREF_KEY))
+    .toMatchObject({
+      zones: savedZones,
+      cityLabels: { 'Asia/Kolkata': 'Bengaluru' },
+    });
+});
+
 test('accepts a direct IANA zone and restores saved zones and city names after reload', async ({ page }) => {
   let clock = await openWorldClock(page);
   await clock.getByLabel('City or time zone').fill('America/Argentina/Buenos_Aires');
