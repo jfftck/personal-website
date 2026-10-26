@@ -1507,19 +1507,19 @@ body.mod-overview .app-window.focused {
 .cal-content { flex:1; min-height:0; overflow:auto; padding:.5rem clamp(.6rem,2.2vw,1.25rem) 1.2rem; }
 .cal-month-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:.35rem; }
 .cal-weekday-label { padding:.35rem 0; color:var(--util-detail); font-size:.68rem; font-weight:750; letter-spacing:.04em; text-align:center; text-transform:uppercase; }
-.cal-date-cell { min-width:0; min-height:clamp(2.65rem,7.5vw,4.5rem); border:1px solid transparent; border-radius:.65rem; background:var(--util-surface); color:var(--app-text); font-size:.9rem; cursor:pointer; transition:background-color 120ms ease,border-color 120ms ease; }
+.cal-date-cell { min-width:0; min-height:clamp(2.65rem,7.5vw,4.5rem); border:1px solid transparent; border-radius:.65rem; background:var(--app-bg); color:var(--app-text); font-size:.9rem; cursor:pointer; transition:background-color 120ms ease,border-color 120ms ease; }
 .cal-date-cell:hover,.cal-week-day:hover,.cal-agenda-item:hover { background:var(--util-surface-strong); }
 .cal-date-cell.outside-month { color:var(--util-detail); opacity:.56; }
 .cal-date-cell.today,.cal-week-day.today,.cal-agenda-item.today { border-color:color-mix(in srgb,var(--accent) 75%,var(--app-border)); }
-.cal-date-cell.selected,.cal-week-day.selected,.cal-agenda-item.selected { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 22%,var(--util-surface)); color:var(--app-text); font-weight:750; }
+.cal-date-cell.selected,.cal-week-day.selected,.cal-agenda-item.selected { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 22%,var(--app-bg)); color:var(--app-text); font-weight:750; }
 .cal-week-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:.55rem; min-height:100%; }
 .cal-week-grid.includes-weekend { grid-template-columns:repeat(7,minmax(0,1fr)); }
-.cal-week-day { display:flex; flex-direction:column; align-items:center; gap:.85rem; min-width:0; min-height:11rem; padding:.85rem .25rem; border:1px solid var(--app-border); border-radius:.8rem; background:var(--util-surface); color:var(--app-text); cursor:pointer; }
+.cal-week-day { display:flex; flex-direction:column; align-items:center; gap:.85rem; min-width:0; min-height:11rem; padding:.85rem .25rem; border:1px solid var(--app-border); border-radius:.8rem; background:var(--app-bg); color:var(--app-text); cursor:pointer; }
 .cal-week-day-name { color:var(--util-detail); font-size:.78rem; font-weight:700; }
 .cal-week-day strong { display:grid; place-items:center; width:2.6rem; height:2.6rem; border-radius:50%; font-size:1.2rem; }
 .cal-week-day.selected strong { background:var(--accent); color:#fff; }
 .cal-agenda { display:grid; gap:.4rem; max-width:54rem; margin-inline:auto; }
-.cal-agenda-item { display:grid; grid-template-columns:minmax(8rem,1fr) minmax(5rem,.7fr) minmax(6rem,1fr); align-items:center; gap:.75rem; min-height:3.4rem; padding:.55rem .8rem; border:1px solid var(--app-border); border-radius:.65rem; background:var(--util-surface); color:var(--app-text); text-align:left; cursor:pointer; }
+.cal-agenda-item { display:grid; grid-template-columns:minmax(8rem,1fr) minmax(5rem,.7fr) minmax(6rem,1fr); align-items:center; gap:.75rem; min-height:3.4rem; padding:.55rem .8rem; border:1px solid var(--app-border); border-radius:.65rem; background:var(--app-bg); color:var(--app-text); text-align:left; cursor:pointer; }
 .cal-agenda-item.selected { border-color:var(--accent); }
 .cal-agenda-weekday { font-weight:700; }
 .cal-agenda-empty { color:var(--util-detail); font-size:.82rem; text-align:right; }
