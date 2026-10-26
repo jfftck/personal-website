@@ -3,9 +3,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const cityZoneReference = require('./fixtures/world-clock-city-zones.json');
 
-let CITY_OPTIONS, createCityLookup, normalizeCity, resolveCity;
+let CITY_OPTIONS, createCityLookup, findCitySuggestions, normalizeCity, resolveCity;
 test.before(async () => {
-  ({ CITY_OPTIONS, createCityLookup, normalizeCity, resolveCity } = await import(
+  ({ CITY_OPTIONS, createCityLookup, findCitySuggestions, normalizeCity, resolveCity } = await import(
     '../artifacts/personal-website/public/apps/world-clock.js'
   ));
 });
@@ -147,4 +147,13 @@ test('diacritic-insensitive and alternate city names resolve to their expected z
   ]) {
     assert.equal(resolveCity(name)?.zone, zone, `${JSON.stringify(name)} should resolve to ${zone}`);
   }
+});
+
+test('city typo suggestions stay close, rank likely matches, and leave exact aliases alone', () => {
+  assert.deepEqual(findCitySuggestions('Pariss').map(({ city, country, zone }) => ({ city, country, zone })), [
+    { city: 'Paris', country: 'France', zone: 'Europe/Paris' },
+  ]);
+  assert.equal(findCitySuggestions('Bangaluru')[0]?.city, 'Bengaluru');
+  assert.deepEqual(findCitySuggestions('Sao Paulo'), []);
+  assert.deepEqual(findCitySuggestions('Atlantis'), []);
 });

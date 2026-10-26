@@ -1499,6 +1499,8 @@ body.mod-overview .app-window.focused {
 .clock-controls .clock-city-browser { flex:1 1 14rem; max-width:24rem; }
 .clock-controls .clock-city-filter { flex:1 1 12rem; max-width:20rem; }
 .clock-controls .clock-city-empty { flex-basis:100%; }
+.clock-city-suggestions { flex-basis:100%; display:flex; align-items:center; flex-wrap:wrap; gap:.4rem; }
+.clock-city-suggestions[hidden] { display:none; }
 .clock-list { overflow:auto; display:grid; gap:.65rem; grid-template-columns:1fr; min-height:0; }
 .clock-list.grid { grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); align-content:start; }
 .clock-item { display:flex; align-items:center; justify-content:space-between; gap:.8rem; border:1px solid var(--app-border); border-radius:.85rem; padding:.85rem 1rem; background:var(--util-surface); }

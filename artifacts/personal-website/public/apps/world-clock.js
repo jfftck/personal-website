@@ -164,6 +164,53 @@ export function resolveCity(value) {
   return CITY_LOOKUP.get(normalizeCity(value));
 }
 
+export function findCitySuggestions(value, options = CITY_OPTIONS, limit = 5) {
+  const query = normalizeCity(value);
+  if (query.length < 4 || query.length > 40) return [];
+
+  const lookup = createCityLookup(options);
+  if (lookup.has(query)) return [];
+
+  const suggestions = [];
+  for (const city of options) {
+    const names = [city.city, ...(city.aliases || [])].map(normalizeCity);
+    const maxDistance = Math.max(query.length, ...names.map(name => name.length)) >= 9 ? 2 : 1;
+    const distance = Math.min(...names.map(name => cityNameDistance(query, name)));
+    if (distance > maxDistance) continue;
+    suggestions.push({ city, distance });
+  }
+
+  return suggestions
+    .sort((a, b) => a.distance - b.distance || a.city.city.localeCompare(b.city.city))
+    .slice(0, limit)
+    .map(({ city }) => city);
+}
+
+function cityNameDistance(left, right) {
+  const rows = Array.from({ length: left.length + 1 }, () => new Array(right.length + 1));
+  for (let i = 0; i <= left.length; i += 1) rows[i][0] = i;
+  for (let j = 0; j <= right.length; j += 1) rows[0][j] = j;
+
+  for (let i = 1; i <= left.length; i += 1) {
+    for (let j = 1; j <= right.length; j += 1) {
+      const substitutionCost = left[i - 1] === right[j - 1] ? 0 : 1;
+      rows[i][j] = Math.min(
+        rows[i - 1][j] + 1,
+        rows[i][j - 1] + 1,
+        rows[i - 1][j - 1] + substitutionCost,
+      );
+      if (
+        i > 1 && j > 1
+        && left[i - 1] === right[j - 2]
+        && left[i - 2] === right[j - 1]
+      ) {
+        rows[i][j] = Math.min(rows[i][j], rows[i - 2][j - 2] + 1);
+      }
+    }
+  }
+  return rows[left.length][right.length];
+}
+
 let nextClockId = 1;
 
 export function buildWorldClock(id, ctx) {
@@ -176,6 +223,7 @@ export function buildWorldClock(id, ctx) {
     <input class="clock-zone-input" aria-label="City or time zone" placeholder="Search a city (e.g. Paris)">
     <datalist></datalist>
     <button type="button" class="util-action clock-add">Add clock</button>
+    <div class="clock-city-suggestions" role="group" aria-label="Possible city matches" aria-live="polite" hidden></div>
     <input class="clock-city-filter" type="search" aria-label="Filter cities by name" placeholder="Filter cities…">
     <select class="clock-city-browser" aria-label="Browse cities by region">
       <option value="">Browse cities by region…</option>
@@ -189,6 +237,7 @@ export function buildWorldClock(id, ctx) {
   const suggestions = root.querySelector('datalist');
   suggestions.id = listId;
   const addInput = root.querySelector('.clock-zone-input');
+  const citySuggestions = root.querySelector('.clock-city-suggestions');
   addInput.setAttribute('list', listId);
   const cityBrowser = root.querySelector('.clock-city-browser');
   const cityFilter = root.querySelector('.clock-city-filter');
@@ -251,6 +300,31 @@ export function buildWorldClock(id, ctx) {
     }
   }
   const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch {} };
+  const updateCitySuggestions = () => {
+    const query = addInput.value.trim();
+    const matches = resolveCity(query) ? [] : findCitySuggestions(query);
+    citySuggestions.replaceChildren();
+    citySuggestions.hidden = matches.length === 0;
+    if (!matches.length) return;
+
+    const prompt = document.createElement('span');
+    prompt.className = 'util-muted';
+    prompt.textContent = 'Possible matches — choose one:';
+    citySuggestions.append(prompt);
+    for (const city of matches) {
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.className = 'util-action clock-city-suggestion';
+      option.textContent = `${city.city} · ${city.country} · ${city.zone}`;
+      option.addEventListener('click', () => {
+        addClock(city);
+        addInput.value = '';
+        citySuggestions.hidden = true;
+        addInput.focus();
+      });
+      citySuggestions.append(option);
+    }
+  };
   const formatDigitalTime = (date, zone) => {
     const use24HourTime = Boolean(ctx?.is24HourTime?.());
     return new Intl.DateTimeFormat(undefined, {
@@ -339,7 +413,10 @@ export function buildWorldClock(id, ctx) {
     if (city) addClock(city);
     cityBrowser.value = '';
   });
-  addInput.addEventListener('input', () => addInput.setCustomValidity(''));
+  addInput.addEventListener('input', () => {
+    addInput.setCustomValidity('');
+    updateCitySuggestions();
+  });
   addInput.addEventListener('keydown', e => { if (e.key === 'Enter') root.querySelector('.clock-add').click(); });
   root.querySelector('.clock-layout').addEventListener('click', () => { prefs.layout = prefs.layout === 'grid' ? 'list' : 'grid'; persist(); render(); });
   root.querySelector('.clock-face-mode').addEventListener('click', () => { prefs.face = prefs.face === 'analog' ? 'digital' : 'analog'; persist(); render(); });

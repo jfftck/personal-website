@@ -60,6 +60,24 @@ test('adds a city entered with spacing and punctuation variants using its catalo
     .toMatchObject({ cityLabels: { 'Asia/Ho_Chi_Minh': 'Ho Chi Minh City' } });
 });
 
+test('offers clear typo matches without adding a city until the user chooses one', async ({ page }) => {
+  const clock = await openWorldClock(page);
+  const cityInput = clock.getByLabel('City or time zone');
+
+  await cityInput.fill('Pariss');
+  const suggestions = clock.getByRole('group', { name: 'Possible city matches' });
+  await expect(suggestions).toBeVisible();
+  await expect(suggestions.getByRole('button')).toHaveText([
+    'Paris · France · Europe/Paris',
+  ]);
+  await expect(clock.locator('.clock-item[data-zone="Europe/Paris"]')).toHaveCount(0);
+
+  await suggestions.getByRole('button', { name: 'Paris · France · Europe/Paris' }).click();
+  await expect(clock.locator('.clock-item[data-zone="Europe/Paris"] strong')).toHaveText('Paris');
+  await expect(cityInput).toHaveValue('');
+  await expect(suggestions).toBeHidden();
+});
+
 test('groups cities by their IANA region and adds the selected city time zone', async ({ page }) => {
   const clock = await openWorldClock(page);
   const browser = clock.getByLabel('Browse cities by region');
