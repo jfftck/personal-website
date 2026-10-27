@@ -154,6 +154,12 @@ export function buildCalculator(id, ctx) {
               </div></div>
               <ul class="calc-function-list" aria-label="Plotted functions"></ul>
             </div>
+            <div class="calc-view-ranges">
+              <span class="calc-view-ranges-label" id="${expressionId}-view-ranges-label">Current view</span>
+              <code class="calc-view-ranges-values" aria-labelledby="${expressionId}-view-ranges-label"></code>
+              <button type="button" class="calc-copy-view-ranges">Copy ranges</button>
+              <span class="calc-copy-view-ranges-status" role="status" aria-live="polite"></span>
+            </div>
             <svg class="calc-plot-area" role="application" aria-label="Function graph. Drag to pan, use the mouse wheel or plus and minus to zoom, and use arrow keys to pan. Press Home to reset the view." tabindex="0" viewBox="0 0 640 400" preserveAspectRatio="none"></svg>
             <p class="calc-graph-status" role="status" aria-live="polite">Add a function, then choose Plot.</p>
             <div class="calc-storage-recovery" role="alert" hidden><span></span><button type="button" class="calc-reset-saved">Reset saved graph</button></div>
@@ -212,6 +218,9 @@ export function buildCalculator(id, ctx) {
   const graph = $('.calc-graph');
   const plotArea = $('.calc-plot-area');
   const graphStatus = $('.calc-graph-status');
+  const viewRangeValues = $('.calc-view-ranges-values');
+  const copyViewRangesButton = $('.calc-copy-view-ranges');
+  const copyViewRangesStatus = $('.calc-copy-view-ranges-status');
   const editorDialog = $('.calc-editor-dialog');
   const settingsDialog = $('.calc-settings-dialog');
   let lastEditorField = null;
@@ -563,6 +572,36 @@ export function buildCalculator(id, ctx) {
     }
     return viewRanges[graphMode];
   }
+  function formatViewRanges(view) {
+    return Object.entries(view).map(([key, value]) => `${key}: ${String(value)}`).join(', ');
+  }
+  async function copyText(text) {
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {}
+    }
+    const fallback = document.createElement('textarea');
+    fallback.value = text;
+    fallback.setAttribute('readonly', '');
+    fallback.setAttribute('aria-hidden', 'true');
+    fallback.tabIndex = -1;
+    fallback.style.position = 'fixed';
+    fallback.style.opacity = '0';
+    document.body.append(fallback);
+    fallback.select();
+    let copied = false;
+    try { copied = document.execCommand('copy'); } catch {}
+    fallback.remove();
+    return copied;
+  }
+  copyViewRangesButton.addEventListener('click', async () => {
+    const copied = await copyText(formatViewRanges(getViewRanges()));
+    copyViewRangesStatus.textContent = copied
+      ? 'Current graph ranges copied.'
+      : 'Could not copy the ranges. Select the values and copy them manually.';
+  });
   function resetView() {
     if (viewRanges) delete viewRanges[graphMode];
     plot(); persistGraphSettings();
@@ -721,6 +760,7 @@ export function buildCalculator(id, ctx) {
   function plot(announce = true) {
     const ns = 'http://www.w3.org/2000/svg';
     const view = getViewRanges();
+    viewRangeValues.textContent = formatViewRanges(view);
     const limits = graphMode === 'cartesian'
       ? { a: view.xMin, b: view.xMax, y0: view.yMin, y1: view.yMax, variable: 'x' }
       : graphMode === 'polar'
@@ -879,6 +919,7 @@ export function buildCalculator(id, ctx) {
   const onKey = event => {
     if (event.ctrlKey || event.metaKey || event.altKey || !root.isConnected || !root.closest('.app-window')?.classList.contains('focused')) return;
     if (event.target === plotArea) return;
+    if (event.target instanceof Element && event.target.closest('button,a,select,[role="button"],[contenteditable="true"]')) return;
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || editorDialog.open || settingsDialog.open) return;
     if (event.key === 'Escape') { clear(); return; }
     const map = { '*': '*', '/': '/', '-': '-', Enter: '=', '=': '=' };

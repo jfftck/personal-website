@@ -458,6 +458,65 @@ test('calculator graph zoom and pan work in every mode without changing configur
   }
 });
 
+test('calculator shows and copies the current view ranges in every graph mode', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  const plot = calculator.locator('.calc-plot-area');
+  const rangesReadout = calculator.locator('.calc-view-ranges-values');
+  const copyButton = calculator.getByRole('button', { name: 'Copy ranges' });
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async text => { window.__copiedGraphRanges = text; } },
+    });
+  });
+
+  const modes = [
+    { name: 'Cartesian', keys: ['xMin', 'xMax', 'yMin', 'yMax'], mins: ['Minimum x', 'Minimum y'], maxes: ['Maximum x', 'Maximum y'] },
+    { name: 'Polar', keys: ['thetaMin', 'thetaMax', 'rMin', 'rMax'], mins: ['Minimum theta', 'Minimum r'], maxes: ['Maximum theta', 'Maximum r'] },
+    { name: 'Parametric', keys: ['tMin', 'tMax', 'xMin', 'xMax', 'yMin', 'yMax'], mins: ['Minimum t', 'Minimum x', 'Minimum y'], maxes: ['Maximum t', 'Maximum x', 'Maximum y'] },
+  ];
+
+  for (const [index, mode] of modes.entries()) {
+    if (index > 0) {
+      const settings = calculator.getByRole('button', { name: 'Graph settings' });
+      await settings.click();
+      const dialog = calculator.getByRole('dialog', { name: 'Graph settings' });
+      await dialog.getByRole('combobox', { name: 'Graph mode' }).click();
+      await dialog.getByRole('option', { name: new RegExp(mode.name) }).click();
+      await dialog.getByRole('button', { name: 'Apply settings' }).click();
+    }
+
+    const configured = await plot.evaluate(element => JSON.parse(element.dataset.view));
+    const initialText = await rangesReadout.textContent();
+    for (const key of mode.keys) expect(initialText).toContain(`${key}: ${configured[key]}`);
+
+    await calculator.getByRole('button', { name: 'Zoom in' }).click();
+    const current = await plot.evaluate(element => JSON.parse(element.dataset.view));
+    expect(JSON.stringify(current)).not.toBe(JSON.stringify(configured));
+    const currentText = await rangesReadout.textContent();
+    for (const key of mode.keys) expect(currentText).toContain(`${key}: ${current[key]}`);
+
+    if (index === 1) {
+      await copyButton.focus();
+      await copyButton.press('Enter');
+    } else {
+      await copyButton.click();
+    }
+    await expect.poll(() => page.evaluate(() => window.__copiedGraphRanges)).toBe(currentText);
+    await expect(calculator.locator('.calc-copy-view-ranges-status')).toHaveText('Current graph ranges copied.');
+
+    await calculator.getByRole('button', { name: 'Graph settings' }).click();
+    const dialog = calculator.getByRole('dialog', { name: 'Graph settings' });
+    for (const [position, label] of mode.mins.entries()) {
+      await expect(dialog.getByLabel(label)).toHaveValue(String(configured[mode.keys[position * 2]]));
+      await expect(dialog.getByLabel(mode.maxes[position])).toHaveValue(String(configured[mode.keys[position * 2 + 1]]));
+    }
+    await dialog.getByRole('button', { name: 'Close graph settings' }).click();
+    await calculator.getByRole('button', { name: 'Reset view' }).click();
+  }
+});
+
 test('graph mode uses the window height without calculator panels or vertical overflow', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   await calculator.getByRole('button', { name: 'Graph', exact: true }).click();

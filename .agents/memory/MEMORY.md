@@ -1,3 +1,4 @@
 - [Preview overlay compatibility](website-preservation.md) — template banners can cover the desktop launcher and intercept clicks.
 - [Preview routing checks](preview-routing.md) — verify the actual development domain before treating localhost:80 errors as broken artifact routes.
 - [Reminder behavior](reminder-behavior.md) — keep reminders page-open only; do not rely on background execution or a server.
+- [Calculator keyboard shortcuts](calculator-keyboard-shortcuts.md) — global shortcuts must leave native controls’ Enter and Space activation to the browser.
