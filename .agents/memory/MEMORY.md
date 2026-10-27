@@ -2,3 +2,4 @@
 - [Preview routing checks](preview-routing.md) — verify the actual development domain before treating localhost:80 errors as broken artifact routes.
 - [Reminder behavior](reminder-behavior.md) — keep reminders page-open only; do not rely on background execution or a server.
 - [Calculator keyboard shortcuts](calculator-keyboard-shortcuts.md) — global shortcuts must leave native controls’ Enter and Space activation to the browser.
+- [Calculator compact layout](calculator-compact-layout.md) — explicit compact button line heights prevent keypad rows overflowing their grid tracks.

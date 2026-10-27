@@ -240,8 +240,8 @@ export function buildCalculator(id, ctx) {
           <div class="calc-display">
             <div class="calc-display-header">
               <label class="calc-expression-label" for="${expressionId}">Expression</label>
-              <button type="button" class="calc-backspace" aria-label="Backspace" title="Delete the previous character">⌫</button>
             </div>
+            <button type="button" class="calc-backspace" aria-label="Backspace" title="Delete the previous character">⌫</button>
             <input class="calc-expression" id="${expressionId}" aria-label="Expression" inputmode="decimal" autocomplete="off" spellcheck="false" value="0">
             <div class="calc-result-line"><span class="calc-result-caption">RESULT</span><output class="calc-value" aria-live="polite">0</output></div>
             <p class="calc-message" role="status" aria-live="polite"></p>

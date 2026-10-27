@@ -116,6 +116,30 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   const expression = calculator.getByRole('textbox', { name: 'Expression' });
   const output = calculator.locator('.calc-value');
 
+  const basicLayout = await calculator.locator('.calc-keypad-columns').evaluate(element => {
+    const keypad = element.querySelector('.calc-keys').getBoundingClientRect();
+    const columns = element.getBoundingClientRect();
+    const wrapper = element.closest('.calc-wrap');
+    return {
+      keypadWidth: keypad.width,
+      columnsWidth: columns.width,
+      supportDisplay: getComputedStyle(element.querySelector('.calc-keypad-support')).display,
+      padding: getComputedStyle(wrapper).padding,
+    };
+  });
+  expect(Math.abs(basicLayout.keypadWidth - basicLayout.columnsWidth)).toBeLessThanOrEqual(2);
+  expect(basicLayout.supportDisplay).toBe('none');
+  expect(basicLayout.padding.split(' ').some(value => Number.parseFloat(value) > 0)).toBe(true);
+  const displayGeometry = await calculator.locator('.calc-display').evaluate(element => {
+    const panel = element.getBoundingClientRect();
+    const button = element.querySelector('.calc-backspace').getBoundingClientRect();
+    const label = element.querySelector('.calc-expression-label').getBoundingClientRect();
+    return { panel, button, label };
+  });
+  expect(displayGeometry.panel.right - displayGeometry.button.right).toBeLessThan(20);
+  expect(displayGeometry.button.top - displayGeometry.panel.top).toBeLessThan(20);
+  expect(displayGeometry.button.left).toBeGreaterThan(displayGeometry.label.right);
+
   await expect(calculator.getByRole('button', { name: 'Base 2' })).toBeHidden();
   await calculator.getByRole('button', { name: 'Scientific' }).click();
   await expect(calculator.getByRole('button', { name: 'Base 2' })).toBeVisible();
@@ -245,12 +269,13 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
     shadow: getComputedStyle(element).boxShadow,
     displayBackground: getComputedStyle(element.querySelector('.calc-display')).backgroundColor,
     historyBackground: getComputedStyle(element.querySelector('.calc-history')).backgroundColor,
+    sidebarBackground: getComputedStyle(element).getPropertyValue('--sidebar-bg').trim(),
   }));
   expect(surfaces.background).toBe('rgba(0, 0, 0, 0)');
   expect(surfaces.border).toBe('0px');
   expect(surfaces.shadow).toBe('none');
   expect(surfaces.displayBackground).toBe('rgba(0, 0, 0, 0)');
-  expect(surfaces.historyBackground).toBe('rgba(0, 0, 0, 0)');
+  expect(surfaces.historyBackground).toBe(surfaces.sidebarBackground);
 });
 
 test('calculator graph edits multiple functions in an accessible keypad dialog', async ({ page }) => {
