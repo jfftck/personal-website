@@ -388,11 +388,29 @@ export function buildCalculator(id, ctx) {
                   </div>
                 </div>
               </div>
-              <button type="button" class="calc-plot calc-primary-action">Plot</button>
+              <div class="calc-plot-actions">
+                <div class="calc-menu-host calc-info-host">
+                  <button type="button" class="calc-info-trigger" aria-label="Graph information" title="Current graph view" aria-haspopup="dialog" aria-expanded="false" aria-controls="${expressionId}-info-panel">
+                    <svg aria-hidden="true" viewBox="0 0 20 20" focusable="false"><circle cx="10" cy="10" r="8.1"></circle><path d="M10 8.7v5"></path><circle cx="10" cy="5.8" r=".7"></circle></svg>
+                  </button>
+                  <div class="calc-menu-popover menu-popover calc-info-panel" id="${expressionId}-info-panel" role="dialog" aria-label="Current graph view" tabindex="-1" hidden>
+                    <h3>Current graph view</h3>
+                    <dl class="calc-info-summary">
+                      <div><dt>Mode</dt><dd class="calc-info-mode"></dd></div>
+                    </dl>
+                    <dl class="calc-info-ranges"></dl>
+                    <dl class="calc-info-display">
+                      <div><dt>Ratio</dt><dd class="calc-info-ratio"></dd></div>
+                      <div><dt>Scale</dt><dd class="calc-info-scale"></dd></div>
+                      <div><dt>Log axes</dt><dd class="calc-info-log"></dd></div>
+                    </dl>
+                    <textarea class="calc-view-ranges-values" aria-label="Current graph ranges for copying" rows="2" readonly spellcheck="false" hidden></textarea>
+                  </div>
+                </div>
+                <button type="button" class="calc-plot calc-primary-action">Plot</button>
+              </div>
             </div>
-            <div class="calc-view-ranges">
-              <span class="calc-view-ranges-label" id="${expressionId}-view-ranges-label">Current view</span>
-              <textarea class="calc-view-ranges-values" aria-labelledby="${expressionId}-view-ranges-label" rows="2" readonly spellcheck="false"></textarea>
+            <div class="calc-copy-statuses" aria-live="polite">
               <span class="calc-copy-view-ranges-status" role="status" aria-live="polite"></span>
               <span class="calc-copy-setup-status" role="status" aria-live="polite"></span>
             </div>
@@ -480,6 +498,9 @@ export function buildCalculator(id, ctx) {
   const copySetupStatus = $('.calc-copy-setup-status');
   const viewMenuTrigger = $('.calc-view-trigger');
   const viewMenu = $('.calc-view-menu');
+  const infoMenuTrigger = $('.calc-info-trigger');
+  const infoMenu = $('.calc-info-panel');
+  const infoRanges = $('.calc-info-ranges');
   const setupMenuTrigger = $('.calc-setup-trigger');
   const setupMenu = $('.calc-setup-menu');
   const modeTrigger = $('.calc-mode-trigger');
@@ -868,12 +889,12 @@ export function buildCalculator(id, ctx) {
       if (shouldOpen) {
         panel.hidden = false;
         trigger.setAttribute('aria-expanded', 'true');
-        panel.querySelector('button:not(:disabled)')?.focus();
+        (panel.querySelector('button:not(:disabled),[tabindex="-1"]'))?.focus();
       }
     });
     panel.addEventListener('click', event => {
       if (!event.target.closest('[data-close-menu]')) return;
-      close(Boolean(event.target.closest('.calc-view-menu,.calc-mode-menu')));
+      close(Boolean(event.target.closest('.calc-view-menu,.calc-mode-menu,.calc-info-panel')));
     });
     document.addEventListener('pointerdown', event => {
       if (panel.hidden || panel.contains(event.target) || trigger.contains(event.target)) return;
@@ -888,6 +909,7 @@ export function buildCalculator(id, ctx) {
   bindGraphPopover(modeTrigger, modeMenu);
   bindGraphPopover(viewMenuTrigger, viewMenu);
   bindGraphPopover(setupMenuTrigger, setupMenu);
+  bindGraphPopover(infoMenuTrigger, infoMenu);
   root.querySelector('.calc-plot').addEventListener('click', plot);
   $('.calc-zoom-in').addEventListener('click', () => { zoomView(0.8); persistGraphSettings(); });
   $('.calc-zoom-out').addEventListener('click', () => { zoomView(1.25); persistGraphSettings(); });
@@ -1370,11 +1392,19 @@ export function buildCalculator(id, ctx) {
   }
   copyViewRangesButton.addEventListener('click', async () => {
     const returnFocus = setupMenu.contains(document.activeElement);
-    const copied = await copyText(formatViewRanges(getViewRanges()));
+    const current = getPlotRanges();
+    const rangeText = current.valid
+      ? formatViewRanges(formatDisplayedRanges(current, getViewRanges()))
+      : formatViewRanges(getViewRanges());
+    viewRangeValues.value = rangeText;
+    const copied = await copyText(rangeText);
     copyViewRangesStatus.textContent = copied
       ? 'Current graph ranges copied.'
       : 'Could not copy the ranges. Select the values and copy them manually.';
     if (!copied) {
+      infoMenu.hidden = false;
+      infoMenuTrigger.setAttribute('aria-expanded', 'true');
+      viewRangeValues.hidden = false;
       viewRangeValues.focus();
       viewRangeValues.select();
     } else if (returnFocus) setupMenuTrigger.focus();
@@ -1750,6 +1780,32 @@ export function buildCalculator(id, ctx) {
       ? clean.toExponential(1).replace(/\.0e/, 'e')
       : String(Number(clean.toPrecision(5)));
   }
+  function renderGraphInformation(displayedView) {
+    const axes = graphMode === 'polar'
+      ? [['Angle (θ)', 'thetaMin', 'thetaMax'], ['Radius (r)', 'rMin', 'rMax']]
+      : graphMode === 'parametric'
+        ? [['Parameter (t)', 'tMin', 'tMax'], ['X axis', 'xMin', 'xMax'], ['Y axis', 'yMin', 'yMax']]
+        : [['X axis', 'xMin', 'xMax'], ['Y axis', 'yMin', 'yMax']];
+    infoRanges.replaceChildren();
+    axes.forEach(([label, minKey, maxKey]) => {
+      const row = document.createElement('div');
+      row.className = 'calc-info-range';
+      row.dataset.axis = minKey;
+      const term = document.createElement('dt');
+      term.textContent = label;
+      const value = document.createElement('dd');
+      value.textContent = `${formatTick(displayedView[minKey])} – ${formatTick(displayedView[maxKey])}`;
+      row.append(term, value);
+      infoRanges.append(row);
+    });
+    $('.calc-info-mode').textContent = graphMode[0].toUpperCase() + graphMode.slice(1);
+    $('.calc-info-ratio').textContent = graphMode === 'polar' ? '1:1'
+      : viewRatio === 'auto' ? 'Auto'
+        : viewRatio === 'custom' ? `${customRatioX}:${customRatioY}` : viewRatio;
+    $('.calc-info-scale').textContent = `${formatTick(viewScaleFactor)}×`;
+    const activeLogs = ['x', 'y'].filter(axis => logAxes[axis]).map(axis => axis.toUpperCase());
+    $('.calc-info-log').textContent = activeLogs.length ? activeLogs.join(' and ') : 'Off';
+  }
   function addSvgText(ns, text, x, y, anchor = 'middle', target = plotArea) {
     const label = document.createElementNS(ns, 'text');
     label.setAttribute('class', 'calc-graph-label');
@@ -1772,6 +1828,7 @@ export function buildCalculator(id, ctx) {
     viewError.textContent = '';
     const displayedView = formatDisplayedRanges(plotView, view);
     viewRangeValues.value = formatViewRanges(displayedView);
+    renderGraphInformation(displayedView);
     plotArea.dataset.renderedView = JSON.stringify(displayedView);
     plotArea.dataset.viewRatio = graphMode === 'polar' ? '1:1'
       : viewRatio === 'custom' ? `${customRatioX}:${customRatioY}` : viewRatio;

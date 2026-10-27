@@ -1434,6 +1434,38 @@ test('calculator graph View supports custom axis ratios, scaling, and logarithmi
   await expect(plot.locator('.calc-graph-grid')).toBeVisible();
 });
 
+test('calculator shows formatted view ranges in a right-anchored information popover', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+  await expect(calculator.locator('.calc-view-ranges')).toHaveCount(0);
+
+  const trigger = calculator.getByRole('button', { name: 'Graph information' });
+  const info = calculator.getByRole('dialog', { name: 'Current graph view' });
+  await expect(info).toBeHidden();
+  const [toolbarBox, triggerBox] = await Promise.all([
+    calculator.locator('.calc-graph-toolbar').boundingBox(),
+    trigger.boundingBox(),
+  ]);
+  expect(triggerBox.x + triggerBox.width / 2).toBeGreaterThan(toolbarBox.x + toolbarBox.width / 2);
+
+  await trigger.click();
+  await expect(info).toBeVisible();
+  await expect(info.getByRole('heading', { name: 'Current graph view' })).toBeVisible();
+  await expect(info.locator('.calc-info-mode')).toHaveText('Cartesian');
+  await expect(info.locator('.calc-info-range')).toHaveCount(2);
+  await expect(info.locator('[data-axis="xMin"] dd')).toHaveText('-10 – 10');
+  await expect(info.locator('[data-axis="yMin"] dd')).toHaveText('-10 – 10');
+  await expect(info.locator('.calc-info-ratio')).toHaveText('Auto');
+  await expect(info.locator('.calc-info-scale')).toHaveText('1×');
+  const [buttonBox, infoBox] = await Promise.all([trigger.boundingBox(), info.boundingBox()]);
+  expect(Math.abs(buttonBox.x + buttonBox.width - infoBox.x - infoBox.width)).toBeLessThan(2);
+
+  await page.keyboard.press('Escape');
+  await expect(info).toBeHidden();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(trigger).toBeFocused();
+});
+
 test('utility app layouts respond to their own narrow window width', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   await calculator.evaluate(element => {
