@@ -55,7 +55,7 @@ function readSavedGraphSettings(rawOverride) {
     const saved = JSON.parse(raw);
     if (!saved || saved.version !== GRAPH_SETTINGS_VERSION || !GRAPH_MODES.includes(saved.graphMode) ||
         !saved.ranges || typeof saved.ranges !== 'object' || Array.isArray(saved.ranges) ||
-        !Array.isArray(saved.functions) || saved.functions.length < 1 || saved.functions.length > 20) {
+        !Array.isArray(saved.functions) || saved.functions.length > 20) {
       return { status: 'invalid' };
     }
 
@@ -183,6 +183,7 @@ export function buildCalculator(id, ctx) {
         <div class="calc-editor-layout">
           <nav class="calc-editor-nav" aria-label="Functions"></nav>
           <div class="calc-editor-fields">
+            <p class="calc-editor-empty" hidden>No functions yet. Add one to start.</p>
             <label class="calc-editor-expression-label">Expression
             <input class="calc-editor-expression" aria-label="Function expression" autocomplete="off" spellcheck="false">
             </label>
@@ -248,7 +249,7 @@ export function buildCalculator(id, ctx) {
     ranges = savedGraph.ranges;
     functions = savedGraph.functions;
     viewRanges = Object.keys(savedGraph.viewRanges).length ? savedGraph.viewRanges : null;
-    activeFunctionId = functions[0].id;
+    activeFunctionId = functions[0]?.id ?? null;
     nextFunctionId = Math.max(nextFunctionId, ...functions.map(fn => Number(fn.id.slice(3)) + 1));
   } else if (savedGraph.status === 'invalid') {
     recoveryMessage.textContent = 'Saved graph settings could not be restored. Defaults are active.';
@@ -272,7 +273,7 @@ export function buildCalculator(id, ctx) {
       ranges = { ...DEFAULT_GRAPH_RANGES };
       viewRanges = null;
       functions = [makeFunction('sin(x)')];
-      activeFunctionId = functions[0].id;
+      activeFunctionId = functions[0]?.id ?? null;
       recoveryNotice.hidden = true;
     } else if (saved.status === 'valid') {
       graphMode = saved.graphMode;
@@ -282,7 +283,7 @@ export function buildCalculator(id, ctx) {
       functions = saved.functions;
       activeFunctionId = functions.some(fn => fn.id === activeFunctionId)
         ? activeFunctionId
-        : functions[0].id;
+        : functions[0]?.id ?? null;
       nextFunctionId = Math.max(nextFunctionId, ...functions.map(fn => Number(fn.id.slice(3)) + 1));
       recoveryNotice.hidden = true;
     } else return;
@@ -484,13 +485,16 @@ export function buildCalculator(id, ctx) {
       toggle.addEventListener('click', () => { fn.visible = !fn.visible; renderFunctions(); plot(); persistGraphSettings(); });
       const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'calc-function-remove'; remove.setAttribute('aria-label', `Remove function ${fn.id}`); remove.textContent = 'Remove';
       remove.addEventListener('click', () => {
-        if (functions.length === 1) { graphStatus.textContent = 'Keep at least one function in the graph.'; return; }
         functions = functions.filter(item => item.id !== fn.id);
-        if (activeFunctionId === fn.id) activeFunctionId = functions[0].id;
+        if (activeFunctionId === fn.id) activeFunctionId = functions[0]?.id ?? null;
         renderFunctions(); plot(); persistGraphSettings();
       });
       row.append(swatch, label, toggle, remove); list.append(row);
     });
+    if (!functions.length) {
+      const empty = document.createElement('li'); empty.className = 'calc-function-empty'; empty.textContent = 'No functions yet';
+      list.append(empty);
+    }
   }
   function renderSettingsFields(fieldMode = graphMode) {
     const holder = $('.calc-range-fields'); holder.replaceChildren();
@@ -551,10 +555,29 @@ export function buildCalculator(id, ctx) {
   }
   function renderEditor() {
     renderEditorNav();
-    const fn = editorDraft.find(item => item.id === activeFunctionId); if (!fn) return;
     const regularLabel = $('.calc-editor-expression-label');
     const fieldWrap = $('.calc-editor-function-fields');
     const regularInput = $('.calc-editor-expression');
+    const emptyMessage = $('.calc-editor-empty');
+    const colorPicker = $('.calc-color-picker');
+    const functionKeypad = $('.calc-function-keypad');
+    const applyButton = $('.calc-apply-functions');
+    const fn = editorDraft.find(item => item.id === activeFunctionId);
+    if (!fn) {
+      emptyMessage.hidden = false;
+      regularLabel.hidden = true;
+      fieldWrap.hidden = true;
+      colorPicker.hidden = true;
+      functionKeypad.hidden = true;
+      applyButton.disabled = true;
+      $('.calc-editor-error').textContent = '';
+      lastEditorField = null;
+      return;
+    }
+    emptyMessage.hidden = true;
+    colorPicker.hidden = false;
+    functionKeypad.hidden = false;
+    applyButton.disabled = false;
     if (graphMode === 'parametric') {
       regularLabel.hidden = true; fieldWrap.hidden = false; fieldWrap.replaceChildren();
       [['xExpression', 'x(t)'], ['yExpression', 'y(t)']].forEach(([key, label]) => {
@@ -580,8 +603,10 @@ export function buildCalculator(id, ctx) {
   }
   function openEditor() {
     editorDraft = functions.map(fn => ({ ...fn })); renderEditor(); editorDialog.showModal();
-    lastEditorField = graphMode === 'parametric' ? $('.calc-editor-x') : $('.calc-editor-expression');
-    lastEditorField.focus();
+    lastEditorField = editorDraft.length
+      ? graphMode === 'parametric' ? $('.calc-editor-x') : $('.calc-editor-expression')
+      : null;
+    (lastEditorField || $('.calc-add-function')).focus();
   }
   $('.calc-add-function').addEventListener('click', () => {
     saveEditorDraft(); const fn = makeFunction(graphMode === 'polar' ? '1' : 'sin(x)');
@@ -951,7 +976,12 @@ export function buildCalculator(id, ctx) {
     }
     const drawable = functions.filter(fn => fn.visible && fn.path);
     drawable.forEach(fn => { const path = document.createElementNS(ns, 'path'); path.setAttribute('d', fn.path); path.setAttribute('class', 'calc-graph-line'); path.style.setProperty('--function-color', fn.color); path.setAttribute('data-function-id', fn.id); plotArea.append(path); });
-    if (!drawable.length) { if (announce) graphStatus.textContent = 'No visible function has a valid plotted curve.'; return; }
+    if (!drawable.length) {
+      if (announce) graphStatus.textContent = functions.length
+        ? 'No visible function has a valid plotted curve.'
+        : 'No functions yet. Add one using Edit functions.';
+      return;
+    }
     if (announce) graphStatus.textContent = `Plotted ${drawable.length} ${drawable.length === 1 ? 'function' : 'functions'} in ${graphMode} mode.`;
   }
   const pointers = new Map();

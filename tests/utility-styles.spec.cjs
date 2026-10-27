@@ -136,6 +136,33 @@ test('calculator graph edits multiple functions in an accessible keypad dialog',
   await expect(calculator.locator('.calc-graph-line')).toHaveCount(1);
 });
 
+test('calculator allows an empty graph and adding functions afterward', async ({ page }) => {
+  let calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await calculator.locator('.calc-function-item').getByRole('button', { name: /^Remove function/ }).click();
+  await expect(calculator.locator('.calc-function-item')).toHaveCount(0);
+  await expect(calculator.locator('.calc-function-empty')).toHaveText('No functions yet');
+  await expect(calculator.locator('.calc-graph-status')).toContainText('No functions yet');
+  await expect(calculator.locator('.calc-graph-line')).toHaveCount(0);
+
+  await page.locator('#close-btn').click();
+  calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await expect(calculator.locator('.calc-function-item')).toHaveCount(0);
+  await expect(calculator.locator('.calc-graph-status')).toContainText('No functions yet');
+
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await expect(editor.locator('.calc-editor-empty')).toBeVisible();
+  await expect(editor.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled();
+  await editor.getByRole('button', { name: 'Add function' }).click();
+  await expect(editor.locator('.calc-editor-empty')).toBeHidden();
+  await expect(editor.getByLabel('Function expression')).toHaveValue('sin(x)');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect(calculator.locator('.calc-function-item')).toHaveCount(1);
+  await expect(calculator.locator('.calc-graph-line')).toHaveCount(1);
+});
+
 test('calculator graph settings keep modes and plot ranges independent', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   await calculator.getByRole('button', { name: 'Graph', exact: true }).click();

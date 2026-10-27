@@ -2622,6 +2622,7 @@ kbd {
 .calc-primary-action { background:var(--accent)!important; border-color:var(--accent)!important; color:#fff!important; font-weight:700!important; }
 .calc-function-list { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:.3rem; margin:0; padding:0; list-style:none; }
 .calc-function-item { display:flex; align-items:center; gap:.25rem; min-width:0; max-width:100%; padding:.2rem .3rem; border:1px solid var(--app-border); border-radius:.55rem; background:var(--util-surface); }
+.calc-function-empty { padding:.2rem .35rem; color:var(--util-detail); font-size:.7rem; font-style:italic; }
 .calc-function-swatch { width:.65rem; height:.65rem; flex:none; border-radius:50%; background:var(--function-color); }
 .calc-function-summary { max-width:12rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:.68rem ui-monospace,monospace; }
 .calc-function-toggle,.calc-function-remove { min-height:1.55rem; padding:.15rem .35rem; font-size:.65rem; }
@@ -2669,6 +2670,8 @@ kbd {
   width:100%; min-width:0; min-height:2.35rem; padding:.45rem .55rem; border:1px solid var(--app-border); border-radius:.5rem; background:var(--toolbar-bg); color:var(--app-text); font: .9rem ui-monospace,monospace;
 }
 .calc-editor-error,.calc-settings-error { min-height:1.2em; margin:0; color:var(--util-danger); font-size:.75rem; }
+.calc-editor-empty { margin:0; padding:.65rem; border:1px dashed var(--app-border); border-radius:.55rem; color:var(--util-detail); font-size:.82rem; }
+.calc-dialog-card button:disabled { cursor:not-allowed; opacity:.48; }
 .calc-function-keypad { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:.3rem; }
 .calc-function-key { min-width:0; padding:.3rem!important; font:.75rem ui-monospace,monospace!important; }
 .calc-dialog-actions { display:flex; justify-content:space-between; gap:.5rem; padding-top:.35rem; }
