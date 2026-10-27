@@ -226,8 +226,8 @@ export function buildCalculator(id, ctx) {
             <button type="button" data-memory="clear" aria-label="Clear memory" title="Clear memory" disabled>MC</button>
           </div>
           <div class="calc-header-graph-actions" role="group" aria-label="Graph editing" hidden>
-            <button type="button" class="calc-open-editor">Edit functions</button>
-            <button type="button" class="calc-open-settings">Graph settings</button>
+            <button type="button" class="calc-open-editor" aria-label="Edit functions">y = f(x)</button>
+            <button type="button" class="calc-open-settings" aria-label="Graph settings">Settings</button>
           </div>
         </div>
         <div class="calc-modes" role="group" aria-label="Calculator mode">

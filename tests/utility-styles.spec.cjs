@@ -98,6 +98,8 @@ test('calculator supports scientific calculations, reusable history, and graphin
   await calculator.getByRole('button', { name: 'Graph' }).click();
   await expect(calculator.locator('.calc-header .calc-memory')).toBeHidden();
   await expect(calculator.locator('.calc-header-graph-actions')).toBeVisible();
+  await expect(calculator.locator('.calc-open-editor')).toHaveText('y = f(x)');
+  await expect(calculator.locator('.calc-open-settings')).toHaveText('Settings');
   await expect(calculator.locator('.calc-graph-tools').getByRole('button', { name: 'Edit functions' })).toHaveCount(0);
   await expect(calculator.locator('.calc-graph-tools').getByRole('button', { name: 'Graph settings' })).toHaveCount(0);
   await calculator.getByRole('button', { name: 'Plot' }).click();
