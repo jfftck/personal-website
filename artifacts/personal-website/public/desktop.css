@@ -3361,7 +3361,7 @@ kbd {
 .calc-header { grid-row:1; padding:.55rem .75rem; }
 .calc-header-actions { display:flex; align-items:center; min-width:0; flex:1 1 auto; }
 .calc-header .calc-memory {
-  width:auto; grid-column:auto; grid-template-columns:repeat(4,minmax(2rem,auto));
+  width:auto; grid-column:auto; grid-template-columns:repeat(5,minmax(2rem,auto));
   gap:.2rem; padding:0;
 }
 .calc-header .calc-memory button { min-height:2rem; padding-inline:.3rem; font-size:.68rem; }
@@ -3443,7 +3443,7 @@ kbd {
 .calc-keypads { grid-row:2; display:grid; grid-template-rows:minmax(0,1fr); min-height:0; }
 .calc-keypads[hidden] { display:none; }
 .calc-memory {
-  display:grid; grid-column:1/-1; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.25rem;
+  display:grid; grid-column:1/-1; grid-template-columns:repeat(5,minmax(0,1fr)); gap:.25rem;
   width:100%; min-width:0; margin:0; padding:.35rem;
 }
 .calc-memory button {

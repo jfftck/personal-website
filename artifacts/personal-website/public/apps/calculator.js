@@ -223,6 +223,7 @@ export function buildCalculator(id, ctx) {
             <button type="button" data-memory="recall" aria-label="Memory recall" title="Recall memory" disabled>MR</button>
             <button type="button" data-memory="add" aria-label="Add to memory" title="Add to memory">M+</button>
             <button type="button" data-memory="subtract" aria-label="Subtract from memory" title="Subtract from memory">M−</button>
+            <button type="button" data-memory="clear" aria-label="Clear memory" title="Clear memory" disabled>MC</button>
           </div>
           <div class="calc-header-graph-actions" role="group" aria-label="Graph editing" hidden>
             <button type="button" class="calc-open-editor">Edit functions</button>
@@ -668,12 +669,20 @@ export function buildCalculator(id, ctx) {
         input.focus({ preventScroll: true });
         return;
       }
+      if (action === 'clear') {
+        memoryValue = null;
+        root.querySelector('[data-memory="recall"]').disabled = true;
+        button.disabled = true;
+        message.textContent = 'Memory cleared.';
+        return;
+      }
       const current = calculate(false);
       if (current === null) return;
       if (action === 'store') memoryValue = current;
       else if (action === 'add') memoryValue = (memoryValue ?? 0) + current;
       else if (action === 'subtract') memoryValue = (memoryValue ?? 0) - current;
       root.querySelector('[data-memory="recall"]').disabled = memoryValue === null;
+      root.querySelector('[data-memory="clear"]').disabled = memoryValue === null;
       message.textContent = action === 'store' ? 'Memory stored.' : 'Memory updated.';
     });
   });

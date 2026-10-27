@@ -210,6 +210,15 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   await calculator.getByRole('button', { name: 'AC', exact: true }).click();
   await calculator.getByRole('button', { name: 'Memory recall' }).click();
   await expect(output).toHaveText('21');
+  await calculator.getByRole('button', { name: 'Clear memory' }).click();
+  await expect(calculator.getByRole('button', { name: 'Memory recall' })).toBeDisabled();
+  await expect(calculator.getByRole('button', { name: 'Clear memory' })).toBeDisabled();
+  await expect(output).toHaveText('21');
+  await expression.fill('9');
+  await calculator.getByRole('button', { name: 'Memory store' }).click();
+  await calculator.getByRole('button', { name: 'AC', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Memory recall' }).click();
+  await expect(output).toHaveText('9');
 
   await calculator.getByRole('button', { name: 'Scientific' }).click();
   await calculator.getByRole('button', { name: 'AC', exact: true }).click();
