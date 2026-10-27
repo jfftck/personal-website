@@ -441,9 +441,12 @@ export function buildCalculator(id, ctx) {
       <form method="dialog" class="calc-dialog-card calc-editor-card">
         <header class="calc-dialog-header"><div><span class="calc-kicker">FUNCTION LAB</span><h3 id="${expressionId}-editor-title">Edit functions</h3></div></header>
         <div class="calc-editor-layout">
-          <nav class="calc-editor-nav" aria-label="Functions"></nav>
+          <nav class="calc-editor-nav" aria-label="Functions">
+            <div class="calc-editor-list" aria-live="polite"></div>
+            <button type="button" class="calc-new-function util-action" aria-label="New function">New</button>
+          </nav>
           <div class="calc-editor-fields">
-            <p class="calc-editor-empty" hidden>No functions yet. Type an expression or choose New Function.</p>
+            <p class="calc-editor-empty" hidden>No functions yet. Type an expression or choose New.</p>
             <div class="calc-editor-expression-label">
               <label class="calc-editor-equation-label" for="${expressionId}-function-expression">y =</label>
               <span class="calc-editor-input-wrap">
@@ -455,7 +458,7 @@ export function buildCalculator(id, ctx) {
             <fieldset class="note-color-picker calc-color-picker"><legend>Line color</legend><div class="note-color-options calc-color-options"></div></fieldset>
             <p class="calc-editor-error" role="alert" aria-live="polite"></p>
             <div class="calc-function-keypad" aria-label="Function keypad"></div>
-            <app-dialog-actions class="calc-dialog-actions"><button type="button" class="calc-new-function">New Function</button><button type="button" data-action="cancel">Cancel</button><button type="button" class="calc-apply-functions calc-primary-action">Apply</button></app-dialog-actions>
+            <app-dialog-actions class="calc-dialog-actions"><button type="button" data-action="cancel">Cancel</button><button type="button" class="calc-apply-functions calc-primary-action">Apply</button></app-dialog-actions>
           </div>
         </div>
       </form>
@@ -1101,24 +1104,31 @@ export function buildCalculator(id, ctx) {
   });
 
   function renderEditorNav() {
-    const nav = $('.calc-editor-nav'); nav.replaceChildren();
-    editorDraft.forEach((fn, index) => {
+    const nav = $('.calc-editor-list'); nav.replaceChildren();
+    editorDraft.forEach(fn => {
       const label = graphMode === 'parametric'
         ? [fn.xExpression, fn.yExpression].some(expression => expression.trim())
           ? `${fn.xExpression.trim() || '…'}, ${fn.yExpression.trim() || '…'}`
           : ''
         : fn.expression.trim();
-      if (!label) return;
-      const row = document.createElement('div'); row.className = 'calc-editor-function-row';
+      const empty = !label;
+      const row = document.createElement('div');
+      row.className = 'calc-editor-function-row';
+      row.dataset.empty = String(empty);
       const select = document.createElement('button'); select.type = 'button'; select.className = 'calc-editor-select';
       select.setAttribute('aria-current', String(fn.id === activeFunctionId));
-      select.setAttribute('aria-label', `Edit ${label}`);
+      select.dataset.empty = String(empty);
+      select.setAttribute('aria-label', empty ? 'Empty function entry' : `Edit ${label}`);
       select.textContent = label;
-      select.title = label;
+      select.title = empty ? 'Type an expression to name this function' : label;
       select.addEventListener('click', () => { saveEditorDraft(); activeFunctionId = fn.id; renderEditor(); });
-      const visible = document.createElement('input'); visible.type = 'checkbox'; visible.checked = fn.visible; visible.setAttribute('aria-label', `Show ${label}`);
-      visible.addEventListener('change', () => { fn.visible = visible.checked; });
-      row.append(select, visible); nav.append(row);
+      row.append(select);
+      if (!empty) {
+        const visible = document.createElement('input'); visible.type = 'checkbox'; visible.checked = fn.visible; visible.setAttribute('aria-label', `Show ${label}`);
+        visible.addEventListener('change', () => { fn.visible = visible.checked; });
+        row.append(visible);
+      }
+      nav.append(row);
     });
   }
   function saveEditorDraft() {
@@ -1138,6 +1148,7 @@ export function buildCalculator(id, ctx) {
     if (start === end && start > 0) field.setRangeText('', start - 1, end, 'end');
     else if (start !== end) field.setRangeText('', start, end, 'end');
     saveEditorDraft();
+    renderEditorNav();
     rememberEditorField(field);
     field.focus();
   }

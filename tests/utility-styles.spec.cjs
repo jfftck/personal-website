@@ -471,15 +471,25 @@ test('calculator graph edits multiple functions in an accessible keypad dialog',
   await functionExpression.fill('sin(x)');
   await expect(editor.locator('.calc-editor-select')).toHaveText('sin(x)');
   await expect(editor.locator('.calc-editor-select')).not.toContainText('Function');
-  await editor.getByRole('button', { name: 'New Function' }).click();
+  await expect(editor.locator('.calc-editor-nav > .calc-new-function')).toHaveText('New');
+  await expect(editor.locator('.calc-dialog-actions .calc-new-function')).toHaveCount(0);
+  await editor.getByRole('button', { name: 'New function' }).click();
   await expect(functionExpression).toHaveValue('');
-  await expect(editor.locator('.calc-editor-select')).toHaveCount(1);
+  await expect(editor.locator('.calc-editor-select:not([data-empty="true"])')).toHaveCount(1);
+  await expect(editor.locator('.calc-editor-select[data-empty="true"]')).toHaveCount(1);
   await editor.getByRole('button', { name: 'cos(', exact: true }).click();
   await editor.getByRole('button', { name: '2', exact: true }).click();
   await editor.getByRole('button', { name: '×', exact: true }).click();
   await editor.getByRole('button', { name: 'x', exact: true }).click();
   await editor.getByRole('button', { name: ')', exact: true }).click();
   await expect(functionExpression).toHaveValue('cos(2*x)');
+  await expect(editor.locator('.calc-editor-select[data-empty="true"]')).toHaveCount(0);
+  const selectedFunctionBackground = await editor.locator('.calc-editor-select[aria-current="true"]')
+    .evaluate(button => ({
+      background: getComputedStyle(button).backgroundColor,
+      common: getComputedStyle(button).getPropertyValue('--btn-active').trim(),
+    }));
+  expect(selectedFunctionBackground.background).toBe(selectedFunctionBackground.common);
   await editor.locator('.note-color-choice[data-note-color="orange"]').click();
   await expect(editor.getByRole('radio', { name: 'Orange line color' })).toBeChecked();
   await editor.getByRole('button', { name: '+', exact: true }).click();
@@ -494,6 +504,43 @@ test('calculator graph edits multiple functions in an accessible keypad dialog',
   await openGraphInfo(calculator);
   await calculator.getByRole('button', { name: /Hide function/ }).first().click();
   await expect(calculator.locator('.calc-graph-line')).toHaveCount(1);
+});
+
+test('calculator function editor underlines empty entries and drops them when applied', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  const expression = editor.getByRole('textbox', { name: 'Function expression' });
+
+  const emptyEntry = editor.locator('.calc-editor-select[data-empty="true"]');
+  await expect(emptyEntry).toHaveCount(1);
+  const underlineStyle = await emptyEntry.evaluate(button => {
+    const style = getComputedStyle(button);
+    return { border: style.borderBottomStyle, background: style.backgroundColor };
+  });
+  expect(underlineStyle).toEqual({ border: 'solid', background: 'rgba(0, 0, 0, 0)' });
+
+  await expression.fill('x');
+  await expect(editor.locator('.calc-editor-select[data-empty="true"]')).toHaveCount(0);
+  await expect(editor.locator('.calc-editor-select[aria-current="true"]')).toHaveText('x');
+  await editor.getByRole('button', { name: 'New function' }).click();
+  await expect(editor.locator('.calc-editor-select[data-empty="true"]')).toHaveCount(1);
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect(calculator.locator('.calc-function-item')).toHaveCount(1);
+
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  const editExisting = calculator.getByRole('dialog', { name: 'Edit functions' });
+  const existingExpression = editExisting.getByRole('textbox', { name: 'Function expression' });
+  await existingExpression.focus();
+  await existingExpression.evaluate(field => field.setSelectionRange(field.value.length, field.value.length));
+  await editExisting.getByRole('button', { name: 'Backspace expression' }).click();
+  await expect(existingExpression).toHaveValue('');
+  await expect(editExisting.locator('.calc-editor-select[data-empty="true"]')).toHaveCount(1);
+  await editExisting.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect(calculator.locator('.calc-function-item')).toHaveCount(0);
+  const info = await openGraphInfo(calculator);
+  await expect(info.locator('.calc-function-empty')).toHaveText('No functions yet');
 });
 
 test('calculator allows an empty graph and adding functions afterward', async ({ page }) => {
@@ -698,7 +745,7 @@ test('calculator fits visible curves in every graph mode without changing config
   await calculator.getByRole('button', { name: 'Edit functions' }).click();
   let editor = calculator.getByRole('dialog', { name: 'Edit functions' });
   await editor.getByLabel('Function expression').fill('4*x+3');
-  await editor.getByRole('button', { name: 'New Function' }).click();
+  await editor.getByRole('button', { name: 'New function' }).click();
   await editor.getByLabel('Function expression').fill('100*x');
   await editor.getByLabel('Show 100*x').uncheck();
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
@@ -863,7 +910,7 @@ test('calculator graph functions, colors, visibility, mode, and ranges persist a
   let editor = calculator.getByRole('dialog', { name: 'Edit functions' });
   await editor.getByLabel('Function expression').fill('sin(theta)');
   await editor.locator('.note-color-choice[data-note-color="orange"]').click();
-  await editor.getByRole('button', { name: 'New Function' }).click();
+  await editor.getByRole('button', { name: 'New function' }).click();
   await editor.getByLabel('Function expression').fill('cos(2*theta)');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
   await openGraphInfo(calculator);
@@ -934,7 +981,7 @@ test('open calculator windows stay in sync when graph settings change', async ({
   const editor = firstCalculator.getByRole('dialog', { name: 'Edit functions' });
   await editor.getByLabel('Function expression').fill('sin(theta)');
   await editor.locator('.note-color-choice[data-note-color="orange"]').click();
-  await editor.getByRole('button', { name: 'New Function' }).click();
+  await editor.getByRole('button', { name: 'New function' }).click();
   await editor.getByLabel('Function expression').fill('cos(theta)');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
 
@@ -1510,13 +1557,34 @@ test('basic and scientific calculator modes remain usable after graphing', async
 
 test('calculator mode persists and editor fields include caret-aware backspace buttons', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
+  const backspace = calculator.locator('.calc-backspace');
+  const backspaceMetrics = () => backspace.evaluate(button => {
+    const input = button.parentElement.querySelector('.calc-expression');
+    const style = getComputedStyle(button);
+    return {
+      width: style.width,
+      boxSizing: style.boxSizing,
+      inputPaddingRight: getComputedStyle(input).paddingRight,
+      rightGap: Number((input.getBoundingClientRect().right - button.getBoundingClientRect().right).toFixed(2)),
+      display: style.display,
+      alignItems: style.alignItems,
+      justifyItems: style.justifyItems,
+    };
+  });
+  const expectedBackspaceMetrics = {
+    width: '32px',
+    boxSizing: 'border-box',
+    inputPaddingRight: '32px',
+    rightGap: 0,
+    display: 'grid',
+    alignItems: 'center',
+    justifyItems: 'center',
+  };
+  await expect.poll(backspaceMetrics).toEqual(expectedBackspaceMetrics);
+
   await chooseCalculatorMode(calculator, 'Scientific');
   await expect(calculator.locator('.calc-mode-select .standard-select-trigger')).toHaveText('Scientific');
-  const backspace = calculator.locator('.calc-backspace');
-  await expect.poll(() => backspace.evaluate(element => ({
-    width: getComputedStyle(element).width,
-    boxSizing: getComputedStyle(element).boxSizing,
-  }))).toEqual({ width: '32px', boxSizing: 'border-box' });
+  await expect.poll(backspaceMetrics).toEqual(expectedBackspaceMetrics);
 
   await page.reload();
   const welcome = page.getByRole('button', { name: 'Get started', exact: true });
@@ -1533,6 +1601,23 @@ test('calculator mode persists and editor fields include caret-aware backspace b
   await settings.getByRole('button', { name: 'Apply settings' }).click();
   await restored.getByRole('button', { name: 'Edit functions' }).click();
   const editor = restored.getByRole('dialog', { name: 'Edit functions' });
+  const editorBackspaceStyle = await editor.getByRole('button', { name: 'Backspace expression' }).evaluate(button => {
+    const style = getComputedStyle(button);
+    return {
+      width: style.width,
+      boxSizing: style.boxSizing,
+      display: style.display,
+      alignItems: style.alignItems,
+      justifyItems: style.justifyItems,
+    };
+  });
+  expect(editorBackspaceStyle).toEqual({
+    width: '32px',
+    boxSizing: 'border-box',
+    display: 'grid',
+    alignItems: 'center',
+    justifyItems: 'center',
+  });
   const xField = editor.getByRole('textbox', { name: 'x(t)' });
   const yField = editor.getByRole('textbox', { name: 'y(t)' });
   await xField.fill('cos(t)');
