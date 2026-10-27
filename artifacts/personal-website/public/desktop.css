@@ -3373,7 +3373,12 @@ kbd {
 }
 .calc-header-graph-actions button:hover { background:var(--util-surface-strong); }
 .calc-header-graph-actions button:focus-visible { outline:2px solid var(--focus-color); outline-offset:2px; }
-.calc-workspace { grid-row:2; min-height:0; overflow:hidden; padding:0; }
+.calc-workspace {
+  display:grid; grid-row:2;
+  grid-template-columns:minmax(0,1fr) minmax(12rem,.38fr);
+  grid-template-rows:minmax(0,1fr); gap:1rem;
+  width:100%; height:100%; min-width:0; min-height:0; overflow:hidden; padding:0;
+}
 .calc-main { display:grid; grid-template-rows:auto minmax(0,1fr); min-width:0; min-height:0; overflow:hidden; padding:.6rem .75rem .75rem; }
 .calc-display {
   position:relative; grid-row:1; min-height:clamp(6.2rem,19cqh,10rem); padding:.65rem clamp(.5rem,1.5cqw,1rem);
@@ -3405,6 +3410,11 @@ kbd {
   .calc-wrap[data-mode="scientific"] .calc-science-key { min-height:1.2rem; font-size:.75rem; }
 }
 @container calc-surface (width < 680px) {
+  .calc-workspace {
+    grid-template-columns:minmax(0,1fr);
+    grid-template-rows:minmax(0,1fr) minmax(8rem,.45fr);
+  }
+  .calc-history { max-height:none; }
   .calc-graph-toolbar { flex-direction:column; }
   .calc-function-list { justify-content:flex-start; }
   .calc-plot-area { min-height:7rem; }

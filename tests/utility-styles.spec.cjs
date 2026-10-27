@@ -164,12 +164,12 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   expect(displayGeometry.button.left).toBeGreaterThan(displayGeometry.label.right);
 
   await expect(calculator.getByRole('button', { name: 'Base 2' })).toBeHidden();
-  await expect(calculator.getByRole('button', { name: '÷', exact: true })).toHaveAttribute('title', 'Divide');
+  await expect(calculator.getByRole('button', { name: '÷', exact: true })).toHaveAttribute('title', 'Divide · type /');
   await calculator.getByRole('button', { name: 'Scientific' }).click();
   await expect(calculator.getByRole('button', { name: 'Base 2' })).toBeVisible();
-  await expect(calculator.getByRole('button', { name: 'Square root' })).toHaveAttribute('title', 'Square root');
-  await expect(calculator.getByRole('button', { name: 'Pi' })).toHaveAttribute('title', 'Pi');
-  await expect(calculator.getByRole('button', { name: 'Euler’s number' })).toHaveAttribute('title', 'Euler’s number');
+  await expect(calculator.getByRole('button', { name: 'Square root' })).toHaveAttribute('title', 'Square root · type sqrt(');
+  await expect(calculator.getByRole('button', { name: 'Pi' })).toHaveAttribute('title', 'Pi constant · type pi');
+  await expect(calculator.getByRole('button', { name: 'Euler’s number' })).toHaveAttribute('title', 'Euler’s number · type e');
   await expression.fill('7+3');
   await calculator.getByRole('button', { name: 'Base 2' }).click();
   await expect(expression).toHaveValue('0b111+0b11');
@@ -292,6 +292,20 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
     return { keysRight: keys.right, supportLeft: support.left };
   });
   expect(mediumPlacement.supportLeft).toBeGreaterThanOrEqual(mediumPlacement.keysRight);
+  const mediumHistory = await calculator.locator('.calc-workspace').evaluate(workspace => {
+    const main = workspace.querySelector('.calc-main').getBoundingClientRect();
+    const history = workspace.querySelector('.calc-history').getBoundingClientRect();
+    return {
+      columns: getComputedStyle(workspace).gridTemplateColumns.split(' ').length,
+      gap: history.top - main.bottom,
+      bottomGap: workspace.getBoundingClientRect().bottom - history.bottom,
+      height: history.height,
+    };
+  });
+  expect(mediumHistory.columns).toBe(1);
+  expect(mediumHistory.gap).toBeGreaterThanOrEqual(0);
+  expect(mediumHistory.bottomGap).toBeLessThanOrEqual(1);
+  expect(mediumHistory.height).toBeGreaterThanOrEqual(128);
   await calculator.evaluate(element => {
     const appWindow = element.closest('.app-window');
     appWindow.style.width = '360px';
@@ -320,6 +334,20 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   expect(order.keypadHeight).toBeGreaterThan(0);
   expect(Math.abs(order.lastKeyBottom - order.keypadBottom), JSON.stringify(order)).toBeLessThanOrEqual(2);
   expect(Math.abs(order.keypadWidth - order.columnsWidth)).toBeLessThanOrEqual(2);
+  const compactHistory = await calculator.locator('.calc-workspace').evaluate(workspace => {
+    const main = workspace.querySelector('.calc-main').getBoundingClientRect();
+    const history = workspace.querySelector('.calc-history').getBoundingClientRect();
+    return {
+      columns: getComputedStyle(workspace).gridTemplateColumns.split(' ').length,
+      gap: history.top - main.bottom,
+      bottomGap: workspace.getBoundingClientRect().bottom - history.bottom,
+      height: history.height,
+    };
+  });
+  expect(compactHistory.columns).toBe(1);
+  expect(compactHistory.gap).toBeGreaterThanOrEqual(0);
+  expect(compactHistory.bottomGap).toBeLessThanOrEqual(1);
+  expect(compactHistory.height).toBeGreaterThanOrEqual(128);
   expect(await calculator.locator('.calc').evaluate(element => getComputedStyle(element).display)).toBe('grid');
   expect(await calculator.locator('.calc-main').evaluate(element => getComputedStyle(element).display)).toBe('grid');
   const surfaces = await calculator.locator('.calc').evaluate(element => ({
@@ -346,12 +374,13 @@ test('calculator graph edits multiple functions in an accessible keypad dialog',
   await expect(editor.getByRole('radio')).toHaveCount(6);
   await expect(editor.getByRole('button', { name: 'sin(', exact: true })).toBeVisible();
   for (const [name, symbol, tooltip] of [
-    ['Theta', 'θ', 'Theta'],
-    ['Pi', 'π', 'Pi'],
-    ['Square root', '√(', 'Square root'],
-    ['e', 'e', 'Euler’s number'],
-    ['^', '^', 'Power'],
-    ['×', '×', 'Multiply'],
+    ['sin(', 'sin(', 'Sine function · type sin('],
+    ['Theta', 'θ', 'Theta variable · type theta'],
+    ['Pi', 'π', 'Pi constant · type pi'],
+    ['Square root', '√(', 'Square root · type sqrt('],
+    ['e', 'e', 'Euler’s number · type e'],
+    ['^', '^', 'Power · type ^'],
+    ['×', '×', 'Multiply · type *'],
   ]) {
     const key = editor.getByRole('button', { name, exact: true });
     await expect(key).toHaveText(symbol);
@@ -368,6 +397,9 @@ test('calculator graph edits multiple functions in an accessible keypad dialog',
   await expect(functionExpression).toHaveValue('cos(2*x)');
   await editor.locator('.note-color-choice[data-note-color="orange"]').click();
   await expect(editor.getByRole('radio', { name: 'Orange line color' })).toBeChecked();
+  await editor.getByRole('button', { name: '+', exact: true }).click();
+  await editor.getByRole('button', { name: '1', exact: true }).click();
+  await expect(functionExpression).toHaveValue('cos(2*x)+1');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
   await expect(calculator.locator('.calc-function-item')).toHaveCount(2);
   await calculator.getByRole('button', { name: 'Plot', exact: true }).click();
@@ -408,6 +440,7 @@ test('calculator allows an empty graph and adding functions afterward', async ({
 test('calculator graph settings keep modes and plot ranges independent', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await expect(calculator.locator('.calc-open-editor')).toHaveText('y = f(x)');
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
   const settings = calculator.getByRole('dialog', { name: 'Graph settings' });
   const graphMode = settings.getByRole('combobox', { name: 'Graph mode' });
@@ -418,8 +451,10 @@ test('calculator graph settings keep modes and plot ranges independent', async (
   await settings.getByLabel('Minimum r').fill('0');
   await settings.getByLabel('Maximum r').fill('5');
   await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await expect(calculator.locator('.calc-open-editor')).toHaveText('r = f(θ)');
   await calculator.getByRole('button', { name: 'Edit functions' }).click();
   const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await expect(editor.locator('.calc-editor-expression-label')).toContainText('r(θ)');
   const functionExpression = editor.getByLabel('Function expression');
   await editor.getByRole('button', { name: 'Clear expression' }).click();
   await editor.getByRole('button', { name: 'sin(', exact: true }).click();
@@ -442,6 +477,7 @@ test('calculator graph settings keep modes and plot ranges independent', async (
   await expect(settings.getByLabel('Minimum t')).toBeVisible();
   await settings.getByLabel('Maximum t').fill('6.28');
   await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await expect(calculator.locator('.calc-open-editor')).toHaveText('x(t), y(t)');
   await calculator.getByRole('button', { name: 'Edit functions' }).click();
   await expect(editor.getByLabel('x(t)')).toBeVisible();
   await expect(editor.getByLabel('y(t)')).toBeVisible();

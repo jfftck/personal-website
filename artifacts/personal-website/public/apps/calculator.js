@@ -21,18 +21,50 @@ const GRAPH_KEYS = [
   '0', 'Clear', '⌫',
 ];
 const BASIC_KEY_TOOLTIPS = Object.freeze({
-  '±': 'Change sign', '%': 'Percent', '÷': 'Divide', '×': 'Multiply', '−': 'Subtract', '+': 'Add',
-  '=': 'Equals', '.': 'Decimal point',
+  '±': 'Change sign · type -',
+  '%': 'Percent · type /100',
+  '÷': 'Divide · type /',
+  '×': 'Multiply · type *',
+  '−': 'Subtract · type -',
+  '+': 'Add · type +',
+  '=': 'Evaluate · press Enter',
+  '.': 'Decimal point · type .',
 });
 const SCIENTIFIC_KEY_TOOLTIPS = Object.freeze({
-  '√(': 'Square root', 'π': 'Pi', e: 'Euler’s number',
-  '^': 'Power', '(': 'Open parenthesis', ')': 'Close parenthesis',
+  'sin(': 'Sine function · type sin(',
+  'cos(': 'Cosine function · type cos(',
+  'tan(': 'Tangent function · type tan(',
+  'ln(': 'Natural logarithm · type ln(',
+  'log(': 'Base-10 logarithm · type log(',
+  '√(': 'Square root · type sqrt(',
+  'π': 'Pi constant · type pi',
+  e: 'Euler’s number · type e',
+  '^': 'Power · type ^',
+  '(': 'Open parenthesis · type (',
+  ')': 'Close parenthesis · type )',
 });
 const GRAPH_KEY_TOOLTIPS = Object.freeze({
-  '√(': 'Square root', 'π': 'Pi', 'θ': 'Theta', e: 'Euler’s number',
-  '÷': 'Divide', '×': 'Multiply', '+': 'Add', '−': 'Subtract',
-  '^': 'Power', '%': 'Modulo', '/': 'Divide', '.': 'Decimal point',
-  '(': 'Open parenthesis', ')': 'Close parenthesis',
+  'sin(': 'Sine function · type sin(',
+  'cos(': 'Cosine function · type cos(',
+  'tan(': 'Tangent function · type tan(',
+  '√(': 'Square root · type sqrt(',
+  'ln(': 'Natural logarithm · type ln(',
+  'log(': 'Base-10 logarithm · type log(',
+  'π': 'Pi constant · type pi',
+  e: 'Euler’s number · type e',
+  x: 'x variable · type x',
+  'θ': 'Theta variable · type theta',
+  t: 'Parameter variable · type t',
+  '^': 'Power · type ^',
+  '÷': 'Divide · type /',
+  '×': 'Multiply · type *',
+  '+': 'Add · type +',
+  '−': 'Subtract · type -',
+  '%': 'Modulo · type %',
+  '/': 'Divide · type /',
+  '.': 'Decimal point · type .',
+  '(': 'Open parenthesis · type (',
+  ')': 'Close parenthesis · type )',
 });
 const MATH_SYMBOL_ALIASES = Object.freeze({
   'θ': 'theta', 'Θ': 'theta', 'π': 'pi', 'Π': 'pi', '√': 'sqrt',
@@ -387,6 +419,7 @@ export function buildCalculator(id, ctx) {
   const editorDialog = $('.calc-editor-dialog');
   const settingsDialog = $('.calc-settings-dialog');
   let lastEditorField = null;
+  let lastEditorSelection = null;
   const history = [];
   let mode = 'basic';
   let radix = 10;
@@ -400,6 +433,17 @@ export function buildCalculator(id, ctx) {
   let activeFunctionId = functions[0].id;
   let editorDraft = [];
   let restoreDraft = null;
+  function rememberEditorField(field, moveCaretToEnd = false) {
+    lastEditorField = field || null;
+    if (!field) {
+      lastEditorSelection = null;
+      return;
+    }
+    const length = field.value.length;
+    const start = moveCaretToEnd ? length : field.selectionStart ?? length;
+    const end = moveCaretToEnd ? length : field.selectionEnd ?? start;
+    lastEditorSelection = { start, end };
+  }
   const storageWarning = $('.calc-storage-warning');
   const recoveryNotice = $('.calc-storage-recovery');
   const recoveryMessage = recoveryNotice.querySelector('span');
@@ -729,6 +773,13 @@ export function buildCalculator(id, ctx) {
   root.querySelectorAll('.calc-dialog-close').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
 
   function renderFunctions() {
+    const editorFormat = graphMode === 'polar'
+      ? 'r = f(θ)'
+      : graphMode === 'parametric' ? 'x(t), y(t)' : 'y = f(x)';
+    const editorButton = $('.calc-open-editor');
+    editorButton.textContent = editorFormat;
+    editorButton.setAttribute('aria-label', `Edit functions: ${editorFormat}`);
+    editorButton.title = `Edit functions · ${editorFormat}`;
     const list = $('.calc-function-list'); list.replaceChildren();
     functions.forEach(fn => {
       const row = document.createElement('li'); row.className = 'calc-function-item';
@@ -797,7 +848,7 @@ export function buildCalculator(id, ctx) {
       const row = document.createElement('div'); row.className = 'calc-editor-function-row';
       const select = document.createElement('button'); select.type = 'button'; select.className = 'calc-editor-select';
       select.setAttribute('aria-current', String(fn.id === activeFunctionId)); select.textContent = `Function ${index + 1}`;
-      select.addEventListener('click', () => { saveEditorDraft(); activeFunctionId = fn.id; renderEditor(); });
+       select.addEventListener('click', () => { saveEditorDraft(); activeFunctionId = fn.id; renderEditor(); });
       const visible = document.createElement('input'); visible.type = 'checkbox'; visible.checked = fn.visible; visible.setAttribute('aria-label', `Show function ${index + 1}`);
       visible.addEventListener('change', () => { fn.visible = visible.checked; });
       row.append(select, visible); nav.append(row);
@@ -828,7 +879,7 @@ export function buildCalculator(id, ctx) {
       functionKeypad.hidden = true;
       applyButton.disabled = true;
       $('.calc-editor-error').textContent = '';
-      lastEditorField = null;
+      rememberEditorField(null);
       return;
     }
     emptyMessage.hidden = true;
@@ -842,12 +893,14 @@ export function buildCalculator(id, ctx) {
         const field = document.createElement('input'); field.className = key === 'xExpression' ? 'calc-editor-x' : 'calc-editor-y'; field.setAttribute('aria-label', label); field.autocomplete = 'off'; field.spellcheck = false; field.value = fn[key];
         fieldLabel.append(field); fieldWrap.append(fieldLabel);
       });
+      rememberEditorField($('.calc-editor-x'), true);
     } else {
       regularLabel.hidden = false; fieldWrap.hidden = true;
       regularLabel.firstChild.textContent = graphMode === 'polar' ? 'r(θ)' : 'y = f(x)';
       regularLabel.title = graphMode === 'polar' ? 'theta' : '';
       regularInput.title = graphMode === 'polar' ? 'theta' : '';
       regularInput.value = fn.expression;
+      rememberEditorField(regularInput, true);
     }
     const colorOptions = $('.calc-color-options'); colorOptions.replaceChildren();
     NOTE_COLORS.forEach(({ value, label, hex }) => {
@@ -862,16 +915,16 @@ export function buildCalculator(id, ctx) {
   }
   function openEditor() {
     editorDraft = functions.map(fn => ({ ...fn })); renderEditor(); editorDialog.showModal();
-    lastEditorField = editorDraft.length
+    rememberEditorField(editorDraft.length
       ? graphMode === 'parametric' ? $('.calc-editor-x') : $('.calc-editor-expression')
-      : null;
+      : null, true);
     (lastEditorField || $('.calc-add-function')).focus();
   }
   $('.calc-add-function').addEventListener('click', () => {
     saveEditorDraft(); const fn = makeFunction(graphMode === 'polar' ? '1' : 'sin(x)');
     if (graphMode === 'parametric') { fn.xExpression = 'cos(t)'; fn.yExpression = 'sin(t)'; }
     editorDraft.push(fn); activeFunctionId = fn.id; renderEditor();
-    lastEditorField = graphMode === 'parametric' ? $('.calc-editor-x') : $('.calc-editor-expression');
+    rememberEditorField(graphMode === 'parametric' ? $('.calc-editor-x') : $('.calc-editor-expression'), true);
     lastEditorField.focus();
   });
   $('.calc-apply-functions').addEventListener('click', () => {
@@ -900,11 +953,21 @@ export function buildCalculator(id, ctx) {
     if (key === '⌫') button.setAttribute('aria-label', 'Delete previous character');
     if (GRAPH_KEY_TOOLTIPS[key]) {
       button.title = GRAPH_KEY_TOOLTIPS[key];
-      if (['√(', 'π', 'θ'].includes(key)) button.setAttribute('aria-label', GRAPH_KEY_TOOLTIPS[key]);
+      const accessibleNames = { '√(': 'Square root', 'π': 'Pi', 'θ': 'Theta' };
+      if (accessibleNames[key]) button.setAttribute('aria-label', accessibleNames[key]);
     }
+    if (key === 'Clear') button.title = 'Clear expression · press Escape';
+    if (key === '⌫') button.title = 'Delete previous character · press Backspace';
     button.addEventListener('click', () => {
-      const field = lastEditorField?.isConnected ? lastEditorField : (graphMode === 'parametric' ? $('.calc-editor-x') : $('.calc-editor-expression'));
-      const start = field.selectionStart ?? field.value.length, end = field.selectionEnd ?? start;
+      const fallback = graphMode === 'parametric' ? $('.calc-editor-x') : $('.calc-editor-expression');
+      const field = lastEditorField?.isConnected && editorDialog.contains(lastEditorField) ? lastEditorField : fallback;
+      if (!field) return;
+      const selection = document.activeElement === field
+        ? { start: field.selectionStart ?? field.value.length, end: field.selectionEnd ?? field.value.length }
+        : lastEditorField === field && lastEditorSelection
+          ? lastEditorSelection
+          : { start: field.value.length, end: field.value.length };
+      const { start, end } = selection;
       if (key === 'Clear') {
         field.value = '';
         field.setSelectionRange(0, 0);
@@ -916,12 +979,16 @@ export function buildCalculator(id, ctx) {
         field.setRangeText(token, start, end, 'end');
       }
       field.dispatchEvent(new Event('input', { bubbles: true }));
+      rememberEditorField(field);
       field.focus();
     });
     $('.calc-function-keypad').append(button);
   });
   editorDialog.addEventListener('focusin', event => {
-    if (event.target.matches('.calc-editor-expression,.calc-editor-x,.calc-editor-y')) lastEditorField = event.target;
+    if (event.target.matches('.calc-editor-expression,.calc-editor-x,.calc-editor-y')) rememberEditorField(event.target);
+  });
+  editorDialog.addEventListener('focusout', event => {
+    if (event.target.matches('.calc-editor-expression,.calc-editor-x,.calc-editor-y')) rememberEditorField(event.target);
   });
   editorDialog.addEventListener('keydown', event => {
     if (event.key === 'Enter' && event.target.matches('.calc-editor-expression,.calc-editor-x,.calc-editor-y')) {
