@@ -687,6 +687,172 @@ test('calculator shows and copies the current view ranges in every graph mode', 
   }
 });
 
+test('calculator copies and explicitly restores complete graph setups in every mode', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async text => { window.__copiedGraphSetup = text; } },
+    });
+  });
+
+  const modes = [
+    {
+      name: 'Cartesian',
+      mode: 'cartesian',
+      ranges: { xMin: '-4', xMax: '4', yMin: '-6', yMax: '6' },
+      expression: '2*x+1',
+      summary: 'y = 2*x+1',
+    },
+    {
+      name: 'Polar',
+      mode: 'polar',
+      ranges: { thetaMin: '0', thetaMax: '6.2', rMin: '0', rMax: '8' },
+      expression: 'sin(theta)',
+      summary: 'r(θ) = sin(theta)',
+    },
+    {
+      name: 'Parametric',
+      mode: 'parametric',
+      ranges: { tMin: '0', tMax: '6.28', xMin: '-2', xMax: '2', yMin: '-3', yMax: '3' },
+      xExpression: 'cos(2*t)',
+      yExpression: 'sin(2*t)',
+      summary: 'x(t)=cos(2*t) · y(t)=sin(2*t)',
+    },
+  ];
+
+  for (const [index, mode] of modes.entries()) {
+    const settingsButton = calculator.getByRole('button', { name: 'Graph settings' });
+    await settingsButton.click();
+    const settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+    await settings.getByRole('combobox', { name: 'Graph mode' }).click();
+    await settings.getByRole('option', { name: new RegExp(mode.name) }).click();
+    for (const [key, value] of Object.entries(mode.ranges)) {
+      const labels = {
+        xMin: 'Minimum x', xMax: 'Maximum x', yMin: 'Minimum y', yMax: 'Maximum y',
+        thetaMin: 'Minimum theta', thetaMax: 'Maximum theta', rMin: 'Minimum r', rMax: 'Maximum r',
+        tMin: 'Minimum t', tMax: 'Maximum t',
+      };
+      await settings.getByLabel(labels[key]).fill(value);
+    }
+    await settings.getByRole('button', { name: 'Apply settings' }).click();
+
+    await calculator.getByRole('button', { name: 'Edit functions' }).click();
+    const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+    if (mode.mode === 'parametric') {
+      await editor.getByLabel('x(t)').fill(mode.xExpression);
+      await editor.getByLabel('y(t)').fill(mode.yExpression);
+    } else {
+      await editor.getByLabel('Function expression').fill(mode.expression);
+    }
+    await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+    await calculator.getByRole('button', { name: 'Zoom in' }).click();
+
+    const currentView = await calculator.locator('.calc-plot-area').evaluate(element => JSON.parse(element.dataset.view));
+    const copySetup = calculator.getByRole('button', { name: 'Copy setup' });
+    if (index === 1) {
+      await copySetup.focus();
+      await copySetup.press('Enter');
+    } else {
+      await copySetup.click();
+    }
+    await expect.poll(() => page.evaluate(() => window.__copiedGraphSetup || '')).not.toBe('');
+    const snippet = JSON.parse(await page.evaluate(() => window.__copiedGraphSetup));
+    expect(snippet.format).toBe('replit-calculator-graph-setup');
+    expect(snippet.version).toBe(1);
+    expect(snippet.graphMode).toBe(mode.mode);
+    expect(snippet.configuredRanges).toEqual(mode.ranges);
+    expect(snippet.currentViewRanges).toEqual(currentView);
+    expect(snippet.functions).toHaveLength(1);
+    if (mode.mode === 'parametric') {
+      expect(snippet.functions[0].xExpression).toBe(mode.xExpression);
+      expect(snippet.functions[0].yExpression).toBe(mode.yExpression);
+    } else {
+      expect(snippet.functions[0].expression).toBe(mode.expression);
+    }
+
+    const alternateMode = mode.mode === 'polar' ? 'cartesian' : 'polar';
+    await settingsButton.click();
+    const alternateSettings = calculator.getByRole('dialog', { name: 'Graph settings' });
+    await alternateSettings.getByRole('combobox', { name: 'Graph mode' }).click();
+    await alternateSettings.getByRole('option', { name: new RegExp(alternateMode === 'polar' ? 'Polar' : 'Cartesian') }).click();
+    await alternateSettings.getByRole('button', { name: 'Apply settings' }).click();
+
+    const snapshotBeforeRestore = await calculator.evaluate(element => ({
+      mode: element.querySelector('.calc-mode-label').textContent,
+      functions: [...element.querySelectorAll('.calc-function-summary')].map(item => item.textContent),
+      view: JSON.parse(element.querySelector('.calc-plot-area').dataset.view),
+    }));
+    await calculator.getByRole('button', { name: 'Restore setup' }).click();
+    const restore = calculator.getByRole('dialog', { name: 'Restore graph setup' });
+    const snippetField = restore.getByRole('textbox', { name: 'Graph setup snippet' });
+    if (index === 0) {
+      await snippetField.fill('not a setup');
+      await restore.getByRole('button', { name: 'Review setup' }).click();
+      await expect(restore.locator('.calc-setup-summary')).toContainText('not valid');
+      await expect(restore.getByRole('button', { name: 'Apply setup' })).toBeHidden();
+      expect(await calculator.evaluate(element => element.querySelector('.calc-mode-label').textContent)).toBe(snapshotBeforeRestore.mode);
+    }
+    await snippetField.fill(JSON.stringify(snippet));
+    await restore.getByRole('button', { name: 'Review setup' }).click();
+    await expect(restore.locator('.calc-setup-summary')).toContainText(`Ready to restore ${mode.mode} setup`);
+    await expect(restore.locator('.calc-setup-summary')).toContainText('Applying replaces the active graph');
+    const setupPreview = restore.locator('.calc-setup-preview');
+    await expect(setupPreview).toBeVisible();
+    await expect(setupPreview).toContainText(mode.mode);
+    await expect(setupPreview).toContainText(mode.summary.replace('r(θ) = ', '').replace('y = ', '').replace('x(t)=', '').replace(' · y(t)=', '; y(t) = '));
+    for (const [key, value] of Object.entries(mode.ranges)) {
+      await expect(setupPreview).toContainText(`${key}: ${value}`);
+    }
+    await expect(restore.getByRole('button', { name: 'Apply setup' })).toBeVisible();
+    expect(await calculator.evaluate(element => ({
+      mode: element.querySelector('.calc-mode-label').textContent,
+      functions: [...element.querySelectorAll('.calc-function-summary')].map(item => item.textContent),
+      view: JSON.parse(element.querySelector('.calc-plot-area').dataset.view),
+    }))).toEqual(snapshotBeforeRestore);
+
+    await restore.getByRole('button', { name: 'Apply setup' }).click();
+    await expect(calculator.locator('.calc-mode-label')).toHaveText(mode.mode.toUpperCase());
+    await expect(calculator.locator('.calc-function-summary')).toHaveText(mode.summary);
+    await expect(calculator.locator('.calc-plot-area')).toHaveAttribute('data-view', JSON.stringify(currentView));
+    await expect(calculator.locator('.calc-graph-status')).toContainText(`Restored ${mode.mode} graph setup`);
+
+    await calculator.getByRole('button', { name: 'Graph settings' }).click();
+    const restoredSettings = calculator.getByRole('dialog', { name: 'Graph settings' });
+    for (const [key, value] of Object.entries(mode.ranges)) {
+      const labels = {
+        xMin: 'Minimum x', xMax: 'Maximum x', yMin: 'Minimum y', yMax: 'Maximum y',
+        thetaMin: 'Minimum theta', thetaMax: 'Maximum theta', rMin: 'Minimum r', rMax: 'Maximum r',
+        tMin: 'Minimum t', tMax: 'Maximum t',
+      };
+      await expect(restoredSettings.getByLabel(labels[key])).toHaveValue(value);
+    }
+    await restoredSettings.getByRole('button', { name: 'Close graph settings' }).click();
+  }
+});
+
+test('calculator exposes the complete setup for manual copying when clipboard access fails', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async () => { throw new Error('Clipboard denied'); } },
+    });
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: () => false });
+  });
+
+  await calculator.getByRole('button', { name: 'Copy setup' }).click();
+  await expect(calculator.locator('.calc-copy-setup-status'))
+    .toHaveText('Could not copy the setup. The snippet is open for manual copying.');
+  const restore = calculator.getByRole('dialog', { name: 'Restore graph setup' });
+  const setupField = restore.getByRole('textbox', { name: 'Graph setup snippet' });
+  await expect(setupField).toHaveValue(/"format": "replit-calculator-graph-setup"/);
+  const selected = await setupField.evaluate(element => element.value.slice(element.selectionStart, element.selectionEnd));
+  expect(selected).toBe(await setupField.inputValue());
+});
+
 test('calculator keeps graph ranges selectable when clipboard access is blocked', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   await calculator.getByRole('button', { name: 'Graph', exact: true }).click();

@@ -155,6 +155,8 @@ export function buildCalculator(id, ctx) {
                 <button type="button" class="calc-fit-view">Fit curves</button>
                 <button type="button" class="calc-reset-view">Reset view</button>
                 <button type="button" class="calc-plot calc-primary-action">Plot</button>
+                <button type="button" class="calc-copy-setup">Copy setup</button>
+                <button type="button" class="calc-open-restore">Restore setup</button>
               </div></div>
               <ul class="calc-function-list" aria-label="Plotted functions"></ul>
             </div>
@@ -163,6 +165,7 @@ export function buildCalculator(id, ctx) {
               <textarea class="calc-view-ranges-values" aria-labelledby="${expressionId}-view-ranges-label" rows="2" readonly spellcheck="false"></textarea>
               <button type="button" class="calc-copy-view-ranges">Copy ranges</button>
               <span class="calc-copy-view-ranges-status" role="status" aria-live="polite"></span>
+              <span class="calc-copy-setup-status" role="status" aria-live="polite"></span>
             </div>
             <svg class="calc-plot-area" role="application" aria-label="Function graph. Drag to pan, use the mouse wheel or plus and minus to zoom, and use arrow keys to pan. Press Home to reset the view." tabindex="0" viewBox="0 0 640 400" preserveAspectRatio="none"></svg>
             <p class="calc-graph-status" role="status" aria-live="polite">Add a function, then choose Plot.</p>
@@ -210,6 +213,17 @@ export function buildCalculator(id, ctx) {
         <p class="calc-settings-error" role="alert" aria-live="polite"></p>
         <footer class="calc-dialog-actions"><button type="button" class="calc-apply-settings calc-primary-action">Apply settings</button></footer>
       </form>
+    </dialog>
+    <dialog class="calc-dialog calc-restore-dialog" aria-labelledby="${expressionId}-restore-title">
+      <form method="dialog" class="calc-dialog-card calc-restore-card">
+        <header class="calc-dialog-header"><div><span class="calc-kicker">PLOT / REUSE</span><h3 id="${expressionId}-restore-title">Restore graph setup</h3></div><button type="button" class="calc-dialog-close" aria-label="Close restore setup">Close</button></header>
+        <label class="calc-setup-field">Paste a graph setup
+          <textarea class="calc-setup-input" rows="8" spellcheck="false" autocomplete="off" aria-label="Graph setup snippet" placeholder="Paste the copied graph setup here"></textarea>
+        </label>
+        <p class="calc-setup-summary" role="status" aria-live="polite">Review the setup before applying it. Your current graph will stay unchanged until you apply.</p>
+        <pre class="calc-setup-preview" hidden></pre>
+        <footer class="calc-dialog-actions"><button type="button" class="calc-review-setup">Review setup</button><button type="button" class="calc-apply-setup calc-primary-action" hidden>Apply setup</button></footer>
+      </form>
     </dialog>`;
 
   enhanceSelect(root.querySelector('.calc-graph-mode'));
@@ -227,6 +241,13 @@ export function buildCalculator(id, ctx) {
   const viewRangeValues = $('.calc-view-ranges-values');
   const copyViewRangesButton = $('.calc-copy-view-ranges');
   const copyViewRangesStatus = $('.calc-copy-view-ranges-status');
+  const copySetupButton = $('.calc-copy-setup');
+  const copySetupStatus = $('.calc-copy-setup-status');
+  const restoreDialog = $('.calc-restore-dialog');
+  const setupInput = $('.calc-setup-input');
+  const setupSummary = $('.calc-setup-summary');
+  const setupPreview = $('.calc-setup-preview');
+  const applySetupButton = $('.calc-apply-setup');
   const editorDialog = $('.calc-editor-dialog');
   const settingsDialog = $('.calc-settings-dialog');
   let lastEditorField = null;
@@ -240,6 +261,7 @@ export function buildCalculator(id, ctx) {
   let functions = [makeFunction('sin(x)')];
   let activeFunctionId = functions[0].id;
   let editorDraft = [];
+  let restoreDraft = null;
   const storageWarning = $('.calc-storage-warning');
   const recoveryNotice = $('.calc-storage-recovery');
   const recoveryMessage = recoveryNotice.querySelector('span');
@@ -679,6 +701,70 @@ export function buildCalculator(id, ctx) {
   function formatViewRanges(view) {
     return Object.entries(view).map(([key, value]) => `${key}: ${String(value)}`).join(', ');
   }
+  function createGraphSetup() {
+    return JSON.stringify({
+      format: 'replit-calculator-graph-setup',
+      version: 1,
+      graphMode,
+      functions: functions.map(({ expression, xExpression, yExpression, color, visible }) => ({
+        expression, xExpression, yExpression, color, visible,
+      })),
+      configuredRanges: Object.fromEntries(VIEW_RANGE_KEYS[graphMode].map(key => [key, ranges[key]])),
+      currentViewRanges: { ...getViewRanges() },
+    }, null, 2);
+  }
+  function parseGraphSetup(text) {
+    try {
+      const setup = JSON.parse(text);
+      if (!setup || setup.format !== 'replit-calculator-graph-setup' || setup.version !== 1 ||
+          !GRAPH_MODES.includes(setup.graphMode) || !Array.isArray(setup.functions) ||
+          !setup.configuredRanges || typeof setup.configuredRanges !== 'object' || Array.isArray(setup.configuredRanges) ||
+          !setup.currentViewRanges || typeof setup.currentViewRanges !== 'object' || Array.isArray(setup.currentViewRanges)) {
+        return { status: 'invalid' };
+      }
+
+      const keys = VIEW_RANGE_KEYS[setup.graphMode];
+      const configuredRanges = {};
+      const currentViewRanges = {};
+      for (const key of keys) {
+        const configured = setup.configuredRanges[key];
+        const current = setup.currentViewRanges[key];
+        if (![configured, current].every(value =>
+          (typeof value === 'string' || typeof value === 'number') &&
+          String(value).trim() && Number.isFinite(Number(value)))) return { status: 'invalid' };
+        configuredRanges[key] = String(configured);
+        currentViewRanges[key] = Number(current);
+      }
+      const pairs = setup.graphMode === 'polar'
+        ? [['thetaMin', 'thetaMax'], ['rMin', 'rMax']]
+        : setup.graphMode === 'parametric'
+          ? [['tMin', 'tMax'], ['xMin', 'xMax'], ['yMin', 'yMax']]
+          : [['xMin', 'xMax'], ['yMin', 'yMax']];
+      if (pairs.some(([min, max]) =>
+        !validRangePair(configuredRanges[min], configuredRanges[max]) ||
+        !validRangePair(currentViewRanges[min], currentViewRanges[max]))) return { status: 'invalid' };
+
+      const functionsForValidation = setup.functions.map((fn, index) => ({
+        id: `fn-${index + 1}`,
+        expression: fn?.expression,
+        xExpression: fn?.xExpression,
+        yExpression: fn?.yExpression,
+        color: fn?.color,
+        visible: fn?.visible,
+      }));
+      const allRanges = { ...DEFAULT_GRAPH_RANGES, ...configuredRanges };
+      const validated = readSavedGraphSettings(JSON.stringify({
+        version: GRAPH_SETTINGS_VERSION,
+        graphMode: setup.graphMode,
+        ranges: allRanges,
+        functions: functionsForValidation,
+        viewRanges: { [setup.graphMode]: currentViewRanges },
+      }));
+      return validated.status === 'valid' ? validated : { status: 'invalid' };
+    } catch {
+      return { status: 'invalid' };
+    }
+  }
   async function copyText(text) {
     if (navigator.clipboard?.writeText) {
       try {
@@ -709,6 +795,77 @@ export function buildCalculator(id, ctx) {
       viewRangeValues.focus();
       viewRangeValues.select();
     }
+  });
+  function openRestoreSetup(initialText = '') {
+    setupInput.value = initialText;
+    restoreDraft = null;
+    applySetupButton.hidden = true;
+    setupPreview.hidden = true;
+    setupPreview.textContent = '';
+    setupSummary.textContent = 'Review the setup before applying it. Your current graph will stay unchanged until you apply.';
+    restoreDialog.showModal();
+    setupInput.focus();
+    if (initialText) setupInput.select();
+  }
+  copySetupButton.addEventListener('click', async () => {
+    const setup = createGraphSetup();
+    const copied = await copyText(setup);
+    copySetupStatus.textContent = copied
+      ? 'Complete graph setup copied.'
+      : 'Could not copy the setup. The snippet is open for manual copying.';
+    if (!copied) openRestoreSetup(setup);
+  });
+  $('.calc-open-restore').addEventListener('click', () => openRestoreSetup());
+  setupInput.addEventListener('input', () => {
+    restoreDraft = null;
+    applySetupButton.hidden = true;
+    setupSummary.textContent = '';
+    setupPreview.hidden = true;
+    setupPreview.textContent = '';
+  });
+  $('.calc-review-setup').addEventListener('click', () => {
+    restoreDraft = parseGraphSetup(setupInput.value);
+    if (restoreDraft.status !== 'valid') {
+      restoreDraft = null;
+      applySetupButton.hidden = true;
+      setupPreview.hidden = true;
+      setupPreview.textContent = '';
+      setupSummary.textContent = 'This setup is not valid. Check that you pasted a complete graph setup snippet.';
+      return;
+    }
+    const count = restoreDraft.functions.length;
+    setupSummary.textContent = `Ready to restore ${restoreDraft.graphMode} setup with ${count} ${count === 1 ? 'function' : 'functions'}. Configured ranges and the current view will be restored. Applying replaces the active graph.`;
+    const functionLines = restoreDraft.functions.map((fn, index) => restoreDraft.graphMode === 'parametric'
+      ? `${index + 1}. x(t) = ${fn.xExpression}; y(t) = ${fn.yExpression}`
+      : `${index + 1}. ${restoreDraft.graphMode === 'polar' ? 'r(θ)' : 'y'} = ${fn.expression}`);
+    setupPreview.textContent = [
+      `Mode: ${restoreDraft.graphMode}`,
+      'Functions:',
+      ...functionLines,
+      `Configured ranges: ${formatViewRanges(Object.fromEntries(VIEW_RANGE_KEYS[restoreDraft.graphMode].map(key => [key, restoreDraft.ranges[key]])))}`,
+      `Current view: ${formatViewRanges(restoreDraft.viewRanges[restoreDraft.graphMode])}`,
+    ].join('\n');
+    setupPreview.hidden = false;
+    applySetupButton.hidden = false;
+  });
+  applySetupButton.addEventListener('click', () => {
+    if (!restoreDraft) return;
+    graphMode = restoreDraft.graphMode;
+    settingsMode = graphMode;
+    ranges = restoreDraft.ranges;
+    viewRanges = restoreDraft.viewRanges;
+    functions = restoreDraft.functions.map(fn => ({
+      ...fn,
+      id: `fn-${nextFunctionId++}`,
+      path: '',
+    }));
+    activeFunctionId = functions[0].id;
+    $('.calc-mode-label').textContent = graphMode.toUpperCase();
+    renderFunctions();
+    restoreDialog.close();
+    plot();
+    persistGraphSettings();
+    graphStatus.textContent = `Restored ${graphMode} graph setup with ${functions.length} ${functions.length === 1 ? 'function' : 'functions'}.`;
   });
   function resetView() {
     if (viewRanges) delete viewRanges[graphMode];
