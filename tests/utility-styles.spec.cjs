@@ -11,6 +11,11 @@ async function openUtility(page, type) {
   return page.locator(`.app-window[data-type="${type}"]`).last();
 }
 
+async function clickGraphMenuAction(calculator, menu, action) {
+  await calculator.getByRole('button', { name: menu, exact: true }).click();
+  await calculator.getByRole('button', { name: action, exact: true }).click();
+}
+
 test('calculator, calendar, and weather controls follow shared theme tokens', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   await expect(calculator.getByText('DESK / 04')).toHaveCount(0);
@@ -547,7 +552,7 @@ test('calculator fits visible curves in every graph mode without changing config
   await editor.getByLabel('Function expression').fill('100*x');
   await editor.getByLabel('Show function 2').uncheck();
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
-  await calculator.getByRole('button', { name: 'Fit curves' }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Fit curves');
   let fitted = await view();
   expect(fitted.xMin).toBe(-4);
   expect(fitted.xMax).toBe(4);
@@ -568,7 +573,7 @@ test('calculator fits visible curves in every graph mode without changing config
   await expect(settings.getByLabel('Minimum y')).toHaveValue('-5');
   await expect(settings.getByLabel('Maximum y')).toHaveValue('5');
   await settings.getByRole('button', { name: 'Close graph settings' }).click();
-  await calculator.getByRole('button', { name: 'Reset view' }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Reset view');
   await expect.poll(view).toEqual({ xMin: -4, xMax: 4, yMin: -5, yMax: 5 });
   await calculator.locator('.calc-function-item').last().getByRole('button', { name: /^Remove function/ }).click();
 
@@ -583,7 +588,7 @@ test('calculator fits visible curves in every graph mode without changing config
   editor = calculator.getByRole('dialog', { name: 'Edit functions' });
   await editor.getByLabel('Function expression').fill('2+sin(theta)');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
-  await calculator.getByRole('button', { name: 'Fit curves' }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Fit curves');
   fitted = await view();
   expect(fitted.thetaMin).toBe(1);
   expect(fitted.thetaMax).toBe(5);
@@ -602,18 +607,18 @@ test('calculator fits visible curves in every graph mode without changing config
   await expect(settings.getByLabel('Minimum r')).toHaveValue('0');
   await expect(settings.getByLabel('Maximum r')).toHaveValue('10');
   await settings.getByRole('button', { name: 'Close graph settings' }).click();
-  await calculator.getByRole('button', { name: 'Reset view' }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Reset view');
   await expect.poll(view).toEqual({ thetaMin: 1, thetaMax: 5, rMin: 0, rMax: 10 });
   await calculator.getByRole('button', { name: 'Edit functions' }).click();
   editor = calculator.getByRole('dialog', { name: 'Edit functions' });
   await editor.getByLabel('Function expression').fill('-2+sin(theta)');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
-  await calculator.getByRole('button', { name: 'Fit curves' }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Fit curves');
   fitted = await view();
   expect(fitted.rMin).toBe(0);
   expect(fitted.rMax).toBeGreaterThanOrEqual(3);
   expect(fitted.rMax).toBeLessThan(10);
-  await calculator.getByRole('button', { name: 'Reset view' }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Reset view');
   await expect.poll(view).toEqual({ thetaMin: 1, thetaMax: 5, rMin: 0, rMax: 10 });
 
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
@@ -626,7 +631,7 @@ test('calculator fits visible curves in every graph mode without changing config
   await editor.getByLabel('x(t)').fill('2*cos(t)');
   await editor.getByLabel('y(t)').fill('3*sin(t)');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
-  await calculator.getByRole('button', { name: 'Fit curves' }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Fit curves');
   fitted = await view();
   expect(fitted.tMin).toBe(0);
   expect(fitted.tMax).toBe(6.283);
@@ -648,7 +653,7 @@ test('calculator fits visible curves in every graph mode without changing config
   await expect(settings.getByLabel('Minimum x')).toHaveValue('-4');
   await expect(settings.getByLabel('Maximum x')).toHaveValue('4');
   await settings.getByRole('button', { name: 'Close graph settings' }).click();
-  await calculator.getByRole('button', { name: 'Reset view' }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Reset view');
   await expect.poll(view).toEqual({ tMin: 0, tMax: 6.283, xMin: -4, xMax: 4, yMin: -5, yMax: 5 });
 });
 
@@ -668,7 +673,7 @@ test('calculator Fit curves includes a narrow peak between rendered samples', as
   const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
   await editor.getByLabel('Function expression').fill('100/(1000000*(x-0.008)^2+1)');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
-  await calculator.getByRole('button', { name: 'Fit curves' }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Fit curves');
 
   const fitted = await calculator.locator('.calc-plot-area').evaluate(element => JSON.parse(element.dataset.view));
   expect(fitted.xMin).toBe(-4);
@@ -909,7 +914,7 @@ test('calculator graph zoom and pan work in every mode without changing configur
   });
   await expect.poll(async () => (await view()).xMax - (await view()).xMin)
     .toBeLessThan(cartesianInitial.xMax - cartesianInitial.xMin);
-  await calculator.getByRole('button', { name: 'Reset view' }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Reset view');
   await expect.poll(view).toEqual(cartesianInitial);
   await plot.evaluate(element => {
     const rect = element.getBoundingClientRect();
@@ -922,7 +927,7 @@ test('calculator graph zoom and pan work in every mode without changing configur
     fire('pointerup', 340);
   });
   await expect.poll(async () => (await view()).xMin).not.toBe(cartesianInitial.xMin);
-  await calculator.getByRole('button', { name: 'Reset view' }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Reset view');
   await expect.poll(view).toEqual(cartesianInitial);
 
   for (const [mode, label, xMin, xMax, yMin, yMax] of [
@@ -938,7 +943,14 @@ test('calculator graph zoom and pan work in every mode without changing configur
     await calculator.getByRole('button', { name: 'Zoom in' }).click();
     const zoomed = await view();
     expect(JSON.stringify(zoomed)).not.toBe(JSON.stringify(configured));
-    await calculator.getByRole('button', { name: 'Reset view' }).click();
+    await clickGraphMenuAction(calculator, 'View', 'Reset view');
+    await expect.poll(view).toEqual(configured);
+    const beforeWheelZoom = await view();
+    const modeBox = await plot.boundingBox();
+    await page.mouse.move(modeBox.x + modeBox.width / 2, modeBox.y + modeBox.height / 2);
+    await page.mouse.wheel(0, -120);
+    await expect.poll(async () => JSON.stringify(await view())).not.toBe(JSON.stringify(beforeWheelZoom));
+    await clickGraphMenuAction(calculator, 'View', 'Reset view');
     await expect.poll(view).toEqual(configured);
     await calculator.getByRole('button', { name: 'Graph settings' }).click();
     const rangeDialog = calculator.getByRole('dialog', { name: 'Graph settings' });
@@ -952,6 +964,64 @@ test('calculator graph zoom and pan work in every mode without changing configur
       await expect(rangeDialog.getByLabel(yMax)).toHaveValue('10');
     }
     await rangeDialog.getByRole('button', { name: 'Close graph settings' }).click();
+  }
+});
+
+test('calculator View controls apply transient graph ratios and keep Polar square', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  const plot = calculator.locator('.calc-plot-area');
+  const viewTrigger = calculator.getByRole('button', { name: 'View', exact: true });
+  const initialView = await plot.evaluate(element => JSON.parse(element.dataset.view));
+
+  await viewTrigger.click();
+  const viewPanel = calculator.getByRole('dialog', { name: 'Graph view options' });
+  const itemAfterDivider = await viewPanel.locator('.calc-menu-divider').evaluate(element => element.nextElementSibling.textContent);
+  expect(itemAfterDivider).toBe('Reset view');
+  await expect(viewPanel.getByRole('button').last()).toHaveText('Reset view');
+  await viewPanel.getByRole('button', { name: '1:1', exact: true }).click();
+  await expect(plot).toHaveAttribute('data-view-ratio', '1:1');
+  await expect(plot).toHaveAttribute('data-view', JSON.stringify(initialView));
+  await viewPanel.getByRole('button', { name: '2:1', exact: true }).click();
+  await expect(plot).toHaveAttribute('data-view-ratio', '2:1');
+  await viewPanel.getByRole('button', { name: '2×', exact: true }).click();
+  await expect(plot).toHaveAttribute('data-scale-factor', '2');
+  await expect(plot).toHaveAttribute('data-view', JSON.stringify(initialView));
+  await page.keyboard.press('Escape');
+  await expect(viewTrigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(viewTrigger).toBeFocused();
+
+  const savedSettings = await page.evaluate(() => JSON.parse(localStorage.getItem('personal-desktop-calculator-graph-v1') || '{}'));
+  expect(savedSettings).not.toHaveProperty('viewRatio');
+  expect(savedSettings).not.toHaveProperty('viewScaleFactor');
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  const settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByRole('combobox', { name: 'Graph mode' }).click();
+  await settings.getByRole('option', { name: /Polar/ }).click();
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  const polarEditor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await polarEditor.getByLabel('Function expression').fill('sin(theta)');
+  await polarEditor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect(plot).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet');
+  await expect(plot).toHaveAttribute('data-view-ratio', '1:1');
+
+  await viewTrigger.click();
+  await expect(viewPanel.getByRole('button', { name: '1:1', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(viewPanel.getByRole('button', { name: '2:1', exact: true })).toBeDisabled();
+  await page.keyboard.press('Escape');
+
+  const circle = plot.locator('circle.calc-graph-grid').first();
+  for (const size of [{ width: 940, height: 540 }, { width: 620, height: 680 }]) {
+    await calculator.evaluate((element, dimensions) => {
+      element.style.width = `${dimensions.width}px`;
+      element.style.height = `${dimensions.height}px`;
+    }, size);
+    await expect.poll(async () => {
+      const box = await circle.boundingBox();
+      return Math.abs(box.width - box.height);
+    }).toBeLessThan(1);
   }
 });
 
@@ -994,6 +1064,7 @@ test('calculator shows and copies the current view ranges in every graph mode', 
     const currentText = await rangesReadout.inputValue();
     for (const key of mode.keys) expect(currentText).toContain(`${key}: ${current[key]}`);
 
+    await calculator.getByRole('button', { name: 'Setup', exact: true }).click();
     if (index === 1) {
       await copyButton.focus();
       await copyButton.press('Enter');
@@ -1010,7 +1081,7 @@ test('calculator shows and copies the current view ranges in every graph mode', 
       await expect(dialog.getByLabel(mode.maxes[position])).toHaveValue(String(configured[mode.keys[position * 2 + 1]]));
     }
     await dialog.getByRole('button', { name: 'Close graph settings' }).click();
-    await calculator.getByRole('button', { name: 'Reset view' }).click();
+    await clickGraphMenuAction(calculator, 'View', 'Reset view');
   }
 });
 
@@ -1078,6 +1149,7 @@ test('calculator copies and explicitly restores complete graph setups in every m
 
     const currentView = await calculator.locator('.calc-plot-area').evaluate(element => JSON.parse(element.dataset.view));
     const copySetup = calculator.getByRole('button', { name: 'Copy setup' });
+    await calculator.getByRole('button', { name: 'Setup', exact: true }).click();
     if (index === 1) {
       await copySetup.focus();
       await copySetup.press('Enter');
@@ -1111,7 +1183,7 @@ test('calculator copies and explicitly restores complete graph setups in every m
       functions: [...element.querySelectorAll('.calc-function-summary')].map(item => item.textContent),
       view: JSON.parse(element.querySelector('.calc-plot-area').dataset.view),
     }));
-    await calculator.getByRole('button', { name: 'Restore setup' }).click();
+    await clickGraphMenuAction(calculator, 'Setup', 'Restore setup');
     const restore = calculator.getByRole('dialog', { name: 'Restore graph setup' });
     const snippetField = restore.getByRole('textbox', { name: 'Graph setup snippet' });
     if (index === 0) {
@@ -1170,7 +1242,7 @@ test('calculator exposes the complete setup for manual copying when clipboard ac
     Object.defineProperty(document, 'execCommand', { configurable: true, value: () => false });
   });
 
-  await calculator.getByRole('button', { name: 'Copy setup' }).click();
+  await clickGraphMenuAction(calculator, 'Setup', 'Copy setup');
   await expect(calculator.locator('.calc-copy-setup-status'))
     .toHaveText('Could not copy the setup. The snippet is open for manual copying.');
   const restore = calculator.getByRole('dialog', { name: 'Restore graph setup' });
@@ -1198,6 +1270,7 @@ test('calculator keeps graph ranges selectable when clipboard access is blocked'
       });
     }, clipboardMode);
 
+    await calculator.getByRole('button', { name: 'Setup', exact: true }).click();
     await copyButton.click();
     await expect(calculator.locator('.calc-copy-view-ranges-status'))
       .toHaveText('Could not copy the ranges. Select the values and copy them manually.');

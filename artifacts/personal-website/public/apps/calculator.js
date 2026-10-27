@@ -72,6 +72,7 @@ const MATH_SYMBOL_ALIASES = Object.freeze({
 });
 const HISTORY_LIMIT = 24;
 const GRAPH_SETTINGS_KEY = 'personal-desktop-calculator-graph-v1';
+const CALCULATOR_MODE_KEY = 'personal-desktop-calculator-mode-v1';
 const GRAPH_SETTINGS_VERSION = 1;
 const GRAPH_MODES = ['cartesian', 'polar', 'parametric'];
 const RANGE_KEYS = ['xMin', 'xMax', 'yMin', 'yMax', 'thetaMin', 'thetaMax', 'rMin', 'rMax', 'tMin', 'tMax'];
@@ -85,6 +86,10 @@ const VIEW_RANGE_KEYS = {
   polar: ['thetaMin', 'thetaMax', 'rMin', 'rMax'],
   parametric: ['tMin', 'tMax', 'xMin', 'xMax', 'yMin', 'yMax'],
 };
+const PLOT_FRAME = Object.freeze({
+  left: 48, right: 616, top: 26, bottom: 374,
+  width: 568, height: 348, centerX: 332, centerY: 200, polarRadius: 174,
+});
 let nextFunctionId = 1;
 const calculatorGraphSubscribers = new Set();
 
@@ -280,10 +285,15 @@ export function buildCalculator(id, ctx) {
             <button type="button" class="calc-open-settings" aria-label="Graph settings">Settings</button>
           </div>
         </div>
-        <div class="calc-modes" role="group" aria-label="Calculator mode">
-          <button type="button" data-mode="basic" aria-pressed="true">Basic</button>
-          <button type="button" data-mode="scientific" aria-pressed="false">Scientific</button>
-          <button type="button" data-mode="graph" aria-pressed="false">Graph</button>
+        <div class="calc-mode-menu-host">
+          <button type="button" class="calc-mode-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="${expressionId}-mode-menu">Basic</button>
+          <div class="calc-mode-menu menu-popover" id="${expressionId}-mode-menu" role="dialog" aria-label="Calculator mode" hidden>
+            <div class="calc-mode-options" role="group" aria-label="Calculator mode">
+              <button type="button" data-mode="basic" aria-pressed="true" data-close-menu>Basic</button>
+              <button type="button" data-mode="scientific" aria-pressed="false" data-close-menu>Scientific</button>
+              <button type="button" data-mode="graph" aria-pressed="false" data-close-menu>Graph</button>
+            </div>
+          </div>
         </div>
       </header>
       <div class="calc-workspace">
@@ -316,22 +326,73 @@ export function buildCalculator(id, ctx) {
             </div>
           </div>
           <section class="calc-graph" hidden aria-label="Function graph">
-            <div class="calc-graph-toolbar">
-              <div><span class="calc-kicker">PLOT / ${'<span class="calc-mode-label">CARTESIAN</span>'}</span><div class="calc-graph-tools">
+            <div class="calc-graph-heading">
+              <span class="calc-kicker">PLOT / ${'<span class="calc-mode-label">CARTESIAN</span>'}</span>
+              <ul class="calc-function-list" aria-label="Plotted functions"></ul>
+            </div>
+            <div class="calc-graph-toolbar" role="group" aria-label="Graph controls">
+              <div class="calc-zoom-controls" role="group" aria-label="Zoom controls">
                 <button type="button" class="calc-zoom-out" aria-label="Zoom out">−</button>
                 <button type="button" class="calc-zoom-in" aria-label="Zoom in">+</button>
-                <button type="button" class="calc-fit-view">Fit curves</button>
-                <button type="button" class="calc-reset-view">Reset view</button>
-                <button type="button" class="calc-plot calc-primary-action">Plot</button>
-                <button type="button" class="calc-copy-setup">Copy setup</button>
-                <button type="button" class="calc-open-restore">Restore setup</button>
-              </div></div>
-              <ul class="calc-function-list" aria-label="Plotted functions"></ul>
+              </div>
+              <div class="calc-menu-controls">
+                <div class="calc-menu-host">
+                  <button type="button" class="calc-menu-trigger calc-view-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="${expressionId}-view-menu">View</button>
+                  <div class="calc-menu-popover menu-popover calc-view-menu" id="${expressionId}-view-menu" role="dialog" aria-label="Graph view options" hidden>
+                    <div class="calc-view-option-group" role="group" aria-label="Axis ratio">
+                      <span class="calc-view-option-title">Ratio</span>
+                      <div class="calc-view-options">
+                        <button type="button" data-view-ratio="auto" aria-pressed="true">Auto</button>
+                        <button type="button" data-view-ratio="1:1" aria-pressed="false">1:1</button>
+                        <button type="button" data-view-ratio="2:1" aria-pressed="false">2:1</button>
+                        <button type="button" data-view-ratio="1:2" aria-pressed="false">1:2</button>
+                        <button type="button" data-view-ratio="custom" aria-pressed="false">Custom…</button>
+                      </div>
+                      <div class="calc-custom-ratio" hidden>
+                        <label>X <input type="number" class="calc-custom-ratio-x" min="0.001" max="1000" step="any" value="1" aria-label="Custom ratio X"></label>
+                        <span aria-hidden="true">:</span>
+                        <label>Y <input type="number" class="calc-custom-ratio-y" min="0.001" max="1000" step="any" value="1" aria-label="Custom ratio Y"></label>
+                        <button type="button" class="calc-apply-custom-ratio">Apply</button>
+                      </div>
+                    </div>
+                    <div class="calc-view-option-group" role="group" aria-label="Scaling factor">
+                      <span class="calc-view-option-title">Scaling factor</span>
+                      <div class="calc-view-options">
+                        <button type="button" data-view-scale="0.5" aria-pressed="false">0.5×</button>
+                        <button type="button" data-view-scale="1" aria-pressed="true">1×</button>
+                        <button type="button" data-view-scale="2" aria-pressed="false">2×</button>
+                        <button type="button" data-view-scale="4" aria-pressed="false">4×</button>
+                        <button type="button" data-view-scale="custom" aria-pressed="false">Custom…</button>
+                      </div>
+                      <div class="calc-custom-scale" hidden>
+                        <label>Factor <input type="number" class="calc-custom-scale-value" min="0.001" max="1000" step="any" value="1" aria-label="Custom scaling factor"></label>
+                        <button type="button" class="calc-apply-custom-scale">Apply</button>
+                      </div>
+                      <div class="calc-log-options" role="group" aria-label="Logarithmic axes">
+                        <button type="button" data-log-axis="x" aria-pressed="false">Log X</button>
+                        <button type="button" data-log-axis="y" aria-pressed="false">Log Y</button>
+                      </div>
+                    </div>
+                    <p class="calc-view-error" role="alert" aria-live="polite"></p>
+                    <button type="button" class="calc-fit-view calc-menu-action" data-close-menu>Fit curves</button>
+                    <hr class="calc-menu-divider">
+                    <button type="button" class="calc-reset-view calc-menu-action" data-close-menu>Reset view</button>
+                  </div>
+                </div>
+                <div class="calc-menu-host">
+                  <button type="button" class="calc-menu-trigger calc-setup-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="${expressionId}-setup-menu">Setup</button>
+                  <div class="calc-menu-popover menu-popover calc-setup-menu" id="${expressionId}-setup-menu" role="dialog" aria-label="Graph setup actions" hidden>
+                    <button type="button" class="calc-copy-setup calc-menu-action" data-close-menu>Copy setup</button>
+                    <button type="button" class="calc-open-restore calc-menu-action" data-close-menu>Restore setup</button>
+                    <button type="button" class="calc-copy-view-ranges calc-menu-action" data-close-menu>Copy ranges</button>
+                  </div>
+                </div>
+              </div>
+              <button type="button" class="calc-plot calc-primary-action">Plot</button>
             </div>
             <div class="calc-view-ranges">
               <span class="calc-view-ranges-label" id="${expressionId}-view-ranges-label">Current view</span>
               <textarea class="calc-view-ranges-values" aria-labelledby="${expressionId}-view-ranges-label" rows="2" readonly spellcheck="false"></textarea>
-              <button type="button" class="calc-copy-view-ranges">Copy ranges</button>
               <span class="calc-copy-view-ranges-status" role="status" aria-live="polite"></span>
               <span class="calc-copy-setup-status" role="status" aria-live="polite"></span>
             </div>
@@ -355,9 +416,13 @@ export function buildCalculator(id, ctx) {
           <nav class="calc-editor-nav" aria-label="Functions"></nav>
           <div class="calc-editor-fields">
             <p class="calc-editor-empty" hidden>No functions yet. Add one to start.</p>
-            <label class="calc-editor-expression-label">y =
-            <input class="calc-editor-expression" aria-label="Function expression" autocomplete="off" spellcheck="false">
-            </label>
+            <div class="calc-editor-expression-label">
+              <label class="calc-editor-equation-label" for="${expressionId}-function-expression">y =</label>
+              <span class="calc-editor-input-wrap">
+                <input class="calc-editor-expression" id="${expressionId}-function-expression" aria-label="Function expression" autocomplete="off" spellcheck="false">
+                <button type="button" class="calc-editor-backspace" aria-label="Backspace Function expression" title="Delete the previous character">⌫</button>
+              </span>
+            </div>
             <div class="calc-editor-function-fields" hidden></div>
             <fieldset class="note-color-picker calc-color-picker"><legend>Line color</legend><div class="note-color-options calc-color-options"></div></fieldset>
             <p class="calc-editor-error" role="alert" aria-live="polite"></p>
@@ -413,17 +478,34 @@ export function buildCalculator(id, ctx) {
   const copyViewRangesStatus = $('.calc-copy-view-ranges-status');
   const copySetupButton = $('.calc-copy-setup');
   const copySetupStatus = $('.calc-copy-setup-status');
+  const viewMenuTrigger = $('.calc-view-trigger');
+  const viewMenu = $('.calc-view-menu');
+  const setupMenuTrigger = $('.calc-setup-trigger');
+  const setupMenu = $('.calc-setup-menu');
+  const modeTrigger = $('.calc-mode-trigger');
+  const modeMenu = $('.calc-mode-menu');
+  const ratioButtons = [...root.querySelectorAll('[data-view-ratio]')];
+  const scaleButtons = [...root.querySelectorAll('[data-view-scale]')];
+  const logAxisButtons = [...root.querySelectorAll('[data-log-axis]')];
   const restoreDialog = $('.calc-restore-dialog');
   const setupInput = $('.calc-setup-input');
   const setupSummary = $('.calc-setup-summary');
   const setupPreview = $('.calc-setup-preview');
   const applySetupButton = $('.calc-apply-setup');
+  const viewError = $('.calc-view-error');
   const editorDialog = $('.calc-editor-dialog');
   const settingsDialog = $('.calc-settings-dialog');
   let lastEditorField = null;
   let lastEditorSelection = null;
   const history = [];
-  let mode = 'basic';
+  let mode = (() => {
+    try {
+      const saved = localStorage.getItem(CALCULATOR_MODE_KEY);
+      return ['basic', 'scientific', 'graph'].includes(saved) ? saved : 'basic';
+    } catch {
+      return 'basic';
+    }
+  })();
   let radix = 10;
   let memoryValue = null;
   let resultFresh = false;
@@ -431,6 +513,11 @@ export function buildCalculator(id, ctx) {
   let settingsMode = graphMode;
   let ranges = { ...DEFAULT_GRAPH_RANGES };
   let viewRanges = null;
+  let viewRatio = 'auto';
+  let customRatioX = 1;
+  let customRatioY = 1;
+  let viewScaleFactor = 1;
+  let logAxes = { x: false, y: false };
   let functions = [makeFunction('sin(x)')];
   let activeFunctionId = functions[0].id;
   let editorDraft = [];
@@ -624,13 +711,15 @@ export function buildCalculator(id, ctx) {
   const setMode = next => {
     if (next === 'basic' && radix !== 10) setRadix(10);
     mode = next; root.dataset.mode = next;
-    root.querySelectorAll('.calc-modes button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === next)));
+    modeTrigger.textContent = next[0].toUpperCase() + next.slice(1);
+    root.querySelectorAll('.calc-mode-options button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === next)));
     root.querySelector('.calc-memory').hidden = next === 'graph';
     root.querySelector('.calc-header-graph-actions').hidden = next !== 'graph';
     scientific.hidden = next !== 'scientific'; graph.hidden = next !== 'graph'; keypads.hidden = next === 'graph';
     root.classList.toggle('calc-graph-mode', next === 'graph');
     root.querySelector('.calc-display').hidden = next === 'graph';
     root.querySelector('.calc-history').hidden = next === 'graph';
+    try { localStorage.setItem(CALCULATOR_MODE_KEY, next); } catch {}
     if (next === 'graph') plot();
   };
   const insert = (text, replaceResult = false) => {
@@ -754,7 +843,7 @@ export function buildCalculator(id, ctx) {
     });
   });
   $('.calc-backspace').addEventListener('click', backspace);
-  root.querySelectorAll('.calc-modes button').forEach(button => button.addEventListener('click', () => setMode(button.dataset.mode)));
+  root.querySelectorAll('.calc-mode-options button').forEach(button => button.addEventListener('click', () => setMode(button.dataset.mode)));
   $('.calc-history-clear').addEventListener('click', () => { history.splice(0); renderHistory(); });
   input.addEventListener('input', () => { resultFresh = false; updatePreview(); });
   input.addEventListener('keydown', event => {
@@ -764,17 +853,133 @@ export function buildCalculator(id, ctx) {
     if (event.key === 'Enter') { event.preventDefault(); calculate(true); }
     if (event.key === 'Escape') clear();
   });
+  function bindGraphPopover(trigger, panel) {
+    const close = restoreFocus => {
+      panel.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+      if (restoreFocus) trigger.focus();
+    };
+    trigger.addEventListener('click', () => {
+      const shouldOpen = panel.hidden;
+      root.querySelectorAll('.calc-menu-popover:not([hidden])').forEach(openPanel => {
+        openPanel.hidden = true;
+        root.querySelector(`[aria-controls="${openPanel.id}"]`)?.setAttribute('aria-expanded', 'false');
+      });
+      if (shouldOpen) {
+        panel.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+        panel.querySelector('button:not(:disabled)')?.focus();
+      }
+    });
+    panel.addEventListener('click', event => {
+      if (!event.target.closest('[data-close-menu]')) return;
+      close(Boolean(event.target.closest('.calc-view-menu,.calc-mode-menu')));
+    });
+    document.addEventListener('pointerdown', event => {
+      if (panel.hidden || panel.contains(event.target) || trigger.contains(event.target)) return;
+      close(false);
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || panel.hidden) return;
+      event.preventDefault();
+      close(true);
+    });
+  }
+  bindGraphPopover(modeTrigger, modeMenu);
+  bindGraphPopover(viewMenuTrigger, viewMenu);
+  bindGraphPopover(setupMenuTrigger, setupMenu);
   root.querySelector('.calc-plot').addEventListener('click', plot);
   $('.calc-zoom-in').addEventListener('click', () => { zoomView(0.8); persistGraphSettings(); });
   $('.calc-zoom-out').addEventListener('click', () => { zoomView(1.25); persistGraphSettings(); });
   $('.calc-fit-view').addEventListener('click', fitView);
   $('.calc-reset-view').addEventListener('click', resetView);
+  ratioButtons.forEach(button => button.addEventListener('click', () => {
+    if (graphMode === 'polar') return;
+    viewRatio = button.dataset.viewRatio;
+    if (viewRatio === 'custom') {
+      $('.calc-custom-ratio').hidden = false;
+      $('.calc-custom-ratio-x').focus();
+      return;
+    }
+    $('.calc-custom-ratio').hidden = true;
+    viewError.textContent = '';
+    updateViewOptions();
+    plot(false);
+  }));
+  scaleButtons.forEach(button => button.addEventListener('click', () => {
+    if (button.dataset.viewScale === 'custom') {
+      $('.calc-custom-scale').hidden = false;
+      $('.calc-custom-scale-value').focus();
+      return;
+    }
+    viewScaleFactor = Number(button.dataset.viewScale);
+    viewError.textContent = '';
+    updateViewOptions();
+    plot(false);
+  }));
+  $('.calc-apply-custom-ratio').addEventListener('click', () => {
+    const x = Number($('.calc-custom-ratio-x').value);
+    const y = Number($('.calc-custom-ratio-y').value);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x <= 0 || y <= 0 || x > 1000 || y > 1000) {
+      viewError.textContent = 'Enter positive X and Y ratio values up to 1000.';
+      return;
+    }
+    customRatioX = x;
+    customRatioY = y;
+    viewRatio = 'custom';
+    viewError.textContent = '';
+    updateViewOptions();
+    plot(false);
+  });
+  $('.calc-apply-custom-scale').addEventListener('click', () => {
+    const factor = Number($('.calc-custom-scale-value').value);
+    if (!Number.isFinite(factor) || factor <= 0 || factor > 1000) {
+      viewError.textContent = 'Enter a scaling factor greater than 0 and no more than 1000.';
+      return;
+    }
+    viewScaleFactor = factor;
+    viewError.textContent = '';
+    updateViewOptions();
+    plot(false);
+  });
+  logAxisButtons.forEach(button => button.addEventListener('click', () => {
+    if (graphMode === 'polar') return;
+    const axis = button.dataset.logAxis;
+    logAxes[axis] = !logAxes[axis];
+    viewError.textContent = '';
+    updateViewOptions();
+    plot(false);
+  }));
   $('.calc-reset-saved').addEventListener('click', resetSavedGraph);
   $('.calc-open-editor').addEventListener('click', openEditor);
   $('.calc-open-settings').addEventListener('click', openSettings);
   root.querySelectorAll('.calc-dialog-close').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
 
+  function updateViewOptions() {
+    const activeRatio = graphMode === 'polar' ? '1:1' : viewRatio;
+    ratioButtons.forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.viewRatio === activeRatio));
+      button.disabled = graphMode === 'polar' && button.dataset.viewRatio !== '1:1';
+    });
+    scaleButtons.forEach(button => {
+      const selected = button.dataset.viewScale === 'custom'
+        ? ![0.5, 1, 2, 4].includes(viewScaleFactor)
+        : Number(button.dataset.viewScale) === viewScaleFactor;
+      button.setAttribute('aria-pressed', String(selected));
+    });
+    $('.calc-custom-ratio').hidden = viewRatio !== 'custom';
+    $('.calc-custom-ratio-x').value = String(customRatioX);
+    $('.calc-custom-ratio-y').value = String(customRatioY);
+    $('.calc-custom-scale').hidden = !scaleButtons.some(button => button.dataset.viewScale === 'custom' && button.getAttribute('aria-pressed') === 'true');
+    $('.calc-custom-scale-value').value = String(viewScaleFactor);
+    logAxisButtons.forEach(button => {
+      button.setAttribute('aria-pressed', String(logAxes[button.dataset.logAxis]));
+      button.disabled = graphMode === 'polar';
+    });
+  }
+
   function renderFunctions() {
+    updateViewOptions();
     const editorFormat = graphMode === 'polar'
       ? 'r = f(θ)'
       : graphMode === 'parametric' ? 'x(t), y(t)' : 'y = f(x)';
@@ -863,6 +1068,44 @@ export function buildCalculator(id, ctx) {
     } else fn.expression = $('.calc-editor-expression').value;
     fn.color = $('.calc-color-picker input:checked')?.value || NOTE_COLORS.find(item => item.value === 'blue').hex;
   }
+  function eraseEditorField(field) {
+    if (!field) return;
+    const selection = lastEditorField === field && lastEditorSelection
+      ? lastEditorSelection
+      : { start: field.selectionStart ?? field.value.length, end: field.selectionEnd ?? field.value.length };
+    const start = Math.max(0, selection.start);
+    const end = Math.max(start, selection.end);
+    if (start === end && start > 0) field.setRangeText('', start - 1, end, 'end');
+    else if (start !== end) field.setRangeText('', start, end, 'end');
+    saveEditorDraft();
+    rememberEditorField(field);
+    field.focus();
+  }
+  function bindEditorBackspace(button, field) {
+    button.addEventListener('pointerdown', () => rememberEditorField(field));
+    button.addEventListener('click', () => eraseEditorField(field));
+  }
+  bindEditorBackspace($('.calc-editor-backspace'), $('.calc-editor-expression'));
+  function makeEditorInput(fieldClass, accessibleName, value, fieldId) {
+    const wrap = document.createElement('span');
+    wrap.className = 'calc-editor-input-wrap';
+    const field = document.createElement('input');
+    field.className = fieldClass;
+    field.id = fieldId;
+    field.setAttribute('aria-label', accessibleName);
+    field.autocomplete = 'off';
+    field.spellcheck = false;
+    field.value = value;
+    const backspaceButton = document.createElement('button');
+    backspaceButton.type = 'button';
+    backspaceButton.className = 'calc-editor-backspace';
+    backspaceButton.setAttribute('aria-label', `Backspace ${accessibleName} expression`);
+    backspaceButton.title = `Delete the previous character in ${accessibleName}`;
+    backspaceButton.textContent = '⌫';
+    bindEditorBackspace(backspaceButton, field);
+    wrap.append(field, backspaceButton);
+    return { wrap, field };
+  }
   function renderEditor() {
     renderEditorNav();
     const regularLabel = $('.calc-editor-expression-label');
@@ -893,14 +1136,16 @@ export function buildCalculator(id, ctx) {
     if (graphMode === 'parametric') {
       regularLabel.hidden = true; fieldWrap.hidden = false; fieldWrap.replaceChildren();
       [['xExpression', 'x(t)'], ['yExpression', 'y(t)']].forEach(([key, label]) => {
-        const fieldLabel = document.createElement('label'); fieldLabel.textContent = `${label} =`;
-        const field = document.createElement('input'); field.className = key === 'xExpression' ? 'calc-editor-x' : 'calc-editor-y'; field.setAttribute('aria-label', label); field.autocomplete = 'off'; field.spellcheck = false; field.value = fn[key];
-        fieldLabel.append(field); fieldWrap.append(fieldLabel);
+        const fieldId = `${expressionId}-${label.replace(/[()]/g, '')}`;
+        const fieldLabel = document.createElement('label'); fieldLabel.className = 'calc-editor-function-label'; fieldLabel.htmlFor = fieldId; fieldLabel.textContent = `${label} =`;
+        const { wrap } = makeEditorInput(key === 'xExpression' ? 'calc-editor-x' : 'calc-editor-y', label, fn[key], fieldId);
+        const fieldRow = document.createElement('div'); fieldRow.className = 'calc-editor-function-field';
+        fieldRow.append(fieldLabel, wrap); fieldWrap.append(fieldRow);
       });
       rememberEditorField($('.calc-editor-x'), true);
     } else {
       regularLabel.hidden = false; fieldWrap.hidden = true;
-      regularLabel.firstChild.textContent = graphMode === 'polar' ? 'r =' : 'y =';
+      $('.calc-editor-equation-label').textContent = graphMode === 'polar' ? 'r =' : 'y =';
       regularLabel.title = '';
       regularInput.title = graphMode === 'polar' ? 'theta' : '';
       regularInput.value = fn.expression;
@@ -1124,6 +1369,7 @@ export function buildCalculator(id, ctx) {
     return copied;
   }
   copyViewRangesButton.addEventListener('click', async () => {
+    const returnFocus = setupMenu.contains(document.activeElement);
     const copied = await copyText(formatViewRanges(getViewRanges()));
     copyViewRangesStatus.textContent = copied
       ? 'Current graph ranges copied.'
@@ -1131,7 +1377,7 @@ export function buildCalculator(id, ctx) {
     if (!copied) {
       viewRangeValues.focus();
       viewRangeValues.select();
-    }
+    } else if (returnFocus) setupMenuTrigger.focus();
   });
   function openRestoreSetup(initialText = '') {
     setupInput.value = initialText;
@@ -1145,12 +1391,14 @@ export function buildCalculator(id, ctx) {
     if (initialText) setupInput.select();
   }
   copySetupButton.addEventListener('click', async () => {
+    const returnFocus = setupMenu.contains(document.activeElement);
     const setup = createGraphSetup();
     const copied = await copyText(setup);
     copySetupStatus.textContent = copied
       ? 'Complete graph setup copied.'
       : 'Could not copy the setup. The snippet is open for manual copying.';
     if (!copied) openRestoreSetup(setup);
+    else if (returnFocus) setupMenuTrigger.focus();
   });
   $('.calc-open-restore').addEventListener('click', () => openRestoreSetup());
   setupInput.addEventListener('input', () => {
@@ -1206,39 +1454,178 @@ export function buildCalculator(id, ctx) {
   });
   function resetView() {
     if (viewRanges) delete viewRanges[graphMode];
+    viewRatio = 'auto';
+    viewScaleFactor = 1;
+    logAxes = { x: false, y: false };
+    $('.calc-custom-ratio').hidden = true;
+    $('.calc-custom-scale').hidden = true;
+    viewError.textContent = '';
+    updateViewOptions();
     plot(); persistGraphSettings();
   }
-  function changeView({ scale = 1, anchorX = 332, anchorY = 200, panX = 0, panY = 0 } = {}) {
-    const current = getViewRanges();
-    const xKeys = graphMode === 'polar' ? ['thetaMin', 'thetaMax'] : ['xMin', 'xMax'];
-    const yKeys = graphMode === 'polar' ? ['rMin', 'rMax'] : ['yMin', 'yMax'];
-    const xSpan = current[xKeys[1]] - current[xKeys[0]];
-    const ySpan = current[yKeys[1]] - current[yKeys[0]];
-    const px = Math.max(0, Math.min(1, (anchorX - 48) / 568));
-    const py = Math.max(0, Math.min(1, (anchorY - 26) / 348));
-    const shiftedX = current[xKeys[0]] - panX / 568 * xSpan;
-    const shiftedY = current[yKeys[0]] + panY / 348 * ySpan;
+  const axisCoordinate = (value, axis) => logAxes[axis] ? Math.log10(value) : value;
+  const axisValue = (coordinate, axis) => logAxes[axis] ? 10 ** coordinate : coordinate;
+  function getAxisCoordinateBounds(view, minKey, maxKey, axis) {
+    let min = Number(view[minKey]);
+    let max = Number(view[maxKey]);
+    if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) return null;
+    if (logAxes[axis]) {
+      if (max <= 0) return null;
+      if (min <= 0) min = Math.max(max / 1000, Number.MIN_VALUE);
+    }
+    const minCoordinate = axisCoordinate(min, axis);
+    const maxCoordinate = axisCoordinate(max, axis);
+    return Number.isFinite(minCoordinate) && Number.isFinite(maxCoordinate) && minCoordinate < maxCoordinate
+      ? { min: minCoordinate, max: maxCoordinate }
+      : null;
+  }
+  function getPlotRanges() {
+    const view = getViewRanges();
+    if (graphMode === 'polar') {
+      const thetaMin = Number(view.thetaMin);
+      const thetaMax = Number(view.thetaMax);
+      const radiusMin = Number(view.rMin);
+      const radiusMax = Number(view.rMax);
+      if (![thetaMin, thetaMax, radiusMin, radiusMax].every(Number.isFinite) || thetaMin >= thetaMax || radiusMin >= radiusMax) {
+        return { valid: false, reason: 'Graph ranges are invalid.' };
+      }
+      return {
+        valid: true,
+        xMinCoord: thetaMin,
+        xMaxCoord: thetaMax,
+        yMinCoord: radiusMin,
+        yMaxCoord: radiusMin + (radiusMax - radiusMin) / viewScaleFactor,
+        xMin: thetaMin,
+        xMax: thetaMax,
+        yMin: radiusMin,
+        yMax: radiusMin + (radiusMax - radiusMin) / viewScaleFactor,
+      };
+    }
+    const xKeys = ['xMin', 'xMax'];
+    const yKeys = ['yMin', 'yMax'];
+    const xBounds = getAxisCoordinateBounds(view, xKeys[0], xKeys[1], 'x');
+    const yBounds = getAxisCoordinateBounds(view, yKeys[0], yKeys[1], 'y');
+    if (!xBounds || !yBounds) {
+      const invalidAxis = logAxes.x && !xBounds ? 'X' : 'Y';
+      return { valid: false, reason: `Logarithmic ${invalidAxis} needs a positive maximum range.` };
+    }
+
+    const xCenter = (xBounds.min + xBounds.max) / 2;
+    const yCenter = (yBounds.min + yBounds.max) / 2;
+    let xSpan = (xBounds.max - xBounds.min) / viewScaleFactor;
+    let ySpan = (yBounds.max - yBounds.min) / viewScaleFactor;
+    let xMinCoord = xCenter - xSpan / 2;
+    let xMaxCoord = xCenter + xSpan / 2;
+    let yMinCoord = yCenter - ySpan / 2;
+    let yMaxCoord = yCenter + ySpan / 2;
+
+    if (viewRatio !== 'auto') {
+      const [ratioX, ratioY] = viewRatio === 'custom'
+        ? [customRatioX, customRatioY]
+        : viewRatio.split(':').map(Number);
+      const targetXSpan = PLOT_FRAME.width * ratioY / (PLOT_FRAME.height * ratioX) * ySpan;
+      if (xSpan < targetXSpan) {
+        xSpan = targetXSpan;
+        xMinCoord = xCenter - xSpan / 2;
+        xMaxCoord = xCenter + xSpan / 2;
+      } else {
+        const targetYSpan = xSpan * PLOT_FRAME.height * ratioX / (PLOT_FRAME.width * ratioY);
+        if (ySpan < targetYSpan) {
+          ySpan = targetYSpan;
+          yMinCoord = yCenter - ySpan / 2;
+          yMaxCoord = yCenter + ySpan / 2;
+        }
+      }
+    }
+
+    const xMin = axisValue(xMinCoord, 'x');
+    const xMax = axisValue(xMaxCoord, 'x');
+    const yMin = axisValue(yMinCoord, 'y');
+    const yMax = axisValue(yMaxCoord, 'y');
+    if (![xMin, xMax, yMin, yMax].every(Number.isFinite)) return { valid: false, reason: 'The selected graph scale exceeds the supported range.' };
+    return { valid: true, xMinCoord, xMaxCoord, yMinCoord, yMaxCoord, xMin, xMax, yMin, yMax };
+  }
+  function formatDisplayedRanges(plotView, rawView = getViewRanges()) {
+    if (graphMode === 'polar') return {
+      thetaMin: plotView.xMin,
+      thetaMax: plotView.xMax,
+      rMin: plotView.yMin,
+      rMax: plotView.yMax,
+    };
+    return graphMode === 'cartesian'
+      ? { xMin: plotView.xMin, xMax: plotView.xMax, yMin: plotView.yMin, yMax: plotView.yMax }
+      : { tMin: rawView.tMin, xMin: plotView.xMin, xMax: plotView.xMax, yMin: plotView.yMin, yMax: plotView.yMax };
+  }
+  function storePlotRanges(plotView) {
+    const current = { ...getViewRanges() };
+    if (graphMode === 'polar') {
+      current.thetaMin = plotView.xMinCoord;
+      current.thetaMax = plotView.xMaxCoord;
+      current.rMin = plotView.yMinCoord;
+      current.rMax = plotView.yMinCoord + (plotView.yMaxCoord - plotView.yMinCoord) * viewScaleFactor;
+    } else {
+      const xCenter = (plotView.xMinCoord + plotView.xMaxCoord) / 2;
+      const yCenter = (plotView.yMinCoord + plotView.yMaxCoord) / 2;
+      const xSpan = (plotView.xMaxCoord - plotView.xMinCoord) * viewScaleFactor;
+      const ySpan = (plotView.yMaxCoord - plotView.yMinCoord) * viewScaleFactor;
+      current.xMin = axisValue(xCenter - xSpan / 2, 'x');
+      current.xMax = axisValue(xCenter + xSpan / 2, 'x');
+      current.yMin = axisValue(yCenter - ySpan / 2, 'y');
+      current.yMax = axisValue(yCenter + ySpan / 2, 'y');
+    }
+    if (!viewRanges) viewRanges = {};
+    viewRanges[graphMode] = current;
+  }
+  function changeView({ scale = 1, anchorX, anchorY = 200, panX = 0, panY = 0 } = {}) {
+    const current = getPlotRanges();
+    if (!current.valid) return;
+    const pointX = Number.isFinite(anchorX) ? anchorX : PLOT_FRAME.centerX;
+    const xSpan = current.xMaxCoord - current.xMinCoord;
+    const ySpan = current.yMaxCoord - current.yMinCoord;
+    const px = Math.max(0, Math.min(1, (pointX - PLOT_FRAME.left) / PLOT_FRAME.width));
+    const py = Math.max(0, Math.min(1, (anchorY - PLOT_FRAME.top) / PLOT_FRAME.height));
+    const shiftedX = current.xMinCoord - panX / PLOT_FRAME.width * xSpan;
+    const shiftedY = current.yMinCoord + panY / PLOT_FRAME.height * ySpan;
     const boundedScale = Number.isFinite(scale) ? Math.max(1e-9, Math.min(1e9, scale)) : 1;
     const nextXSpan = Math.max(1e-9, Math.min(1e9, xSpan * boundedScale));
     const nextYSpan = Math.max(1e-9, Math.min(1e9, ySpan * boundedScale));
     const xAnchor = shiftedX + px * xSpan;
     const yAnchor = shiftedY + (1 - py) * ySpan;
     const next = {
-      [xKeys[0]]: xAnchor - px * nextXSpan,
-      [xKeys[1]]: xAnchor + (1 - px) * nextXSpan,
-      [yKeys[0]]: yAnchor - (1 - py) * nextYSpan,
-      [yKeys[1]]: yAnchor + py * nextYSpan,
+      xMinCoord: xAnchor - px * nextXSpan,
+      xMaxCoord: xAnchor + (1 - px) * nextXSpan,
+      yMinCoord: yAnchor - (1 - py) * nextYSpan,
+      yMaxCoord: yAnchor + py * nextYSpan,
     };
     if (Object.values(next).every(Number.isFinite)) {
-      current[xKeys[0]] = next[xKeys[0]]; current[xKeys[1]] = next[xKeys[1]];
-      current[yKeys[0]] = next[yKeys[0]]; current[yKeys[1]] = next[yKeys[1]];
+      const nextPlotView = {
+        ...next,
+        xMin: axisValue(next.xMinCoord, 'x'),
+        xMax: axisValue(next.xMaxCoord, 'x'),
+        yMin: axisValue(next.yMinCoord, 'y'),
+        yMax: axisValue(next.yMaxCoord, 'y'),
+      };
+      storePlotRanges(nextPlotView);
       plot(false);
     }
   }
-  const zoomView = (scale, point = { x: 332, y: 200 }) => changeView({ scale, anchorX: point.x, anchorY: point.y });
+  const zoomView = (scale, point = { x: PLOT_FRAME.centerX, y: PLOT_FRAME.centerY }) => changeView({ scale, anchorX: point.x, anchorY: point.y });
   function eventPoint(event) {
     const rect = plotArea.getBoundingClientRect();
-    return { x: 640 * (event.clientX - rect.left) / rect.width, y: 400 * (event.clientY - rect.top) / rect.height };
+    const matrix = plotArea.getScreenCTM?.();
+    let x = 640 * (event.clientX - rect.left) / rect.width;
+    let y = 400 * (event.clientY - rect.top) / rect.height;
+    if (matrix && plotArea.createSVGPoint) {
+      try {
+        const screenPoint = plotArea.createSVGPoint();
+        screenPoint.x = event.clientX;
+        screenPoint.y = event.clientY;
+        const svgPoint = screenPoint.matrixTransform(matrix.inverse());
+        x = svgPoint.x;
+        y = svgPoint.y;
+      } catch {}
+    }
+    return { x, y };
   }
   function niceStep(span, targetCount = 7) {
     const raw = span / targetCount;
@@ -1343,6 +1730,8 @@ export function buildCalculator(id, ctx) {
 
     if (!viewRanges) viewRanges = {};
     viewRanges[graphMode] = view;
+    viewScaleFactor = 1;
+    updateViewOptions();
     plot(false);
     persistGraphSettings();
     graphStatus.textContent = `Fitted the view to ${visible.length} visible ${visible.length === 1 ? 'curve' : 'curves'} in ${graphMode} mode.`;
@@ -1353,16 +1742,19 @@ export function buildCalculator(id, ctx) {
       ? clean.toExponential(1).replace(/\.0e/, 'e')
       : String(Number(clean.toPrecision(5)));
   }
-  function addSvgText(ns, text, x, y, anchor = 'middle') {
+  function addSvgText(ns, text, x, y, anchor = 'middle', target = plotArea) {
     const label = document.createElementNS(ns, 'text');
     label.setAttribute('class', 'calc-graph-label');
     label.setAttribute('x', x); label.setAttribute('y', y);
     label.setAttribute('text-anchor', anchor);
     label.textContent = text;
-    plotArea.append(label);
+    target.append(label);
   }
   function plot(announce = true) {
     const ns = 'http://www.w3.org/2000/svg';
+    plotArea.setAttribute('preserveAspectRatio', graphMode === 'polar' ? 'xMidYMid meet' : 'none');
+    plotArea.dataset.viewRatio = graphMode === 'polar' ? '1:1' : viewRatio;
+    plotArea.dataset.scaleFactor = String(viewScaleFactor);
     const view = getViewRanges();
     viewRangeValues.value = formatViewRanges(view);
     const limits = graphMode === 'cartesian'
@@ -1424,6 +1816,10 @@ export function buildCalculator(id, ctx) {
     });
     if (plotError) { if (announce) graphStatus.textContent = plotError; return; }
     plotArea.replaceChildren();
+    const plotLayer = document.createElementNS(ns, 'g');
+    const transform = getPlotTransform();
+    plotLayer.setAttribute('transform', `translate(${transform.translateX} ${transform.translateY}) scale(${transform.scaleX} ${transform.scaleY})`);
+    plotArea.append(plotLayer);
     if (graphMode === 'polar') {
       const radialStep = niceStep(limits.y1 - limits.y0, 6);
       for (let tick = Math.ceil(limits.y0 / radialStep) * radialStep, count = 0; tick <= limits.y1 + radialStep * 1e-8 && count < 80; tick += radialStep, count++) {
@@ -1431,8 +1827,8 @@ export function buildCalculator(id, ctx) {
         if (radius < 0 || radius > 160) continue;
         const circle = document.createElementNS(ns, 'circle');
         circle.setAttribute('class', 'calc-graph-grid'); circle.setAttribute('cx', '320'); circle.setAttribute('cy', '200'); circle.setAttribute('r', radius);
-        plotArea.append(circle);
-        addSvgText(ns, formatTick(tick), 324 + radius, 196, 'start');
+        plotLayer.append(circle);
+        addSvgText(ns, formatTick(tick), 324 + radius, 196, 'start', plotLayer);
       }
       const thetaStep = niceStep(limits.b - limits.a, 8);
       const spoke = document.createElementNS(ns, 'path');
@@ -1442,11 +1838,11 @@ export function buildCalculator(id, ctx) {
         const x = 320 + 160 * Math.cos(angle), y = 200 - 160 * Math.sin(angle);
         spokePath += `M320 200L${x.toFixed(2)} ${y.toFixed(2)} `;
       }
-      spoke.setAttribute('d', spokePath); plotArea.append(spoke);
+      spoke.setAttribute('d', spokePath); plotLayer.append(spoke);
       const axis = document.createElementNS(ns, 'path');
       axis.setAttribute('class', 'calc-graph-axis'); axis.setAttribute('d', 'M160 200H480 M320 40V360');
-      plotArea.append(axis);
-      addSvgText(ns, 'θ', 486, 196, 'start'); addSvgText(ns, 'r', 324, 36, 'start');
+      plotLayer.append(axis);
+      addSvgText(ns, 'θ', 486, 196, 'start', plotLayer); addSvgText(ns, 'r', 324, 36, 'start', plotLayer);
     } else {
       const grid = document.createElementNS(ns, 'path');
       grid.setAttribute('class', 'calc-graph-grid');
@@ -1454,22 +1850,22 @@ export function buildCalculator(id, ctx) {
       const xStep = niceStep(x1 - x0), yStep = niceStep(limits.y1 - limits.y0);
       for (let tick = Math.ceil(x0 / xStep) * xStep, count = 0; tick <= x1 + xStep * 1e-8 && count < 100; tick += xStep, count++) {
         const px = xMap(tick); gridPath += `M${px.toFixed(2)} 26V374 `;
-        addSvgText(ns, formatTick(tick), px, 390);
+        addSvgText(ns, formatTick(tick), px, 390, 'middle', plotLayer);
       }
       for (let tick = Math.ceil(limits.y0 / yStep) * yStep, count = 0; tick <= limits.y1 + yStep * 1e-8 && count < 100; tick += yStep, count++) {
         const py = yMap(tick); gridPath += `M48 ${py.toFixed(2)}H616 `;
-        addSvgText(ns, formatTick(tick), 43, py + 4, 'end');
+        addSvgText(ns, formatTick(tick), 43, py + 4, 'end', plotLayer);
       }
-      grid.setAttribute('d', gridPath); plotArea.prepend(grid);
+      grid.setAttribute('d', gridPath); plotLayer.prepend(grid);
       const zeroX = x0 <= 0 && x1 >= 0 ? xMap(0) : null;
       const zeroY = limits.y0 <= 0 && limits.y1 >= 0 ? yMap(0) : null;
       const axis = document.createElementNS(ns, 'path'); axis.setAttribute('class', 'calc-graph-axis');
       axis.setAttribute('d', `M48 26V374H616${zeroY === null ? '' : ` M48 ${zeroY}H616`}${zeroX === null ? '' : ` M${zeroX} 26V374`}`);
-      plotArea.append(axis);
-      addSvgText(ns, 'x', 609, 386, 'end'); addSvgText(ns, 'y', 56, 36, 'start');
+      plotLayer.append(axis);
+      addSvgText(ns, 'x', 609, 386, 'end', plotLayer); addSvgText(ns, 'y', 56, 36, 'start', plotLayer);
     }
     const drawable = functions.filter(fn => fn.visible && fn.path);
-    drawable.forEach(fn => { const path = document.createElementNS(ns, 'path'); path.setAttribute('d', fn.path); path.setAttribute('class', 'calc-graph-line'); path.style.setProperty('--function-color', fn.color); path.setAttribute('data-function-id', fn.id); plotArea.append(path); });
+    drawable.forEach(fn => { const path = document.createElementNS(ns, 'path'); path.setAttribute('d', fn.path); path.setAttribute('class', 'calc-graph-line'); path.style.setProperty('--function-color', fn.color); path.setAttribute('data-function-id', fn.id); plotLayer.append(path); });
     if (!drawable.length) {
       if (announce) graphStatus.textContent = functions.length
         ? 'No visible function has a valid plotted curve.'
