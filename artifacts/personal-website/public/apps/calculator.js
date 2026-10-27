@@ -216,7 +216,19 @@ export function buildCalculator(id, ctx) {
   const expressionId = `${id || 'calculator'}-expression`;
   root.innerHTML = `
     <div class="calc" aria-label="Calculator">
-      <header class="calc-header"><div><h2>Calculator</h2></div>
+      <header class="calc-header">
+        <div class="calc-header-actions">
+          <div class="calc-memory" role="group" aria-label="Memory">
+            <button type="button" data-memory="store" aria-label="Memory store" title="Store result">MS</button>
+            <button type="button" data-memory="recall" aria-label="Memory recall" title="Recall memory" disabled>MR</button>
+            <button type="button" data-memory="add" aria-label="Add to memory" title="Add to memory">M+</button>
+            <button type="button" data-memory="subtract" aria-label="Subtract from memory" title="Subtract from memory">M−</button>
+          </div>
+          <div class="calc-header-graph-actions" role="group" aria-label="Graph editing" hidden>
+            <button type="button" class="calc-open-editor">Edit functions</button>
+            <button type="button" class="calc-open-settings">Graph settings</button>
+          </div>
+        </div>
         <div class="calc-modes" role="group" aria-label="Calculator mode">
           <button type="button" data-mode="basic" aria-pressed="true">Basic</button>
           <button type="button" data-mode="scientific" aria-pressed="false">Scientific</button>
@@ -238,12 +250,6 @@ export function buildCalculator(id, ctx) {
             <div class="calc-keypad-columns">
               <div class="calc-keys" aria-label="Calculator keypad"></div>
               <div class="calc-keypad-support">
-                <div class="calc-memory" role="group" aria-label="Memory">
-                  <button type="button" data-memory="store" aria-label="Memory store" title="Store result">MS</button>
-                  <button type="button" data-memory="recall" aria-label="Memory recall" title="Recall memory" disabled>MR</button>
-                  <button type="button" data-memory="add" aria-label="Add to memory" title="Add to memory">M+</button>
-                  <button type="button" data-memory="subtract" aria-label="Subtract from memory" title="Subtract from memory">M−</button>
-                </div>
                 <div class="calc-base-control" role="group" aria-label="Number base">
                   <span class="calc-base-label">Base</span>
                   <button type="button" data-radix="2" aria-label="Base 2" aria-pressed="false">2</button>
@@ -259,8 +265,6 @@ export function buildCalculator(id, ctx) {
           <section class="calc-graph" hidden aria-label="Function graph">
             <div class="calc-graph-toolbar">
               <div><span class="calc-kicker">PLOT / ${'<span class="calc-mode-label">CARTESIAN</span>'}</span><div class="calc-graph-tools">
-                <button type="button" class="calc-open-editor">Edit functions</button>
-                <button type="button" class="calc-open-settings">Graph settings</button>
                 <button type="button" class="calc-zoom-out" aria-label="Zoom out">−</button>
                 <button type="button" class="calc-zoom-in" aria-label="Zoom in">+</button>
                 <button type="button" class="calc-fit-view">Fit curves</button>
@@ -556,6 +560,8 @@ export function buildCalculator(id, ctx) {
     if (next === 'basic' && radix !== 10) setRadix(10);
     mode = next; root.dataset.mode = next;
     root.querySelectorAll('.calc-modes button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === next)));
+    root.querySelector('.calc-memory').hidden = next === 'graph';
+    root.querySelector('.calc-header-graph-actions').hidden = next !== 'graph';
     scientific.hidden = next !== 'scientific'; graph.hidden = next !== 'graph'; keypads.hidden = next === 'graph';
     root.classList.toggle('calc-graph-mode', next === 'graph');
     root.querySelector('.calc-display').hidden = next === 'graph';

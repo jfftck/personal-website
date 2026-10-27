@@ -76,6 +76,8 @@ test('calculator supports scientific calculations, reusable history, and graphin
   const calculator = await openUtility(page, 'calculator');
   const output = calculator.locator('.calc-value');
 
+  await expect(calculator.locator('.calc-header h2')).toHaveCount(0);
+  await expect(calculator.locator('.calc-header .calc-memory')).toBeVisible();
   await calculator.getByRole('button', { name: '7', exact: true }).click();
   await calculator.getByRole('button', { name: '+', exact: true }).click();
   await calculator.getByRole('button', { name: '3', exact: true }).click();
@@ -94,6 +96,10 @@ test('calculator supports scientific calculations, reusable history, and graphin
   await expect(output).toHaveText('3');
 
   await calculator.getByRole('button', { name: 'Graph' }).click();
+  await expect(calculator.locator('.calc-header .calc-memory')).toBeHidden();
+  await expect(calculator.locator('.calc-header-graph-actions')).toBeVisible();
+  await expect(calculator.locator('.calc-graph-tools').getByRole('button', { name: 'Edit functions' })).toHaveCount(0);
+  await expect(calculator.locator('.calc-graph-tools').getByRole('button', { name: 'Graph settings' })).toHaveCount(0);
   await calculator.getByRole('button', { name: 'Plot' }).click();
   await expect(calculator.locator('.calc-graph-line')).toHaveAttribute('d', /M/);
   await expect(calculator.locator('.calc-graph-status')).toContainText('Plotted');
