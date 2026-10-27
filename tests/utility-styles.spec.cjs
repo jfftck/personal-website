@@ -107,6 +107,74 @@ test('calculator supports scientific calculations, reusable history, and graphin
   await expect(calculator.locator('.calc-graph-line')).toHaveCount(1);
 });
 
+test('calculator supports selectable bases, memory, constants, backspace, and compact scientific keys', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  const expression = calculator.getByRole('textbox', { name: 'Expression' });
+  const output = calculator.locator('.calc-value');
+
+  await expression.fill('7+3');
+  await calculator.getByRole('button', { name: 'Base 2' }).click();
+  await expect(expression).toHaveValue('0b111+0b11');
+  await expect(output).toHaveText('0b1010');
+  await calculator.getByRole('button', { name: 'Base 8' }).click();
+  await expect(expression).toHaveValue('0o7+0o3');
+  await expect(output).toHaveText('0o12');
+  await calculator.getByRole('button', { name: 'Base 16' }).click();
+  await expect(expression).toHaveValue('0x7+0x3');
+  await expect(output).toHaveText('0xa');
+
+  await calculator.getByRole('button', { name: 'AC', exact: true }).click();
+  await expression.press('F');
+  await expect(expression).toHaveValue('0xF');
+  await expect(output).toHaveText('0xf');
+  await calculator.getByRole('button', { name: 'AC', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Hex digit A' }).click();
+  await calculator.getByRole('button', { name: '+', exact: true }).click();
+  await calculator.getByRole('button', { name: '1', exact: true }).click();
+  await calculator.getByRole('button', { name: '=', exact: true }).click();
+  await expect(output).toHaveText('0xb');
+
+  await expression.fill('123');
+  await expression.evaluate(element => element.setSelectionRange(2, 2));
+  await calculator.getByRole('button', { name: 'Backspace' }).click();
+  await expect(expression).toHaveValue('13');
+  await expect(output).toHaveText('0x13');
+
+  await calculator.getByRole('button', { name: 'Base 10' }).click();
+  await expression.fill('12');
+  await calculator.getByRole('button', { name: '=', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Memory store' }).click();
+  await calculator.getByRole('button', { name: 'AC', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Memory recall' }).click();
+  await expect(output).toHaveText('12');
+  await calculator.getByRole('button', { name: 'Add to memory' }).click();
+  await expression.fill('3');
+  await calculator.getByRole('button', { name: 'Subtract from memory' }).click();
+  await calculator.getByRole('button', { name: 'AC', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Memory recall' }).click();
+  await expect(output).toHaveText('21');
+
+  await calculator.getByRole('button', { name: 'Scientific' }).click();
+  await calculator.getByRole('button', { name: 'AC', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Pi' }).click();
+  await calculator.getByRole('button', { name: '+', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Euler’s number' }).click();
+  await calculator.getByRole('button', { name: '=', exact: true }).click();
+  await expect(output).toHaveText('5.85987448205');
+
+  await calculator.evaluate(element => {
+    const appWindow = element.closest('.app-window');
+    appWindow.style.width = '960px';
+    appWindow.style.height = '680px';
+  });
+  const keypadColumns = calculator.locator('.calc-keypad-columns');
+  const wideColumns = await keypadColumns.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
+  expect(wideColumns).toBe(2);
+  await calculator.evaluate(element => { element.closest('.app-window').style.width = '480px'; });
+  const narrowColumns = await keypadColumns.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
+  expect(narrowColumns).toBe(1);
+});
+
 test('calculator graph edits multiple functions in an accessible keypad dialog', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   await calculator.getByRole('button', { name: 'Graph', exact: true }).click();

@@ -10,7 +10,8 @@ const BASIC_KEYS = [
   ['1', 'digit'], ['2', 'digit'], ['3', 'digit'], ['+', 'operator'],
   ['0', 'wide digit'], ['.', 'decimal'], ['=', 'equals'],
 ];
-const SCIENTIFIC_KEYS = ['sin(', 'cos(', 'tan(', 'ln(', 'log(', '√(', '^', '(', ')'];
+const SCIENTIFIC_KEYS = ['sin(', 'cos(', 'tan(', 'ln(', 'log(', '√(', 'π', 'e', '^', '(', ')'];
+const HEX_DIGITS = ['A', 'B', 'C', 'D', 'E', 'F'];
 const GRAPH_KEYS = [
   'sin(', 'cos(', 'tan(', 'sqrt(', 'ln(', 'log(',
   'pi', 'e', 'x', 'theta', 't', '^',
@@ -122,9 +123,95 @@ function readSavedGraphSettings(rawOverride) {
   }
 }
 
+function parseRadixNumber(raw, radix) {
+  let base = radix;
+  let digits = raw;
+  const prefix = raw.toLowerCase().match(/^0([box])/);
+  if (prefix) {
+    base = { b: 2, o: 8, x: 16 }[prefix[1]];
+    digits = raw.slice(2);
+  }
+  const [whole = '', fraction = ''] = digits.toLowerCase().split('.');
+  const digitValue = character => {
+    const value = Number.parseInt(character, 16);
+    if (!Number.isFinite(value) || value >= base) {
+      throw new Error(`Digit “${character.toUpperCase()}” is not valid in base ${base}.`);
+    }
+    return value;
+  };
+  let result = 0;
+  for (const character of whole || '0') result = result * base + digitValue(character);
+  let place = 1 / base;
+  for (const character of fraction) {
+    result += digitValue(character) * place;
+    place /= base;
+  }
+  if (!Number.isFinite(result)) throw new Error('The number is too large.');
+  return result;
+}
+
+function scanExpressionTokens(source, radix = 10) {
+  const tokens = [];
+  const pattern = /\s*(0[bxo][0-9a-f]+(?:\.[0-9a-f]*)?|\d+(?:\.\d*)?|\.\d+|[a-zA-Z]+|[+\-*/%^()])/gyi;
+  let position = 0;
+  while (position < source.length) {
+    if (!source.slice(position).trim()) break;
+    pattern.lastIndex = position;
+    const match = pattern.exec(source);
+    if (!match) throw new Error(`Unsupported character “${source[position]}”.`);
+    const raw = match[1];
+    const value = raw.toLowerCase();
+    const start = match.index + match[0].length - raw.length;
+    const numeric = /^\d|\./.test(value);
+    if (/^[a-z]+$/.test(value) && !['x', 'theta', 't', 'pi', 'e', 'sin', 'cos', 'tan', 'ln', 'log', 'sqrt'].includes(value)) {
+      throw new Error(`Unknown function or name “${value}”.`);
+    }
+    tokens.push({ value, start, end: pattern.lastIndex, numeric });
+    position = pattern.lastIndex;
+  }
+  return tokens;
+}
+
+function formatRadixNumber(number, radix) {
+  if (!Number.isFinite(number)) throw new Error('The result is not a finite number.');
+  const rounded = Number(number.toPrecision(12));
+  if (radix === 10) return String(rounded);
+  const prefix = { 2: '0b', 8: '0o', 16: '0x' }[radix];
+  if (!prefix) throw new Error('Unsupported number base.');
+  const sign = rounded < 0 ? '-' : '';
+  const absolute = Math.abs(rounded);
+  const integer = Math.floor(absolute);
+  let whole = integer.toString(radix);
+  let remainder = absolute - integer;
+  let fraction = '';
+  const digits = '0123456789abcdef';
+  for (let place = 0; place < 14 && remainder > 1e-14; place += 1) {
+    remainder *= radix;
+    const digit = Math.min(radix - 1, Math.floor(remainder));
+    fraction += digits[digit];
+    remainder -= digit;
+  }
+  fraction = fraction.replace(/0+$/, '');
+  return `${sign}${prefix}${whole}${fraction ? `.${fraction}` : ''}`;
+}
+
+function convertExpressionRadix(source, fromRadix, toRadix) {
+  let result = '';
+  let cursor = 0;
+  for (const token of scanExpressionTokens(source, fromRadix)) {
+    result += source.slice(cursor, token.start);
+    result += token.numeric
+      ? formatRadixNumber(parseRadixNumber(token.value, fromRadix), toRadix)
+      : source.slice(token.start, token.end);
+    cursor = token.end;
+  }
+  return result + source.slice(cursor);
+}
+
 export function buildCalculator(id, ctx) {
   const root = document.createElement('section');
   root.className = 'utility-app calc-wrap';
+  root.dataset.radix = '10';
   const expressionId = `${id || 'calculator'}-expression`;
   root.innerHTML = `
     <div class="calc" aria-label="Calculator">
@@ -138,13 +225,36 @@ export function buildCalculator(id, ctx) {
       <div class="calc-workspace">
         <main class="calc-main">
           <div class="calc-display">
-            <label class="calc-expression-label" for="${expressionId}">Expression</label>
+            <div class="calc-display-header">
+              <label class="calc-expression-label" for="${expressionId}">Expression</label>
+              <div class="calc-base-control" role="group" aria-label="Number base">
+                <span class="calc-base-label">Base</span>
+                <button type="button" data-radix="2" aria-label="Base 2" aria-pressed="false">2</button>
+                <button type="button" data-radix="8" aria-label="Base 8" aria-pressed="false">8</button>
+                <button type="button" data-radix="10" aria-label="Base 10" aria-pressed="true">10</button>
+                <button type="button" data-radix="16" aria-label="Base 16" aria-pressed="false">16</button>
+              </div>
+              <button type="button" class="calc-backspace" aria-label="Backspace" title="Delete the previous character">⌫</button>
+            </div>
             <input class="calc-expression" id="${expressionId}" aria-label="Expression" inputmode="decimal" autocomplete="off" spellcheck="false" value="0">
             <div class="calc-result-line"><span class="calc-result-caption">RESULT</span><output class="calc-value" aria-live="polite">0</output></div>
             <p class="calc-message" role="status" aria-live="polite"></p>
           </div>
-          <div class="calc-scientific" hidden></div>
-          <div class="calc-keys" aria-label="Calculator keypad"></div>
+          <div class="calc-keypads">
+            <div class="calc-memory" role="group" aria-label="Memory">
+              <button type="button" data-memory="store" aria-label="Memory store" title="Store result">MS</button>
+              <button type="button" data-memory="recall" aria-label="Memory recall" title="Recall memory" disabled>MR</button>
+              <button type="button" data-memory="add" aria-label="Add to memory" title="Add to memory">M+</button>
+              <button type="button" data-memory="subtract" aria-label="Subtract from memory" title="Subtract from memory">M−</button>
+            </div>
+            <div class="calc-keypad-columns">
+              <div class="calc-keys" aria-label="Calculator keypad"></div>
+              <div class="calc-extra-keys">
+                <div class="calc-hex-keys" aria-label="Hexadecimal digits" hidden></div>
+                <div class="calc-scientific" aria-label="Scientific keypad" hidden></div>
+              </div>
+            </div>
+          </div>
           <section class="calc-graph" hidden aria-label="Function graph">
             <div class="calc-graph-toolbar">
               <div><span class="calc-kicker">PLOT / ${'<span class="calc-mode-label">CARTESIAN</span>'}</span><div class="calc-graph-tools">
@@ -232,6 +342,8 @@ export function buildCalculator(id, ctx) {
   const value = $('.calc-value');
   const message = $('.calc-message');
   const keys = $('.calc-keys');
+  const keypads = $('.calc-keypads');
+  const hexKeys = $('.calc-hex-keys');
   const scientific = $('.calc-scientific');
   const historyList = $('.calc-history-list');
   const historyEmpty = $('.calc-history-empty');
@@ -253,6 +365,8 @@ export function buildCalculator(id, ctx) {
   let lastEditorField = null;
   const history = [];
   let mode = 'basic';
+  let radix = 10;
+  let memoryValue = null;
   let resultFresh = false;
   let graphMode = 'cartesian';
   let settingsMode = graphMode;
@@ -397,8 +511,7 @@ export function buildCalculator(id, ctx) {
     return { id: `fn-${nextFunctionId++}`, expression, xExpression: 'cos(t)', yExpression: 'sin(t)', color, visible: true, path: '' };
   }
   const format = number => {
-    if (!Number.isFinite(number)) throw new Error('The result is not a finite number.');
-    return String(Number(number.toPrecision(12)));
+    return formatRadixNumber(number, radix);
   };
   const renderHistory = () => {
     historyList.replaceChildren();
@@ -411,7 +524,7 @@ export function buildCalculator(id, ctx) {
       const result = document.createElement('strong'); result.textContent = entry.result;
       button.append(expression, result);
       button.addEventListener('click', () => {
-        input.value = entry.result; value.textContent = entry.result;
+        input.value = format(entry.numericResult); value.textContent = format(entry.numericResult);
         message.textContent = 'History result loaded into the expression.';
         resultFresh = true; input.focus({ preventScroll: true });
       });
@@ -422,11 +535,11 @@ export function buildCalculator(id, ctx) {
   const calculate = (record = true) => {
     try {
       const expression = input.value.trim();
-      const result = format(evaluateExpression(expression));
-      value.textContent = result; message.textContent = '';
+      const result = evaluateExpression(expression, null, radix);
+      value.textContent = format(result); message.textContent = '';
       input.setSelectionRange(input.value.length, input.value.length);
       if (record && expression) {
-        history.unshift({ expression, result }); history.splice(HISTORY_LIMIT); renderHistory(); resultFresh = true;
+        history.unshift({ expression, result: format(result), numericResult: result }); history.splice(HISTORY_LIMIT); renderHistory(); resultFresh = true;
       }
       return result;
     } catch (error) {
@@ -441,7 +554,7 @@ export function buildCalculator(id, ctx) {
   const setMode = next => {
     mode = next; root.dataset.mode = next;
     root.querySelectorAll('.calc-modes button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === next)));
-    scientific.hidden = next !== 'scientific'; graph.hidden = next !== 'graph'; keys.hidden = next === 'graph';
+    scientific.hidden = next !== 'scientific'; graph.hidden = next !== 'graph'; keypads.hidden = next === 'graph';
     root.classList.toggle('calc-graph-mode', next === 'graph');
     root.querySelector('.calc-display').hidden = next === 'graph';
     root.querySelector('.calc-history').hidden = next === 'graph';
@@ -449,39 +562,121 @@ export function buildCalculator(id, ctx) {
   };
   const insert = (text, replaceResult = false) => {
     const start = input.selectionStart ?? input.value.length, end = input.selectionEnd ?? start;
-    const replace = resultFresh && replaceResult, replaceZero = input.value === '0' && replaceResult;
+    const replace = resultFresh && replaceResult;
+    const replaceZero = replaceResult && ['0', '0b0', '0o0', '0x0'].includes(input.value.trim().toLowerCase());
     const base = replace || replaceZero ? '' : input.value, offset = replace || replaceZero ? 0 : start, suffixStart = replace || replaceZero ? 0 : end;
     const insertion = (replace || replaceZero) && text === '.' ? '0.' : text;
     input.value = `${base.slice(0, offset)}${insertion}${base.slice(suffixStart)}`;
     const caret = offset + insertion.length; input.setSelectionRange(caret, caret);
     resultFresh = false; input.focus({ preventScroll: true }); updatePreview();
   };
-  const clear = () => { input.value = '0'; value.textContent = '0'; message.textContent = ''; resultFresh = false; input.focus({ preventScroll: true }); };
+  const insertRadixDigit = digit => {
+    if (Number.parseInt(digit, 16) >= radix) return;
+    if (radix === 10) { insert(digit, true); return; }
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    const prefix = { 2: '0b', 8: '0o', 16: '0x' }[radix];
+    const before = input.value.slice(0, start);
+    const startsOperand = !before.trim() || /[+\-*/^(]\s*$/.test(before);
+    if (resultFresh || input.value === '0' || input.value.trim().toLowerCase() === `${prefix}0` || !input.value || startsOperand) {
+      insert(`${prefix}${digit}`, true);
+      return;
+    }
+    insert(digit, true);
+  };
+  const clear = () => {
+    input.value = formatRadixNumber(0, radix); value.textContent = input.value;
+    message.textContent = ''; resultFresh = false; input.focus({ preventScroll: true });
+  };
+  const backspace = () => {
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    if (start === end && start > 0) input.setRangeText('', start - 1, end, 'end');
+    else if (start !== end) input.setRangeText('', start, end, 'end');
+    resultFresh = false;
+    updatePreview();
+    input.focus({ preventScroll: true });
+  };
+  const setRadix = next => {
+    if (next === radix) return;
+    try { input.value = convertExpressionRadix(input.value, radix, next); }
+    catch { /* Leave an incomplete expression intact so the user can finish editing it. */ }
+    radix = next;
+    root.dataset.radix = String(next);
+    input.inputMode = next === 16 ? 'text' : 'decimal';
+    root.querySelectorAll('.calc-base-control button').forEach(button => {
+      button.setAttribute('aria-pressed', String(Number(button.dataset.radix) === next));
+    });
+    keys.querySelectorAll('[data-digit]').forEach(button => { button.disabled = Number(button.dataset.digit) >= next; });
+    hexKeys.hidden = next !== 16;
+    updatePreview();
+  };
 
   BASIC_KEYS.forEach(([label, kind]) => {
     const button = document.createElement('button');
     button.type = 'button'; button.className = `calc-key ${kind.includes('operator') ? 'operator' : ''} ${kind.includes('equals') ? 'equals' : ''} ${kind.includes('wide') ? 'wide' : ''}`;
     button.textContent = label;
+    if (kind.includes('digit')) button.dataset.digit = label;
     button.addEventListener('click', () => {
       if (kind.includes('clear')) clear();
       else if (kind.includes('equals')) calculate(true);
       else if (kind.includes('sign')) {
-        const match = input.value.match(/(-?\d*\.?\d+)$/);
-        if (match) { input.setRangeText(String(-Number(match[0])), match.index, input.value.length, 'end'); resultFresh = false; updatePreview(); }
-      } else if (kind.includes('percent')) insert('/100');
+        const match = input.value.match(/-?(?:0[bxo][0-9a-f]+|[0-9a-f]+)(?:\.[0-9a-f]*)?$/i);
+        if (match) {
+          const replacement = match[0].startsWith('-') ? match[0].slice(1) : `-${match[0]}`;
+          input.setRangeText(replacement, match.index, input.value.length, 'end'); resultFresh = false; updatePreview();
+        }
+      } else if (kind.includes('percent')) insert(`/${formatRadixNumber(100, radix)}`);
       else if (kind.includes('operator')) insert(({ '÷': '/', '×': '*', '−': '-' })[label] || label);
-      else insert(label, kind.includes('digit') || kind.includes('decimal'));
+      else if (kind.includes('digit')) insertRadixDigit(label);
+      else insert(label, kind.includes('decimal'));
     });
     keys.append(button);
   });
   SCIENTIFIC_KEYS.forEach(label => {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'calc-science-key'; button.textContent = label;
-    button.addEventListener('click', () => insert(label === '√(' ? 'sqrt(' : label, true)); scientific.append(button);
+    if (label === 'π') button.setAttribute('aria-label', 'Pi');
+    if (label === 'e') button.setAttribute('aria-label', 'Euler’s number');
+    button.addEventListener('click', () => insert(label === '√(' ? 'sqrt(' : label === 'π' ? 'pi' : label, true)); scientific.append(button);
   });
+  HEX_DIGITS.forEach(digit => {
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'calc-key calc-hex-key';
+    button.textContent = digit; button.setAttribute('aria-label', `Hex digit ${digit}`);
+    button.addEventListener('click', () => insertRadixDigit(digit));
+    hexKeys.append(button);
+  });
+  root.querySelectorAll('.calc-base-control button').forEach(button => {
+    button.addEventListener('click', () => setRadix(Number(button.dataset.radix)));
+  });
+  root.querySelectorAll('.calc-memory button').forEach(button => {
+    button.addEventListener('click', () => {
+      const action = button.dataset.memory;
+      if (action === 'recall') {
+        if (memoryValue === null) return;
+        input.value = formatRadixNumber(memoryValue, radix);
+        resultFresh = false;
+        updatePreview();
+        message.textContent = 'Memory recalled.';
+        input.focus({ preventScroll: true });
+        return;
+      }
+      const current = calculate(false);
+      if (current === null) return;
+      if (action === 'store') memoryValue = current;
+      else if (action === 'add') memoryValue = (memoryValue ?? 0) + current;
+      else if (action === 'subtract') memoryValue = (memoryValue ?? 0) - current;
+      root.querySelector('[data-memory="recall"]').disabled = memoryValue === null;
+      message.textContent = action === 'store' ? 'Memory stored.' : 'Memory updated.';
+    });
+  });
+  $('.calc-backspace').addEventListener('click', backspace);
   root.querySelectorAll('.calc-modes button').forEach(button => button.addEventListener('click', () => setMode(button.dataset.mode)));
   $('.calc-history-clear').addEventListener('click', () => { history.splice(0); renderHistory(); });
   input.addEventListener('input', () => { resultFresh = false; updatePreview(); });
   input.addEventListener('keydown', event => {
+    if (radix === 16 && /^[a-f]$/i.test(event.key)) {
+      event.preventDefault(); insertRadixDigit(event.key.toUpperCase()); return;
+    }
     if (event.key === 'Enter') { event.preventDefault(); calculate(true); }
     if (event.key === 'Escape') clear();
   });
@@ -1196,10 +1391,12 @@ export function buildCalculator(id, ctx) {
     if (event.key === 'Escape') { clear(); return; }
     const map = { '*': '*', '/': '/', '-': '-', Enter: '=', '=': '=' };
     const key = map[event.key] || event.key;
-    if (/^[0-9.]$/.test(key)) { event.preventDefault(); insert(key, true); }
+    if (/^[0-9]$/.test(key)) { event.preventDefault(); insertRadixDigit(key); }
+    else if (radix === 16 && /^[a-f]$/i.test(key)) { event.preventDefault(); insertRadixDigit(key.toUpperCase()); }
+    else if (key === '.') { event.preventDefault(); insert(key, true); }
     else if (['+', '-', '*', '/'].includes(key)) { event.preventDefault(); insert(key); }
     else if (key === '=') { event.preventDefault(); calculate(true); }
-    else if (event.key === 'Backspace') { event.preventDefault(); input.value = input.value.length > 1 ? input.value.slice(0, -1) : '0'; updatePreview(); }
+    else if (event.key === 'Backspace') { event.preventDefault(); backspace(); }
   };
   document.addEventListener('keydown', onKey);
   renderHistory();
@@ -1211,10 +1408,10 @@ export function buildCalculator(id, ctx) {
   return root;
 }
 
-export function evaluateExpression(source, variableValues = null) {
+export function evaluateExpression(source, variableValues = null, radix = 10) {
   if (typeof source !== 'string' || !source.trim()) throw new Error('Enter an expression first.');
   if (source.length > 180) throw new Error('Expression is too long.');
-  const tokens = tokenize(source); let cursor = 0;
+  const tokens = tokenize(source, radix); let cursor = 0;
   const peek = () => tokens[cursor], take = () => tokens[cursor++];
   const expect = token => { if (take() !== token) throw new Error(`Expected “${token}”.`); };
   const primary = () => {
@@ -1223,7 +1420,7 @@ export function evaluateExpression(source, variableValues = null) {
     if (token === '+') return primary();
     if (token === '-') return -primary();
     if (token === '(') { const result = sum(); expect(')'); return result; }
-    if (/^\d/.test(token) || /^\.\d/.test(token)) return Number(token);
+    if (/^\d/.test(token) || /^\.\d/.test(token)) return parseRadixNumber(token, radix);
     if (['x', 'theta', 't'].includes(token)) {
       const vars = typeof variableValues === 'number' ? { x: variableValues } : variableValues;
       if (!vars || !Object.hasOwn(vars, token)) throw new Error(`Use ${token} only in the matching graph mode.`);
@@ -1257,16 +1454,6 @@ export function evaluateExpression(source, variableValues = null) {
   return result;
 }
 
-function tokenize(source) {
-  const tokens = [], pattern = /\s*([0-9]+(?:\.[0-9]*)?|\.[0-9]+|[a-zA-Z]+|[+\-*/%^()])/gy;
-  let position = 0;
-  while (position < source.length) {
-    if (!source.slice(position).trim()) break;
-    pattern.lastIndex = position; const match = pattern.exec(source);
-    if (!match) throw new Error(`Unsupported character “${source[position]}”.`);
-    const token = match[1].toLowerCase();
-    if (/^[a-z]+$/.test(token) && !['x', 'theta', 't', 'pi', 'e', 'sin', 'cos', 'tan', 'ln', 'log', 'sqrt'].includes(token)) throw new Error(`Unknown function or name “${token}”.`);
-    tokens.push(token); position = pattern.lastIndex;
-  }
-  return tokens;
+function tokenize(source, radix = 10) {
+  return scanExpressionTokens(source, radix).map(token => token.value);
 }
