@@ -287,7 +287,7 @@ export function buildCalculator(id, ctx) {
         </div>
         <div class="calc-mode-menu-host">
           <button type="button" class="calc-mode-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="${expressionId}-mode-menu">Basic</button>
-          <div class="calc-mode-menu menu-popover" id="${expressionId}-mode-menu" role="dialog" aria-label="Calculator mode" hidden>
+          <div class="calc-mode-menu calc-menu-popover menu-popover" id="${expressionId}-mode-menu" role="dialog" aria-label="Calculator mode" hidden>
             <div class="calc-mode-options" role="group" aria-label="Calculator mode">
               <button type="button" data-mode="basic" aria-pressed="true" data-close-menu>Basic</button>
               <button type="button" data-mode="scientific" aria-pressed="false" data-close-menu>Scientific</button>
@@ -420,7 +420,7 @@ export function buildCalculator(id, ctx) {
               <label class="calc-editor-equation-label" for="${expressionId}-function-expression">y =</label>
               <span class="calc-editor-input-wrap">
                 <input class="calc-editor-expression" id="${expressionId}-function-expression" aria-label="Function expression" autocomplete="off" spellcheck="false">
-                <button type="button" class="calc-editor-backspace" aria-label="Backspace Function expression" title="Delete the previous character">⌫</button>
+                <button type="button" class="calc-editor-backspace" aria-label="Backspace expression" title="Delete the previous character">⌫</button>
               </span>
             </div>
             <div class="calc-editor-function-fields" hidden></div>
@@ -1099,7 +1099,7 @@ export function buildCalculator(id, ctx) {
     const backspaceButton = document.createElement('button');
     backspaceButton.type = 'button';
     backspaceButton.className = 'calc-editor-backspace';
-    backspaceButton.setAttribute('aria-label', `Backspace ${accessibleName} expression`);
+    backspaceButton.setAttribute('aria-label', `Backspace ${accessibleName === 'x(t)' ? 'first' : 'second'} coordinate`);
     backspaceButton.title = `Delete the previous character in ${accessibleName}`;
     backspaceButton.textContent = '⌫';
     bindEditorBackspace(backspaceButton, field);
@@ -1481,6 +1481,10 @@ export function buildCalculator(id, ctx) {
   }
   function getPlotRanges() {
     const view = getViewRanges();
+    const rect = plotArea.getBoundingClientRect();
+    const scaleX = rect.width > 0 ? rect.width / 640 : 1;
+    const scaleY = rect.height > 0 ? rect.height / 400 : 1;
+    const pixelRatio = (PLOT_FRAME.width * scaleX) / (PLOT_FRAME.height * scaleY);
     if (graphMode === 'polar') {
       const thetaMin = Number(view.thetaMin);
       const thetaMax = Number(view.thetaMax);
@@ -1499,6 +1503,10 @@ export function buildCalculator(id, ctx) {
         xMax: thetaMax,
         yMin: radiusMin,
         yMax: radiusMin + (radiusMax - radiusMin) / viewScaleFactor,
+        pixelScaleX: scaleX,
+        pixelScaleY: scaleY,
+        radiusX: Math.min(PLOT_FRAME.width * scaleX, PLOT_FRAME.height * scaleY) / 2 / scaleX,
+        radiusY: Math.min(PLOT_FRAME.width * scaleX, PLOT_FRAME.height * scaleY) / 2 / scaleY,
       };
     }
     const xKeys = ['xMin', 'xMax'];
@@ -1523,13 +1531,13 @@ export function buildCalculator(id, ctx) {
       const [ratioX, ratioY] = viewRatio === 'custom'
         ? [customRatioX, customRatioY]
         : viewRatio.split(':').map(Number);
-      const targetXSpan = PLOT_FRAME.width * ratioY / (PLOT_FRAME.height * ratioX) * ySpan;
+      const targetXSpan = pixelRatio * ratioY / ratioX * ySpan;
       if (xSpan < targetXSpan) {
         xSpan = targetXSpan;
         xMinCoord = xCenter - xSpan / 2;
         xMaxCoord = xCenter + xSpan / 2;
       } else {
-        const targetYSpan = xSpan * PLOT_FRAME.height * ratioX / (PLOT_FRAME.width * ratioY);
+        const targetYSpan = xSpan * ratioX / (pixelRatio * ratioY);
         if (ySpan < targetYSpan) {
           ySpan = targetYSpan;
           yMinCoord = yCenter - ySpan / 2;
@@ -1554,7 +1562,7 @@ export function buildCalculator(id, ctx) {
     };
     return graphMode === 'cartesian'
       ? { xMin: plotView.xMin, xMax: plotView.xMax, yMin: plotView.yMin, yMax: plotView.yMax }
-      : { tMin: rawView.tMin, xMin: plotView.xMin, xMax: plotView.xMax, yMin: plotView.yMin, yMax: plotView.yMax };
+      : { tMin: rawView.tMin, tMax: rawView.tMax, xMin: plotView.xMin, xMax: plotView.xMax, yMin: plotView.yMin, yMax: plotView.yMax };
   }
   function storePlotRanges(plotView) {
     const current = { ...getViewRanges() };
@@ -1752,27 +1760,54 @@ export function buildCalculator(id, ctx) {
   }
   function plot(announce = true) {
     const ns = 'http://www.w3.org/2000/svg';
-    plotArea.setAttribute('preserveAspectRatio', graphMode === 'polar' ? 'xMidYMid meet' : 'none');
-    plotArea.dataset.viewRatio = graphMode === 'polar' ? '1:1' : viewRatio;
+    plotArea.setAttribute('preserveAspectRatio', 'none');
     plotArea.dataset.scaleFactor = String(viewScaleFactor);
     const view = getViewRanges();
-    viewRangeValues.value = formatViewRanges(view);
+    const plotView = getPlotRanges();
+    if (!plotView.valid) {
+      viewError.textContent = plotView.reason;
+      if (announce) graphStatus.textContent = plotView.reason;
+      return;
+    }
+    viewError.textContent = '';
+    const displayedView = formatDisplayedRanges(plotView, view);
+    viewRangeValues.value = formatViewRanges(displayedView);
+    plotArea.dataset.renderedView = JSON.stringify(displayedView);
+    plotArea.dataset.viewRatio = graphMode === 'polar' ? '1:1'
+      : viewRatio === 'custom' ? `${customRatioX}:${customRatioY}` : viewRatio;
     const limits = graphMode === 'cartesian'
-      ? { a: view.xMin, b: view.xMax, y0: view.yMin, y1: view.yMax, variable: 'x' }
+      ? { a: plotView.xMin, b: plotView.xMax, y0: plotView.yMin, y1: plotView.yMax, variable: 'x' }
       : graphMode === 'polar'
-        ? { a: view.thetaMin, b: view.thetaMax, y0: view.rMin, y1: view.rMax, variable: 'theta' }
-        : { a: view.tMin, b: view.tMax, x0: view.xMin, x1: view.xMax, y0: view.yMin, y1: view.yMax, variable: 't' };
+        ? { a: view.thetaMin, b: view.thetaMax, y0: plotView.yMin, y1: plotView.yMax, variable: 'theta' }
+        : { a: view.tMin, b: view.tMax, x0: plotView.xMin, x1: plotView.xMax, y0: plotView.yMin, y1: plotView.yMax, variable: 't' };
     const invalidRange = [limits.a, limits.b, limits.y0, limits.y1, ...(graphMode === 'parametric' ? [limits.x0, limits.x1] : [])].some(n => !Number.isFinite(n)) ||
       limits.a >= limits.b || limits.y0 >= limits.y1 || (graphMode === 'parametric' && limits.x0 >= limits.x1);
     if (invalidRange) { if (announce) graphStatus.textContent = 'Graph ranges are invalid. Open Graph settings to correct them.'; return; }
-    const x0 = graphMode === 'parametric' ? limits.x0 : limits.a;
-    const x1 = graphMode === 'parametric' ? limits.x1 : limits.b;
-    const xMap = x => 48 + (x - x0) / (x1 - x0) * 568;
-    const yMap = y => 362 - (y - limits.y0) / (limits.y1 - limits.y0) * 324;
+    const xCoordinateMin = graphMode === 'polar' ? plotView.xMinCoord : plotView.xMinCoord;
+    const xCoordinateMax = graphMode === 'polar' ? plotView.xMaxCoord : plotView.xMaxCoord;
+    const yCoordinateMin = plotView.yMinCoord;
+    const yCoordinateMax = plotView.yMaxCoord;
+    const xMap = x => PLOT_FRAME.left + (axisCoordinate(x, 'x') - xCoordinateMin) / (xCoordinateMax - xCoordinateMin) * PLOT_FRAME.width;
+    const yMap = y => PLOT_FRAME.bottom - (axisCoordinate(y, 'y') - yCoordinateMin) / (yCoordinateMax - yCoordinateMin) * PLOT_FRAME.height;
     plotArea.dataset.view = JSON.stringify(view);
     plotArea.setAttribute('aria-valuetext', graphMode === 'polar'
       ? `theta ${formatTick(limits.a)} to ${formatTick(limits.b)}, radius ${formatTick(limits.y0)} to ${formatTick(limits.y1)}`
-      : `x ${formatTick(x0)} to ${formatTick(x1)}, y ${formatTick(limits.y0)} to ${formatTick(limits.y1)}`);
+      : `x ${formatTick(plotView.xMin)} to ${formatTick(plotView.xMax)}, y ${formatTick(limits.y0)} to ${formatTick(limits.y1)}`);
+    const makeTicks = (min, max, axis) => {
+      if (logAxes[axis]) {
+        const ticks = [];
+        for (let exponent = Math.ceil(min); exponent <= max + 1e-9 && ticks.length < 100; exponent++) {
+          ticks.push({ coordinate: exponent, value: 10 ** exponent });
+        }
+        return ticks;
+      }
+      const step = niceStep(max - min);
+      const ticks = [];
+      for (let value = Math.ceil(min / step) * step, count = 0; value <= max + step * 1e-8 && count < 100; value += step, count++) {
+        ticks.push({ coordinate: value, value });
+      }
+      return ticks;
+    };
     const paths = [];
     let plotError = '';
     const count = 500;
@@ -1792,7 +1827,12 @@ export function buildCalculator(id, ctx) {
       } catch (error) { plotError = `Cannot plot ${fn.id}: ${error.message} Previous valid plots are preserved.`; return; }
       try {
         for (let i = 0; i <= count; i++) {
-          const q = limits.a + (limits.b - limits.a) * i / count;
+          const qCoordinate = graphMode === 'cartesian' && logAxes.x
+            ? plotView.xMinCoord + (plotView.xMaxCoord - plotView.xMinCoord) * i / count
+            : null;
+          const q = graphMode === 'cartesian' && logAxes.x
+            ? axisValue(qCoordinate, 'x')
+            : limits.a + (limits.b - limits.a) * i / count;
           let x, y, r;
           try {
             if (graphMode === 'cartesian') { x = q; y = evaluateExpression(fn.expression, { x: q }); }
@@ -1801,13 +1841,14 @@ export function buildCalculator(id, ctx) {
           } catch (error) { drawing = false; continue; }
           if (graphMode === 'polar') {
             if (!Number.isFinite(r) || Math.abs(r) > 1e7) { drawing = false; continue; }
-            const radial = (r - limits.y0) / (limits.y1 - limits.y0) * 160;
-            const px = 320 + radial * Math.cos(q), py = 200 - radial * Math.sin(q);
+            const radial = (r - limits.y0) / (limits.y1 - limits.y0);
+            const px = PLOT_FRAME.centerX + radial * plotView.radiusX * Math.cos(q);
+            const py = PLOT_FRAME.centerY - radial * plotView.radiusY * Math.sin(q);
             d += `${drawing ? 'L' : 'M'}${px.toFixed(2)} ${py.toFixed(2)} `; drawing = true; continue;
           }
-          if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 1e7 || Math.abs(y) > 1e7) { drawing = false; continue; }
+          if (!Number.isFinite(x) || !Number.isFinite(y) || (logAxes.x && x <= 0) || (logAxes.y && y <= 0) || Math.abs(x) > 1e7 || Math.abs(y) > 1e7) { drawing = false; continue; }
           const px = xMap(x), py = yMap(y);
-          if (py < -1000 || py > 1400 || px < -1000 || px > 1600) { drawing = false; continue; }
+          if (!Number.isFinite(px) || !Number.isFinite(py) || py < -1000 || py > 1400 || px < -1000 || px > 1600) { drawing = false; continue; }
           d += `${drawing ? 'L' : 'M'}${px.toFixed(2)} ${py.toFixed(2)} `; drawing = true;
         }
       } catch (error) { failed = error; }
@@ -1817,52 +1858,56 @@ export function buildCalculator(id, ctx) {
     if (plotError) { if (announce) graphStatus.textContent = plotError; return; }
     plotArea.replaceChildren();
     const plotLayer = document.createElementNS(ns, 'g');
-    const transform = getPlotTransform();
-    plotLayer.setAttribute('transform', `translate(${transform.translateX} ${transform.translateY}) scale(${transform.scaleX} ${transform.scaleY})`);
     plotArea.append(plotLayer);
     if (graphMode === 'polar') {
       const radialStep = niceStep(limits.y1 - limits.y0, 6);
       for (let tick = Math.ceil(limits.y0 / radialStep) * radialStep, count = 0; tick <= limits.y1 + radialStep * 1e-8 && count < 80; tick += radialStep, count++) {
-        const radius = (tick - limits.y0) / (limits.y1 - limits.y0) * 160;
-        if (radius < 0 || radius > 160) continue;
-        const circle = document.createElementNS(ns, 'circle');
-        circle.setAttribute('class', 'calc-graph-grid'); circle.setAttribute('cx', '320'); circle.setAttribute('cy', '200'); circle.setAttribute('r', radius);
-        plotLayer.append(circle);
-        addSvgText(ns, formatTick(tick), 324 + radius, 196, 'start', plotLayer);
+        const fraction = (tick - limits.y0) / (limits.y1 - limits.y0);
+        if (fraction < 0 || fraction > 1) continue;
+        const ellipse = document.createElementNS(ns, 'ellipse');
+        ellipse.setAttribute('class', 'calc-graph-grid');
+        ellipse.setAttribute('cx', PLOT_FRAME.centerX); ellipse.setAttribute('cy', PLOT_FRAME.centerY);
+        ellipse.setAttribute('rx', plotView.radiusX * fraction); ellipse.setAttribute('ry', plotView.radiusY * fraction);
+        plotLayer.append(ellipse);
+        addSvgText(ns, formatTick(tick), PLOT_FRAME.centerX + plotView.radiusX * fraction + 4, PLOT_FRAME.centerY - 4, 'start', plotLayer);
       }
       const thetaStep = niceStep(limits.b - limits.a, 8);
       const spoke = document.createElementNS(ns, 'path');
       spoke.setAttribute('class', 'calc-graph-grid');
       let spokePath = '';
       for (let angle = Math.ceil(limits.a / thetaStep) * thetaStep, count = 0; angle <= limits.b + thetaStep * 1e-8 && count < 80; angle += thetaStep, count++) {
-        const x = 320 + 160 * Math.cos(angle), y = 200 - 160 * Math.sin(angle);
-        spokePath += `M320 200L${x.toFixed(2)} ${y.toFixed(2)} `;
+        const x = PLOT_FRAME.centerX + plotView.radiusX * Math.cos(angle);
+        const y = PLOT_FRAME.centerY - plotView.radiusY * Math.sin(angle);
+        spokePath += `M${PLOT_FRAME.centerX} ${PLOT_FRAME.centerY}L${x.toFixed(2)} ${y.toFixed(2)} `;
       }
       spoke.setAttribute('d', spokePath); plotLayer.append(spoke);
       const axis = document.createElementNS(ns, 'path');
-      axis.setAttribute('class', 'calc-graph-axis'); axis.setAttribute('d', 'M160 200H480 M320 40V360');
+      axis.setAttribute('class', 'calc-graph-axis');
+      axis.setAttribute('d', `M${PLOT_FRAME.centerX - plotView.radiusX} ${PLOT_FRAME.centerY}H${PLOT_FRAME.centerX + plotView.radiusX} M${PLOT_FRAME.centerX} ${PLOT_FRAME.centerY - plotView.radiusY}V${PLOT_FRAME.centerY + plotView.radiusY}`);
       plotLayer.append(axis);
-      addSvgText(ns, 'θ', 486, 196, 'start', plotLayer); addSvgText(ns, 'r', 324, 36, 'start', plotLayer);
+      addSvgText(ns, 'θ', PLOT_FRAME.centerX + plotView.radiusX + 5, PLOT_FRAME.centerY - 4, 'start', plotLayer);
+      addSvgText(ns, 'r', PLOT_FRAME.centerX + 4, PLOT_FRAME.centerY - plotView.radiusY - 5, 'start', plotLayer);
     } else {
       const grid = document.createElementNS(ns, 'path');
       grid.setAttribute('class', 'calc-graph-grid');
-      let gridPath = '';
-      const xStep = niceStep(x1 - x0), yStep = niceStep(limits.y1 - limits.y0);
-      for (let tick = Math.ceil(x0 / xStep) * xStep, count = 0; tick <= x1 + xStep * 1e-8 && count < 100; tick += xStep, count++) {
-        const px = xMap(tick); gridPath += `M${px.toFixed(2)} 26V374 `;
-        addSvgText(ns, formatTick(tick), px, 390, 'middle', plotLayer);
+      let gridPath = `M${PLOT_FRAME.left} ${PLOT_FRAME.top}H${PLOT_FRAME.right}V${PLOT_FRAME.bottom}H${PLOT_FRAME.left}Z `;
+      for (const tick of makeTicks(plotView.xMinCoord, plotView.xMaxCoord, 'x')) {
+        const px = PLOT_FRAME.left + (tick.coordinate - plotView.xMinCoord) / (plotView.xMaxCoord - plotView.xMinCoord) * PLOT_FRAME.width;
+        gridPath += `M${px.toFixed(2)} ${PLOT_FRAME.top}V${PLOT_FRAME.bottom} `;
+        addSvgText(ns, formatTick(tick.value), px, 390, 'middle', plotLayer);
       }
-      for (let tick = Math.ceil(limits.y0 / yStep) * yStep, count = 0; tick <= limits.y1 + yStep * 1e-8 && count < 100; tick += yStep, count++) {
-        const py = yMap(tick); gridPath += `M48 ${py.toFixed(2)}H616 `;
-        addSvgText(ns, formatTick(tick), 43, py + 4, 'end', plotLayer);
+      for (const tick of makeTicks(plotView.yMinCoord, plotView.yMaxCoord, 'y')) {
+        const py = PLOT_FRAME.bottom - (tick.coordinate - plotView.yMinCoord) / (plotView.yMaxCoord - plotView.yMinCoord) * PLOT_FRAME.height;
+        gridPath += `M${PLOT_FRAME.left} ${py.toFixed(2)}H${PLOT_FRAME.right} `;
+        addSvgText(ns, formatTick(tick.value), PLOT_FRAME.left - 5, py + 4, 'end', plotLayer);
       }
       grid.setAttribute('d', gridPath); plotLayer.prepend(grid);
-      const zeroX = x0 <= 0 && x1 >= 0 ? xMap(0) : null;
-      const zeroY = limits.y0 <= 0 && limits.y1 >= 0 ? yMap(0) : null;
+      const zeroX = !logAxes.x && plotView.xMin <= 0 && plotView.xMax >= 0 ? xMap(0) : null;
+      const zeroY = !logAxes.y && limits.y0 <= 0 && limits.y1 >= 0 ? yMap(0) : null;
       const axis = document.createElementNS(ns, 'path'); axis.setAttribute('class', 'calc-graph-axis');
-      axis.setAttribute('d', `M48 26V374H616${zeroY === null ? '' : ` M48 ${zeroY}H616`}${zeroX === null ? '' : ` M${zeroX} 26V374`}`);
+      axis.setAttribute('d', `M${PLOT_FRAME.left} ${PLOT_FRAME.top}V${PLOT_FRAME.bottom}H${PLOT_FRAME.right}${zeroY === null ? '' : ` M${PLOT_FRAME.left} ${zeroY}H${PLOT_FRAME.right}`}${zeroX === null ? '' : ` M${zeroX} ${PLOT_FRAME.top}V${PLOT_FRAME.bottom}`}`);
       plotLayer.append(axis);
-      addSvgText(ns, 'x', 609, 386, 'end', plotLayer); addSvgText(ns, 'y', 56, 36, 'start', plotLayer);
+      addSvgText(ns, 'x', PLOT_FRAME.right - 5, 390, 'end', plotLayer); addSvgText(ns, 'y', PLOT_FRAME.left + 8, PLOT_FRAME.top + 10, 'start', plotLayer);
     }
     const drawable = functions.filter(fn => fn.visible && fn.path);
     drawable.forEach(fn => { const path = document.createElementNS(ns, 'path'); path.setAttribute('d', fn.path); path.setAttribute('class', 'calc-graph-line'); path.style.setProperty('--function-color', fn.color); path.setAttribute('data-function-id', fn.id); plotLayer.append(path); });
@@ -1891,6 +1936,11 @@ export function buildCalculator(id, ctx) {
     plotArea.classList.add('is-panning');
     try { plotArea.setPointerCapture(event.pointerId); } catch {}
   });
+  const plotResizeObserver = new ResizeObserver(() => {
+    if (graphMode !== 'polar' && viewRatio === 'auto') return;
+    plot(false);
+  });
+  plotResizeObserver.observe(plotArea);
   plotArea.addEventListener('pointermove', event => {
     if (!pointers.has(event.pointerId)) return;
     event.preventDefault();
@@ -1938,8 +1988,10 @@ export function buildCalculator(id, ctx) {
   };
   document.addEventListener('keydown', onKey);
   renderHistory();
+  setMode(mode);
   if (ctx?.appApis && id) ctx.appApis[id] = { destroy: () => {
     document.removeEventListener('keydown', onKey);
+    plotResizeObserver.disconnect();
     window.removeEventListener('storage', onStorageGraphSettings);
     calculatorGraphSubscribers.delete(onGraphSettingsChanged);
   } };

@@ -11,6 +11,14 @@ async function openUtility(page, type) {
   return page.locator(`.app-window[data-type="${type}"]`).last();
 }
 
+async function chooseCalculatorMode(calculator, mode) {
+  const trigger = calculator.locator('.calc-mode-trigger');
+  if (await trigger.textContent() === mode) return;
+  await trigger.click();
+  await calculator.getByRole('dialog', { name: 'Calculator mode' })
+    .getByRole('button', { name: mode, exact: true }).click();
+}
+
 async function clickGraphMenuAction(calculator, menu, action) {
   await calculator.getByRole('button', { name: menu, exact: true }).click();
   await calculator.getByRole('button', { name: action, exact: true }).click();
@@ -93,14 +101,14 @@ test('calculator supports scientific calculations, reusable history, and graphin
   await historyEntry.click();
   await expect(calculator.getByRole('textbox', { name: 'Expression' })).toHaveValue('10');
 
-  await calculator.getByRole('button', { name: 'Scientific' }).click();
+  await chooseCalculatorMode(calculator, 'Scientific');
   await calculator.locator('.calc-science-key').filter({ hasText: '√(' }).click();
   await calculator.getByRole('button', { name: '9', exact: true }).click();
   await calculator.locator('.calc-science-key').filter({ hasText: ')' }).click();
   await calculator.getByRole('button', { name: '=', exact: true }).click();
   await expect(output).toHaveText('3');
 
-  await calculator.getByRole('button', { name: 'Graph' }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   await expect(calculator.locator('.calc-header .calc-memory')).toBeHidden();
   await expect(calculator.locator('.calc-header-graph-actions')).toBeVisible();
   await expect(calculator.locator('.calc-open-editor')).toHaveText('y = f(x)');
@@ -180,7 +188,7 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
 
   await expect(calculator.getByRole('button', { name: 'Base 2' })).toBeHidden();
   await expect(calculator.getByRole('button', { name: '÷', exact: true })).toHaveAttribute('title', 'Divide · type /');
-  await calculator.getByRole('button', { name: 'Scientific' }).click();
+  await chooseCalculatorMode(calculator, 'Scientific');
   await expect(calculator.getByRole('button', { name: 'Base 2' })).toBeVisible();
   const scientificBackspace = await backspaceGeometry();
   expect(scientificBackspace.buttonInsideInputRow).toBe(true);
@@ -218,7 +226,7 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
 
   await calculator.getByRole('button', { name: 'Base 10' }).click();
   await calculator.getByRole('button', { name: 'Base 16' }).click();
-  await calculator.getByRole('button', { name: 'Basic' }).click();
+  await chooseCalculatorMode(calculator, 'Basic');
   await expect(calculator.getByRole('button', { name: 'Base 2' })).toBeHidden();
   await expect(expression).toHaveValue('19');
   await expect(output).toHaveText('19');
@@ -244,7 +252,7 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   await calculator.getByRole('button', { name: 'Memory recall' }).click();
   await expect(output).toHaveText('9');
 
-  await calculator.getByRole('button', { name: 'Scientific' }).click();
+  await chooseCalculatorMode(calculator, 'Scientific');
   await calculator.getByRole('button', { name: 'AC', exact: true }).click();
   await calculator.getByRole('button', { name: 'Pi' }).click();
   await calculator.getByRole('button', { name: '+', exact: true }).click();
@@ -385,7 +393,7 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
 
 test('calculator graph edits multiple functions in an accessible keypad dialog', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   await calculator.getByRole('button', { name: 'Edit functions' }).click();
   const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
   await expect(editor).toBeVisible();
@@ -444,7 +452,7 @@ test('calculator graph edits multiple functions in an accessible keypad dialog',
 
 test('calculator allows an empty graph and adding functions afterward', async ({ page }) => {
   let calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   await calculator.locator('.calc-function-item').getByRole('button', { name: /^Remove function/ }).click();
   await expect(calculator.locator('.calc-function-item')).toHaveCount(0);
   await expect(calculator.locator('.calc-function-empty')).toHaveText('No functions yet');
@@ -453,7 +461,7 @@ test('calculator allows an empty graph and adding functions afterward', async ({
 
   await page.locator('#close-btn').click();
   calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   await expect(calculator.locator('.calc-function-item')).toHaveCount(0);
   await expect(calculator.locator('.calc-graph-status')).toContainText('No functions yet');
 
@@ -471,7 +479,7 @@ test('calculator allows an empty graph and adding functions afterward', async ({
 
 test('calculator graph settings keep modes and plot ranges independent', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   await expect(calculator.locator('.calc-open-editor')).toHaveText('y = f(x)');
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
   const settings = calculator.getByRole('dialog', { name: 'Graph settings' });
@@ -534,7 +542,7 @@ test('calculator graph settings keep modes and plot ranges independent', async (
 
 test('calculator fits visible curves in every graph mode without changing configured ranges', async ({ page }) => {
   let calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   const view = async () => calculator.locator('.calc-plot-area').evaluate(element => JSON.parse(element.dataset.view));
 
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
@@ -561,7 +569,7 @@ test('calculator fits visible curves in every graph mode without changing config
   await expect(calculator.locator('.calc-graph-status')).toContainText('1 visible curve');
   await page.locator('#close-btn').click();
   calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   await expect(calculator.locator('.calc-mode-label')).toHaveText('CARTESIAN');
   await expect.poll(view).toEqual(fitted);
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
@@ -597,7 +605,7 @@ test('calculator fits visible curves in every graph mode without changing config
   expect(fitted.rMax).toBeLessThan(10);
   await page.locator('#close-btn').click();
   calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   await expect(calculator.locator('.calc-mode-label')).toHaveText('POLAR');
   await expect.poll(view).toEqual(fitted);
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
@@ -643,7 +651,7 @@ test('calculator fits visible curves in every graph mode without changing config
   expect(fitted.yMax).toBeGreaterThanOrEqual(3);
   await page.locator('#close-btn').click();
   calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   await expect(calculator.locator('.calc-mode-label')).toHaveText('PARAMETRIC');
   await expect.poll(view).toEqual(fitted);
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
@@ -659,7 +667,7 @@ test('calculator fits visible curves in every graph mode without changing config
 
 test('calculator Fit curves includes a narrow peak between rendered samples', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
 
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
   const settings = calculator.getByRole('dialog', { name: 'Graph settings' });
@@ -686,7 +694,7 @@ test('calculator Fit curves includes a narrow peak between rendered samples', as
 
 test('calculator graph functions, colors, visibility, mode, and ranges persist across reopen and refresh', async ({ page }) => {
   let calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
   let settings = calculator.getByRole('dialog', { name: 'Graph settings' });
   await settings.getByLabel('Minimum x').fill('-4');
@@ -719,7 +727,7 @@ test('calculator graph functions, colors, visibility, mode, and ranges persist a
 
   await page.locator('#close-btn').click();
   calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   await expect(calculator.locator('.calc-mode-label')).toHaveText('POLAR');
   await expect(calculator.locator('.calc-function-item')).toHaveCount(2);
   await expect(calculator.locator('.calc-function-toggle[aria-pressed="false"]')).toHaveCount(1);
@@ -742,7 +750,7 @@ test('calculator graph functions, colors, visibility, mode, and ranges persist a
   const welcome = page.getByRole('button', { name: 'Get started', exact: true });
   if (await welcome.isVisible().catch(() => false)) await welcome.click();
   calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   await expect(calculator.locator('.calc-mode-label')).toHaveText('POLAR');
   await expect(calculator.locator('.calc-function-item')).toHaveCount(2);
   await expect(calculator.locator('.calc-function-toggle[aria-pressed="false"]')).toHaveCount(1);
@@ -761,8 +769,8 @@ test('open calculator windows stay in sync when graph settings change', async ({
   const firstCalculator = await openUtility(page, 'calculator');
   const secondCalculator = await openUtility(page, 'calculator');
   await expect(page.locator('.app-window[data-type="calculator"]')).toHaveCount(2);
-  await firstCalculator.getByRole('button', { name: 'Graph', exact: true }).click();
-  await secondCalculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(firstCalculator, 'Graph');
+  await chooseCalculatorMode(secondCalculator, 'Graph');
 
   await firstCalculator.getByRole('button', { name: 'Graph settings' }).click();
   const settings = firstCalculator.getByRole('dialog', { name: 'Graph settings' });
@@ -793,7 +801,7 @@ test('open calculator windows stay in sync when graph settings change', async ({
   await secondCalculator.locator('.calc-graph-toolbar').click();
   await page.locator('#close-btn').click();
   const reopenedCalculator = await openUtility(page, 'calculator');
-  await reopenedCalculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(reopenedCalculator, 'Graph');
   await expect(reopenedCalculator.locator('.calc-mode-label')).toHaveText('POLAR');
   await expect(reopenedCalculator.locator('.calc-function-item')).toHaveCount(2);
   await expect(reopenedCalculator.locator('.calc-function-toggle[aria-pressed="false"]')).toHaveCount(1);
@@ -804,7 +812,7 @@ test('calculator safely resets malformed or outdated saved graph settings', asyn
   for (const saved of ['{broken', JSON.stringify({ version: 0, graphMode: 'cartesian' })]) {
     await page.evaluate(value => localStorage.setItem('personal-desktop-calculator-graph-v1', value), saved);
     const calculator = await openUtility(page, 'calculator');
-    await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+    await chooseCalculatorMode(calculator, 'Graph');
     const recovery = calculator.locator('.calc-storage-recovery');
     await expect(recovery).toBeVisible();
     await expect(recovery).toContainText('Defaults are active.');
@@ -836,7 +844,7 @@ test('calculator keeps graph storage warnings visible until settings save succes
     };
   });
   const calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   const warning = calculator.locator('.calc-storage-warning');
   await expect(warning).toBeVisible();
   await expect(warning).toContainText('could not read saved graph settings');
@@ -865,7 +873,7 @@ test('calculator keeps graph storage warnings visible until settings save succes
 
 test('calculator graph zoom and pan work in every mode without changing configured ranges', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   const plot = calculator.locator('.calc-plot-area');
   const view = async () => plot.evaluate(element => JSON.parse(element.dataset.view));
   await expect(plot).toHaveAttribute('aria-valuetext', 'x -10 to 10, y -10 to 10');
@@ -969,7 +977,7 @@ test('calculator graph zoom and pan work in every mode without changing configur
 
 test('calculator View controls apply transient graph ratios and keep Polar square', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   const plot = calculator.locator('.calc-plot-area');
   const viewTrigger = calculator.getByRole('button', { name: 'View', exact: true });
   const initialView = await plot.evaluate(element => JSON.parse(element.dataset.view));
@@ -1004,7 +1012,7 @@ test('calculator View controls apply transient graph ratios and keep Polar squar
   const polarEditor = calculator.getByRole('dialog', { name: 'Edit functions' });
   await polarEditor.getByLabel('Function expression').fill('sin(theta)');
   await polarEditor.getByRole('button', { name: 'Apply', exact: true }).click();
-  await expect(plot).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet');
+  await expect(plot).toHaveAttribute('preserveAspectRatio', 'none');
   await expect(plot).toHaveAttribute('data-view-ratio', '1:1');
 
   await viewTrigger.click();
@@ -1012,7 +1020,7 @@ test('calculator View controls apply transient graph ratios and keep Polar squar
   await expect(viewPanel.getByRole('button', { name: '2:1', exact: true })).toBeDisabled();
   await page.keyboard.press('Escape');
 
-  const circle = plot.locator('circle.calc-graph-grid').first();
+  const circle = plot.locator('ellipse.calc-graph-grid').last();
   for (const size of [{ width: 940, height: 540 }, { width: 620, height: 680 }]) {
     await calculator.evaluate((element, dimensions) => {
       element.style.width = `${dimensions.width}px`;
@@ -1020,14 +1028,14 @@ test('calculator View controls apply transient graph ratios and keep Polar squar
     }, size);
     await expect.poll(async () => {
       const box = await circle.boundingBox();
-      return Math.abs(box.width - box.height);
+      return box ? Math.abs(box.width - box.height) : Number.POSITIVE_INFINITY;
     }).toBeLessThan(1);
   }
 });
 
 test('calculator shows and copies the current view ranges in every graph mode', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   const plot = calculator.locator('.calc-plot-area');
   const rangesReadout = calculator.locator('.calc-view-ranges-values');
   const copyButton = calculator.getByRole('button', { name: 'Copy ranges' });
@@ -1087,7 +1095,7 @@ test('calculator shows and copies the current view ranges in every graph mode', 
 
 test('calculator copies and explicitly restores complete graph setups in every mode', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -1233,7 +1241,7 @@ test('calculator copies and explicitly restores complete graph setups in every m
 
 test('calculator exposes the complete setup for manual copying when clipboard access fails', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -1254,7 +1262,7 @@ test('calculator exposes the complete setup for manual copying when clipboard ac
 
 test('calculator keeps graph ranges selectable when clipboard access is blocked', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   const values = calculator.locator('.calc-view-ranges-values');
   const copyButton = calculator.getByRole('button', { name: 'Copy ranges' });
 
@@ -1295,7 +1303,7 @@ test('calculator keeps graph ranges selectable when clipboard access is blocked'
 
 test('graph mode uses the window height without calculator panels or vertical overflow', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Graph');
   await expect(calculator.locator('.calc-display')).toBeHidden();
   await expect(calculator.locator('.calc-history')).toBeHidden();
   await expect(calculator.locator('.calc-plot-area')).toBeVisible();
@@ -1313,7 +1321,7 @@ test('scientific calculator controls fit in a short app window', async ({ page }
     element.style.height = '460px';
     element.style.flex = '0 0 460px';
   });
-  await calculator.getByRole('button', { name: 'Scientific', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Scientific');
   const dimensions = await calculator.locator('.calc-main').evaluate(element => {
     const bounds = element.getBoundingClientRect();
     const bottom = Math.max(
@@ -1333,21 +1341,97 @@ test('basic and scientific calculator modes remain usable after graphing', async
   await calculator.getByRole('button', { name: '3', exact: true }).click();
   await calculator.getByRole('button', { name: '=', exact: true }).click();
   await expect(calculator.locator('.calc-value')).toHaveText('10');
-  await calculator.getByRole('button', { name: 'Scientific', exact: true }).click();
-  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
-  await calculator.getByRole('button', { name: 'Basic', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Scientific');
+  await chooseCalculatorMode(calculator, 'Graph');
+  await chooseCalculatorMode(calculator, 'Basic');
   await calculator.getByRole('button', { name: 'AC', exact: true }).click();
   await calculator.getByRole('button', { name: '6', exact: true }).click();
   await calculator.getByRole('button', { name: '×', exact: true }).click();
   await calculator.getByRole('button', { name: '7', exact: true }).click();
   await calculator.getByRole('button', { name: '=', exact: true }).click();
   await expect(calculator.locator('.calc-value')).toHaveText('42');
-  await calculator.getByRole('button', { name: 'Scientific', exact: true }).click();
+  await chooseCalculatorMode(calculator, 'Scientific');
   await calculator.locator('.calc-science-key').filter({ hasText: '√(' }).click();
   await calculator.getByRole('button', { name: '9', exact: true }).click();
   await calculator.locator('.calc-science-key').filter({ hasText: ')' }).click();
   await calculator.getByRole('button', { name: '=', exact: true }).click();
   await expect(calculator.locator('.calc-value')).toHaveText('3');
+});
+
+test('calculator mode persists and editor fields include caret-aware backspace buttons', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Scientific');
+  await expect(calculator.locator('.calc-mode-trigger')).toHaveText('Scientific');
+  const backspace = calculator.locator('.calc-backspace');
+  await expect.poll(() => backspace.evaluate(element => ({
+    width: getComputedStyle(element).width,
+    boxSizing: getComputedStyle(element).boxSizing,
+  }))).toEqual({ width: '32px', boxSizing: 'border-box' });
+
+  await page.reload();
+  const welcome = page.getByRole('button', { name: 'Get started', exact: true });
+  if (await welcome.isVisible().catch(() => false)) await welcome.click();
+  let restored = page.locator('.app-window[data-type="calculator"]').last();
+  if (!await restored.count()) restored = await openUtility(page, 'calculator');
+  await expect(restored.locator('.calc-mode-trigger')).toHaveText('Scientific');
+
+  await chooseCalculatorMode(restored, 'Graph');
+  await restored.getByRole('button', { name: 'Graph settings' }).click();
+  const settings = restored.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByRole('combobox', { name: 'Graph mode' }).click();
+  await settings.getByRole('option', { name: /Parametric/ }).click();
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await restored.getByRole('button', { name: 'Edit functions' }).click();
+  const editor = restored.getByRole('dialog', { name: 'Edit functions' });
+  const xField = editor.getByRole('textbox', { name: 'x(t)' });
+  const yField = editor.getByRole('textbox', { name: 'y(t)' });
+  await xField.fill('cos(t)');
+  await xField.focus();
+  await xField.evaluate(element => element.setSelectionRange(element.value.length, element.value.length));
+  await editor.getByRole('button', { name: 'Backspace first coordinate' }).click();
+  await expect(xField).toHaveValue('cos(t');
+  await yField.fill('sin(t)');
+  await yField.focus();
+  await yField.evaluate(element => element.setSelectionRange(element.value.length, element.value.length));
+  await editor.getByRole('button', { name: 'Backspace second coordinate' }).click();
+  await expect(yField).toHaveValue('sin(t');
+});
+
+test('calculator graph View supports custom axis ratios, scaling, and logarithmic axes', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+  const plot = calculator.locator('.calc-plot-area');
+  const view = calculator.getByRole('button', { name: 'View', exact: true });
+  await view.click();
+  const panel = calculator.getByRole('dialog', { name: 'Graph view options' });
+
+  await panel.getByRole('button', { name: 'Custom…' }).first().click();
+  await panel.getByLabel('Custom ratio X').fill('3');
+  await panel.getByLabel('Custom ratio Y').fill('2');
+  await panel.getByRole('button', { name: 'Apply', exact: true }).first().click();
+  await expect(plot).toHaveAttribute('data-view-ratio', '3:2');
+  const ratioGeometry = await plot.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const range = JSON.parse(element.dataset.renderedView);
+    const pixelPerUnitX = (rect.width * 568 / 640) / (range.xMax - range.xMin);
+    const pixelPerUnitY = (rect.height * 348 / 400) / (range.yMax - range.yMin);
+    return pixelPerUnitX / pixelPerUnitY;
+  });
+  expect(ratioGeometry).toBeCloseTo(1.5, 2);
+
+  await panel.getByRole('button', { name: 'Custom…' }).last().click();
+  await panel.getByLabel('Custom scaling factor').fill('3.5');
+  await panel.getByRole('button', { name: 'Apply', exact: true }).last().click();
+  await expect(plot).toHaveAttribute('data-scale-factor', '3.5');
+  await panel.getByRole('button', { name: 'Log X', exact: true }).click();
+  await panel.getByRole('button', { name: 'Log Y', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Log X', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.getByRole('button', { name: 'Log Y', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  const logView = await plot.evaluate(element => JSON.parse(element.dataset.renderedView));
+  expect(logView.xMin).toBeGreaterThan(0);
+  expect(logView.yMin).toBeGreaterThan(0);
+  await expect(plot.getByText('0.1', { exact: true })).toBeVisible();
+  await expect(plot.locator('.calc-graph-grid')).toBeVisible();
 });
 
 test('utility app layouts respond to their own narrow window width', async ({ page }) => {
