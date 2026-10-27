@@ -2596,7 +2596,7 @@ kbd {
 
 /* Calculator graphing is a focused plotting workspace; compact modes stay inside
    the app window while the plot, not its controls, receives the remaining height. */
-.calc-wrap { height:100%; min-height:0; overflow:hidden; padding:clamp(.65rem,1.6cqw,1rem); }
+.calc-wrap { height:100%; min-height:0; overflow:hidden; padding:0; }
 .calc {
   width:100%; height:100%; min-height:0; margin:0; padding:0;
   display:flex; flex-direction:column; overflow:hidden; container-type:size; container-name:calc-surface;
@@ -3351,14 +3351,14 @@ kbd {
 
 /* Calculator sizing overrides follow the shared utility rules so graph mode
    owns the full app viewport and compact scientific keys never force scrolling. */
-.calc-wrap { height:100%; min-height:0; overflow:hidden; padding:clamp(.65rem,1.6cqw,1rem); }
+.calc-wrap { height:100%; min-height:0; overflow:hidden; padding:0; }
 .calc {
   width:100%; height:100%; min-height:0; margin:0; padding:0;
   display:grid; grid-template-rows:auto minmax(0,1fr);
   overflow:hidden; container-type:size; container-name:calc-surface;
   color:var(--app-text); border:0; border-radius:0; background:transparent; box-shadow:none;
 }
-.calc-header { grid-row:1; padding-bottom:.55rem; }
+.calc-header { grid-row:1; padding:.55rem .75rem; }
 .calc-header-actions { display:flex; align-items:center; min-width:0; flex:1 1 auto; }
 .calc-header .calc-memory {
   width:auto; grid-column:auto; grid-template-columns:repeat(4,minmax(2rem,auto));
@@ -3373,8 +3373,8 @@ kbd {
 }
 .calc-header-graph-actions button:hover { background:var(--util-surface-strong); }
 .calc-header-graph-actions button:focus-visible { outline:2px solid var(--focus-color); outline-offset:2px; }
-.calc-workspace { grid-row:2; min-height:0; overflow:hidden; padding-top:.35rem; }
-.calc-main { display:grid; grid-template-rows:auto minmax(0,1fr); min-height:0; overflow:hidden; }
+.calc-workspace { grid-row:2; min-height:0; overflow:hidden; padding:0; }
+.calc-main { display:grid; grid-template-rows:auto minmax(0,1fr); min-width:0; min-height:0; overflow:hidden; padding:.6rem .75rem .75rem; }
 .calc-display {
   position:relative; grid-row:1; min-height:clamp(6.2rem,19cqh,10rem); padding:.65rem clamp(.5rem,1.5cqw,1rem);
   border:0; border-radius:0; background:transparent;
@@ -3410,7 +3410,7 @@ kbd {
   .calc-plot-area { min-height:7rem; }
 }
 @container calc-surface (width < 390px) {
-  .calc-wrap { padding:.45rem; }
+  .calc-wrap { padding:0; }
   .calc { padding:0; }
   .calc-header { align-items:center; flex-direction:row; }
   .calc-graph-tools button { padding-inline:.42rem; font-size:.72rem; }
@@ -3504,8 +3504,16 @@ kbd {
   }
   .calc-keypad-support {
     grid-template-columns:minmax(0,1fr);
-    align-content:start;
+    grid-template-rows:auto minmax(0,1fr);
+    align-content:stretch;
   }
+  .calc-wrap[data-radix="16"] .calc-keypad-support { grid-template-rows:auto auto minmax(0,1fr); }
+  .calc-scientific:not([hidden]) {
+    grid-template-rows:repeat(4,minmax(0,1fr));
+    align-content:stretch;
+    height:100%;
+  }
+  .calc-scientific .calc-science-key { min-height:0; }
   .calc-scientific:not([hidden]),.calc-hex-keys { grid-column:1; }
 }
 @container calc-surface (width < 390px) {

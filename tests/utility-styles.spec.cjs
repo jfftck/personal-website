@@ -120,16 +120,37 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
     const keypad = element.querySelector('.calc-keys').getBoundingClientRect();
     const columns = element.getBoundingClientRect();
     const wrapper = element.closest('.calc-wrap');
+      const calc = wrapper.querySelector('.calc');
+      const header = calc.querySelector('.calc-header');
+      const history = calc.querySelector('.calc-history');
+      const workspace = calc.querySelector('.calc-workspace');
+      const main = calc.querySelector('.calc-main');
     return {
       keypadWidth: keypad.width,
       columnsWidth: columns.width,
       supportDisplay: getComputedStyle(element.querySelector('.calc-keypad-support')).display,
       padding: getComputedStyle(wrapper).padding,
+        mainPaddingTop: Number.parseFloat(getComputedStyle(main).paddingTop),
+        headerLeftInset: header.getBoundingClientRect().left - calc.getBoundingClientRect().left,
+        headerRightInset: calc.getBoundingClientRect().right - header.getBoundingClientRect().right,
+        toolbarBorder: getComputedStyle(header).borderBottomWidth,
+        historyTopGap: history.getBoundingClientRect().top - header.getBoundingClientRect().bottom,
+        historyRightGap: calc.getBoundingClientRect().right - history.getBoundingClientRect().right,
+        historyBottomGap: calc.getBoundingClientRect().bottom - history.getBoundingClientRect().bottom,
+        workspaceTopGap: workspace.getBoundingClientRect().top - header.getBoundingClientRect().bottom,
     };
   });
   expect(Math.abs(basicLayout.keypadWidth - basicLayout.columnsWidth)).toBeLessThanOrEqual(2);
   expect(basicLayout.supportDisplay).toBe('none');
-  expect(basicLayout.padding.split(' ').some(value => Number.parseFloat(value) > 0)).toBe(true);
+  expect(basicLayout.padding).toBe('0px');
+  expect(basicLayout.mainPaddingTop).toBeGreaterThan(0);
+  expect(basicLayout.headerLeftInset).toBeLessThanOrEqual(1);
+  expect(basicLayout.headerRightInset).toBeLessThanOrEqual(1);
+  expect(basicLayout.toolbarBorder).toBe('1px');
+  expect(basicLayout.historyTopGap).toBeLessThanOrEqual(1);
+  expect(basicLayout.historyRightGap).toBeLessThanOrEqual(1);
+  expect(basicLayout.historyBottomGap).toBeLessThanOrEqual(1);
+  expect(basicLayout.workspaceTopGap).toBeLessThanOrEqual(1);
   const displayGeometry = await calculator.locator('.calc-display').evaluate(element => {
     const panel = element.getBoundingClientRect();
     const button = element.querySelector('.calc-backspace').getBoundingClientRect();
@@ -218,8 +239,22 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   expect(await calculator.locator('.calc-memory').evaluate(element => getComputedStyle(element).display)).toBe('grid');
   expect(await calculator.locator('.calc-base-control').evaluate(element => getComputedStyle(element).display)).toBe('grid');
   expect(await calculator.locator('.calc-scientific').evaluate(element => getComputedStyle(element).display)).toBe('grid');
+  const scientificFill = await keypadColumns.evaluate(element => {
+    const support = element.querySelector('.calc-keypad-support').getBoundingClientRect();
+    const scientific = element.querySelector('.calc-scientific').getBoundingClientRect();
+    return support.bottom - scientific.bottom;
+  });
+  expect(scientificFill).toBeLessThanOrEqual(16);
   await calculator.getByRole('button', { name: 'Base 16' }).click();
   expect(await calculator.locator('.calc-hex-keys').evaluate(element => getComputedStyle(element).display)).toBe('grid');
+  const hexOrdering = await keypadColumns.evaluate(element => {
+    const hex = element.querySelector('.calc-hex-keys').getBoundingClientRect();
+    const scientific = element.querySelector('.calc-scientific').getBoundingClientRect();
+    const support = element.querySelector('.calc-keypad-support').getBoundingClientRect();
+    return { hexBottom: hex.bottom, scienceTop: scientific.top, supportBottom: support.bottom, scienceBottom: scientific.bottom };
+  });
+  expect(hexOrdering.hexBottom).toBeLessThanOrEqual(hexOrdering.scienceTop + 1);
+  expect(hexOrdering.supportBottom - hexOrdering.scienceBottom).toBeLessThanOrEqual(16);
   await calculator.evaluate(element => {
     const appWindow = element.closest('.app-window');
     appWindow.style.width = '480px';
