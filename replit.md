@@ -26,6 +26,8 @@ Personal website with a tiling desktop, document and media viewers, and browser 
 ## Where things live
 
 - `artifacts/personal-website/public/` — original browser-ready site, assets, manifests, and content
+- `artifacts/personal-website/APP-COMPONENTS.md` — required shared-control usage guide for app UI
+- `artifacts/personal-website/public/shared/` — shared browser components and utilities
 - `artifacts/personal-website/scripts/build-static.cjs` — copies the original static site without bundling or changing its URLs
 - `artifacts/api-server/legacy/admin/` — preserved admin UI and request handler
 - `artifacts/api-server/src/app.ts` — mounts the legacy handler before body parsers, preserving streaming uploads
@@ -34,6 +36,7 @@ Personal website with a tiling desktop, document and media viewers, and browser 
 ## Architecture decisions
 
 - Keep the existing vanilla website and custom API layer intact during migration; do not rewrite it to use scaffold React components or generated hooks.
+- Prefer the shared `<app-select>` and `<app-dialog-actions>` controls for app dropdowns and native-dialog footers; follow `artifacts/personal-website/APP-COMPONENTS.md` when adding controls.
 - Mutable content URLs route to the same backend storage used by admin edits, including in production.
 - The admin console remains at its original URL. Creating a separate Library app is separate work.
 

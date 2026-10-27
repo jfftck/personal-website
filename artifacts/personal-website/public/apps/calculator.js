@@ -1,7 +1,8 @@
 'use strict';
 
-import { enhanceSelect } from './custom-select.js';
+import { enhanceSelect, refreshCustomSelect } from './custom-select.js';
 import { NOTE_COLORS } from './sticky-notes.js';
+import '../shared/app-controls.js';
 
 const BASIC_KEYS = [
   ['AC', 'clear'], ['±', 'sign'], ['%', 'percent'], ['÷', 'operator'],
@@ -73,7 +74,7 @@ const MATH_SYMBOL_ALIASES = Object.freeze({
 const HISTORY_LIMIT = 24;
 const GRAPH_SETTINGS_KEY = 'personal-desktop-calculator-graph-v1';
 const CALCULATOR_MODE_KEY = 'personal-desktop-calculator-mode-v1';
-const GRAPH_SETTINGS_VERSION = 1;
+const GRAPH_SETTINGS_VERSION = 2;
 const GRAPH_MODES = ['cartesian', 'polar', 'parametric'];
 const RANGE_KEYS = ['xMin', 'xMax', 'yMin', 'yMax', 'thetaMin', 'thetaMax', 'rMin', 'rMax', 'tMin', 'tMax'];
 const DEFAULT_GRAPH_RANGES = {
@@ -109,9 +110,12 @@ function readSavedGraphSettings(rawOverride) {
 
   try {
     const saved = JSON.parse(raw);
-    if (!saved || saved.version !== GRAPH_SETTINGS_VERSION || !GRAPH_MODES.includes(saved.graphMode) ||
+    const legacyFunctions = saved?.version === 1 && Array.isArray(saved.functions);
+    const hasModeFunctions = saved?.version === GRAPH_SETTINGS_VERSION &&
+      saved.functionsByMode && typeof saved.functionsByMode === 'object' && !Array.isArray(saved.functionsByMode);
+    if (!saved || (!legacyFunctions && !hasModeFunctions) || !GRAPH_MODES.includes(saved.graphMode) ||
         !saved.ranges || typeof saved.ranges !== 'object' || Array.isArray(saved.ranges) ||
-        !Array.isArray(saved.functions) || saved.functions.length > 20) {
+        (legacyFunctions && saved.functions.length > 20)) {
       return { status: 'invalid' };
     }
 
@@ -129,26 +133,32 @@ function readSavedGraphSettings(rawOverride) {
     ];
     if (rangePairs.some(([min, max]) => !validRangePair(ranges[min], ranges[max]))) return { status: 'invalid' };
 
+    const serializedFunctions = legacyFunctions
+      ? Object.fromEntries(GRAPH_MODES.map(mode => [mode, mode === saved.graphMode ? saved.functions : []]))
+      : saved.functionsByMode;
+    if (GRAPH_MODES.some(mode => !Array.isArray(serializedFunctions[mode]) || serializedFunctions[mode].length > 20)) {
+      return { status: 'invalid' };
+    }
     const ids = new Set();
-    const functions = saved.functions.map(fn => {
+    const functionsByMode = Object.fromEntries(GRAPH_MODES.map(mode => [mode, serializedFunctions[mode].map(fn => {
       if (!fn || typeof fn !== 'object' || typeof fn.id !== 'string' || !/^fn-\d+$/.test(fn.id) || ids.has(fn.id) ||
-          typeof fn.expression !== 'string' || !fn.expression.trim() || fn.expression.length > 180 ||
+          typeof fn.expression !== 'string' || (mode !== 'parametric' && !fn.expression.trim()) || fn.expression.length > 180 ||
           typeof fn.xExpression !== 'string' || !fn.xExpression.trim() || fn.xExpression.length > 180 ||
           typeof fn.yExpression !== 'string' || !fn.yExpression.trim() || fn.yExpression.length > 180 ||
           typeof fn.visible !== 'boolean' || !NOTE_COLORS.some(color => color.hex === fn.color)) return null;
       ids.add(fn.id);
       return { id: fn.id, expression: fn.expression, xExpression: fn.xExpression, yExpression: fn.yExpression, color: fn.color, visible: fn.visible, path: '' };
-    });
-    if (functions.some(fn => !fn)) return { status: 'invalid' };
+    })]));
+    if (GRAPH_MODES.some(mode => functionsByMode[mode].some(fn => !fn))) return { status: 'invalid' };
     const acceptsExpression = (expression, variable) => {
       for (const probe of [0, 1, -1, 2, 0.5]) {
         try { evaluateExpression(expression, { [variable]: probe }); return true; } catch {}
       }
       return false;
     };
-    if (functions.some(fn => saved.graphMode === 'parametric'
+    if (GRAPH_MODES.some(mode => functionsByMode[mode].some(fn => mode === 'parametric'
       ? !acceptsExpression(fn.xExpression, 't') || !acceptsExpression(fn.yExpression, 't')
-      : !acceptsExpression(fn.expression, saved.graphMode === 'polar' ? 'theta' : 'x'))) return { status: 'invalid' };
+      : !acceptsExpression(fn.expression, mode === 'polar' ? 'theta' : 'x')))) return { status: 'invalid' };
 
     const viewRanges = {};
     if (saved.viewRanges !== null && saved.viewRanges !== undefined) {
@@ -172,7 +182,7 @@ function readSavedGraphSettings(rawOverride) {
         viewRanges[graphMode] = validated;
       }
     }
-    return { status: 'valid', graphMode: saved.graphMode, ranges, functions, viewRanges };
+    return { status: 'valid', graphMode: saved.graphMode, ranges, functions: functionsByMode[saved.graphMode], functionsByMode, viewRanges };
   } catch {
     return { status: 'invalid' };
   }
@@ -285,16 +295,13 @@ export function buildCalculator(id, ctx) {
             <button type="button" class="calc-open-settings" aria-label="Graph settings">Settings</button>
           </div>
         </div>
-        <div class="calc-mode-menu-host">
-          <button type="button" class="calc-mode-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="${expressionId}-mode-menu">Basic</button>
-          <div class="calc-mode-menu calc-menu-popover menu-popover" id="${expressionId}-mode-menu" role="dialog" aria-label="Calculator mode" hidden>
-            <div class="calc-mode-options" role="group" aria-label="Calculator mode">
-              <button type="button" data-mode="basic" aria-pressed="true" data-close-menu>Basic</button>
-              <button type="button" data-mode="scientific" aria-pressed="false" data-close-menu>Scientific</button>
-              <button type="button" data-mode="graph" aria-pressed="false" data-close-menu>Graph</button>
-            </div>
-          </div>
-        </div>
+        <app-select class="calc-mode-select">
+          <select class="calc-mode-select-field" aria-label="Calculator mode">
+            <option value="basic">Basic</option>
+            <option value="scientific">Scientific</option>
+            <option value="graph">Graph</option>
+          </select>
+        </app-select>
       </header>
       <div class="calc-workspace">
         <main class="calc-main">
@@ -328,7 +335,6 @@ export function buildCalculator(id, ctx) {
           <section class="calc-graph" hidden aria-label="Function graph">
             <div class="calc-graph-heading">
               <span class="calc-kicker">PLOT / ${'<span class="calc-mode-label">CARTESIAN</span>'}</span>
-              <ul class="calc-function-list" aria-label="Plotted functions"></ul>
             </div>
             <div class="calc-graph-toolbar" role="group" aria-label="Graph controls">
               <div class="calc-zoom-controls" role="group" aria-label="Zoom controls">
@@ -395,6 +401,10 @@ export function buildCalculator(id, ctx) {
                   </button>
                   <div class="calc-menu-popover menu-popover calc-info-panel" id="${expressionId}-info-panel" role="dialog" aria-label="Current graph view" tabindex="-1" hidden>
                     <h3>Current graph view</h3>
+                    <section class="calc-info-functions" aria-labelledby="${expressionId}-functions-heading">
+                      <h4 id="${expressionId}-functions-heading">Functions</h4>
+                      <ul class="calc-function-list" aria-label="Functions in this plot mode"></ul>
+                    </section>
                     <dl class="calc-info-summary">
                       <div><dt>Mode</dt><dd class="calc-info-mode"></dd></div>
                     </dl>
@@ -429,11 +439,11 @@ export function buildCalculator(id, ctx) {
     </div>
     <dialog class="calc-dialog calc-editor-dialog" aria-labelledby="${expressionId}-editor-title">
       <form method="dialog" class="calc-dialog-card calc-editor-card">
-        <header class="calc-dialog-header"><div><span class="calc-kicker">FUNCTION LAB</span><h3 id="${expressionId}-editor-title">Edit functions</h3></div><button type="button" class="calc-dialog-close" aria-label="Close function editor">Close</button></header>
+        <header class="calc-dialog-header"><div><span class="calc-kicker">FUNCTION LAB</span><h3 id="${expressionId}-editor-title">Edit functions</h3></div></header>
         <div class="calc-editor-layout">
           <nav class="calc-editor-nav" aria-label="Functions"></nav>
           <div class="calc-editor-fields">
-            <p class="calc-editor-empty" hidden>No functions yet. Add one to start.</p>
+            <p class="calc-editor-empty" hidden>No functions yet. Type an expression or choose New Function.</p>
             <div class="calc-editor-expression-label">
               <label class="calc-editor-equation-label" for="${expressionId}-function-expression">y =</label>
               <span class="calc-editor-input-wrap">
@@ -445,14 +455,14 @@ export function buildCalculator(id, ctx) {
             <fieldset class="note-color-picker calc-color-picker"><legend>Line color</legend><div class="note-color-options calc-color-options"></div></fieldset>
             <p class="calc-editor-error" role="alert" aria-live="polite"></p>
             <div class="calc-function-keypad" aria-label="Function keypad"></div>
-            <footer class="calc-dialog-actions"><button type="button" class="calc-add-function">Add function</button><button type="button" class="calc-apply-functions calc-primary-action">Apply</button></footer>
+            <app-dialog-actions class="calc-dialog-actions"><button type="button" class="calc-new-function">New Function</button><button type="button" data-action="cancel">Cancel</button><button type="button" class="calc-apply-functions calc-primary-action">Apply</button></app-dialog-actions>
           </div>
         </div>
       </form>
     </dialog>
     <dialog class="calc-dialog calc-settings-dialog" aria-labelledby="${expressionId}-settings-title">
       <form method="dialog" class="calc-dialog-card calc-settings-card">
-        <header class="calc-dialog-header"><div><span class="calc-kicker">PLOT / CONFIGURE</span><h3 id="${expressionId}-settings-title">Graph settings</h3></div><button type="button" class="calc-dialog-close" aria-label="Close graph settings">Close</button></header>
+        <header class="calc-dialog-header"><div><span class="calc-kicker">PLOT / CONFIGURE</span><h3 id="${expressionId}-settings-title">Graph settings</h3></div></header>
         <label class="calc-setting-field">Graph mode
           <select class="calc-graph-mode" aria-label="Graph mode">
             <option value="cartesian">Cartesian · y = f(x)</option>
@@ -462,7 +472,7 @@ export function buildCalculator(id, ctx) {
         </label>
         <div class="calc-range-fields"></div>
         <p class="calc-settings-error" role="alert" aria-live="polite"></p>
-        <footer class="calc-dialog-actions"><button type="button" class="calc-apply-settings calc-primary-action">Apply settings</button></footer>
+        <app-dialog-actions class="calc-dialog-actions"><button type="button" data-action="cancel">Cancel</button><button type="button" class="calc-apply-settings calc-primary-action">Apply settings</button></app-dialog-actions>
       </form>
     </dialog>
     <dialog class="calc-dialog calc-restore-dialog" aria-labelledby="${expressionId}-restore-title">
@@ -478,6 +488,7 @@ export function buildCalculator(id, ctx) {
     </dialog>`;
 
   enhanceSelect(root.querySelector('.calc-graph-mode'));
+  enhanceSelect(root.querySelector('.calc-mode-select-field'));
   const $ = selector => root.querySelector(selector);
   const input = $('.calc-expression');
   const value = $('.calc-value');
@@ -503,8 +514,7 @@ export function buildCalculator(id, ctx) {
   const infoRanges = $('.calc-info-ranges');
   const setupMenuTrigger = $('.calc-setup-trigger');
   const setupMenu = $('.calc-setup-menu');
-  const modeTrigger = $('.calc-mode-trigger');
-  const modeMenu = $('.calc-mode-menu');
+  const modeSelect = $('.calc-mode-select-field');
   const ratioButtons = [...root.querySelectorAll('[data-view-ratio]')];
   const scaleButtons = [...root.querySelectorAll('[data-view-scale]')];
   const logAxisButtons = [...root.querySelectorAll('[data-log-axis]')];
@@ -539,8 +549,9 @@ export function buildCalculator(id, ctx) {
   let customRatioY = 1;
   let viewScaleFactor = 1;
   let logAxes = { x: false, y: false };
-  let functions = [makeFunction('sin(x)')];
-  let activeFunctionId = functions[0].id;
+  let functionsByMode = Object.fromEntries(GRAPH_MODES.map(plotMode => [plotMode, []]));
+  let functions = functionsByMode[graphMode];
+  let activeFunctionId = null;
   let editorDraft = [];
   let restoreDraft = null;
   function rememberEditorField(field, moveCaretToEnd = false) {
@@ -561,10 +572,11 @@ export function buildCalculator(id, ctx) {
   if (savedGraph.status === 'valid') {
     graphMode = savedGraph.graphMode;
     ranges = savedGraph.ranges;
-    functions = savedGraph.functions;
+    functionsByMode = savedGraph.functionsByMode;
+    functions = functionsByMode[graphMode];
     viewRanges = Object.keys(savedGraph.viewRanges).length ? savedGraph.viewRanges : null;
     activeFunctionId = functions[0]?.id ?? null;
-    nextFunctionId = Math.max(nextFunctionId, ...functions.map(fn => Number(fn.id.slice(3)) + 1));
+    nextFunctionId = Math.max(nextFunctionId, ...Object.values(functionsByMode).flat().map(fn => Number(fn.id.slice(3)) + 1));
   } else if (savedGraph.status === 'invalid') {
     recoveryMessage.textContent = 'Saved graph settings could not be restored. Defaults are active.';
     recoveryNotice.hidden = false;
@@ -586,19 +598,21 @@ export function buildCalculator(id, ctx) {
       settingsMode = graphMode;
       ranges = { ...DEFAULT_GRAPH_RANGES };
       viewRanges = null;
-      functions = [makeFunction('sin(x)')];
-      activeFunctionId = functions[0]?.id ?? null;
+      functionsByMode = Object.fromEntries(GRAPH_MODES.map(plotMode => [plotMode, []]));
+      functions = functionsByMode[graphMode];
+      activeFunctionId = null;
       recoveryNotice.hidden = true;
     } else if (saved.status === 'valid') {
       graphMode = saved.graphMode;
       settingsMode = graphMode;
       ranges = saved.ranges;
       viewRanges = Object.keys(saved.viewRanges).length ? saved.viewRanges : null;
-      functions = saved.functions;
+      functionsByMode = saved.functionsByMode;
+      functions = functionsByMode[graphMode];
       activeFunctionId = functions.some(fn => fn.id === activeFunctionId)
         ? activeFunctionId
         : functions[0]?.id ?? null;
-      nextFunctionId = Math.max(nextFunctionId, ...functions.map(fn => Number(fn.id.slice(3)) + 1));
+      nextFunctionId = Math.max(nextFunctionId, ...Object.values(functionsByMode).flat().map(fn => Number(fn.id.slice(3)) + 1));
       recoveryNotice.hidden = true;
     } else return;
 
@@ -612,9 +626,7 @@ export function buildCalculator(id, ctx) {
       version: GRAPH_SETTINGS_VERSION,
       graphMode,
       ranges,
-      functions: functions.map(({ id: functionId, expression, xExpression, yExpression, color, visible }) => ({
-        id: functionId, expression, xExpression, yExpression, color, visible,
-      })),
+      functionsByMode: serializeFunctionsByMode(),
       viewRanges,
     }));
     if (saved.status === 'valid') {
@@ -637,15 +649,27 @@ export function buildCalculator(id, ctx) {
   }
   window.addEventListener('storage', onStorageGraphSettings);
 
+  function serializeFunctionsByMode() {
+    functionsByMode[graphMode] = functions;
+    return Object.fromEntries(GRAPH_MODES.map(plotMode => [plotMode, functionsByMode[plotMode].map(({ id: functionId, expression, xExpression, yExpression, color, visible }) => ({
+      id: functionId, expression, xExpression, yExpression, color, visible,
+    }))]));
+  }
+
+  function activateGraphMode(nextMode) {
+    functionsByMode[graphMode] = functions;
+    graphMode = nextMode;
+    functions = functionsByMode[graphMode] || (functionsByMode[graphMode] = []);
+    activeFunctionId = functions[0]?.id ?? null;
+  }
+
   function persistGraphSettings() {
     try {
       const serialized = JSON.stringify({
         version: GRAPH_SETTINGS_VERSION,
         graphMode,
         ranges,
-        functions: functions.map(({ id: functionId, expression, xExpression, yExpression, color, visible }) => ({
-          id: functionId, expression, xExpression, yExpression, color, visible,
-        })),
+        functionsByMode: serializeFunctionsByMode(),
         viewRanges,
       });
       localStorage.setItem(GRAPH_SETTINGS_KEY, serialized);
@@ -668,8 +692,9 @@ export function buildCalculator(id, ctx) {
       settingsMode = graphMode;
       ranges = { ...DEFAULT_GRAPH_RANGES };
       viewRanges = null;
-      functions = [makeFunction('sin(x)')];
-      activeFunctionId = functions[0].id;
+      functionsByMode = Object.fromEntries(GRAPH_MODES.map(plotMode => [plotMode, []]));
+      functions = functionsByMode[graphMode];
+      activeFunctionId = null;
       $('.calc-mode-label').textContent = graphMode.toUpperCase();
       recoveryNotice.hidden = true;
       renderFunctions();
@@ -732,8 +757,8 @@ export function buildCalculator(id, ctx) {
   const setMode = next => {
     if (next === 'basic' && radix !== 10) setRadix(10);
     mode = next; root.dataset.mode = next;
-    modeTrigger.textContent = next[0].toUpperCase() + next.slice(1);
-    root.querySelectorAll('.calc-mode-options button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === next)));
+    modeSelect.value = next;
+    refreshCustomSelect(modeSelect);
     root.querySelector('.calc-memory').hidden = next === 'graph';
     root.querySelector('.calc-header-graph-actions').hidden = next !== 'graph';
     scientific.hidden = next !== 'scientific'; graph.hidden = next !== 'graph'; keypads.hidden = next === 'graph';
@@ -864,7 +889,7 @@ export function buildCalculator(id, ctx) {
     });
   });
   $('.calc-backspace').addEventListener('click', backspace);
-  root.querySelectorAll('.calc-mode-options button').forEach(button => button.addEventListener('click', () => setMode(button.dataset.mode)));
+  modeSelect.addEventListener('change', () => setMode(modeSelect.value));
   $('.calc-history-clear').addEventListener('click', () => { history.splice(0); renderHistory(); });
   input.addEventListener('input', () => { resultFresh = false; updatePreview(); });
   input.addEventListener('keydown', event => {
@@ -906,7 +931,6 @@ export function buildCalculator(id, ctx) {
       close(true);
     });
   }
-  bindGraphPopover(modeTrigger, modeMenu);
   bindGraphPopover(viewMenuTrigger, viewMenu);
   bindGraphPopover(setupMenuTrigger, setupMenu);
   bindGraphPopover(infoMenuTrigger, infoMenu);
@@ -1001,6 +1025,7 @@ export function buildCalculator(id, ctx) {
   }
 
   function renderFunctions() {
+    functionsByMode[graphMode] = functions;
     updateViewOptions();
     const editorFormat = graphMode === 'polar'
       ? 'r = f(θ)'
@@ -1016,9 +1041,9 @@ export function buildCalculator(id, ctx) {
       const label = document.createElement('span'); label.className = 'calc-function-summary';
       label.textContent = graphMode === 'parametric' ? `x(t)=${fn.xExpression} · y(t)=${fn.yExpression}` : `${graphMode === 'polar' ? 'r(θ)' : 'y'} = ${fn.expression}`;
       const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'calc-function-toggle';
-      toggle.setAttribute('aria-pressed', String(fn.visible)); toggle.setAttribute('aria-label', `${fn.visible ? 'Hide' : 'Show'} function ${fn.id}`); toggle.textContent = fn.visible ? 'Visible' : 'Hidden';
+      toggle.setAttribute('aria-pressed', String(fn.visible)); toggle.setAttribute('aria-label', `${fn.visible ? 'Hide' : 'Show'} function: ${label.textContent}`); toggle.textContent = fn.visible ? 'Visible' : 'Hidden';
       toggle.addEventListener('click', () => { fn.visible = !fn.visible; renderFunctions(); plot(); persistGraphSettings(); });
-      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'calc-function-remove'; remove.setAttribute('aria-label', `Remove function ${fn.id}`); remove.textContent = 'Remove';
+      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'calc-function-remove'; remove.setAttribute('aria-label', `Remove function: ${label.textContent}`); remove.textContent = 'Remove';
       remove.addEventListener('click', () => {
         functions = functions.filter(item => item.id !== fn.id);
         if (activeFunctionId === fn.id) activeFunctionId = functions[0]?.id ?? null;
@@ -1049,7 +1074,10 @@ export function buildCalculator(id, ctx) {
   }
   function openSettings() {
     settingsMode = graphMode;
-    $('.calc-graph-mode').value = settingsMode; $('.calc-settings-error').textContent = ''; renderSettingsFields(settingsMode);
+    const graphModeSelect = $('.calc-graph-mode');
+    graphModeSelect.value = settingsMode;
+    refreshCustomSelect(graphModeSelect);
+    $('.calc-settings-error').textContent = ''; renderSettingsFields(settingsMode);
     settingsDialog.showModal(); $('.calc-graph-mode').focus();
   }
   $('.calc-graph-mode').addEventListener('change', event => {
@@ -1066,7 +1094,8 @@ export function buildCalculator(id, ctx) {
         : [['tMin', 'tMax', 't'], ['xMin', 'xMax', 'x'], ['yMin', 'yMax', 'y']];
     if (!error && pairs.some(([a, b]) => nums[a] >= nums[b])) error = 'Each range start must be less than its end.';
     if (error) { $('.calc-settings-error').textContent = error; return; }
-    ranges = nextRanges; graphMode = settingsMode;
+    ranges = nextRanges;
+    if (settingsMode !== graphMode) activateGraphMode(settingsMode);
     viewRanges = null;
     $('.calc-mode-label').textContent = graphMode.toUpperCase(); renderFunctions(); settingsDialog.close(); plot(); persistGraphSettings();
   });
@@ -1074,11 +1103,20 @@ export function buildCalculator(id, ctx) {
   function renderEditorNav() {
     const nav = $('.calc-editor-nav'); nav.replaceChildren();
     editorDraft.forEach((fn, index) => {
+      const label = graphMode === 'parametric'
+        ? [fn.xExpression, fn.yExpression].some(expression => expression.trim())
+          ? `${fn.xExpression.trim() || '…'}, ${fn.yExpression.trim() || '…'}`
+          : ''
+        : fn.expression.trim();
+      if (!label) return;
       const row = document.createElement('div'); row.className = 'calc-editor-function-row';
       const select = document.createElement('button'); select.type = 'button'; select.className = 'calc-editor-select';
-      select.setAttribute('aria-current', String(fn.id === activeFunctionId)); select.textContent = `Function ${index + 1}`;
-       select.addEventListener('click', () => { saveEditorDraft(); activeFunctionId = fn.id; renderEditor(); });
-      const visible = document.createElement('input'); visible.type = 'checkbox'; visible.checked = fn.visible; visible.setAttribute('aria-label', `Show function ${index + 1}`);
+      select.setAttribute('aria-current', String(fn.id === activeFunctionId));
+      select.setAttribute('aria-label', `Edit ${label}`);
+      select.textContent = label;
+      select.title = label;
+      select.addEventListener('click', () => { saveEditorDraft(); activeFunctionId = fn.id; renderEditor(); });
+      const visible = document.createElement('input'); visible.type = 'checkbox'; visible.checked = fn.visible; visible.setAttribute('aria-label', `Show ${label}`);
       visible.addEventListener('change', () => { fn.visible = visible.checked; });
       row.append(select, visible); nav.append(row);
     });
@@ -1159,7 +1197,7 @@ export function buildCalculator(id, ctx) {
       regularLabel.hidden = true; fieldWrap.hidden = false; fieldWrap.replaceChildren();
       [['xExpression', 'x(t)'], ['yExpression', 'y(t)']].forEach(([key, label]) => {
         const fieldId = `${expressionId}-${label.replace(/[()]/g, '')}`;
-        const fieldLabel = document.createElement('label'); fieldLabel.className = 'calc-editor-function-label'; fieldLabel.htmlFor = fieldId; fieldLabel.textContent = `${label} =`;
+        const fieldLabel = document.createElement('label'); fieldLabel.className = 'calc-editor-function-label'; fieldLabel.htmlFor = fieldId; fieldLabel.textContent = `${label[0]} =`;
         const { wrap } = makeEditorInput(key === 'xExpression' ? 'calc-editor-x' : 'calc-editor-y', label, fn[key], fieldId);
         const fieldRow = document.createElement('div'); fieldRow.className = 'calc-editor-function-field';
         fieldRow.append(fieldLabel, wrap); fieldWrap.append(fieldRow);
@@ -1185,22 +1223,41 @@ export function buildCalculator(id, ctx) {
     $('.calc-editor-error').textContent = '';
   }
   function openEditor() {
-    editorDraft = functions.map(fn => ({ ...fn })); renderEditor(); editorDialog.showModal();
+    editorDraft = functions.map(fn => ({ ...fn }));
+    if (!editorDraft.length) {
+      const blank = makeFunction('');
+      if (graphMode === 'parametric') {
+        blank.xExpression = '';
+        blank.yExpression = '';
+      }
+      editorDraft.push(blank);
+    }
+    activeFunctionId = editorDraft.some(fn => fn.id === activeFunctionId)
+      ? activeFunctionId
+      : editorDraft[0].id;
+    renderEditor(); editorDialog.showModal();
     rememberEditorField(editorDraft.length
       ? graphMode === 'parametric' ? $('.calc-editor-x') : $('.calc-editor-expression')
       : null, true);
-    (lastEditorField || $('.calc-add-function')).focus();
+    (lastEditorField || $('.calc-new-function')).focus();
   }
-  $('.calc-add-function').addEventListener('click', () => {
-    saveEditorDraft(); const fn = makeFunction(graphMode === 'polar' ? '1' : 'sin(x)');
-    if (graphMode === 'parametric') { fn.xExpression = 'cos(t)'; fn.yExpression = 'sin(t)'; }
+  $('.calc-new-function').addEventListener('click', () => {
+    saveEditorDraft();
+    const fn = makeFunction('');
+    if (graphMode === 'parametric') {
+      fn.xExpression = '';
+      fn.yExpression = '';
+    }
     editorDraft.push(fn); activeFunctionId = fn.id; renderEditor();
     rememberEditorField(graphMode === 'parametric' ? $('.calc-editor-x') : $('.calc-editor-expression'), true);
     lastEditorField.focus();
   });
   $('.calc-apply-functions').addEventListener('click', () => {
     saveEditorDraft();
-    const bad = editorDraft.find(fn => {
+    const completedDraft = editorDraft.filter(fn => graphMode === 'parametric'
+      ? fn.xExpression.trim() || fn.yExpression.trim()
+      : fn.expression.trim());
+    const bad = completedDraft.find(fn => {
       try {
         const valid = (expression, variable) => {
           let lastError;
@@ -1215,7 +1272,10 @@ export function buildCalculator(id, ctx) {
       } catch (error) { $('.calc-editor-error').textContent = `${fn.id}: ${error.message}`; return true; }
     });
     if (bad) return;
-    functions = editorDraft.map(fn => ({ ...fn }));
+    functions = completedDraft.map(fn => ({ ...fn }));
+    activeFunctionId = functions.some(fn => fn.id === activeFunctionId)
+      ? activeFunctionId
+      : functions[0]?.id ?? null;
     $('.calc-editor-error').textContent = ''; editorDialog.close(); renderFunctions(); plot(); persistGraphSettings();
   });
   function focusParametricY() {
@@ -1280,6 +1340,11 @@ export function buildCalculator(id, ctx) {
   });
   editorDialog.addEventListener('focusout', event => {
     if (event.target.matches('.calc-editor-expression,.calc-editor-x,.calc-editor-y')) rememberEditorField(event.target);
+  });
+  editorDialog.addEventListener('input', event => {
+    if (!event.target.matches('.calc-editor-expression,.calc-editor-x,.calc-editor-y')) return;
+    saveEditorDraft();
+    renderEditorNav();
   });
   editorDialog.addEventListener('keydown', event => {
     if (event.key === ',' && graphMode === 'parametric' && event.target.matches('.calc-editor-x')) {
@@ -1361,7 +1426,7 @@ export function buildCalculator(id, ctx) {
         version: GRAPH_SETTINGS_VERSION,
         graphMode: setup.graphMode,
         ranges: allRanges,
-        functions: functionsForValidation,
+        functionsByMode: Object.fromEntries(GRAPH_MODES.map(mode => [mode, mode === setup.graphMode ? functionsForValidation : []])),
         viewRanges: { [setup.graphMode]: currentViewRanges },
       }));
       return validated.status === 'valid' ? validated : { status: 'invalid' };
@@ -1465,7 +1530,7 @@ export function buildCalculator(id, ctx) {
   });
   applySetupButton.addEventListener('click', () => {
     if (!restoreDraft) return;
-    graphMode = restoreDraft.graphMode;
+    activateGraphMode(restoreDraft.graphMode);
     settingsMode = graphMode;
     ranges = restoreDraft.ranges;
     viewRanges = restoreDraft.viewRanges;
@@ -1474,7 +1539,8 @@ export function buildCalculator(id, ctx) {
       id: `fn-${nextFunctionId++}`,
       path: '',
     }));
-    activeFunctionId = functions[0].id;
+    functionsByMode[graphMode] = functions;
+    activeFunctionId = functions[0]?.id ?? null;
     $('.calc-mode-label').textContent = graphMode.toUpperCase();
     renderFunctions();
     restoreDialog.close();

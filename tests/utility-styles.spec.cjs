@@ -12,11 +12,13 @@ async function openUtility(page, type) {
 }
 
 async function chooseCalculatorMode(calculator, mode) {
-  const trigger = calculator.locator('.calc-mode-trigger');
-  if (await trigger.textContent() === mode) return;
+  const select = calculator.locator('.calc-mode-select-field');
+  if (await select.inputValue() === mode.toLowerCase()) return;
+  const trigger = calculator.getByRole('combobox', { name: 'Calculator mode' });
   await trigger.click();
-  await calculator.getByRole('dialog', { name: 'Calculator mode' })
-    .getByRole('button', { name: mode, exact: true }).click();
+  const popupId = await trigger.getAttribute('aria-controls');
+  await calculator.locator('xpath=ancestor::body').locator(`#${popupId}`)
+    .getByRole('option', { name: mode, exact: true }).click();
 }
 
 async function clickGraphMenuAction(calculator, menu, action) {
@@ -24,8 +26,39 @@ async function clickGraphMenuAction(calculator, menu, action) {
   await calculator.getByRole('button', { name: action, exact: true }).click();
 }
 
+async function openGraphInfo(calculator) {
+  const panel = calculator.getByRole('dialog', { name: 'Current graph view' });
+  if (!(await panel.isVisible())) await calculator.getByRole('button', { name: 'Graph information' }).click();
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+async function closeGraphInfo(page, calculator) {
+  const panel = calculator.getByRole('dialog', { name: 'Current graph view' });
+  if (await panel.isVisible()) {
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+  }
+}
+
+async function setGraphPlotMode(page, calculator, mode) {
+  if (await calculator.locator('.calc-mode-label').textContent() === mode.toUpperCase()) return;
+  await closeGraphInfo(page, calculator);
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  const settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByRole('combobox', { name: 'Graph mode' }).click();
+  await settings.getByRole('option', { name: new RegExp(mode, 'i') }).click();
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await expect(calculator.locator('.calc-mode-label')).toHaveText(mode.toUpperCase());
+}
+
 test('calculator, calendar, and weather controls follow shared theme tokens', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
+  await expect(calculator.locator('.calc-mode-select')).toHaveCount(1);
+  const calculatorMode = calculator.getByRole('combobox', { name: 'Calculator mode' });
+  await expect(calculatorMode).toHaveAttribute('aria-haspopup', 'listbox');
+  const calculatorModeRadius = await calculatorMode.evaluate(element => getComputedStyle(element).borderRadius);
+  await expect(calculator.locator('.calc-mode-select-field')).toHaveClass(/standard-select-native/);
   await expect(calculator.getByText('DESK / 04')).toHaveCount(0);
   const calculatorColors = {};
   for (const theme of ['dark', 'light']) {
@@ -49,6 +82,7 @@ test('calculator, calendar, and weather controls follow shared theme tokens', as
   expect(calendarStyle.viewButtonHeight).toBeGreaterThanOrEqual(38);
 
   const weather = await openUtility(page, 'weather');
+  await expect(weather.locator('app-select').first()).toBeAttached();
   const fields = weather.locator('.weather-setup .util-field');
   await expect(fields).toHaveCount(2);
   const weatherFieldStyle = await fields.first().evaluate(element => {
@@ -64,11 +98,13 @@ test('calculator, calendar, and weather controls follow shared theme tokens', as
   await expect(trigger).toHaveAttribute('aria-haspopup', 'listbox');
   const selectStyle = await trigger.evaluate(element => {
     const style = getComputedStyle(element);
-    return { radius: style.borderRadius, border: style.borderTopWidth, transform: style.transform };
+    return { radius: style.borderRadius, border: style.borderTopWidth, transform: style.transform, textTransform: style.textTransform };
   });
   expect(selectStyle.radius).toBe('10.4px');
   expect(selectStyle.border).toBe('1px');
   expect(selectStyle.transform).toBe('none');
+  expect(calculatorModeRadius).toBe(selectStyle.radius);
+  expect(selectStyle.textTransform).toBe('capitalize');
 
   await trigger.click();
   const popupId = await trigger.getAttribute('aria-controls');
@@ -115,6 +151,9 @@ test('calculator supports scientific calculations, reusable history, and graphin
   await expect(calculator.locator('.calc-open-settings')).toHaveText('Settings');
   await expect(calculator.locator('.calc-graph-tools').getByRole('button', { name: 'Edit functions' })).toHaveCount(0);
   await expect(calculator.locator('.calc-graph-tools').getByRole('button', { name: 'Graph settings' })).toHaveCount(0);
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  await calculator.getByLabel('Function expression').fill('sin(x)');
+  await calculator.getByRole('button', { name: 'Apply', exact: true }).click();
   await calculator.getByRole('button', { name: 'Plot' }).click();
   await expect(calculator.locator('.calc-graph-line')).toHaveAttribute('d', /M/);
   await expect(calculator.locator('.calc-graph-status')).toContainText('Plotted');
@@ -122,7 +161,7 @@ test('calculator supports scientific calculations, reusable history, and graphin
   await calculator.getByLabel('Function expression').fill('window.alert(1)');
   await calculator.getByRole('button', { name: 'Apply', exact: true }).click();
   await expect(calculator.locator('.calc-editor-error')).toContainText('Unknown function or name');
-  await calculator.getByRole('button', { name: 'Close function editor' }).click();
+  await calculator.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(calculator.locator('.calc-graph-line')).toHaveCount(1);
 });
 
@@ -397,6 +436,8 @@ test('calculator graph edits multiple functions in an accessible keypad dialog',
   await calculator.getByRole('button', { name: 'Edit functions' }).click();
   const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
   await expect(editor).toBeVisible();
+  await expect(editor.locator('.calc-dialog-close')).toHaveCount(0);
+  await expect(editor.locator('app-dialog-actions')).toBeVisible();
   await expect(editor.getByRole('radio')).toHaveCount(6);
   await expect(editor.locator('.calc-editor-expression-label')).toContainText('y =');
   const equationLayout = await editor.locator('.calc-editor-expression-label').evaluate(label => {
@@ -426,9 +467,13 @@ test('calculator graph edits multiple functions in an accessible keypad dialog',
     await expect(key).toHaveText(symbol);
     await expect(key).toHaveAttribute('title', tooltip);
   }
-  await editor.getByRole('button', { name: 'Add function' }).click();
   const functionExpression = editor.getByRole('textbox', { name: 'Function expression' });
-  await functionExpression.fill('');
+  await functionExpression.fill('sin(x)');
+  await expect(editor.locator('.calc-editor-select')).toHaveText('sin(x)');
+  await expect(editor.locator('.calc-editor-select')).not.toContainText('Function');
+  await editor.getByRole('button', { name: 'New Function' }).click();
+  await expect(functionExpression).toHaveValue('');
+  await expect(editor.locator('.calc-editor-select')).toHaveCount(1);
   await editor.getByRole('button', { name: 'cos(', exact: true }).click();
   await editor.getByRole('button', { name: '2', exact: true }).click();
   await editor.getByRole('button', { name: '×', exact: true }).click();
@@ -446,6 +491,7 @@ test('calculator graph edits multiple functions in an accessible keypad dialog',
   await expect(calculator.locator('.calc-graph-line')).toHaveCount(2);
   const colors = await calculator.locator('.calc-graph-line').evaluateAll(lines => lines.map(line => line.style.getPropertyValue('--function-color')));
   expect(new Set(colors).size).toBe(2);
+  await openGraphInfo(calculator);
   await calculator.getByRole('button', { name: /Hide function/ }).first().click();
   await expect(calculator.locator('.calc-graph-line')).toHaveCount(1);
 });
@@ -453,9 +499,10 @@ test('calculator graph edits multiple functions in an accessible keypad dialog',
 test('calculator allows an empty graph and adding functions afterward', async ({ page }) => {
   let calculator = await openUtility(page, 'calculator');
   await chooseCalculatorMode(calculator, 'Graph');
-  await calculator.locator('.calc-function-item').getByRole('button', { name: /^Remove function/ }).click();
+  const info = await openGraphInfo(calculator);
+  await expect(calculator.locator('.calc-graph-heading .calc-function-list')).toHaveCount(0);
   await expect(calculator.locator('.calc-function-item')).toHaveCount(0);
-  await expect(calculator.locator('.calc-function-empty')).toHaveText('No functions yet');
+  await expect(info.locator('.calc-function-empty')).toHaveText('No functions yet');
   await expect(calculator.locator('.calc-graph-status')).toContainText('No functions yet');
   await expect(calculator.locator('.calc-graph-line')).toHaveCount(0);
 
@@ -463,18 +510,105 @@ test('calculator allows an empty graph and adding functions afterward', async ({
   calculator = await openUtility(page, 'calculator');
   await chooseCalculatorMode(calculator, 'Graph');
   await expect(calculator.locator('.calc-function-item')).toHaveCount(0);
+  await openGraphInfo(calculator);
   await expect(calculator.locator('.calc-graph-status')).toContainText('No functions yet');
 
   await calculator.getByRole('button', { name: 'Edit functions' }).click();
   const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
-  await expect(editor.locator('.calc-editor-empty')).toBeVisible();
-  await expect(editor.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled();
-  await editor.getByRole('button', { name: 'Add function' }).click();
   await expect(editor.locator('.calc-editor-empty')).toBeHidden();
-  await expect(editor.getByLabel('Function expression')).toHaveValue('sin(x)');
+  await expect(editor.getByRole('button', { name: 'Apply', exact: true })).toBeEnabled();
+  await expect(editor.locator('.calc-editor-empty')).toBeHidden();
+  await editor.getByLabel('Function expression').fill('sin(x)');
+  await expect(editor.locator('.calc-editor-select')).toHaveText('sin(x)');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
   await expect(calculator.locator('.calc-function-item')).toHaveCount(1);
   await expect(calculator.locator('.calc-graph-line')).toHaveCount(1);
+});
+
+test('calculator keeps functions separate by plot mode and lists them in graph information', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+  await expect(calculator.locator('.calc-graph-heading .calc-function-list')).toHaveCount(0);
+
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  let editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await editor.getByLabel('Function expression').fill('x^2');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  let info = await openGraphInfo(calculator);
+  await expect(info.locator('.calc-function-summary')).toHaveText('y = x^2');
+
+  await setGraphPlotMode(page, calculator, 'polar');
+  info = await openGraphInfo(calculator);
+  await expect(info.locator('.calc-function-empty')).toHaveText('No functions yet');
+  await closeGraphInfo(page, calculator);
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await editor.getByLabel('Function expression').fill('sin(theta)');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  info = await openGraphInfo(calculator);
+  await expect(info.locator('.calc-function-summary')).toHaveText('r(θ) = sin(theta)');
+
+  await setGraphPlotMode(page, calculator, 'parametric');
+  info = await openGraphInfo(calculator);
+  await expect(info.locator('.calc-function-empty')).toHaveText('No functions yet');
+  await closeGraphInfo(page, calculator);
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await editor.getByLabel('x(t)').fill('t');
+  await editor.getByLabel('y(t)').fill('t^2');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  info = await openGraphInfo(calculator);
+  await expect(info.locator('.calc-function-summary')).toHaveText('x(t)=t · y(t)=t^2');
+
+  await setGraphPlotMode(page, calculator, 'cartesian');
+  info = await openGraphInfo(calculator);
+  await expect(info.locator('.calc-function-summary')).toHaveText('y = x^2');
+  await page.locator('#close-btn').click();
+
+  const reopened = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(reopened, 'Graph');
+  await expect(reopened.locator('.calc-mode-label')).toHaveText('CARTESIAN');
+  info = await openGraphInfo(reopened);
+  await expect(info.locator('.calc-function-summary')).toHaveText('y = x^2');
+  await closeGraphInfo(page, reopened);
+  await setGraphPlotMode(page, reopened, 'polar');
+  info = await openGraphInfo(reopened);
+  await expect(info.locator('.calc-function-summary')).toHaveText('r(θ) = sin(theta)');
+  await closeGraphInfo(page, reopened);
+  await setGraphPlotMode(page, reopened, 'parametric');
+  info = await openGraphInfo(reopened);
+  await expect(info.locator('.calc-function-summary')).toHaveText('x(t)=t · y(t)=t^2');
+});
+
+test('calculator migrates saved functions into their existing plot mode', async ({ page }) => {
+  const legacy = {
+    version: 1,
+    graphMode: 'polar',
+    ranges: {
+      xMin: '-10', xMax: '10', yMin: '-10', yMax: '10',
+      thetaMin: '-6.28', thetaMax: '6.28', rMin: '-10', rMax: '10',
+      tMin: '-6.28', tMax: '6.28',
+    },
+    functions: [{
+      id: 'fn-1', expression: 'sin(theta)', xExpression: 'cos(t)', yExpression: 'sin(t)',
+      color: '#e47b27', visible: true,
+    }],
+    viewRanges: {},
+  };
+  await page.evaluate(value => localStorage.setItem('personal-desktop-calculator-graph-v1', JSON.stringify(value)), legacy);
+  const calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+  await expect(calculator.locator('.calc-mode-label')).toHaveText('POLAR');
+  let info = await openGraphInfo(calculator);
+  await expect(info.locator('.calc-function-summary')).toHaveText('r(θ) = sin(theta)');
+  await setGraphPlotMode(page, calculator, 'cartesian');
+  info = await openGraphInfo(calculator);
+  await expect(info.locator('.calc-function-empty')).toHaveText('No functions yet');
+
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('personal-desktop-calculator-graph-v1')));
+  expect(saved.version).toBe(2);
+  expect(saved.functionsByMode.cartesian).toHaveLength(0);
+  expect(saved.functionsByMode.polar).toHaveLength(1);
 });
 
 test('calculator graph settings keep modes and plot ranges independent', async ({ page }) => {
@@ -483,6 +617,8 @@ test('calculator graph settings keep modes and plot ranges independent', async (
   await expect(calculator.locator('.calc-open-editor')).toHaveText('y = f(x)');
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
   const settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await expect(settings.locator('.calc-dialog-close')).toHaveCount(0);
+  await expect(settings.locator('app-dialog-actions button')).toHaveText(['Cancel', 'Apply settings']);
   const graphMode = settings.getByRole('combobox', { name: 'Graph mode' });
   await graphMode.click();
   await settings.getByRole('option', { name: /Polar/ }).click();
@@ -523,8 +659,14 @@ test('calculator graph settings keep modes and plot ranges independent', async (
   const yExpression = editor.locator('.calc-editor-y');
   await expect(xExpression).toBeVisible();
   await expect(yExpression).toBeVisible();
-  await expect(editor.locator('.calc-editor-function-fields label').nth(0)).toContainText('x(t) =');
-  await expect(editor.locator('.calc-editor-function-fields label').nth(1)).toContainText('y(t) =');
+  await expect(editor.locator('.calc-editor-function-fields label').nth(0)).toHaveText('x =');
+  await expect(editor.locator('.calc-editor-function-fields label').nth(1)).toHaveText('y =');
+  const backspaceWidth = await editor.locator('.calc-editor-backspace').first().evaluate(button => ({
+    width: getComputedStyle(button).width,
+    right: getComputedStyle(button).right,
+    padding: getComputedStyle(button.previousElementSibling).paddingRight,
+  }));
+  expect(backspaceWidth).toEqual({ width: '32px', right: '0px', padding: '32px' });
   await expect(editor.getByRole('button', { name: 'Move to y expression' })).toBeVisible();
   await xExpression.fill('cos(t)');
   await yExpression.fill('');
@@ -556,9 +698,9 @@ test('calculator fits visible curves in every graph mode without changing config
   await calculator.getByRole('button', { name: 'Edit functions' }).click();
   let editor = calculator.getByRole('dialog', { name: 'Edit functions' });
   await editor.getByLabel('Function expression').fill('4*x+3');
-  await editor.getByRole('button', { name: 'Add function' }).click();
+  await editor.getByRole('button', { name: 'New Function' }).click();
   await editor.getByLabel('Function expression').fill('100*x');
-  await editor.getByLabel('Show function 2').uncheck();
+  await editor.getByLabel('Show 100*x').uncheck();
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
   await clickGraphMenuAction(calculator, 'View', 'Fit curves');
   let fitted = await view();
@@ -580,9 +722,10 @@ test('calculator fits visible curves in every graph mode without changing config
   await expect(settings.getByLabel('Maximum y')).toHaveValue('5');
   await expect(settings.getByLabel('Minimum y')).toHaveValue('-5');
   await expect(settings.getByLabel('Maximum y')).toHaveValue('5');
-  await settings.getByRole('button', { name: 'Close graph settings' }).click();
+  await settings.getByRole('button', { name: 'Cancel', exact: true }).click();
   await clickGraphMenuAction(calculator, 'View', 'Reset view');
   await expect.poll(view).toEqual({ xMin: -4, xMax: 4, yMin: -5, yMax: 5 });
+  await openGraphInfo(calculator);
   await calculator.locator('.calc-function-item').last().getByRole('button', { name: /^Remove function/ }).click();
 
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
@@ -610,11 +753,12 @@ test('calculator fits visible curves in every graph mode without changing config
   await expect.poll(view).toEqual(fitted);
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
   settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await expect(settings.getByRole('combobox', { name: 'Graph mode' })).toHaveAttribute('data-value', 'polar');
   await expect(settings.getByLabel('Minimum theta')).toHaveValue('1');
   await expect(settings.getByLabel('Maximum theta')).toHaveValue('5');
   await expect(settings.getByLabel('Minimum r')).toHaveValue('0');
   await expect(settings.getByLabel('Maximum r')).toHaveValue('10');
-  await settings.getByRole('button', { name: 'Close graph settings' }).click();
+  await settings.getByRole('button', { name: 'Cancel', exact: true }).click();
   await clickGraphMenuAction(calculator, 'View', 'Reset view');
   await expect.poll(view).toEqual({ thetaMin: 1, thetaMax: 5, rMin: 0, rMax: 10 });
   await calculator.getByRole('button', { name: 'Edit functions' }).click();
@@ -656,11 +800,12 @@ test('calculator fits visible curves in every graph mode without changing config
   await expect.poll(view).toEqual(fitted);
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
   settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await expect(settings.getByRole('combobox', { name: 'Graph mode' })).toHaveAttribute('data-value', 'parametric');
   await expect(settings.getByLabel('Minimum t')).toHaveValue('0');
   await expect(settings.getByLabel('Maximum t')).toHaveValue('6.283');
   await expect(settings.getByLabel('Minimum x')).toHaveValue('-4');
   await expect(settings.getByLabel('Maximum x')).toHaveValue('4');
-  await settings.getByRole('button', { name: 'Close graph settings' }).click();
+  await settings.getByRole('button', { name: 'Cancel', exact: true }).click();
   await clickGraphMenuAction(calculator, 'View', 'Reset view');
   await expect.poll(view).toEqual({ tMin: 0, tMax: 6.283, xMin: -4, xMax: 4, yMin: -5, yMax: 5 });
 });
@@ -718,9 +863,10 @@ test('calculator graph functions, colors, visibility, mode, and ranges persist a
   let editor = calculator.getByRole('dialog', { name: 'Edit functions' });
   await editor.getByLabel('Function expression').fill('sin(theta)');
   await editor.locator('.note-color-choice[data-note-color="orange"]').click();
-  await editor.getByRole('button', { name: 'Add function' }).click();
+  await editor.getByRole('button', { name: 'New Function' }).click();
   await editor.getByLabel('Function expression').fill('cos(2*theta)');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await openGraphInfo(calculator);
   await calculator.getByRole('button', { name: /Hide function/ }).first().click();
   await expect(calculator.locator('.calc-function-item')).toHaveCount(2);
   await expect(calculator.locator('.calc-plot-area')).toHaveAttribute('aria-valuetext', /theta -1 to 7/);
@@ -729,6 +875,7 @@ test('calculator graph functions, colors, visibility, mode, and ranges persist a
   calculator = await openUtility(page, 'calculator');
   await chooseCalculatorMode(calculator, 'Graph');
   await expect(calculator.locator('.calc-mode-label')).toHaveText('POLAR');
+  await openGraphInfo(calculator);
   await expect(calculator.locator('.calc-function-item')).toHaveCount(2);
   await expect(calculator.locator('.calc-function-toggle[aria-pressed="false"]')).toHaveCount(1);
   await expect.poll(() => calculator.locator('.calc-function-swatch').first().evaluate(element => element.style.getPropertyValue('--function-color'))).toBe('#e47b27');
@@ -744,7 +891,7 @@ test('calculator graph functions, colors, visibility, mode, and ranges persist a
   await expect(settings.getByLabel('Maximum x')).toHaveValue('4');
   await expect(settings.getByLabel('Minimum y')).toHaveValue('-5');
   await expect(settings.getByLabel('Maximum y')).toHaveValue('5');
-  await settings.getByRole('button', { name: 'Close graph settings' }).click();
+  await settings.getByRole('button', { name: 'Cancel', exact: true }).click();
 
   await page.reload();
   const welcome = page.getByRole('button', { name: 'Get started', exact: true });
@@ -787,14 +934,16 @@ test('open calculator windows stay in sync when graph settings change', async ({
   const editor = firstCalculator.getByRole('dialog', { name: 'Edit functions' });
   await editor.getByLabel('Function expression').fill('sin(theta)');
   await editor.locator('.note-color-choice[data-note-color="orange"]').click();
-  await editor.getByRole('button', { name: 'Add function' }).click();
+  await editor.getByRole('button', { name: 'New Function' }).click();
   await editor.getByLabel('Function expression').fill('cos(theta)');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
 
+  await openGraphInfo(secondCalculator);
   await expect(secondCalculator.locator('.calc-function-item')).toHaveCount(2);
   await expect(secondCalculator.locator('.calc-function-summary').first()).toContainText('sin(theta)');
   await expect.poll(() => secondCalculator.locator('.calc-function-swatch').first()
     .evaluate(element => element.style.getPropertyValue('--function-color'))).toBe('#e47b27');
+  await openGraphInfo(firstCalculator);
   await firstCalculator.getByRole('button', { name: /Hide function/ }).first().click();
   await expect(secondCalculator.locator('.calc-function-toggle[aria-pressed="false"]')).toHaveCount(1);
 
@@ -803,6 +952,7 @@ test('open calculator windows stay in sync when graph settings change', async ({
   const reopenedCalculator = await openUtility(page, 'calculator');
   await chooseCalculatorMode(reopenedCalculator, 'Graph');
   await expect(reopenedCalculator.locator('.calc-mode-label')).toHaveText('POLAR');
+  await openGraphInfo(reopenedCalculator);
   await expect(reopenedCalculator.locator('.calc-function-item')).toHaveCount(2);
   await expect(reopenedCalculator.locator('.calc-function-toggle[aria-pressed="false"]')).toHaveCount(1);
   await expect(reopenedCalculator.locator('.calc-plot-area')).toHaveAttribute('aria-valuetext', /theta -2 to 8/);
@@ -818,7 +968,7 @@ test('calculator safely resets malformed or outdated saved graph settings', asyn
     await expect(recovery).toContainText('Defaults are active.');
     await recovery.getByRole('button', { name: 'Reset saved graph' }).click();
     await expect(recovery).toBeHidden();
-    await expect(calculator.locator('.calc-function-item')).toHaveCount(1);
+    await expect(calculator.locator('.calc-function-item')).toHaveCount(0);
     await expect(calculator.locator('.calc-mode-label')).toHaveText('CARTESIAN');
     await expect.poll(() => page.evaluate(() => localStorage.getItem('personal-desktop-calculator-graph-v1'))).toBeNull();
     await page.locator('#close-btn').click();
@@ -868,7 +1018,7 @@ test('calculator keeps graph storage warnings visible until settings save succes
   await expect(warning).toBeHidden();
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('personal-desktop-calculator-graph-v1') || 'null')?.version
-  )).toBe(1);
+  )).toBe(2);
 });
 
 test('calculator graph zoom and pan work in every mode without changing configured ranges', async ({ page }) => {
@@ -971,7 +1121,7 @@ test('calculator graph zoom and pan work in every mode without changing configur
       await expect(rangeDialog.getByLabel(yMin)).toHaveValue('-10');
       await expect(rangeDialog.getByLabel(yMax)).toHaveValue('10');
     }
-    await rangeDialog.getByRole('button', { name: 'Close graph settings' }).click();
+    await rangeDialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   }
 });
 
@@ -1088,7 +1238,7 @@ test('calculator shows and copies the current view ranges in every graph mode', 
       await expect(dialog.getByLabel(label)).toHaveValue(String(configured[mode.keys[position * 2]]));
       await expect(dialog.getByLabel(mode.maxes[position])).toHaveValue(String(configured[mode.keys[position * 2 + 1]]));
     }
-    await dialog.getByRole('button', { name: 'Close graph settings' }).click();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
     await clickGraphMenuAction(calculator, 'View', 'Reset view');
   }
 });
@@ -1235,7 +1385,7 @@ test('calculator copies and explicitly restores complete graph setups in every m
       };
       await expect(restoredSettings.getByLabel(labels[key])).toHaveValue(value);
     }
-    await restoredSettings.getByRole('button', { name: 'Close graph settings' }).click();
+    await restoredSettings.getByRole('button', { name: 'Cancel', exact: true }).click();
   }
 });
 
@@ -1361,7 +1511,7 @@ test('basic and scientific calculator modes remain usable after graphing', async
 test('calculator mode persists and editor fields include caret-aware backspace buttons', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   await chooseCalculatorMode(calculator, 'Scientific');
-  await expect(calculator.locator('.calc-mode-trigger')).toHaveText('Scientific');
+  await expect(calculator.locator('.calc-mode-select .standard-select-trigger')).toHaveText('Scientific');
   const backspace = calculator.locator('.calc-backspace');
   await expect.poll(() => backspace.evaluate(element => ({
     width: getComputedStyle(element).width,
@@ -1373,7 +1523,7 @@ test('calculator mode persists and editor fields include caret-aware backspace b
   if (await welcome.isVisible().catch(() => false)) await welcome.click();
   let restored = page.locator('.app-window[data-type="calculator"]').last();
   if (!await restored.count()) restored = await openUtility(page, 'calculator');
-  await expect(restored.locator('.calc-mode-trigger')).toHaveText('Scientific');
+  await expect(restored.locator('.calc-mode-select .standard-select-trigger')).toHaveText('Scientific');
 
   await chooseCalculatorMode(restored, 'Graph');
   await restored.getByRole('button', { name: 'Graph settings' }).click();

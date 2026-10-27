@@ -10,6 +10,7 @@ export function button(text, onClick, className = '') {
 }
 
 export function selectControl(text, options, value, onChange) {
+  const component = document.createElement('app-select');
   const label = document.createElement('label');
   label.append(`${text} `);
   const select = document.createElement('select');
@@ -24,7 +25,9 @@ export function selectControl(text, options, value, onChange) {
   select.value = value;
   select.addEventListener('change', () => onChange(select.value));
   label.append(select);
-  return enhanceSelect(select)?.field || label;
+  component.append(label);
+  enhanceSelect(select);
+  return component;
 }
 
 function createGameSettings(root, toolbar, title, id) {

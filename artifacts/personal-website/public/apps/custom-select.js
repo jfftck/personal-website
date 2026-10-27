@@ -1,6 +1,7 @@
 const controls = new WeakMap();
 const managedControls = new Set();
 const openControls = new Set();
+const appSelectUpgradeGuard = new WeakSet();
 let nextControlId = 1;
 let lifecycleObserver;
 let globalListenersReady = false;
@@ -61,6 +62,18 @@ function labelTextFor(select) {
 export function enhanceSelect(select) {
   if (!(select instanceof HTMLSelectElement) || controls.has(select)) return controls.get(select) || null;
   if (!document.body) return null;
+
+  if (!select.closest('app-select')) {
+    const source = select.closest('label') || select;
+    const parent = source.parentNode;
+    if (parent) {
+      const component = document.createElement('app-select');
+      appSelectUpgradeGuard.add(select);
+      parent.insertBefore(component, source);
+      component.append(source);
+      appSelectUpgradeGuard.delete(select);
+    }
+  }
 
   const { label, text: labelText } = labelTextFor(select);
   const controlNumber = nextControlId++;
@@ -428,3 +441,23 @@ export function focusCustomSelect(select) {
   const control = controls.get(select);
   (control?.trigger || select)?.focus({ preventScroll: true });
 }
+
+class AppSelectElement extends HTMLElement {
+  connectedCallback() {
+    const select = this.querySelector('select');
+    if (select && !appSelectUpgradeGuard.has(select)) enhanceSelect(select);
+  }
+
+  focus(options) {
+    const select = this.querySelector('select');
+    if (select) focusCustomSelect(select);
+    else super.focus?.(options);
+  }
+
+  refresh() {
+    const select = this.querySelector('select');
+    if (select) refreshCustomSelect(select);
+  }
+}
+
+if (!customElements.get('app-select')) customElements.define('app-select', AppSelectElement);
