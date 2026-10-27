@@ -228,13 +228,6 @@ export function buildCalculator(id, ctx) {
           <div class="calc-display">
             <div class="calc-display-header">
               <label class="calc-expression-label" for="${expressionId}">Expression</label>
-              <div class="calc-base-control" role="group" aria-label="Number base">
-                <span class="calc-base-label">Base</span>
-                <button type="button" data-radix="2" aria-label="Base 2" aria-pressed="false">2</button>
-                <button type="button" data-radix="8" aria-label="Base 8" aria-pressed="false">8</button>
-                <button type="button" data-radix="10" aria-label="Base 10" aria-pressed="true">10</button>
-                <button type="button" data-radix="16" aria-label="Base 16" aria-pressed="false">16</button>
-              </div>
               <button type="button" class="calc-backspace" aria-label="Backspace" title="Delete the previous character">⌫</button>
             </div>
             <input class="calc-expression" id="${expressionId}" aria-label="Expression" inputmode="decimal" autocomplete="off" spellcheck="false" value="0">
@@ -242,15 +235,22 @@ export function buildCalculator(id, ctx) {
             <p class="calc-message" role="status" aria-live="polite"></p>
           </div>
           <div class="calc-keypads">
-            <div class="calc-memory" role="group" aria-label="Memory">
-              <button type="button" data-memory="store" aria-label="Memory store" title="Store result">MS</button>
-              <button type="button" data-memory="recall" aria-label="Memory recall" title="Recall memory" disabled>MR</button>
-              <button type="button" data-memory="add" aria-label="Add to memory" title="Add to memory">M+</button>
-              <button type="button" data-memory="subtract" aria-label="Subtract from memory" title="Subtract from memory">M−</button>
-            </div>
             <div class="calc-keypad-columns">
               <div class="calc-keys" aria-label="Calculator keypad"></div>
-              <div class="calc-extra-keys">
+              <div class="calc-keypad-support">
+                <div class="calc-memory" role="group" aria-label="Memory">
+                  <button type="button" data-memory="store" aria-label="Memory store" title="Store result">MS</button>
+                  <button type="button" data-memory="recall" aria-label="Memory recall" title="Recall memory" disabled>MR</button>
+                  <button type="button" data-memory="add" aria-label="Add to memory" title="Add to memory">M+</button>
+                  <button type="button" data-memory="subtract" aria-label="Subtract from memory" title="Subtract from memory">M−</button>
+                </div>
+                <div class="calc-base-control" role="group" aria-label="Number base">
+                  <span class="calc-base-label">Base</span>
+                  <button type="button" data-radix="2" aria-label="Base 2" aria-pressed="false">2</button>
+                  <button type="button" data-radix="8" aria-label="Base 8" aria-pressed="false">8</button>
+                  <button type="button" data-radix="10" aria-label="Base 10" aria-pressed="true">10</button>
+                  <button type="button" data-radix="16" aria-label="Base 16" aria-pressed="false">16</button>
+                </div>
                 <div class="calc-hex-keys" aria-label="Hexadecimal digits" hidden></div>
                 <div class="calc-scientific" aria-label="Scientific keypad" hidden></div>
               </div>

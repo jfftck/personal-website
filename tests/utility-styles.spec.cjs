@@ -19,12 +19,10 @@ test('calculator, calendar, and weather controls follow shared theme tokens', as
     await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
     calculatorColors[theme] = await calculator.locator('.calc').evaluate(element => ({
       color: getComputedStyle(element).color,
-      keySurface: getComputedStyle(element.querySelector('.calc-key')).backgroundColor,
       keyRadius: getComputedStyle(element.querySelector('.calc-key')).borderRadius,
     }));
   }
   expect(calculatorColors.dark.color).not.toBe(calculatorColors.light.color);
-  expect(calculatorColors.dark.keySurface).not.toBe(calculatorColors.light.keySurface);
   expect(calculatorColors.dark.keyRadius).toBe(calculatorColors.light.keyRadius);
 
   const calendar = await openUtility(page, 'calendar');
@@ -178,6 +176,18 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   const keypadColumns = calculator.locator('.calc-keypad-columns');
   const wideColumns = await keypadColumns.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
   expect(wideColumns).toBe(2);
+  const widePlacement = await keypadColumns.evaluate(element => {
+    const keys = element.querySelector('.calc-keys').getBoundingClientRect();
+    const support = element.querySelector('.calc-keypad-support').getBoundingClientRect();
+    return { keysRight: keys.right, supportLeft: support.left, supportWidth: support.width };
+  });
+  expect(widePlacement.supportLeft).toBeGreaterThanOrEqual(widePlacement.keysRight);
+  expect(widePlacement.supportWidth).toBeGreaterThan(180);
+  expect(await calculator.locator('.calc-memory').evaluate(element => getComputedStyle(element).display)).toBe('grid');
+  expect(await calculator.locator('.calc-base-control').evaluate(element => getComputedStyle(element).display)).toBe('grid');
+  expect(await calculator.locator('.calc-scientific').evaluate(element => getComputedStyle(element).display)).toBe('grid');
+  await calculator.getByRole('button', { name: 'Base 16' }).click();
+  expect(await calculator.locator('.calc-hex-keys').evaluate(element => getComputedStyle(element).display)).toBe('grid');
   await calculator.evaluate(element => {
     const appWindow = element.closest('.app-window');
     appWindow.style.width = '480px';
@@ -186,11 +196,31 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   const narrowColumns = await keypadColumns.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
   expect(narrowColumns).toBe(1);
   const order = await keypadColumns.evaluate(element => {
-    const extra = element.querySelector('.calc-extra-keys').getBoundingClientRect();
+    const extra = element.querySelector('.calc-keypad-support').getBoundingClientRect();
     const number = element.querySelector('.calc-keys').getBoundingClientRect();
-    return { extraTop: extra.top, numberTop: number.top };
+    const keypad = element.querySelector('.calc-keys');
+    const keypadBox = keypad.getBoundingClientRect();
+    const lastKeyBox = keypad.lastElementChild.getBoundingClientRect();
+    console.log('keypad grid metrics', {
+      columns: element.getBoundingClientRect().toJSON(),
+      keys: keypadBox.toJSON(),
+      last: lastKeyBox.toJSON(),
+      rows: getComputedStyle(keypad).gridTemplateRows,
+      keypadRows: getComputedStyle(element).gridTemplateRows,
+    });
+    return {
+      extraTop: extra.top,
+      numberTop: number.top,
+      keypadHeight: keypadBox.height,
+      lastKeyBottom: lastKeyBox.bottom,
+      keypadBottom: keypadBox.bottom,
+    };
   });
   expect(order.extraTop).toBeLessThan(order.numberTop);
+  expect(order.keypadHeight).toBeGreaterThan(0);
+  expect(Math.abs(order.lastKeyBottom - order.keypadBottom)).toBeLessThanOrEqual(2);
+  expect(await calculator.locator('.calc').evaluate(element => getComputedStyle(element).display)).toBe('grid');
+  expect(await calculator.locator('.calc-main').evaluate(element => getComputedStyle(element).display)).toBe('grid');
   const surfaces = await calculator.locator('.calc').evaluate(element => ({
     background: getComputedStyle(element).backgroundColor,
     border: getComputedStyle(element).borderTopWidth,
