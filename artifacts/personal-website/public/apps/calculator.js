@@ -35,16 +35,20 @@ const VIEW_RANGE_KEYS = {
   parametric: ['tMin', 'tMax', 'xMin', 'xMax', 'yMin', 'yMax'],
 };
 let nextFunctionId = 1;
+const calculatorGraphSubscribers = new Set();
 
 function validRangePair(min, max) {
   return Number.isFinite(Number(min)) && Number.isFinite(Number(max)) &&
     Number.isFinite(Number(max) - Number(min)) && Number(min) < Number(max);
 }
 
-function readSavedGraphSettings() {
+function readSavedGraphSettings(rawOverride) {
   let raw;
-  try { raw = localStorage.getItem(GRAPH_SETTINGS_KEY); }
-  catch { return { status: 'unavailable' }; }
+  if (arguments.length) raw = rawOverride;
+  else {
+    try { raw = localStorage.getItem(GRAPH_SETTINGS_KEY); }
+    catch { return { status: 'unavailable' }; }
+  }
   if (raw === null) return { status: 'empty' };
 
   try {
@@ -252,9 +256,66 @@ export function buildCalculator(id, ctx) {
   }
   $('.calc-mode-label').textContent = graphMode.toUpperCase();
 
+  function applySavedGraphSettings(saved) {
+    if (saved.status === 'empty') {
+      graphMode = 'cartesian';
+      settingsMode = graphMode;
+      ranges = { ...DEFAULT_GRAPH_RANGES };
+      viewRanges = null;
+      functions = [makeFunction('sin(x)')];
+      activeFunctionId = functions[0].id;
+      recoveryNotice.hidden = true;
+    } else if (saved.status === 'valid') {
+      graphMode = saved.graphMode;
+      settingsMode = graphMode;
+      ranges = saved.ranges;
+      viewRanges = Object.keys(saved.viewRanges).length ? saved.viewRanges : null;
+      functions = saved.functions;
+      activeFunctionId = functions.some(fn => fn.id === activeFunctionId)
+        ? activeFunctionId
+        : functions[0].id;
+      nextFunctionId = Math.max(nextFunctionId, ...functions.map(fn => Number(fn.id.slice(3)) + 1));
+      recoveryNotice.hidden = true;
+    } else return;
+
+    $('.calc-mode-label').textContent = graphMode.toUpperCase();
+    renderFunctions();
+    plot(false);
+  }
+
+  function broadcastGraphSettings() {
+    const saved = readSavedGraphSettings(JSON.stringify({
+      version: GRAPH_SETTINGS_VERSION,
+      graphMode,
+      ranges,
+      functions: functions.map(({ id: functionId, expression, xExpression, yExpression, color, visible }) => ({
+        id: functionId, expression, xExpression, yExpression, color, visible,
+      })),
+      viewRanges,
+    }));
+    if (saved.status === 'valid') {
+      calculatorGraphSubscribers.forEach(subscriber => {
+        if (subscriber !== onGraphSettingsChanged) subscriber(saved);
+      });
+    }
+  }
+
+  function onGraphSettingsChanged(saved) {
+    applySavedGraphSettings(saved);
+  }
+  calculatorGraphSubscribers.add(onGraphSettingsChanged);
+  function onStorageGraphSettings(event) {
+    if (event.key === GRAPH_SETTINGS_KEY) {
+      applySavedGraphSettings(event.newValue === null
+        ? { status: 'empty' }
+        : readSavedGraphSettings(event.newValue));
+    }
+  }
+  window.addEventListener('storage', onStorageGraphSettings);
+
   function persistGraphSettings() {
     try {
-      localStorage.setItem(GRAPH_SETTINGS_KEY, JSON.stringify({
+      const serialized = JSON.stringify({
         version: GRAPH_SETTINGS_VERSION,
         graphMode,
         ranges,
@@ -262,7 +323,14 @@ export function buildCalculator(id, ctx) {
           id: functionId, expression, xExpression, yExpression, color, visible,
         })),
         viewRanges,
-      }));
+      });
+      localStorage.setItem(GRAPH_SETTINGS_KEY, serialized);
+      const saved = readSavedGraphSettings(serialized);
+      if (saved.status === 'valid') {
+        calculatorGraphSubscribers.forEach(subscriber => {
+          if (subscriber !== onGraphSettingsChanged) subscriber(saved);
+        });
+      }
     } catch {
       graphStatus.textContent = 'Graph settings could not be saved in this browser.';
     }
@@ -282,6 +350,7 @@ export function buildCalculator(id, ctx) {
       renderFunctions();
       plot();
       graphStatus.textContent = 'Saved graph reset to defaults.';
+      broadcastGraphSettings();
     } catch {
       recoveryMessage.textContent = 'Saved graph settings could not be cleared. Check this browser’s storage settings and try again.';
       recoveryNotice.hidden = false;
@@ -931,7 +1000,11 @@ export function buildCalculator(id, ctx) {
   };
   document.addEventListener('keydown', onKey);
   renderHistory();
-  if (ctx?.appApis && id) ctx.appApis[id] = { destroy: () => document.removeEventListener('keydown', onKey) };
+  if (ctx?.appApis && id) ctx.appApis[id] = { destroy: () => {
+    document.removeEventListener('keydown', onKey);
+    window.removeEventListener('storage', onStorageGraphSettings);
+    calculatorGraphSubscribers.delete(onGraphSettingsChanged);
+  } };
   return root;
 }
 

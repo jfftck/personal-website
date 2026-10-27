@@ -344,6 +344,49 @@ test('calculator graph functions, colors, visibility, mode, and ranges persist a
   await expect(settings.getByLabel('Maximum x')).toHaveValue('4');
 });
 
+test('open calculator windows stay in sync when graph settings change', async ({ page }) => {
+  const firstCalculator = await openUtility(page, 'calculator');
+  const secondCalculator = await openUtility(page, 'calculator');
+  await expect(page.locator('.app-window[data-type="calculator"]')).toHaveCount(2);
+  await firstCalculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await secondCalculator.getByRole('button', { name: 'Graph', exact: true }).click();
+
+  await firstCalculator.getByRole('button', { name: 'Graph settings' }).click();
+  const settings = firstCalculator.getByRole('dialog', { name: 'Graph settings' });
+  const graphMode = settings.getByRole('combobox', { name: 'Graph mode' });
+  await graphMode.click();
+  await settings.getByRole('option', { name: /Polar/ }).click();
+  await settings.getByLabel('Minimum theta').fill('-2');
+  await settings.getByLabel('Maximum theta').fill('8');
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await expect(secondCalculator.locator('.calc-mode-label')).toHaveText('POLAR');
+  await expect(secondCalculator.locator('.calc-plot-area')).toHaveAttribute('aria-valuetext', /theta -2 to 8/);
+
+  await firstCalculator.getByRole('button', { name: 'Edit functions' }).click();
+  const editor = firstCalculator.getByRole('dialog', { name: 'Edit functions' });
+  await editor.getByLabel('Function expression').fill('sin(theta)');
+  await editor.locator('.note-color-choice[data-note-color="orange"]').click();
+  await editor.getByRole('button', { name: 'Add function' }).click();
+  await editor.getByLabel('Function expression').fill('cos(theta)');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+
+  await expect(secondCalculator.locator('.calc-function-item')).toHaveCount(2);
+  await expect(secondCalculator.locator('.calc-function-summary').first()).toContainText('sin(theta)');
+  await expect.poll(() => secondCalculator.locator('.calc-function-swatch').first()
+    .evaluate(element => element.style.getPropertyValue('--function-color'))).toBe('#e47b27');
+  await firstCalculator.getByRole('button', { name: /Hide function/ }).first().click();
+  await expect(secondCalculator.locator('.calc-function-toggle[aria-pressed="false"]')).toHaveCount(1);
+
+  await secondCalculator.locator('.calc-graph-toolbar').click();
+  await page.locator('#close-btn').click();
+  const reopenedCalculator = await openUtility(page, 'calculator');
+  await reopenedCalculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await expect(reopenedCalculator.locator('.calc-mode-label')).toHaveText('POLAR');
+  await expect(reopenedCalculator.locator('.calc-function-item')).toHaveCount(2);
+  await expect(reopenedCalculator.locator('.calc-function-toggle[aria-pressed="false"]')).toHaveCount(1);
+  await expect(reopenedCalculator.locator('.calc-plot-area')).toHaveAttribute('aria-valuetext', /theta -2 to 8/);
+});
+
 test('calculator safely resets malformed or outdated saved graph settings', async ({ page }) => {
   for (const saved of ['{broken', JSON.stringify({ version: 0, graphMode: 'cartesian' })]) {
     await page.evaluate(value => localStorage.setItem('personal-desktop-calculator-graph-v1', value), saved);
