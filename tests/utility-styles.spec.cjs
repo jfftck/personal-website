@@ -183,6 +183,8 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   });
   expect(widePlacement.supportLeft).toBeGreaterThanOrEqual(widePlacement.keysRight);
   expect(widePlacement.supportWidth).toBeGreaterThan(180);
+  expect(await calculator.locator('.calc-keys').evaluate(element => getComputedStyle(element).display)).toBe('grid');
+  expect(await calculator.locator('.calc-keypad-support').evaluate(element => getComputedStyle(element).display)).toBe('grid');
   expect(await calculator.locator('.calc-memory').evaluate(element => getComputedStyle(element).display)).toBe('grid');
   expect(await calculator.locator('.calc-base-control').evaluate(element => getComputedStyle(element).display)).toBe('grid');
   expect(await calculator.locator('.calc-scientific').evaluate(element => getComputedStyle(element).display)).toBe('grid');
@@ -194,31 +196,41 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
     appWindow.style.height = '760px';
   });
   const narrowColumns = await keypadColumns.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
-  expect(narrowColumns).toBe(1);
+  expect(narrowColumns).toBe(2);
+  const mediumPlacement = await keypadColumns.evaluate(element => {
+    const keys = element.querySelector('.calc-keys').getBoundingClientRect();
+    const support = element.querySelector('.calc-keypad-support').getBoundingClientRect();
+    return { keysRight: keys.right, supportLeft: support.left };
+  });
+  expect(mediumPlacement.supportLeft).toBeGreaterThanOrEqual(mediumPlacement.keysRight);
+  await calculator.evaluate(element => {
+    const appWindow = element.closest('.app-window');
+    appWindow.style.width = '360px';
+    appWindow.style.height = '760px';
+  });
+  const compactColumns = await keypadColumns.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
+  expect(compactColumns).toBe(1);
   const order = await keypadColumns.evaluate(element => {
     const extra = element.querySelector('.calc-keypad-support').getBoundingClientRect();
     const number = element.querySelector('.calc-keys').getBoundingClientRect();
     const keypad = element.querySelector('.calc-keys');
     const keypadBox = keypad.getBoundingClientRect();
     const lastKeyBox = keypad.lastElementChild.getBoundingClientRect();
-    console.log('keypad grid metrics', {
-      columns: element.getBoundingClientRect().toJSON(),
-      keys: keypadBox.toJSON(),
-      last: lastKeyBox.toJSON(),
-      rows: getComputedStyle(keypad).gridTemplateRows,
-      keypadRows: getComputedStyle(element).gridTemplateRows,
-    });
+    const columnsBox = element.getBoundingClientRect();
     return {
-      extraTop: extra.top,
+      supportTop: extra.top,
       numberTop: number.top,
       keypadHeight: keypadBox.height,
       lastKeyBottom: lastKeyBox.bottom,
       keypadBottom: keypadBox.bottom,
+      keypadWidth: keypadBox.width,
+      columnsWidth: columnsBox.width,
     };
   });
-  expect(order.extraTop).toBeLessThan(order.numberTop);
+  expect(order.supportTop).toBeLessThan(order.numberTop);
   expect(order.keypadHeight).toBeGreaterThan(0);
-  expect(Math.abs(order.lastKeyBottom - order.keypadBottom)).toBeLessThanOrEqual(2);
+  expect(Math.abs(order.lastKeyBottom - order.keypadBottom), JSON.stringify(order)).toBeLessThanOrEqual(2);
+  expect(Math.abs(order.keypadWidth - order.columnsWidth)).toBeLessThanOrEqual(2);
   expect(await calculator.locator('.calc').evaluate(element => getComputedStyle(element).display)).toBe('grid');
   expect(await calculator.locator('.calc-main').evaluate(element => getComputedStyle(element).display)).toBe('grid');
   const surfaces = await calculator.locator('.calc').evaluate(element => ({

@@ -3457,7 +3457,7 @@ kbd {
 .calc-key:disabled { cursor:not-allowed; opacity:.38; }
 .calc-hex-keys { display:grid; grid-column:1/-1; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.25rem; min-width:0; padding:.35rem; }
 .calc-hex-keys[hidden] { display:none; }
-.calc-hex-key { min-height:2rem!important; font-size:.88rem!important; }
+.calc-hex-key { min-height:1.65rem!important; font-size:.88rem!important; }
 .calc-wrap[data-radix="16"] .calc-hex-keys { display:grid; }
 .calc-wrap[data-mode="basic"] .calc-base-control { display:none; }
 .calc-scientific:not([hidden]) {
@@ -3465,7 +3465,22 @@ kbd {
   gap:.25rem; min-width:0; margin:0; padding:.35rem;
 }
 .calc-scientific[hidden] { display:none; }
-@container calc-surface (min-width: 600px) {
+@container calc-surface (width < 600px) {
+  .calc-keypad-support { grid-template-columns:repeat(2,minmax(0,1fr)); gap:.25rem; padding:.15rem; }
+  .calc-memory,.calc-base-control { grid-column:auto; }
+  .calc-memory,.calc-base-control,.calc-hex-keys,.calc-scientific:not([hidden]) { padding:.2rem; }
+  .calc-memory button,.calc-base-control button { min-height:1.5rem; }
+  .calc-wrap[data-mode="basic"] .calc-memory { grid-column:1/-1; }
+  .calc-wrap:not([data-radix="16"]) .calc-scientific:not([hidden]),
+  .calc-wrap[data-mode="basic"] .calc-hex-keys { grid-column:1/-1; }
+  .calc-wrap[data-radix="16"] .calc-scientific:not([hidden]),
+  .calc-wrap[data-radix="16"] .calc-hex-keys { grid-column:auto; }
+  .calc-scientific:not([hidden]) { gap:.12rem; }
+  .calc-scientific .calc-science-key { min-height:1.45rem; }
+  .calc-keypads .calc-key { min-height:1.5rem; }
+  .calc-wrap[data-mode="scientific"] .calc-keypads .calc-key { min-height:1.5rem; }
+}
+@container calc-surface (min-width: 460px) {
   .calc-keypad-columns {
     grid-template-columns:minmax(0,1.1fr) minmax(13rem,.8fr);
     grid-template-rows:minmax(0,1fr);
