@@ -13,13 +13,31 @@ const BASIC_KEYS = [
 const SCIENTIFIC_KEYS = ['sin(', 'cos(', 'tan(', 'ln(', 'log(', '√(', 'π', 'e', '^', '(', ')'];
 const HEX_DIGITS = ['A', 'B', 'C', 'D', 'E', 'F'];
 const GRAPH_KEYS = [
-  'sin(', 'cos(', 'tan(', 'sqrt(', 'ln(', 'log(',
-  'pi', 'e', 'x', 'theta', 't', '^',
+  'sin(', 'cos(', 'tan(', '√(', 'ln(', 'log(',
+  'π', 'e', 'x', 'θ', 't', '^',
   '7', '8', '9', '÷', '(', ')',
   '4', '5', '6', '×', '+', '−',
   '1', '2', '3', '%', '/', '.',
   '0', 'Clear', '⌫',
 ];
+const BASIC_KEY_TOOLTIPS = Object.freeze({
+  '±': 'Change sign', '%': 'Percent', '÷': 'Divide', '×': 'Multiply', '−': 'Subtract', '+': 'Add',
+  '=': 'Equals', '.': 'Decimal point',
+});
+const SCIENTIFIC_KEY_TOOLTIPS = Object.freeze({
+  '√(': 'Square root', 'π': 'Pi', e: 'Euler’s number',
+  '^': 'Power', '(': 'Open parenthesis', ')': 'Close parenthesis',
+});
+const GRAPH_KEY_TOOLTIPS = Object.freeze({
+  '√(': 'Square root', 'π': 'Pi', 'θ': 'Theta', e: 'Euler’s number',
+  '÷': 'Divide', '×': 'Multiply', '+': 'Add', '−': 'Subtract',
+  '^': 'Power', '%': 'Modulo', '/': 'Divide', '.': 'Decimal point',
+  '(': 'Open parenthesis', ')': 'Close parenthesis',
+});
+const MATH_SYMBOL_ALIASES = Object.freeze({
+  'θ': 'theta', 'Θ': 'theta', 'π': 'pi', 'Π': 'pi', '√': 'sqrt',
+  '×': '*', '÷': '/', '−': '-',
+});
 const HISTORY_LIMIT = 24;
 const GRAPH_SETTINGS_KEY = 'personal-desktop-calculator-graph-v1';
 const GRAPH_SETTINGS_VERSION = 1;
@@ -152,7 +170,7 @@ function parseRadixNumber(raw, radix) {
 
 function scanExpressionTokens(source, radix = 10) {
   const tokens = [];
-  const pattern = /\s*(0[bxo][0-9a-f]+(?:\.[0-9a-f]*)?|\d+(?:\.\d*)?|\.\d+|[a-zA-Z]+|[+\-*/%^()])/gyi;
+  const pattern = /\s*(0[bxo][0-9a-f]+(?:\.[0-9a-f]*)?|\d+(?:\.\d*)?|\.\d+|[a-zA-Z]+|[θΘπΠ√×÷−]|[+\-*/%^()])/gyi;
   let position = 0;
   while (position < source.length) {
     if (!source.slice(position).trim()) break;
@@ -160,7 +178,7 @@ function scanExpressionTokens(source, radix = 10) {
     const match = pattern.exec(source);
     if (!match) throw new Error(`Unsupported character “${source[position]}”.`);
     const raw = match[1];
-    const value = raw.toLowerCase();
+    const value = MATH_SYMBOL_ALIASES[raw] || raw.toLowerCase();
     const start = match.index + match[0].length - raw.length;
     const numeric = /^\d|\./.test(value);
     if (/^[a-z]+$/.test(value) && !['x', 'theta', 't', 'pi', 'e', 'sin', 'cos', 'tan', 'ln', 'log', 'sqrt'].includes(value)) {
@@ -321,7 +339,7 @@ export function buildCalculator(id, ctx) {
         <label class="calc-setting-field">Graph mode
           <select class="calc-graph-mode" aria-label="Graph mode">
             <option value="cartesian">Cartesian · y = f(x)</option>
-            <option value="polar">Polar · r = f(theta)</option>
+            <option value="polar" title="theta">Polar · r = f(θ)</option>
             <option value="parametric">Parametric · x(t), y(t)</option>
           </select>
         </label>
@@ -625,6 +643,7 @@ export function buildCalculator(id, ctx) {
     const button = document.createElement('button');
     button.type = 'button'; button.className = `calc-key ${kind.includes('operator') ? 'operator' : ''} ${kind.includes('equals') ? 'equals' : ''} ${kind.includes('wide') ? 'wide' : ''}`;
     button.textContent = label;
+    if (BASIC_KEY_TOOLTIPS[label]) button.title = BASIC_KEY_TOOLTIPS[label];
     if (kind.includes('digit')) button.dataset.digit = label;
     button.addEventListener('click', () => {
       if (kind.includes('clear')) clear();
@@ -644,9 +663,11 @@ export function buildCalculator(id, ctx) {
   });
   SCIENTIFIC_KEYS.forEach(label => {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'calc-science-key'; button.textContent = label;
-    if (label === 'π') button.setAttribute('aria-label', 'Pi');
-    if (label === 'e') button.setAttribute('aria-label', 'Euler’s number');
-    button.addEventListener('click', () => insert(label === '√(' ? 'sqrt(' : label === 'π' ? 'pi' : label, true)); scientific.append(button);
+    if (SCIENTIFIC_KEY_TOOLTIPS[label]) {
+      button.title = SCIENTIFIC_KEY_TOOLTIPS[label];
+      button.setAttribute('aria-label', SCIENTIFIC_KEY_TOOLTIPS[label]);
+    }
+    button.addEventListener('click', () => insert(label, true)); scientific.append(button);
   });
   HEX_DIGITS.forEach(digit => {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'calc-key calc-hex-key';
@@ -735,13 +756,15 @@ export function buildCalculator(id, ctx) {
     const fields = fieldMode === 'cartesian'
       ? [['xMin', 'Minimum x'], ['xMax', 'Maximum x'], ['yMin', 'Minimum y'], ['yMax', 'Maximum y']]
       : fieldMode === 'polar'
-        ? [['thetaMin', 'Minimum theta'], ['thetaMax', 'Maximum theta'], ['rMin', 'Minimum r'], ['rMax', 'Maximum r']]
+        ? [['thetaMin', 'Minimum θ'], ['thetaMax', 'Maximum θ'], ['rMin', 'Minimum r'], ['rMax', 'Maximum r']]
         : [['tMin', 'Minimum t'], ['tMax', 'Maximum t'], ['xMin', 'Minimum x'], ['xMax', 'Maximum x'], ['yMin', 'Minimum y'], ['yMax', 'Maximum y']];
     fields.forEach(([key, label]) => {
       const wrapper = document.createElement('label'); wrapper.className = 'calc-setting-field';
       wrapper.textContent = label;
       const field = document.createElement('input'); field.type = 'number'; field.step = 'any'; field.dataset.range = key; field.value = ranges[key];
-      field.setAttribute('aria-label', label); wrapper.append(field); holder.append(wrapper);
+      field.setAttribute('aria-label', label.replace('θ', 'theta'));
+      if (label.includes('θ')) field.title = 'theta';
+      wrapper.append(field); holder.append(wrapper);
     });
   }
   function openSettings() {
@@ -821,7 +844,9 @@ export function buildCalculator(id, ctx) {
       });
     } else {
       regularLabel.hidden = false; fieldWrap.hidden = true;
-      regularLabel.firstChild.textContent = graphMode === 'polar' ? 'r(theta)' : 'y = f(x)';
+      regularLabel.firstChild.textContent = graphMode === 'polar' ? 'r(θ)' : 'y = f(x)';
+      regularLabel.title = graphMode === 'polar' ? 'theta' : '';
+      regularInput.title = graphMode === 'polar' ? 'theta' : '';
       regularInput.value = fn.expression;
     }
     const colorOptions = $('.calc-color-options'); colorOptions.replaceChildren();
@@ -873,6 +898,10 @@ export function buildCalculator(id, ctx) {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'calc-function-key'; button.textContent = key;
     if (key === 'Clear') button.setAttribute('aria-label', 'Clear expression');
     if (key === '⌫') button.setAttribute('aria-label', 'Delete previous character');
+    if (GRAPH_KEY_TOOLTIPS[key]) {
+      button.title = GRAPH_KEY_TOOLTIPS[key];
+      if (['√(', 'π', 'θ'].includes(key)) button.setAttribute('aria-label', GRAPH_KEY_TOOLTIPS[key]);
+    }
     button.addEventListener('click', () => {
       const field = lastEditorField?.isConnected ? lastEditorField : (graphMode === 'parametric' ? $('.calc-editor-x') : $('.calc-editor-expression'));
       const start = field.selectionStart ?? field.value.length, end = field.selectionEnd ?? start;

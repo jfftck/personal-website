@@ -164,8 +164,12 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   expect(displayGeometry.button.left).toBeGreaterThan(displayGeometry.label.right);
 
   await expect(calculator.getByRole('button', { name: 'Base 2' })).toBeHidden();
+  await expect(calculator.getByRole('button', { name: '÷', exact: true })).toHaveAttribute('title', 'Divide');
   await calculator.getByRole('button', { name: 'Scientific' }).click();
   await expect(calculator.getByRole('button', { name: 'Base 2' })).toBeVisible();
+  await expect(calculator.getByRole('button', { name: 'Square root' })).toHaveAttribute('title', 'Square root');
+  await expect(calculator.getByRole('button', { name: 'Pi' })).toHaveAttribute('title', 'Pi');
+  await expect(calculator.getByRole('button', { name: 'Euler’s number' })).toHaveAttribute('title', 'Euler’s number');
   await expression.fill('7+3');
   await calculator.getByRole('button', { name: 'Base 2' }).click();
   await expect(expression).toHaveValue('0b111+0b11');
@@ -229,6 +233,15 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   await calculator.getByRole('button', { name: 'Euler’s number' }).click();
   await calculator.getByRole('button', { name: '=', exact: true }).click();
   await expect(output).toHaveText('5.85987448205');
+  await expression.fill('√(π)');
+  await calculator.getByRole('button', { name: '=', exact: true }).click();
+  await expect(output).toHaveText('1.77245385091');
+  await expression.fill('sqrt(pi)');
+  await calculator.getByRole('button', { name: '=', exact: true }).click();
+  await expect(output).toHaveText('1.77245385091');
+  await expression.fill('2×3');
+  await calculator.getByRole('button', { name: '=', exact: true }).click();
+  await expect(output).toHaveText('6');
 
   await calculator.evaluate(element => {
     const appWindow = element.closest('.app-window');
@@ -332,6 +345,18 @@ test('calculator graph edits multiple functions in an accessible keypad dialog',
   await expect(editor).toBeVisible();
   await expect(editor.getByRole('radio')).toHaveCount(6);
   await expect(editor.getByRole('button', { name: 'sin(', exact: true })).toBeVisible();
+  for (const [name, symbol, tooltip] of [
+    ['Theta', 'θ', 'Theta'],
+    ['Pi', 'π', 'Pi'],
+    ['Square root', '√(', 'Square root'],
+    ['e', 'e', 'Euler’s number'],
+    ['^', '^', 'Power'],
+    ['×', '×', 'Multiply'],
+  ]) {
+    const key = editor.getByRole('button', { name, exact: true });
+    await expect(key).toHaveText(symbol);
+    await expect(key).toHaveAttribute('title', tooltip);
+  }
   await editor.getByRole('button', { name: 'Add function' }).click();
   const functionExpression = editor.getByRole('textbox', { name: 'Function expression' });
   await functionExpression.fill('');
@@ -395,10 +420,20 @@ test('calculator graph settings keep modes and plot ranges independent', async (
   await settings.getByRole('button', { name: 'Apply settings' }).click();
   await calculator.getByRole('button', { name: 'Edit functions' }).click();
   const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
-  await editor.getByLabel('Function expression').fill('sin(theta)');
+  const functionExpression = editor.getByLabel('Function expression');
+  await editor.getByRole('button', { name: 'Clear expression' }).click();
+  await editor.getByRole('button', { name: 'sin(', exact: true }).click();
+  await editor.getByRole('button', { name: 'Theta', exact: true }).click();
+  await editor.getByRole('button', { name: ')', exact: true }).click();
+  await expect(functionExpression).toHaveValue('sin(θ)');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
   await calculator.getByRole('button', { name: 'Plot', exact: true }).click();
   await expect(calculator.locator('.calc-graph-status')).toContainText('polar');
+  await expect(calculator.locator('.calc-graph-line')).toHaveCount(1);
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  await editor.getByLabel('Function expression').fill('sin(theta)');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Plot', exact: true }).click();
   await expect(calculator.locator('.calc-graph-line')).toHaveCount(1);
 
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
