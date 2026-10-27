@@ -2673,6 +2673,11 @@ kbd {
 .calc-editor-function-row input { width:1rem; height:1rem; accent-color:var(--accent); }
 .calc-editor-fields { display:grid; gap:.6rem; min-width:0; }
 .calc-editor-fields label,.calc-setting-field { display:grid; gap:.25rem; color:var(--util-detail); font-size:.75rem; font-weight:650; }
+.calc-editor-fields .calc-editor-expression-label,
+.calc-editor-fields .calc-editor-function-fields label {
+  grid-template-columns:max-content minmax(0,1fr); align-items:center; gap:.55rem;
+}
+.calc-editor-function-fields:not([hidden]) { display:grid; gap:.45rem; }
 .calc-editor-fields input:not([type="radio"]),.calc-setting-field input,.calc-setting-field select {
   width:100%; min-width:0; min-height:2.35rem; padding:.45rem .55rem; border:1px solid var(--app-border); border-radius:.5rem; background:var(--toolbar-bg); color:var(--app-text); font: .9rem ui-monospace,monospace;
 }
@@ -3431,8 +3436,10 @@ kbd {
 }
 
 .calc-display-header { display:flex; align-items:center; gap:.45rem; min-width:0; }
-.calc-display-header { padding-right:2.4rem; }
+.calc-display-header { padding-right:0; }
 .calc-expression-label { flex:none; }
+.calc-expression-input-wrap { position:relative; grid-column:1/-1; min-width:0; }
+.calc-expression { box-sizing:border-box; padding-right:2rem; }
 .calc-base-control { display:grid; grid-column:1/-1; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.12rem; min-width:0; padding:.35rem; }
 .calc-base-label { color:var(--util-detail); font-size:.62rem; font-weight:700; }
 .calc-base-label { grid-column:1/-1; }
@@ -3443,7 +3450,7 @@ kbd {
   font:600 .68rem ui-monospace,monospace;
 }
 .calc-base-control button[aria-pressed="true"] { border-color:var(--accent); background:var(--accent); color:#fff; }
-.calc-backspace { position:absolute; top:.5rem; right:.6rem; min-width:1.8rem; font-size:.95rem; }
+.calc-backspace { position:absolute; top:50%; right:.2rem; transform:translateY(-50%); min-width:1.8rem; font-size:.95rem; }
 .calc-backspace:hover,.calc-base-control button:hover,.calc-memory button:hover { background:var(--util-surface-strong); }
 .calc-base-control button[aria-pressed="true"]:hover { background:var(--accent); }
 .calc-backspace:focus-visible,.calc-base-control button:focus-visible,

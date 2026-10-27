@@ -153,20 +153,33 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   expect(basicLayout.historyRightGap).toBeLessThanOrEqual(1);
   expect(basicLayout.historyBottomGap).toBeLessThanOrEqual(1);
   expect(basicLayout.workspaceTopGap).toBeLessThanOrEqual(1);
-  const displayGeometry = await calculator.locator('.calc-display').evaluate(element => {
-    const panel = element.getBoundingClientRect();
-    const button = element.querySelector('.calc-backspace').getBoundingClientRect();
-    const label = element.querySelector('.calc-expression-label').getBoundingClientRect();
-    return { panel, button, label };
+  const backspaceGeometry = async () => calculator.locator('.calc-expression-input-wrap').evaluate(wrapper => {
+    const buttonElement = wrapper.querySelector('.calc-backspace');
+    const button = buttonElement.getBoundingClientRect();
+    const input = wrapper.querySelector('.calc-expression');
+    const inputBounds = input.getBoundingClientRect();
+    return {
+      buttonInsideInputRow: wrapper.contains(buttonElement) &&
+        button.left >= inputBounds.left && button.right <= inputBounds.right,
+      rightGap: inputBounds.right - button.right,
+      verticalCenterOffset: Math.abs((button.top + button.bottom) / 2 - (inputBounds.top + inputBounds.bottom) / 2),
+      rightPadding: parseFloat(getComputedStyle(input).paddingRight),
+    };
   });
-  expect(displayGeometry.panel.right - displayGeometry.button.right).toBeLessThan(20);
-  expect(displayGeometry.button.top - displayGeometry.panel.top).toBeLessThan(20);
-  expect(displayGeometry.button.left).toBeGreaterThan(displayGeometry.label.right);
+  const basicBackspace = await backspaceGeometry();
+  expect(basicBackspace.buttonInsideInputRow).toBe(true);
+  expect(basicBackspace.rightGap).toBeGreaterThanOrEqual(2);
+  expect(basicBackspace.rightGap).toBeLessThanOrEqual(8);
+  expect(basicBackspace.verticalCenterOffset).toBeLessThanOrEqual(2);
+  expect(basicBackspace.rightPadding).toBeGreaterThanOrEqual(32);
 
   await expect(calculator.getByRole('button', { name: 'Base 2' })).toBeHidden();
   await expect(calculator.getByRole('button', { name: '÷', exact: true })).toHaveAttribute('title', 'Divide · type /');
   await calculator.getByRole('button', { name: 'Scientific' }).click();
   await expect(calculator.getByRole('button', { name: 'Base 2' })).toBeVisible();
+  const scientificBackspace = await backspaceGeometry();
+  expect(scientificBackspace.buttonInsideInputRow).toBe(true);
+  expect(scientificBackspace.rightPadding).toBeGreaterThanOrEqual(32);
   await expect(calculator.getByRole('button', { name: 'Square root' })).toHaveAttribute('title', 'Square root · type sqrt(');
   await expect(calculator.getByRole('button', { name: 'Pi' })).toHaveAttribute('title', 'Pi constant · type pi');
   await expect(calculator.getByRole('button', { name: 'Euler’s number' })).toHaveAttribute('title', 'Euler’s number · type e');
@@ -372,6 +385,20 @@ test('calculator graph edits multiple functions in an accessible keypad dialog',
   const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
   await expect(editor).toBeVisible();
   await expect(editor.getByRole('radio')).toHaveCount(6);
+  await expect(editor.locator('.calc-editor-expression-label')).toContainText('y =');
+  const equationLayout = await editor.locator('.calc-editor-expression-label').evaluate(label => {
+    const input = label.querySelector('input').getBoundingClientRect();
+    const bounds = label.getBoundingClientRect();
+    const style = getComputedStyle(label);
+    return {
+      display: style.display,
+      columns: style.gridTemplateColumns.split(' ').length,
+      inputTopOffset: input.top - bounds.top,
+    };
+  });
+  expect(equationLayout.display).toBe('grid');
+  expect(equationLayout.columns).toBe(2);
+  expect(Math.abs(equationLayout.inputTopOffset)).toBeLessThanOrEqual(2);
   await expect(editor.getByRole('button', { name: 'sin(', exact: true })).toBeVisible();
   for (const [name, symbol, tooltip] of [
     ['sin(', 'sin(', 'Sine function · type sin('],
@@ -454,7 +481,7 @@ test('calculator graph settings keep modes and plot ranges independent', async (
   await expect(calculator.locator('.calc-open-editor')).toHaveText('r = f(θ)');
   await calculator.getByRole('button', { name: 'Edit functions' }).click();
   const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
-  await expect(editor.locator('.calc-editor-expression-label')).toContainText('r(θ)');
+  await expect(editor.locator('.calc-editor-expression-label')).toContainText('r =');
   const functionExpression = editor.getByLabel('Function expression');
   await editor.getByRole('button', { name: 'Clear expression' }).click();
   await editor.getByRole('button', { name: 'sin(', exact: true }).click();
@@ -479,10 +506,22 @@ test('calculator graph settings keep modes and plot ranges independent', async (
   await settings.getByRole('button', { name: 'Apply settings' }).click();
   await expect(calculator.locator('.calc-open-editor')).toHaveText('x(t), y(t)');
   await calculator.getByRole('button', { name: 'Edit functions' }).click();
-  await expect(editor.getByLabel('x(t)')).toBeVisible();
-  await expect(editor.getByLabel('y(t)')).toBeVisible();
-  await editor.getByLabel('x(t)').fill('cos(t)');
-  await editor.getByLabel('y(t)').fill('sin(t)');
+  const xExpression = editor.locator('.calc-editor-x');
+  const yExpression = editor.locator('.calc-editor-y');
+  await expect(xExpression).toBeVisible();
+  await expect(yExpression).toBeVisible();
+  await expect(editor.locator('.calc-editor-function-fields label').nth(0)).toContainText('x(t) =');
+  await expect(editor.locator('.calc-editor-function-fields label').nth(1)).toContainText('y(t) =');
+  await expect(editor.getByRole('button', { name: 'Move to y expression' })).toBeVisible();
+  await xExpression.fill('cos(t)');
+  await yExpression.fill('');
+  await xExpression.focus();
+  await editor.getByRole('button', { name: 'Move to y expression' }).click();
+  await expect(yExpression).toBeFocused();
+  await editor.getByRole('button', { name: 'sin(', exact: true }).click();
+  await editor.getByRole('button', { name: 't', exact: true }).click();
+  await editor.getByRole('button', { name: ')', exact: true }).click();
+  await expect(yExpression).toHaveValue('sin(t)');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
   await calculator.getByRole('button', { name: 'Plot', exact: true }).click();
   await expect(calculator.locator('.calc-graph-status')).toContainText('parametric');

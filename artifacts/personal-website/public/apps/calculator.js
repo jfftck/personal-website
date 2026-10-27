@@ -14,7 +14,7 @@ const SCIENTIFIC_KEYS = ['sin(', 'cos(', 'tan(', 'ln(', 'log(', '√(', 'π', 'e
 const HEX_DIGITS = ['A', 'B', 'C', 'D', 'E', 'F'];
 const GRAPH_KEYS = [
   'sin(', 'cos(', 'tan(', '√(', 'ln(', 'log(',
-  'π', 'e', 'x', 'θ', 't', '^',
+  'π', 'e', 'x', 'θ', 't', ',', '^',
   '7', '8', '9', '÷', '(', ')',
   '4', '5', '6', '×', '+', '−',
   '1', '2', '3', '%', '/', '.',
@@ -292,8 +292,10 @@ export function buildCalculator(id, ctx) {
             <div class="calc-display-header">
               <label class="calc-expression-label" for="${expressionId}">Expression</label>
             </div>
-            <button type="button" class="calc-backspace" aria-label="Backspace" title="Delete the previous character">⌫</button>
-            <input class="calc-expression" id="${expressionId}" aria-label="Expression" inputmode="decimal" autocomplete="off" spellcheck="false" value="0">
+            <div class="calc-expression-input-wrap">
+              <input class="calc-expression" id="${expressionId}" aria-label="Expression" inputmode="decimal" autocomplete="off" spellcheck="false" value="0">
+              <button type="button" class="calc-backspace" aria-label="Backspace" title="Delete the previous character">⌫</button>
+            </div>
             <div class="calc-result-line"><span class="calc-result-caption">RESULT</span><output class="calc-value" aria-live="polite">0</output></div>
             <p class="calc-message" role="status" aria-live="polite"></p>
           </div>
@@ -353,7 +355,7 @@ export function buildCalculator(id, ctx) {
           <nav class="calc-editor-nav" aria-label="Functions"></nav>
           <div class="calc-editor-fields">
             <p class="calc-editor-empty" hidden>No functions yet. Add one to start.</p>
-            <label class="calc-editor-expression-label">Expression
+            <label class="calc-editor-expression-label">y =
             <input class="calc-editor-expression" aria-label="Function expression" autocomplete="off" spellcheck="false">
             </label>
             <div class="calc-editor-function-fields" hidden></div>
@@ -870,6 +872,8 @@ export function buildCalculator(id, ctx) {
     const colorPicker = $('.calc-color-picker');
     const functionKeypad = $('.calc-function-keypad');
     const applyButton = $('.calc-apply-functions');
+    const coordinateSeparator = $('.calc-function-key[data-function-key=","]');
+    if (coordinateSeparator) coordinateSeparator.hidden = graphMode !== 'parametric';
     const fn = editorDraft.find(item => item.id === activeFunctionId);
     if (!fn) {
       emptyMessage.hidden = false;
@@ -889,15 +893,15 @@ export function buildCalculator(id, ctx) {
     if (graphMode === 'parametric') {
       regularLabel.hidden = true; fieldWrap.hidden = false; fieldWrap.replaceChildren();
       [['xExpression', 'x(t)'], ['yExpression', 'y(t)']].forEach(([key, label]) => {
-        const fieldLabel = document.createElement('label'); fieldLabel.textContent = label;
+        const fieldLabel = document.createElement('label'); fieldLabel.textContent = `${label} =`;
         const field = document.createElement('input'); field.className = key === 'xExpression' ? 'calc-editor-x' : 'calc-editor-y'; field.setAttribute('aria-label', label); field.autocomplete = 'off'; field.spellcheck = false; field.value = fn[key];
         fieldLabel.append(field); fieldWrap.append(fieldLabel);
       });
       rememberEditorField($('.calc-editor-x'), true);
     } else {
       regularLabel.hidden = false; fieldWrap.hidden = true;
-      regularLabel.firstChild.textContent = graphMode === 'polar' ? 'r(θ)' : 'y = f(x)';
-      regularLabel.title = graphMode === 'polar' ? 'theta' : '';
+      regularLabel.firstChild.textContent = graphMode === 'polar' ? 'r =' : 'y =';
+      regularLabel.title = '';
       regularInput.title = graphMode === 'polar' ? 'theta' : '';
       regularInput.value = fn.expression;
       rememberEditorField(regularInput, true);
@@ -947,10 +951,26 @@ export function buildCalculator(id, ctx) {
     functions = editorDraft.map(fn => ({ ...fn }));
     $('.calc-editor-error').textContent = ''; editorDialog.close(); renderFunctions(); plot(); persistGraphSettings();
   });
+  function focusParametricY() {
+    if (graphMode !== 'parametric') return;
+    saveEditorDraft();
+    const field = $('.calc-editor-y');
+    if (!field) return;
+    const end = field.value.length;
+    field.focus();
+    field.setSelectionRange(end, end);
+    rememberEditorField(field);
+  }
   GRAPH_KEYS.forEach(key => {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'calc-function-key'; button.textContent = key;
+    button.dataset.functionKey = key;
     if (key === 'Clear') button.setAttribute('aria-label', 'Clear expression');
     if (key === '⌫') button.setAttribute('aria-label', 'Delete previous character');
+    if (key === ',') {
+      button.setAttribute('aria-label', 'Move to y expression');
+      button.title = 'Coordinate separator · move focus to y(t)';
+      button.hidden = graphMode !== 'parametric';
+    }
     if (GRAPH_KEY_TOOLTIPS[key]) {
       button.title = GRAPH_KEY_TOOLTIPS[key];
       const accessibleNames = { '√(': 'Square root', 'π': 'Pi', 'θ': 'Theta' };
@@ -959,6 +979,10 @@ export function buildCalculator(id, ctx) {
     if (key === 'Clear') button.title = 'Clear expression · press Escape';
     if (key === '⌫') button.title = 'Delete previous character · press Backspace';
     button.addEventListener('click', () => {
+      if (key === ',') {
+        focusParametricY();
+        return;
+      }
       const fallback = graphMode === 'parametric' ? $('.calc-editor-x') : $('.calc-editor-expression');
       const field = lastEditorField?.isConnected && editorDialog.contains(lastEditorField) ? lastEditorField : fallback;
       if (!field) return;
@@ -991,6 +1015,11 @@ export function buildCalculator(id, ctx) {
     if (event.target.matches('.calc-editor-expression,.calc-editor-x,.calc-editor-y')) rememberEditorField(event.target);
   });
   editorDialog.addEventListener('keydown', event => {
+    if (event.key === ',' && graphMode === 'parametric' && event.target.matches('.calc-editor-x')) {
+      event.preventDefault();
+      focusParametricY();
+      return;
+    }
     if (event.key === 'Enter' && event.target.matches('.calc-editor-expression,.calc-editor-x,.calc-editor-y')) {
       event.preventDefault(); $('.calc-apply-functions').click();
     }
