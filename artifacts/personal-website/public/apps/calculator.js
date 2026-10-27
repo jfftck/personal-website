@@ -160,7 +160,7 @@ export function buildCalculator(id, ctx) {
             </div>
             <div class="calc-view-ranges">
               <span class="calc-view-ranges-label" id="${expressionId}-view-ranges-label">Current view</span>
-              <code class="calc-view-ranges-values" aria-labelledby="${expressionId}-view-ranges-label"></code>
+              <textarea class="calc-view-ranges-values" aria-labelledby="${expressionId}-view-ranges-label" rows="2" readonly spellcheck="false"></textarea>
               <button type="button" class="calc-copy-view-ranges">Copy ranges</button>
               <span class="calc-copy-view-ranges-status" role="status" aria-live="polite"></span>
             </div>
@@ -680,6 +680,10 @@ export function buildCalculator(id, ctx) {
     copyViewRangesStatus.textContent = copied
       ? 'Current graph ranges copied.'
       : 'Could not copy the ranges. Select the values and copy them manually.';
+    if (!copied) {
+      viewRangeValues.focus();
+      viewRangeValues.select();
+    }
   });
   function resetView() {
     if (viewRanges) delete viewRanges[graphMode];
@@ -841,7 +845,7 @@ export function buildCalculator(id, ctx) {
   function plot(announce = true) {
     const ns = 'http://www.w3.org/2000/svg';
     const view = getViewRanges();
-    viewRangeValues.textContent = formatViewRanges(view);
+    viewRangeValues.value = formatViewRanges(view);
     const limits = graphMode === 'cartesian'
       ? { a: view.xMin, b: view.xMax, y0: view.yMin, y1: view.yMax, variable: 'x' }
       : graphMode === 'polar'

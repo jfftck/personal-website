@@ -631,13 +631,13 @@ test('calculator shows and copies the current view ranges in every graph mode', 
     }
 
     const configured = await plot.evaluate(element => JSON.parse(element.dataset.view));
-    const initialText = await rangesReadout.textContent();
+    const initialText = await rangesReadout.inputValue();
     for (const key of mode.keys) expect(initialText).toContain(`${key}: ${configured[key]}`);
 
     await calculator.getByRole('button', { name: 'Zoom in' }).click();
     const current = await plot.evaluate(element => JSON.parse(element.dataset.view));
     expect(JSON.stringify(current)).not.toBe(JSON.stringify(configured));
-    const currentText = await rangesReadout.textContent();
+    const currentText = await rangesReadout.inputValue();
     for (const key of mode.keys) expect(currentText).toContain(`${key}: ${current[key]}`);
 
     if (index === 1) {
@@ -657,6 +657,46 @@ test('calculator shows and copies the current view ranges in every graph mode', 
     }
     await dialog.getByRole('button', { name: 'Close graph settings' }).click();
     await calculator.getByRole('button', { name: 'Reset view' }).click();
+  }
+});
+
+test('calculator keeps graph ranges selectable when clipboard access is blocked', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  const values = calculator.locator('.calc-view-ranges-values');
+  const copyButton = calculator.getByRole('button', { name: 'Copy ranges' });
+
+  for (const clipboardMode of ['rejected', 'unavailable']) {
+    await page.evaluate(mode => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: mode === 'rejected' ? { writeText: async () => { throw new Error('Clipboard denied'); } } : undefined,
+      });
+      Object.defineProperty(document, 'execCommand', {
+        configurable: true,
+        value: () => false,
+      });
+    }, clipboardMode);
+
+    await copyButton.click();
+    await expect(calculator.locator('.calc-copy-view-ranges-status'))
+      .toHaveText('Could not copy the ranges. Select the values and copy them manually.');
+    const selectedAfterFailure = await values.evaluate(element => ({
+      value: element.value,
+      selected: element.value.slice(element.selectionStart, element.selectionEnd),
+      focused: document.activeElement === element,
+    }));
+    expect(selectedAfterFailure.selected).toBe(selectedAfterFailure.value);
+    expect(selectedAfterFailure.focused).toBe(true);
+
+    await values.click({ clickCount: 3 });
+    const pointerSelection = await values.evaluate(element => element.value.slice(element.selectionStart, element.selectionEnd));
+    expect(pointerSelection.length).toBeGreaterThan(0);
+
+    await values.focus();
+    await values.press('Control+A');
+    const keyboardSelection = await values.evaluate(element => element.value.slice(element.selectionStart, element.selectionEnd));
+    expect(keyboardSelection).toBe(selectedAfterFailure.value);
   }
 });
 
