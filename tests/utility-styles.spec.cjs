@@ -18,13 +18,13 @@ test('calculator, calendar, and weather controls follow shared theme tokens', as
   for (const theme of ['dark', 'light']) {
     await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
     calculatorColors[theme] = await calculator.locator('.calc').evaluate(element => ({
-      background: getComputedStyle(element).backgroundColor,
       color: getComputedStyle(element).color,
+      keySurface: getComputedStyle(element.querySelector('.calc-key')).backgroundColor,
       keyRadius: getComputedStyle(element.querySelector('.calc-key')).borderRadius,
     }));
   }
-  expect(calculatorColors.dark.background).not.toBe(calculatorColors.light.background);
   expect(calculatorColors.dark.color).not.toBe(calculatorColors.light.color);
+  expect(calculatorColors.dark.keySurface).not.toBe(calculatorColors.light.keySurface);
   expect(calculatorColors.dark.keyRadius).toBe(calculatorColors.light.keyRadius);
 
   const calendar = await openUtility(page, 'calendar');
@@ -112,6 +112,9 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   const expression = calculator.getByRole('textbox', { name: 'Expression' });
   const output = calculator.locator('.calc-value');
 
+  await expect(calculator.getByRole('button', { name: 'Base 2' })).toBeHidden();
+  await calculator.getByRole('button', { name: 'Scientific' }).click();
+  await expect(calculator.getByRole('button', { name: 'Base 2' })).toBeVisible();
   await expression.fill('7+3');
   await calculator.getByRole('button', { name: 'Base 2' }).click();
   await expect(expression).toHaveValue('0b111+0b11');
@@ -141,6 +144,11 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   await expect(output).toHaveText('0x13');
 
   await calculator.getByRole('button', { name: 'Base 10' }).click();
+  await calculator.getByRole('button', { name: 'Base 16' }).click();
+  await calculator.getByRole('button', { name: 'Basic' }).click();
+  await expect(calculator.getByRole('button', { name: 'Base 2' })).toBeHidden();
+  await expect(expression).toHaveValue('19');
+  await expect(output).toHaveText('19');
   await expression.fill('12');
   await calculator.getByRole('button', { name: '=', exact: true }).click();
   await calculator.getByRole('button', { name: 'Memory store' }).click();
@@ -170,9 +178,31 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   const keypadColumns = calculator.locator('.calc-keypad-columns');
   const wideColumns = await keypadColumns.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
   expect(wideColumns).toBe(2);
-  await calculator.evaluate(element => { element.closest('.app-window').style.width = '480px'; });
+  await calculator.evaluate(element => {
+    const appWindow = element.closest('.app-window');
+    appWindow.style.width = '480px';
+    appWindow.style.height = '760px';
+  });
   const narrowColumns = await keypadColumns.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
   expect(narrowColumns).toBe(1);
+  const order = await keypadColumns.evaluate(element => {
+    const extra = element.querySelector('.calc-extra-keys').getBoundingClientRect();
+    const number = element.querySelector('.calc-keys').getBoundingClientRect();
+    return { extraTop: extra.top, numberTop: number.top };
+  });
+  expect(order.extraTop).toBeLessThan(order.numberTop);
+  const surfaces = await calculator.locator('.calc').evaluate(element => ({
+    background: getComputedStyle(element).backgroundColor,
+    border: getComputedStyle(element).borderTopWidth,
+    shadow: getComputedStyle(element).boxShadow,
+    displayBackground: getComputedStyle(element.querySelector('.calc-display')).backgroundColor,
+    historyBackground: getComputedStyle(element.querySelector('.calc-history')).backgroundColor,
+  }));
+  expect(surfaces.background).toBe('rgba(0, 0, 0, 0)');
+  expect(surfaces.border).toBe('0px');
+  expect(surfaces.shadow).toBe('none');
+  expect(surfaces.displayBackground).toBe('rgba(0, 0, 0, 0)');
+  expect(surfaces.historyBackground).toBe('rgba(0, 0, 0, 0)');
 });
 
 test('calculator graph edits multiple functions in an accessible keypad dialog', async ({ page }) => {

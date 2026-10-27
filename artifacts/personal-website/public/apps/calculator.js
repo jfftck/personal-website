@@ -211,6 +211,7 @@ function convertExpressionRadix(source, fromRadix, toRadix) {
 export function buildCalculator(id, ctx) {
   const root = document.createElement('section');
   root.className = 'utility-app calc-wrap';
+  root.dataset.mode = 'basic';
   root.dataset.radix = '10';
   const expressionId = `${id || 'calculator'}-expression`;
   root.innerHTML = `
@@ -552,6 +553,7 @@ export function buildCalculator(id, ctx) {
     if (calculate(false) !== null) message.textContent = '';
   };
   const setMode = next => {
+    if (next === 'basic' && radix !== 10) setRadix(10);
     mode = next; root.dataset.mode = next;
     root.querySelectorAll('.calc-modes button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === next)));
     scientific.hidden = next !== 'scientific'; graph.hidden = next !== 'graph'; keypads.hidden = next === 'graph';
