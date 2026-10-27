@@ -404,6 +404,52 @@ test('calculator safely resets malformed or outdated saved graph settings', asyn
   }
 });
 
+test('calculator keeps graph storage warnings visible until settings save successfully', async ({ page }) => {
+  await page.evaluate(() => {
+    window.__graphStorageAccess = { readBlocked: true, writeBlocked: false };
+    const originalGetItem = Storage.prototype.getItem;
+    const originalSetItem = Storage.prototype.setItem;
+    Storage.prototype.getItem = function (key) {
+      if (key === 'personal-desktop-calculator-graph-v1' && window.__graphStorageAccess.readBlocked) {
+        throw new DOMException('Storage access is blocked', 'SecurityError');
+      }
+      return originalGetItem.call(this, key);
+    };
+    Storage.prototype.setItem = function (key, value) {
+      if (key === 'personal-desktop-calculator-graph-v1' && window.__graphStorageAccess.writeBlocked) {
+        throw new DOMException('Storage is full', 'QuotaExceededError');
+      }
+      return originalSetItem.call(this, key, value);
+    };
+  });
+  const calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  const warning = calculator.locator('.calc-storage-warning');
+  await expect(warning).toBeVisible();
+  await expect(warning).toContainText('could not read saved graph settings');
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  await calculator.getByRole('button', { name: 'Apply settings' }).click();
+  await expect(warning).toBeHidden();
+
+  await page.evaluate(() => {
+    window.__graphStorageAccess.readBlocked = false;
+    window.__graphStorageAccess.writeBlocked = true;
+  });
+  await calculator.getByRole('button', { name: 'Zoom in' }).click();
+  await expect(warning).toBeVisible();
+  await expect(warning).toContainText('could not be saved');
+  await calculator.getByRole('button', { name: 'Plot' }).click();
+  await expect(warning).toBeVisible();
+
+  await page.evaluate(() => { window.__graphStorageAccess.writeBlocked = false; });
+  await calculator.getByRole('button', { name: 'Zoom in' }).click();
+  await expect(warning).toBeHidden();
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('personal-desktop-calculator-graph-v1') || 'null')?.version
+  )).toBe(1);
+});
+
 test('calculator graph zoom and pan work in every mode without changing configured ranges', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   await calculator.getByRole('button', { name: 'Graph', exact: true }).click();

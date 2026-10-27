@@ -166,6 +166,7 @@ export function buildCalculator(id, ctx) {
             </div>
             <svg class="calc-plot-area" role="application" aria-label="Function graph. Drag to pan, use the mouse wheel or plus and minus to zoom, and use arrow keys to pan. Press Home to reset the view." tabindex="0" viewBox="0 0 640 400" preserveAspectRatio="none"></svg>
             <p class="calc-graph-status" role="status" aria-live="polite">Add a function, then choose Plot.</p>
+            <div class="calc-storage-warning" role="alert" hidden></div>
             <div class="calc-storage-recovery" role="alert" hidden><span></span><button type="button" class="calc-reset-saved">Reset saved graph</button></div>
           </section>
         </main>
@@ -238,6 +239,7 @@ export function buildCalculator(id, ctx) {
   let functions = [makeFunction('sin(x)')];
   let activeFunctionId = functions[0].id;
   let editorDraft = [];
+  const storageWarning = $('.calc-storage-warning');
   const recoveryNotice = $('.calc-storage-recovery');
   const recoveryMessage = recoveryNotice.querySelector('span');
   const savedGraph = readSavedGraphSettings();
@@ -252,9 +254,16 @@ export function buildCalculator(id, ctx) {
     recoveryMessage.textContent = 'Saved graph settings could not be restored. Defaults are active.';
     recoveryNotice.hidden = false;
   } else if (savedGraph.status === 'unavailable') {
-    graphStatus.textContent = 'This browser could not read saved graph settings. Changes may not persist.';
+    showStorageWarning('read');
   }
   $('.calc-mode-label').textContent = graphMode.toUpperCase();
+
+  function showStorageWarning(operation) {
+    storageWarning.textContent = operation === 'read'
+      ? 'This browser could not read saved graph settings. Changes may not persist until browser storage is available.'
+      : 'Graph settings could not be saved in this browser. Changes may not persist until browser storage is available.';
+    storageWarning.hidden = false;
+  }
 
   function applySavedGraphSettings(saved) {
     if (saved.status === 'empty') {
@@ -327,12 +336,13 @@ export function buildCalculator(id, ctx) {
       localStorage.setItem(GRAPH_SETTINGS_KEY, serialized);
       const saved = readSavedGraphSettings(serialized);
       if (saved.status === 'valid') {
+        storageWarning.hidden = true;
         calculatorGraphSubscribers.forEach(subscriber => {
           if (subscriber !== onGraphSettingsChanged) subscriber(saved);
         });
       }
     } catch {
-      graphStatus.textContent = 'Graph settings could not be saved in this browser.';
+      showStorageWarning('write');
     }
   }
 
