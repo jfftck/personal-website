@@ -736,7 +736,9 @@ export function buildCalculator(id, ctx) {
     return Number.isFinite(lower) && Number.isFinite(upper) && lower < upper ? [lower, upper] : null;
   }
   function fitView() {
-    const sampleCount = 500;
+    // Fit more finely than the rendered path so narrow features between plot
+    // samples still contribute to the fitted bounds.
+    const sampleCount = 8000;
     const visible = functions.filter(fn => fn.visible);
     if (!visible.length) {
       graphStatus.textContent = 'Show at least one function before fitting the view.';

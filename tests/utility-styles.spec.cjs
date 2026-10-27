@@ -298,6 +298,33 @@ test('calculator fits visible curves in every graph mode without changing config
   await expect.poll(view).toEqual({ tMin: 0, tMax: 6.283, xMin: -4, xMax: 4, yMin: -5, yMax: 5 });
 });
 
+test('calculator Fit curves includes a narrow peak between rendered samples', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  const settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByLabel('Minimum x').fill('-4');
+  await settings.getByLabel('Maximum x').fill('4');
+  await settings.getByLabel('Minimum y').fill('-5');
+  await settings.getByLabel('Maximum y').fill('5');
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await editor.getByLabel('Function expression').fill('100/(1000000*(x-0.008)^2+1)');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await calculator.getByRole('button', { name: 'Fit curves' }).click();
+
+  const fitted = await calculator.locator('.calc-plot-area').evaluate(element => JSON.parse(element.dataset.view));
+  expect(fitted.xMin).toBe(-4);
+  expect(fitted.xMax).toBe(4);
+  expect(fitted.yMax).toBeGreaterThan(50);
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  await expect(settings.getByLabel('Minimum y')).toHaveValue('-5');
+  await expect(settings.getByLabel('Maximum y')).toHaveValue('5');
+});
+
 test('calculator graph functions, colors, visibility, mode, and ranges persist across reopen and refresh', async ({ page }) => {
   let calculator = await openUtility(page, 'calculator');
   await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
