@@ -601,6 +601,8 @@ test('calculator keeps functions separate by plot mode and lists them in graph i
   await closeGraphInfo(page, calculator);
   await calculator.getByRole('button', { name: 'Edit functions' }).click();
   editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await expect(editor.locator('.calc-editor-expression-label')).toBeHidden();
+  await expect(editor.locator('.calc-editor-function-fields .calc-editor-function-label')).toHaveText(['x =', 'y =']);
   await editor.getByLabel('x(t)').fill('t');
   await editor.getByLabel('y(t)').fill('t^2');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
