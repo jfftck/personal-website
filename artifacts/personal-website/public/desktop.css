@@ -2613,6 +2613,7 @@ kbd {
 .calc-graph { flex:1; min-height:0; display:flex; flex-direction:column; gap:.45rem; margin:0; }
 .calc-graph-toolbar { display:flex; flex:none; align-items:flex-start; justify-content:space-between; gap:.6rem; min-height:0; }
 .calc-graph-tools { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.35rem; }
+.calc-graph-tools .calc-fit-view { font-weight:650; }
 .calc-graph-tools button,.calc-dialog-card button,.calc-dialog-card select,.calc-function-toggle,.calc-function-remove {
   min-height:2rem; padding:.36rem .62rem; border:1px solid var(--app-border); border-radius:.5rem;
   background:var(--util-surface); color:var(--app-text); cursor:pointer; font:inherit;
@@ -3339,6 +3340,7 @@ kbd {
 .calc-graph { flex:1; min-height:0; display:flex; flex-direction:column; gap:.45rem; margin:0; }
 .calc-graph-toolbar { display:flex; flex:none; align-items:flex-start; justify-content:space-between; gap:.6rem; min-height:0; }
 .calc-graph-tools { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.35rem; }
+.calc-graph-tools .calc-fit-view { font-weight:650; }
 .calc-plot-area { flex:1; min-height:5rem; height:auto; margin:0; }
 .calc-graph-line { stroke:var(--function-color,var(--util-teal)); }
 .calc-graph-status { flex:none; margin:0; }

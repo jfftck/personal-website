@@ -148,6 +148,7 @@ export function buildCalculator(id, ctx) {
                 <button type="button" class="calc-open-settings">Graph settings</button>
                 <button type="button" class="calc-zoom-out" aria-label="Zoom out">−</button>
                 <button type="button" class="calc-zoom-in" aria-label="Zoom in">+</button>
+                <button type="button" class="calc-fit-view">Fit curves</button>
                 <button type="button" class="calc-reset-view">Reset view</button>
                 <button type="button" class="calc-plot calc-primary-action">Plot</button>
               </div></div>
@@ -376,6 +377,7 @@ export function buildCalculator(id, ctx) {
   root.querySelector('.calc-plot').addEventListener('click', plot);
   $('.calc-zoom-in').addEventListener('click', () => { zoomView(0.8); persistGraphSettings(); });
   $('.calc-zoom-out').addEventListener('click', () => { zoomView(1.25); persistGraphSettings(); });
+  $('.calc-fit-view').addEventListener('click', fitView);
   $('.calc-reset-view').addEventListener('click', resetView);
   $('.calc-reset-saved').addEventListener('click', resetSavedGraph);
   $('.calc-open-editor').addEventListener('click', openEditor);
@@ -602,6 +604,105 @@ export function buildCalculator(id, ctx) {
     const power = 10 ** Math.floor(Math.log10(raw));
     const fraction = raw / power;
     return (fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10) * power;
+  }
+  function fitBounds(values) {
+    if (!values.length) return null;
+    let min = Math.min(...values), max = Math.max(...values);
+    const span = max - min;
+    const padding = span > 0 ? span * 0.08 : Math.max(Math.abs(max) * 0.1, 1);
+    min -= padding;
+    max += padding;
+    const step = niceStep(max - min, 8);
+    const lower = Math.floor(min / step) * step;
+    const upper = Math.ceil(max / step) * step;
+    return Number.isFinite(lower) && Number.isFinite(upper) && lower < upper ? [lower, upper] : null;
+  }
+  function fitView() {
+    const sampleCount = 500;
+    const visible = functions.filter(fn => fn.visible);
+    if (!visible.length) {
+      graphStatus.textContent = 'Show at least one function before fitting the view.';
+      return;
+    }
+
+    const xValues = [], yValues = [], angleValues = [], radiusValues = [];
+    const sourceMin = graphMode === 'cartesian' ? Number(ranges.xMin)
+      : graphMode === 'polar' ? Number(ranges.thetaMin) : Number(ranges.tMin);
+    const sourceMax = graphMode === 'cartesian' ? Number(ranges.xMax)
+      : graphMode === 'polar' ? Number(ranges.thetaMax) : Number(ranges.tMax);
+    if (!Number.isFinite(sourceMin) || !Number.isFinite(sourceMax) || sourceMin >= sourceMax) {
+      graphStatus.textContent = 'Graph ranges are invalid. Open Graph settings to correct them.';
+      return;
+    }
+
+    visible.forEach(fn => {
+      for (let index = 0; index <= sampleCount; index++) {
+        const parameter = sourceMin + (sourceMax - sourceMin) * index / sampleCount;
+        try {
+          if (graphMode === 'cartesian') {
+            const y = evaluateExpression(fn.expression, { x: parameter });
+            if (Number.isFinite(y) && Math.abs(y) <= 1e7) yValues.push(y);
+          } else if (graphMode === 'polar') {
+            const radius = evaluateExpression(fn.expression, { theta: parameter });
+            if (Number.isFinite(radius) && Math.abs(radius) <= 1e7) {
+              angleValues.push(parameter);
+              radiusValues.push(radius);
+            }
+          } else {
+            const x = evaluateExpression(fn.xExpression, { t: parameter });
+            const y = evaluateExpression(fn.yExpression, { t: parameter });
+            if (Number.isFinite(x) && Number.isFinite(y) && Math.abs(x) <= 1e7 && Math.abs(y) <= 1e7) {
+              xValues.push(x);
+              yValues.push(y);
+            }
+          }
+        } catch {}
+      }
+    });
+
+    const view = Object.fromEntries(VIEW_RANGE_KEYS[graphMode].map(key => [
+      key, Number(ranges[key]),
+    ]));
+    if (graphMode === 'cartesian') {
+      const yBounds = fitBounds(yValues);
+      if (!yBounds) {
+        graphStatus.textContent = 'No visible function has a valid curve to fit.';
+        return;
+      }
+      [view.yMin, view.yMax] = yBounds;
+      view.xMin = Number(ranges.xMin);
+      view.xMax = Number(ranges.xMax);
+    } else if (graphMode === 'polar') {
+      const radiusBounds = fitBounds(radiusValues.map(radius => Math.abs(radius)));
+      if (!radiusBounds || !angleValues.length) {
+        graphStatus.textContent = 'No visible function has a valid curve to fit.';
+        return;
+      }
+      view.thetaMin = Math.min(...angleValues);
+      view.thetaMax = Math.max(...angleValues);
+      if (view.thetaMin >= view.thetaMax) {
+        graphStatus.textContent = 'The visible polar curves do not span a fit-able angular range.';
+        return;
+      }
+      view.rMin = 0;
+      view.rMax = Math.max(radiusBounds[1], 1);
+    } else {
+      const xBounds = fitBounds(xValues), yBounds = fitBounds(yValues);
+      if (!xBounds || !yBounds) {
+        graphStatus.textContent = 'No visible function has a valid curve to fit.';
+        return;
+      }
+      [view.xMin, view.xMax] = xBounds;
+      [view.yMin, view.yMax] = yBounds;
+      view.tMin = Number(ranges.tMin);
+      view.tMax = Number(ranges.tMax);
+    }
+
+    if (!viewRanges) viewRanges = {};
+    viewRanges[graphMode] = view;
+    plot(false);
+    persistGraphSettings();
+    graphStatus.textContent = `Fitted the view to ${visible.length} visible ${visible.length === 1 ? 'curve' : 'curves'} in ${graphMode} mode.`;
   }
   function formatTick(number) {
     const clean = Math.abs(number) < 1e-12 ? 0 : number;
