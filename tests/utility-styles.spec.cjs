@@ -174,10 +174,9 @@ test('calculator graph settings keep modes and plot ranges independent', async (
 });
 
 test('calculator fits visible curves in every graph mode without changing configured ranges', async ({ page }) => {
-  const calculator = await openUtility(page, 'calculator');
+  let calculator = await openUtility(page, 'calculator');
   await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
-  const plot = calculator.locator('.calc-plot-area');
-  const view = async () => plot.evaluate(element => JSON.parse(element.dataset.view));
+  const view = async () => calculator.locator('.calc-plot-area').evaluate(element => JSON.parse(element.dataset.view));
 
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
   let settings = calculator.getByRole('dialog', { name: 'Graph settings' });
@@ -201,8 +200,17 @@ test('calculator fits visible curves in every graph mode without changing config
   expect(fitted.yMin).toBeLessThan(-13);
   expect(fitted.yMax).toBeGreaterThan(19);
   await expect(calculator.locator('.calc-graph-status')).toContainText('1 visible curve');
+  await page.locator('#close-btn').click();
+  calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await expect(calculator.locator('.calc-mode-label')).toHaveText('CARTESIAN');
+  await expect.poll(view).toEqual(fitted);
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
   settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await expect(settings.getByLabel('Minimum x')).toHaveValue('-4');
+  await expect(settings.getByLabel('Maximum x')).toHaveValue('4');
+  await expect(settings.getByLabel('Minimum y')).toHaveValue('-5');
+  await expect(settings.getByLabel('Maximum y')).toHaveValue('5');
   await expect(settings.getByLabel('Minimum y')).toHaveValue('-5');
   await expect(settings.getByLabel('Maximum y')).toHaveValue('5');
   await settings.getByRole('button', { name: 'Close graph settings' }).click();
@@ -228,6 +236,18 @@ test('calculator fits visible curves in every graph mode without changing config
   expect(fitted.rMin).toBeLessThanOrEqual(1);
   expect(fitted.rMax).toBeGreaterThanOrEqual(3);
   expect(fitted.rMax).toBeLessThan(10);
+  await page.locator('#close-btn').click();
+  calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await expect(calculator.locator('.calc-mode-label')).toHaveText('POLAR');
+  await expect.poll(view).toEqual(fitted);
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await expect(settings.getByLabel('Minimum theta')).toHaveValue('1');
+  await expect(settings.getByLabel('Maximum theta')).toHaveValue('5');
+  await expect(settings.getByLabel('Minimum r')).toHaveValue('0');
+  await expect(settings.getByLabel('Maximum r')).toHaveValue('10');
+  await settings.getByRole('button', { name: 'Close graph settings' }).click();
   await calculator.getByRole('button', { name: 'Reset view' }).click();
   await expect.poll(view).toEqual({ thetaMin: 1, thetaMax: 5, rMin: 0, rMax: 10 });
   await calculator.getByRole('button', { name: 'Edit functions' }).click();
@@ -262,8 +282,15 @@ test('calculator fits visible curves in every graph mode without changing config
   expect(fitted.xMax).toBeLessThan(10);
   expect(fitted.yMin).toBeLessThanOrEqual(-3);
   expect(fitted.yMax).toBeGreaterThanOrEqual(3);
+  await page.locator('#close-btn').click();
+  calculator = await openUtility(page, 'calculator');
+  await calculator.getByRole('button', { name: 'Graph', exact: true }).click();
+  await expect(calculator.locator('.calc-mode-label')).toHaveText('PARAMETRIC');
+  await expect.poll(view).toEqual(fitted);
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
   settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await expect(settings.getByLabel('Minimum t')).toHaveValue('0');
+  await expect(settings.getByLabel('Maximum t')).toHaveValue('6.283');
   await expect(settings.getByLabel('Minimum x')).toHaveValue('-4');
   await expect(settings.getByLabel('Maximum x')).toHaveValue('4');
   await settings.getByRole('button', { name: 'Close graph settings' }).click();
