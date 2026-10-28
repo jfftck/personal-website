@@ -1249,6 +1249,22 @@ test('calculator graph settings control axis labels, axis lines, grid styles, an
   await expect(settings.getByRole('combobox', { name: 'Grid spacing' })).toHaveAttribute('data-value', 'fine');
 });
 
+test('polar graph radial numbers appear below the theta axis', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+  await setGraphPlotMode(page, calculator, 'polar');
+  const plot = calculator.locator('.calc-plot-area');
+  const positions = await plot.evaluate(element => ({
+    thetaY: Number(element.querySelector('.calc-graph-axis-name-theta').getAttribute('y')),
+    radialY: [...element.querySelectorAll('.calc-graph-radial-label')]
+      .map(label => Number(label.getAttribute('y'))),
+  }));
+
+  expect(positions.radialY.length).toBeGreaterThan(0);
+  expect(positions.thetaY).toBeLessThan(200);
+  expect(positions.radialY.every(y => y > 200)).toBe(true);
+});
+
 test('calculator View controls apply transient graph ratios and keep Polar square', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   await chooseCalculatorMode(calculator, 'Graph');

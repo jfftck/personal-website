@@ -2093,7 +2093,11 @@ export function buildCalculator(id, ctx) {
           ellipse.setAttribute('rx', plotView.radiusX * fraction); ellipse.setAttribute('ry', plotView.radiusY * fraction);
           plotLayer.append(ellipse);
         }
-        if (graphDisplay.axisLabels) addSvgText(ns, formatTick(tick), PLOT_FRAME.centerX + plotView.radiusX * fraction + 4, PLOT_FRAME.centerY - 4, 'start', plotLayer);
+        if (graphDisplay.axisLabels) {
+          const radialLabel = addSvgText(ns, formatTick(tick),
+            PLOT_FRAME.centerX + plotView.radiusX * fraction + 4, PLOT_FRAME.centerY + 14, 'start', plotLayer);
+          radialLabel.classList.add('calc-graph-radial-label');
+        }
       }
       if (gridEnabled) {
         const thetaStep = niceStep(limits.b - limits.a, Math.max(3, Math.round(targetCount * 1.15)));
@@ -2120,7 +2124,8 @@ export function buildCalculator(id, ctx) {
         plotLayer.append(yAxis);
       }
       if (graphDisplay.axisLabels) {
-        addSvgText(ns, 'θ', PLOT_FRAME.centerX + plotView.radiusX + 5, PLOT_FRAME.centerY - 4, 'start', plotLayer);
+        const thetaLabel = addSvgText(ns, 'θ', PLOT_FRAME.centerX + plotView.radiusX + 5, PLOT_FRAME.centerY - 4, 'start', plotLayer);
+        thetaLabel.classList.add('calc-graph-axis-name-theta');
         addSvgText(ns, 'r', PLOT_FRAME.centerX + 4, PLOT_FRAME.centerY - plotView.radiusY - 5, 'start', plotLayer);
       }
     } else {
