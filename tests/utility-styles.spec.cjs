@@ -1174,6 +1174,81 @@ test('calculator graph zoom and pan work in every mode without changing configur
   }
 });
 
+test('calculator graph settings control axis labels, axis lines, grid styles, and spacing', async ({ page }) => {
+  let calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+  let plot = calculator.locator('.calc-plot-area');
+  const defaultLabelCount = await plot.locator('.calc-graph-label').count();
+  const chooseSetting = async (settingsDialog, label, option) => {
+    const trigger = settingsDialog.getByRole('combobox', { name: label });
+    await trigger.click();
+    const popupId = await trigger.getAttribute('aria-controls');
+    await page.locator(`#${popupId}`).getByRole('option', { name: option, exact: true }).click();
+  };
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  let settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await chooseSetting(settings, 'Grid spacing', 'Fine');
+  await chooseSetting(settings, 'Grid style', 'Dotted lines');
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await expect(plot).toHaveAttribute('data-grid-style', 'dotted');
+  await expect(plot.locator('.calc-graph-grid')).not.toHaveCount(0);
+  await expect(plot.locator('.calc-graph-axis-x')).toHaveCount(1);
+  await expect(plot.locator('.calc-graph-axis-y')).toHaveCount(1);
+  const axisNamePositions = await plot.evaluate(element => ({
+    xLabelY: Number(element.querySelector('.calc-graph-axis-name-x').getAttribute('y')),
+    xAxisY: Number(element.querySelector('.calc-graph-axis-x').getAttribute('d').match(/M[\d.]+ ([\d.]+)/)[1]),
+    yLabelX: Number(element.querySelector('.calc-graph-axis-name-y').getAttribute('x')),
+    yAxisX: Number(element.querySelector('.calc-graph-axis-y').getAttribute('d').match(/M([\d.]+)/)[1]),
+  }));
+  expect(axisNamePositions.xLabelY).toBeLessThan(axisNamePositions.xAxisY);
+  expect(axisNamePositions.yLabelX).toBeGreaterThan(axisNamePositions.yAxisX);
+  expect(await plot.locator('.calc-graph-label').count()).toBeGreaterThan(defaultLabelCount);
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await chooseSetting(settings, 'Grid style', 'No grid');
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await expect(plot).toHaveAttribute('data-grid-style', 'none');
+  await expect(plot.locator('.calc-graph-grid')).toHaveCount(0);
+  expect(await plot.locator('.calc-graph-label').count()).toBeGreaterThan(0);
+  await expect(plot.locator('.calc-graph-axis-x')).toHaveCount(1);
+  await expect(plot.locator('.calc-graph-axis-y')).toHaveCount(1);
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByLabel('Show axis labels').uncheck();
+  await settings.getByLabel('Show X-axis line').uncheck();
+  await settings.getByLabel('Show Y-axis line').uncheck();
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await expect(plot).toHaveAttribute('data-grid-style', 'none');
+  await expect(plot.locator('.calc-graph-grid')).toHaveCount(0);
+  await expect(plot.locator('.calc-graph-label')).toHaveCount(0);
+  await expect(plot.locator('.calc-graph-axis')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('personal-desktop-calculator-graph-v1')).display
+  )).toEqual({
+    axisLabels: false,
+    xAxisLine: false,
+    yAxisLine: false,
+    gridStyle: 'none',
+    gridSpacing: 'fine',
+  });
+
+  await page.locator('#close-btn').click();
+  calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+  plot = calculator.locator('.calc-plot-area');
+  await expect(plot).toHaveAttribute('data-grid-style', 'none');
+  await expect(plot.locator('.calc-graph-label')).toHaveCount(0);
+  await expect(plot.locator('.calc-graph-axis')).toHaveCount(0);
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await expect(settings.getByLabel('Show axis labels')).not.toBeChecked();
+  await expect(settings.getByRole('combobox', { name: 'Grid style' })).toHaveAttribute('data-value', 'none');
+  await expect(settings.getByRole('combobox', { name: 'Grid spacing' })).toHaveAttribute('data-value', 'fine');
+});
+
 test('calculator View controls apply transient graph ratios and keep Polar square', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   await chooseCalculatorMode(calculator, 'Graph');

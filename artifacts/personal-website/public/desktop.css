@@ -2716,6 +2716,20 @@ kbd {
 .calc-function-key { min-width:0; padding:.3rem!important; font:.75rem ui-monospace,monospace!important; }
 .calc-dialog-actions { display:flex; justify-content:flex-end; gap:.5rem; padding-top:.35rem; }
 .calc-settings-card { gap:.75rem; }
+.calc-graph-display-settings {
+  display:grid; gap:.65rem; margin:0; padding:.7rem;
+  border:1px solid var(--app-border); border-radius:.6rem;
+}
+.calc-graph-display-settings legend { padding-inline:.25rem; color:var(--util-detail); font-size:.78rem; font-weight:700; }
+.calc-graph-display-toggles { display:flex; flex-wrap:wrap; gap:.45rem .9rem; }
+.calc-graph-display-toggles label {
+  display:flex; align-items:center; gap:.4rem; color:var(--app-text); font-size:.78rem; font-weight:500;
+}
+.calc-graph-display-toggles input { width:1rem; height:1rem; accent-color:var(--accent); }
+.calc-graph-display-selects { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.6rem; }
+.calc-grid-style-select,.calc-grid-spacing-select { min-width:0; }
+.calc-plot-area[data-grid-style="dashed"] .calc-graph-grid { stroke-dasharray:5 4; }
+.calc-plot-area[data-grid-style="dotted"] .calc-graph-grid { stroke-dasharray:1 4; stroke-linecap:round; }
 .calc-restore-card { gap:.75rem; }
 .calc-setup-field { display:grid; gap:.4rem; color:var(--util-detail); font-size:.82rem; font-weight:650; }
 .calc-setup-input { width:100%; min-height:12rem; padding:.65rem; border:1px solid var(--app-border); border-radius:.55rem; background:var(--toolbar-bg); color:var(--app-text); font:.78rem/1.45 ui-monospace,monospace; resize:vertical; }

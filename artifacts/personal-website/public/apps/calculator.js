@@ -76,6 +76,16 @@ const GRAPH_SETTINGS_KEY = 'personal-desktop-calculator-graph-v1';
 const CALCULATOR_MODE_KEY = 'personal-desktop-calculator-mode-v1';
 const GRAPH_SETTINGS_VERSION = 2;
 const GRAPH_MODES = ['cartesian', 'polar', 'parametric'];
+const GRAPH_DISPLAY_DEFAULTS = Object.freeze({
+  axisLabels: true,
+  xAxisLine: true,
+  yAxisLine: true,
+  gridStyle: 'solid',
+  gridSpacing: 'standard',
+});
+const GRAPH_GRID_STYLES = ['solid', 'dashed', 'dotted', 'none'];
+const GRAPH_GRID_SPACINGS = ['fine', 'standard', 'coarse'];
+const GRAPH_GRID_TARGETS = Object.freeze({ fine: 12, standard: 7, coarse: 4 });
 const RANGE_KEYS = ['xMin', 'xMax', 'yMin', 'yMax', 'thetaMin', 'thetaMax', 'rMin', 'rMax', 'tMin', 'tMax'];
 const DEFAULT_GRAPH_RANGES = {
   xMin: '-10', xMax: '10', yMin: '-10', yMax: '10',
@@ -94,6 +104,21 @@ const PLOT_FRAME = Object.freeze({
 let nextFunctionId = 1;
 const calculatorGraphSubscribers = new Set();
 
+function readGraphDisplay(value) {
+  if (value === undefined) return { ...GRAPH_DISPLAY_DEFAULTS };
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      typeof value.axisLabels !== 'boolean' || typeof value.xAxisLine !== 'boolean' ||
+      typeof value.yAxisLine !== 'boolean' || !GRAPH_GRID_STYLES.includes(value.gridStyle) ||
+      !GRAPH_GRID_SPACINGS.includes(value.gridSpacing)) return null;
+  return {
+    axisLabels: value.axisLabels,
+    xAxisLine: value.xAxisLine,
+    yAxisLine: value.yAxisLine,
+    gridStyle: value.gridStyle,
+    gridSpacing: value.gridSpacing,
+  };
+}
+
 function validRangePair(min, max) {
   return Number.isFinite(Number(min)) && Number.isFinite(Number(max)) &&
     Number.isFinite(Number(max) - Number(min)) && Number(min) < Number(max);
@@ -110,10 +135,11 @@ function readSavedGraphSettings(rawOverride) {
 
   try {
     const saved = JSON.parse(raw);
+    const display = readGraphDisplay(saved?.display);
     const legacyFunctions = saved?.version === 1 && Array.isArray(saved.functions);
     const hasModeFunctions = saved?.version === GRAPH_SETTINGS_VERSION &&
       saved.functionsByMode && typeof saved.functionsByMode === 'object' && !Array.isArray(saved.functionsByMode);
-    if (!saved || (!legacyFunctions && !hasModeFunctions) || !GRAPH_MODES.includes(saved.graphMode) ||
+    if (!saved || !display || (!legacyFunctions && !hasModeFunctions) || !GRAPH_MODES.includes(saved.graphMode) ||
         !saved.ranges || typeof saved.ranges !== 'object' || Array.isArray(saved.ranges) ||
         (legacyFunctions && saved.functions.length > 20)) {
       return { status: 'invalid' };
@@ -182,7 +208,7 @@ function readSavedGraphSettings(rawOverride) {
         viewRanges[graphMode] = validated;
       }
     }
-    return { status: 'valid', graphMode: saved.graphMode, ranges, functions: functionsByMode[saved.graphMode], functionsByMode, viewRanges };
+    return { status: 'valid', graphMode: saved.graphMode, ranges, functions: functionsByMode[saved.graphMode], functionsByMode, viewRanges, display };
   } catch {
     return { status: 'invalid' };
   }
@@ -474,6 +500,35 @@ export function buildCalculator(id, ctx) {
           </select>
         </label>
         <div class="calc-range-fields"></div>
+        <fieldset class="calc-graph-display-settings">
+          <legend>Graph display</legend>
+          <div class="calc-graph-display-toggles">
+            <label><input type="checkbox" class="calc-show-axis-labels"> Show axis labels</label>
+            <label><input type="checkbox" class="calc-show-x-axis"> Show X-axis line</label>
+            <label><input type="checkbox" class="calc-show-y-axis"> Show Y-axis line</label>
+          </div>
+          <div class="calc-graph-display-selects">
+            <label class="calc-setting-field">Grid style
+              <app-select class="calc-grid-style-select">
+                <select class="calc-grid-style" aria-label="Grid style">
+                  <option value="solid">Solid lines</option>
+                  <option value="dashed">Dashed lines</option>
+                  <option value="dotted">Dotted lines</option>
+                  <option value="none">No grid</option>
+                </select>
+              </app-select>
+            </label>
+            <label class="calc-setting-field">Grid spacing
+              <app-select class="calc-grid-spacing-select">
+                <select class="calc-grid-spacing" aria-label="Grid spacing">
+                  <option value="fine">Fine</option>
+                  <option value="standard">Standard</option>
+                  <option value="coarse">Coarse</option>
+                </select>
+              </app-select>
+            </label>
+          </div>
+        </fieldset>
         <p class="calc-settings-error" role="alert" aria-live="polite"></p>
         <app-dialog-actions class="calc-dialog-actions"><button type="button" data-action="cancel">Cancel</button><button type="button" class="calc-apply-settings calc-primary-action">Apply settings</button></app-dialog-actions>
       </form>
@@ -492,6 +547,8 @@ export function buildCalculator(id, ctx) {
 
   enhanceSelect(root.querySelector('.calc-graph-mode'));
   enhanceSelect(root.querySelector('.calc-mode-select-field'));
+  enhanceSelect(root.querySelector('.calc-grid-style'));
+  enhanceSelect(root.querySelector('.calc-grid-spacing'));
   const $ = selector => root.querySelector(selector);
   const input = $('.calc-expression');
   const value = $('.calc-value');
@@ -545,6 +602,7 @@ export function buildCalculator(id, ctx) {
   let resultFresh = false;
   let graphMode = 'cartesian';
   let settingsMode = graphMode;
+  let graphDisplay = { ...GRAPH_DISPLAY_DEFAULTS };
   let ranges = { ...DEFAULT_GRAPH_RANGES };
   let viewRanges = null;
   let viewRatio = 'auto';
@@ -575,6 +633,7 @@ export function buildCalculator(id, ctx) {
   if (savedGraph.status === 'valid') {
     graphMode = savedGraph.graphMode;
     ranges = savedGraph.ranges;
+    graphDisplay = savedGraph.display;
     functionsByMode = savedGraph.functionsByMode;
     functions = functionsByMode[graphMode];
     viewRanges = Object.keys(savedGraph.viewRanges).length ? savedGraph.viewRanges : null;
@@ -600,6 +659,7 @@ export function buildCalculator(id, ctx) {
       graphMode = 'cartesian';
       settingsMode = graphMode;
       ranges = { ...DEFAULT_GRAPH_RANGES };
+      graphDisplay = { ...GRAPH_DISPLAY_DEFAULTS };
       viewRanges = null;
       functionsByMode = Object.fromEntries(GRAPH_MODES.map(plotMode => [plotMode, []]));
       functions = functionsByMode[graphMode];
@@ -609,6 +669,7 @@ export function buildCalculator(id, ctx) {
       graphMode = saved.graphMode;
       settingsMode = graphMode;
       ranges = saved.ranges;
+      graphDisplay = saved.display;
       viewRanges = Object.keys(saved.viewRanges).length ? saved.viewRanges : null;
       functionsByMode = saved.functionsByMode;
       functions = functionsByMode[graphMode];
@@ -629,6 +690,7 @@ export function buildCalculator(id, ctx) {
       version: GRAPH_SETTINGS_VERSION,
       graphMode,
       ranges,
+      display: graphDisplay,
       functionsByMode: serializeFunctionsByMode(),
       viewRanges,
     }));
@@ -672,6 +734,7 @@ export function buildCalculator(id, ctx) {
         version: GRAPH_SETTINGS_VERSION,
         graphMode,
         ranges,
+        display: graphDisplay,
         functionsByMode: serializeFunctionsByMode(),
         viewRanges,
       });
@@ -694,6 +757,7 @@ export function buildCalculator(id, ctx) {
       graphMode = 'cartesian';
       settingsMode = graphMode;
       ranges = { ...DEFAULT_GRAPH_RANGES };
+      graphDisplay = { ...GRAPH_DISPLAY_DEFAULTS };
       viewRanges = null;
       functionsByMode = Object.fromEntries(GRAPH_MODES.map(plotMode => [plotMode, []]));
       functions = functionsByMode[graphMode];
@@ -1080,6 +1144,15 @@ export function buildCalculator(id, ctx) {
     const graphModeSelect = $('.calc-graph-mode');
     graphModeSelect.value = settingsMode;
     refreshCustomSelect(graphModeSelect);
+    $('.calc-show-axis-labels').checked = graphDisplay.axisLabels;
+    $('.calc-show-x-axis').checked = graphDisplay.xAxisLine;
+    $('.calc-show-y-axis').checked = graphDisplay.yAxisLine;
+    const gridStyle = $('.calc-grid-style');
+    gridStyle.value = graphDisplay.gridStyle;
+    refreshCustomSelect(gridStyle);
+    const gridSpacing = $('.calc-grid-spacing');
+    gridSpacing.value = graphDisplay.gridSpacing;
+    refreshCustomSelect(gridSpacing);
     $('.calc-settings-error').textContent = ''; renderSettingsFields(settingsMode);
     settingsDialog.showModal(); $('.calc-graph-mode').focus();
   }
@@ -1089,6 +1162,13 @@ export function buildCalculator(id, ctx) {
   $('.calc-apply-settings').addEventListener('click', () => {
     const nextRanges = { ...ranges }; let error = '';
     $('.calc-range-fields').querySelectorAll('input').forEach(field => { nextRanges[field.dataset.range] = field.value; });
+    const nextDisplay = {
+      axisLabels: $('.calc-show-axis-labels').checked,
+      xAxisLine: $('.calc-show-x-axis').checked,
+      yAxisLine: $('.calc-show-y-axis').checked,
+      gridStyle: $('.calc-grid-style').value,
+      gridSpacing: $('.calc-grid-spacing').value,
+    };
     const required = settingsMode === 'cartesian' ? ['xMin', 'xMax', 'yMin', 'yMax'] : settingsMode === 'polar' ? ['thetaMin', 'thetaMax', 'rMin', 'rMax'] : ['tMin', 'tMax', 'xMin', 'xMax', 'yMin', 'yMax'];
     const nums = Object.fromEntries(required.map(key => [key, Number(nextRanges[key])]));
     if (required.some(key => !String(nextRanges[key]).trim() || !Number.isFinite(nums[key]))) error = 'Enter a finite value for every range.';
@@ -1098,6 +1178,7 @@ export function buildCalculator(id, ctx) {
     if (!error && pairs.some(([a, b]) => nums[a] >= nums[b])) error = 'Each range start must be less than its end.';
     if (error) { $('.calc-settings-error').textContent = error; return; }
     ranges = nextRanges;
+    graphDisplay = nextDisplay;
     if (settingsMode !== graphMode) activateGraphMode(settingsMode);
     viewRanges = null;
     $('.calc-mode-label').textContent = graphMode.toUpperCase(); renderFunctions(); settingsDialog.close(); plot(); persistGraphSettings();
@@ -1386,6 +1467,7 @@ export function buildCalculator(id, ctx) {
       format: 'replit-calculator-graph-setup',
       version: 1,
       graphMode,
+      display: graphDisplay,
       functions: functions.map(({ expression, xExpression, yExpression, color, visible }) => ({
         expression, xExpression, yExpression, color, visible,
       })),
@@ -1437,6 +1519,7 @@ export function buildCalculator(id, ctx) {
         version: GRAPH_SETTINGS_VERSION,
         graphMode: setup.graphMode,
         ranges: allRanges,
+        display: setup.display,
         functionsByMode: Object.fromEntries(GRAPH_MODES.map(mode => [mode, mode === setup.graphMode ? functionsForValidation : []])),
         viewRanges: { [setup.graphMode]: currentViewRanges },
       }));
@@ -1545,6 +1628,7 @@ export function buildCalculator(id, ctx) {
     settingsMode = graphMode;
     ranges = restoreDraft.ranges;
     viewRanges = restoreDraft.viewRanges;
+    graphDisplay = restoreDraft.display;
     functions = restoreDraft.functions.map(fn => ({
       ...fn,
       id: `fn-${nextFunctionId++}`,
@@ -1890,6 +1974,7 @@ export function buildCalculator(id, ctx) {
     label.setAttribute('text-anchor', anchor);
     label.textContent = text;
     target.append(label);
+    return label;
   }
   function plot(announce = true) {
     const ns = 'http://www.w3.org/2000/svg';
@@ -1906,6 +1991,7 @@ export function buildCalculator(id, ctx) {
     const displayedView = formatDisplayedRanges(plotView, view);
     viewRangeValues.value = formatViewRanges(displayedView);
     renderGraphInformation(displayedView);
+    plotArea.dataset.gridStyle = graphDisplay.gridStyle;
     plotArea.dataset.renderedView = JSON.stringify(displayedView);
     plotArea.dataset.viewRatio = graphMode === 'polar' ? '1:1'
       : viewRatio === 'custom' ? `${customRatioX}:${customRatioY}` : viewRatio;
@@ -1935,7 +2021,7 @@ export function buildCalculator(id, ctx) {
         }
         return ticks;
       }
-      const step = niceStep(max - min);
+      const step = niceStep(max - min, GRAPH_GRID_TARGETS[graphDisplay.gridSpacing]);
       const ticks = [];
       for (let value = Math.ceil(min / step) * step, count = 0; value <= max + step * 1e-8 && count < 100; value += step, count++) {
         ticks.push({ coordinate: value, value });
@@ -1994,54 +2080,101 @@ export function buildCalculator(id, ctx) {
     const plotLayer = document.createElementNS(ns, 'g');
     plotArea.append(plotLayer);
     if (graphMode === 'polar') {
-      const radialStep = niceStep(limits.y1 - limits.y0, 6);
+      const gridEnabled = graphDisplay.gridStyle !== 'none';
+      const targetCount = GRAPH_GRID_TARGETS[graphDisplay.gridSpacing];
+      const radialStep = niceStep(limits.y1 - limits.y0, targetCount);
       for (let tick = Math.ceil(limits.y0 / radialStep) * radialStep, count = 0; tick <= limits.y1 + radialStep * 1e-8 && count < 80; tick += radialStep, count++) {
         const fraction = (tick - limits.y0) / (limits.y1 - limits.y0);
         if (fraction < 0 || fraction > 1) continue;
-        const ellipse = document.createElementNS(ns, 'ellipse');
-        ellipse.setAttribute('class', 'calc-graph-grid');
-        ellipse.setAttribute('cx', PLOT_FRAME.centerX); ellipse.setAttribute('cy', PLOT_FRAME.centerY);
-        ellipse.setAttribute('rx', plotView.radiusX * fraction); ellipse.setAttribute('ry', plotView.radiusY * fraction);
-        plotLayer.append(ellipse);
-        addSvgText(ns, formatTick(tick), PLOT_FRAME.centerX + plotView.radiusX * fraction + 4, PLOT_FRAME.centerY - 4, 'start', plotLayer);
+        if (gridEnabled) {
+          const ellipse = document.createElementNS(ns, 'ellipse');
+          ellipse.setAttribute('class', 'calc-graph-grid');
+          ellipse.setAttribute('cx', PLOT_FRAME.centerX); ellipse.setAttribute('cy', PLOT_FRAME.centerY);
+          ellipse.setAttribute('rx', plotView.radiusX * fraction); ellipse.setAttribute('ry', plotView.radiusY * fraction);
+          plotLayer.append(ellipse);
+        }
+        if (graphDisplay.axisLabels) addSvgText(ns, formatTick(tick), PLOT_FRAME.centerX + plotView.radiusX * fraction + 4, PLOT_FRAME.centerY - 4, 'start', plotLayer);
       }
-      const thetaStep = niceStep(limits.b - limits.a, 8);
-      const spoke = document.createElementNS(ns, 'path');
-      spoke.setAttribute('class', 'calc-graph-grid');
-      let spokePath = '';
-      for (let angle = Math.ceil(limits.a / thetaStep) * thetaStep, count = 0; angle <= limits.b + thetaStep * 1e-8 && count < 80; angle += thetaStep, count++) {
-        const x = PLOT_FRAME.centerX + plotView.radiusX * Math.cos(angle);
-        const y = PLOT_FRAME.centerY - plotView.radiusY * Math.sin(angle);
-        spokePath += `M${PLOT_FRAME.centerX} ${PLOT_FRAME.centerY}L${x.toFixed(2)} ${y.toFixed(2)} `;
+      if (gridEnabled) {
+        const thetaStep = niceStep(limits.b - limits.a, Math.max(3, Math.round(targetCount * 1.15)));
+        const spoke = document.createElementNS(ns, 'path');
+        spoke.setAttribute('class', 'calc-graph-grid');
+        let spokePath = '';
+        for (let angle = Math.ceil(limits.a / thetaStep) * thetaStep, count = 0; angle <= limits.b + thetaStep * 1e-8 && count < 80; angle += thetaStep, count++) {
+          const x = PLOT_FRAME.centerX + plotView.radiusX * Math.cos(angle);
+          const y = PLOT_FRAME.centerY - plotView.radiusY * Math.sin(angle);
+          spokePath += `M${PLOT_FRAME.centerX} ${PLOT_FRAME.centerY}L${x.toFixed(2)} ${y.toFixed(2)} `;
+        }
+        spoke.setAttribute('d', spokePath); plotLayer.append(spoke);
       }
-      spoke.setAttribute('d', spokePath); plotLayer.append(spoke);
-      const axis = document.createElementNS(ns, 'path');
-      axis.setAttribute('class', 'calc-graph-axis');
-      axis.setAttribute('d', `M${PLOT_FRAME.centerX - plotView.radiusX} ${PLOT_FRAME.centerY}H${PLOT_FRAME.centerX + plotView.radiusX} M${PLOT_FRAME.centerX} ${PLOT_FRAME.centerY - plotView.radiusY}V${PLOT_FRAME.centerY + plotView.radiusY}`);
-      plotLayer.append(axis);
-      addSvgText(ns, 'θ', PLOT_FRAME.centerX + plotView.radiusX + 5, PLOT_FRAME.centerY - 4, 'start', plotLayer);
-      addSvgText(ns, 'r', PLOT_FRAME.centerX + 4, PLOT_FRAME.centerY - plotView.radiusY - 5, 'start', plotLayer);
+      if (graphDisplay.xAxisLine) {
+        const xAxis = document.createElementNS(ns, 'path');
+        xAxis.setAttribute('class', 'calc-graph-axis calc-graph-axis-x');
+        xAxis.setAttribute('d', `M${PLOT_FRAME.centerX - plotView.radiusX} ${PLOT_FRAME.centerY}H${PLOT_FRAME.centerX + plotView.radiusX}`);
+        plotLayer.append(xAxis);
+      }
+      if (graphDisplay.yAxisLine) {
+        const yAxis = document.createElementNS(ns, 'path');
+        yAxis.setAttribute('class', 'calc-graph-axis calc-graph-axis-y');
+        yAxis.setAttribute('d', `M${PLOT_FRAME.centerX} ${PLOT_FRAME.centerY - plotView.radiusY}V${PLOT_FRAME.centerY + plotView.radiusY}`);
+        plotLayer.append(yAxis);
+      }
+      if (graphDisplay.axisLabels) {
+        addSvgText(ns, 'θ', PLOT_FRAME.centerX + plotView.radiusX + 5, PLOT_FRAME.centerY - 4, 'start', plotLayer);
+        addSvgText(ns, 'r', PLOT_FRAME.centerX + 4, PLOT_FRAME.centerY - plotView.radiusY - 5, 'start', plotLayer);
+      }
     } else {
-      const grid = document.createElementNS(ns, 'path');
-      grid.setAttribute('class', 'calc-graph-grid');
-      let gridPath = `M${PLOT_FRAME.left} ${PLOT_FRAME.top}H${PLOT_FRAME.right}V${PLOT_FRAME.bottom}H${PLOT_FRAME.left}Z `;
-      for (const tick of makeTicks(plotView.xMinCoord, plotView.xMaxCoord, 'x')) {
-        const px = PLOT_FRAME.left + (tick.coordinate - plotView.xMinCoord) / (plotView.xMaxCoord - plotView.xMinCoord) * PLOT_FRAME.width;
-        gridPath += `M${px.toFixed(2)} ${PLOT_FRAME.top}V${PLOT_FRAME.bottom} `;
-        addSvgText(ns, formatTick(tick.value), px, 390, 'middle', plotLayer);
+      const xTicks = makeTicks(plotView.xMinCoord, plotView.xMaxCoord, 'x');
+      const yTicks = makeTicks(plotView.yMinCoord, plotView.yMaxCoord, 'y');
+      if (graphDisplay.gridStyle !== 'none') {
+        const grid = document.createElementNS(ns, 'path');
+        grid.setAttribute('class', 'calc-graph-grid');
+        let gridPath = `M${PLOT_FRAME.left} ${PLOT_FRAME.top}H${PLOT_FRAME.right}V${PLOT_FRAME.bottom}H${PLOT_FRAME.left}Z `;
+        for (const tick of xTicks) {
+          const px = PLOT_FRAME.left + (tick.coordinate - plotView.xMinCoord) / (plotView.xMaxCoord - plotView.xMinCoord) * PLOT_FRAME.width;
+          gridPath += `M${px.toFixed(2)} ${PLOT_FRAME.top}V${PLOT_FRAME.bottom} `;
+        }
+        for (const tick of yTicks) {
+          const py = PLOT_FRAME.bottom - (tick.coordinate - plotView.yMinCoord) / (plotView.yMaxCoord - plotView.yMinCoord) * PLOT_FRAME.height;
+          gridPath += `M${PLOT_FRAME.left} ${py.toFixed(2)}H${PLOT_FRAME.right} `;
+        }
+        grid.setAttribute('d', gridPath); plotLayer.prepend(grid);
       }
-      for (const tick of makeTicks(plotView.yMinCoord, plotView.yMaxCoord, 'y')) {
-        const py = PLOT_FRAME.bottom - (tick.coordinate - plotView.yMinCoord) / (plotView.yMaxCoord - plotView.yMinCoord) * PLOT_FRAME.height;
-        gridPath += `M${PLOT_FRAME.left} ${py.toFixed(2)}H${PLOT_FRAME.right} `;
-        addSvgText(ns, formatTick(tick.value), PLOT_FRAME.left - 5, py + 4, 'end', plotLayer);
+      if (graphDisplay.axisLabels) {
+        for (const tick of xTicks) {
+          const px = PLOT_FRAME.left + (tick.coordinate - plotView.xMinCoord) / (plotView.xMaxCoord - plotView.xMinCoord) * PLOT_FRAME.width;
+          addSvgText(ns, formatTick(tick.value), px, 390, 'middle', plotLayer);
+        }
+        for (const tick of yTicks) {
+          const py = PLOT_FRAME.bottom - (tick.coordinate - plotView.yMinCoord) / (plotView.yMaxCoord - plotView.yMinCoord) * PLOT_FRAME.height;
+          addSvgText(ns, formatTick(tick.value), PLOT_FRAME.left - 5, py + 4, 'end', plotLayer);
+        }
       }
-      grid.setAttribute('d', gridPath); plotLayer.prepend(grid);
       const zeroX = !logAxes.x && plotView.xMin <= 0 && plotView.xMax >= 0 ? xMap(0) : null;
       const zeroY = !logAxes.y && limits.y0 <= 0 && limits.y1 >= 0 ? yMap(0) : null;
-      const axis = document.createElementNS(ns, 'path'); axis.setAttribute('class', 'calc-graph-axis');
-      axis.setAttribute('d', `M${PLOT_FRAME.left} ${PLOT_FRAME.top}V${PLOT_FRAME.bottom}H${PLOT_FRAME.right}${zeroY === null ? '' : ` M${PLOT_FRAME.left} ${zeroY}H${PLOT_FRAME.right}`}${zeroX === null ? '' : ` M${zeroX} ${PLOT_FRAME.top}V${PLOT_FRAME.bottom}`}`);
-      plotLayer.append(axis);
-      addSvgText(ns, 'x', PLOT_FRAME.right - 5, 390, 'end', plotLayer); addSvgText(ns, 'y', PLOT_FRAME.left + 8, PLOT_FRAME.top + 10, 'start', plotLayer);
+      if (graphDisplay.xAxisLine && zeroY !== null) {
+        const xAxis = document.createElementNS(ns, 'path');
+        xAxis.setAttribute('class', 'calc-graph-axis calc-graph-axis-x');
+        xAxis.setAttribute('d', `M${PLOT_FRAME.left} ${zeroY}H${PLOT_FRAME.right}`);
+        plotLayer.append(xAxis);
+      }
+      if (graphDisplay.yAxisLine && zeroX !== null) {
+        const yAxis = document.createElementNS(ns, 'path');
+        yAxis.setAttribute('class', 'calc-graph-axis calc-graph-axis-y');
+        yAxis.setAttribute('d', `M${zeroX} ${PLOT_FRAME.top}V${PLOT_FRAME.bottom}`);
+        plotLayer.append(yAxis);
+      }
+      if (graphDisplay.axisLabels) {
+        const xLabelY = zeroY !== null && zeroY > PLOT_FRAME.top + 18
+          ? zeroY - 8 : PLOT_FRAME.top + 12;
+        const yLabelX = zeroX !== null && zeroX < PLOT_FRAME.right - 20
+          ? zeroX + 8 : PLOT_FRAME.right - 8;
+        const xLabel = addSvgText(ns, 'x', PLOT_FRAME.right - 5, xLabelY, 'end', plotLayer);
+        xLabel.classList.add('calc-graph-axis-name', 'calc-graph-axis-name-x');
+        const yLabel = addSvgText(ns, 'y', yLabelX, PLOT_FRAME.top + 10,
+          yLabelX === PLOT_FRAME.right - 8 ? 'end' : 'start', plotLayer);
+        yLabel.classList.add('calc-graph-axis-name', 'calc-graph-axis-name-y');
+      }
     }
     const drawable = functions.filter(fn => fn.visible && fn.path);
     drawable.forEach(fn => { const path = document.createElementNS(ns, 'path'); path.setAttribute('d', fn.path); path.setAttribute('class', 'calc-graph-line'); path.style.setProperty('--function-color', fn.color); path.setAttribute('data-function-id', fn.id); plotLayer.append(path); });
