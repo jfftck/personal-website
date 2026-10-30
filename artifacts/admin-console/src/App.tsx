@@ -681,7 +681,7 @@ function Console() {
               <section className="panel list-panel" aria-label="Files">
                 <div className="list-toolbar">
                   <div className="list-title"><Folder size={16} /> Files <span className="count-pill">{visibleFiles.length}</span></div>
-                  <span className="list-hint">{search ? 'Search results across the library' : selectedFolder ? selectedFolder : 'Private library · public delivery enabled'}</span>
+                  <span className="list-hint" title={search ? 'Search results across the library' : selectedFolder || 'Private library · public delivery enabled'}>{search ? 'Search results across the library' : selectedFolder ? selectedFolder : 'Private library · public delivery enabled'}</span>
                 </div>
                 <div className="file-table-head"><span>Title</span><span>Content date</span><span>Size</span><span /></div>
                 {visibleFiles.length === 0 ? (
@@ -712,8 +712,35 @@ function Console() {
                 ) : (
                   <>
                     <div className="detail-file">
-                      <div className="detail-file-icon">{fileIcon(selectedFile)}</div>
-                      <h3>{selectedFile.title}</h3><p>{selectedFile.name} · {selectedFile.folderPath || 'Root folder'}</p>
+                        {selectedFile.contentType.toLowerCase().startsWith('image/') ? (
+                          <div className="detail-media-frame">
+                            <img
+                              className="detail-media"
+                              src={selectedFile.url}
+                              alt={selectedFile.title || selectedFile.name}
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          </div>
+                        ) : selectedFile.contentType.toLowerCase().startsWith('video/') ? (
+                          <div className="detail-media-frame">
+                            <video
+                              className="detail-media"
+                              src={selectedFile.url}
+                              poster={selectedFile.posterUrl ?? undefined}
+                              controls
+                              playsInline
+                              preload="metadata"
+                              aria-label={`Preview ${selectedFile.title || selectedFile.name}`}
+                            />
+                          </div>
+                        ) : (
+                          <div className="detail-file-icon">{fileIcon(selectedFile)}</div>
+                        )}
+                        <h3 title={selectedFile.title}>{selectedFile.title}</h3>
+                        <p title={`${selectedFile.name} · ${selectedFile.folderPath || 'Root folder'}`}>
+                          {selectedFile.name} · {selectedFile.folderPath || 'Root folder'}
+                        </p>
                     </div>
                     <Form {...metadataForm}>
                     <form key={`${selectedFile.id}-${selectedFile.updatedAt}`} onSubmit={metadataForm.handleSubmit(saveMetadata)}>
@@ -722,7 +749,13 @@ function Console() {
                           <FormLabel className="field-label">Title</FormLabel>
                           <FormControl><input className="field-control" maxLength={220} data-testid="input-file-title" {...field} /></FormControl>
                           <FormMessage data-testid="error-file-title" />
-                          <p className="field-help">File name: <code data-testid="generated-file-name">{filenameFromTitle(
+                          <p className="field-help file-name-preview">File name: <code title={filenameFromTitle(
+                            metadataForm.watch('title') ?? '',
+                            metadataForm.watch('date') ?? '',
+                            selectedFile.name,
+                            selectedFile.contentType,
+                            '.md',
+                          ) || 'Choose a title and date'} data-testid="generated-file-name">{filenameFromTitle(
                             metadataForm.watch('title') ?? '',
                             metadataForm.watch('date') ?? '',
                             selectedFile.name,
@@ -733,7 +766,7 @@ function Console() {
                       )} />
                       <div className="readonly-file-field">
                         <label className="field-label" htmlFor="input-file-original-name">Original file name</label>
-                        <input id="input-file-original-name" className="field-control" value={selectedFile.originalFileName ?? ''} readOnly placeholder="Not recorded for this file" data-testid="input-file-original-name" />
+                        <input id="input-file-original-name" className="field-control" value={selectedFile.originalFileName ?? ''} readOnly placeholder="Not recorded for this file" title={selectedFile.originalFileName || 'Not recorded for this file'} data-testid="input-file-original-name" />
                         <p className="field-help">Captured from the upload and kept unchanged. Edit the title to use a friendlier name.</p>
                       </div>
                       <FormField control={metadataForm.control} name="description" render={({ field }) => (
@@ -756,7 +789,7 @@ function Console() {
                           <div className="folder-picker-row">
                             <Select value={field.value || ROOT_FOLDER_OPTION} onValueChange={(value) => field.onChange(value === ROOT_FOLDER_OPTION ? '' : value)}>
                               <FormControl>
-                                <SelectTrigger className="field-control folder-picker-trigger" data-testid="select-file-destination" aria-label="Destination folder">
+                                <SelectTrigger className="field-control folder-picker-trigger" title={field.value || 'Root folder'} data-testid="select-file-destination" aria-label="Destination folder">
                                   <SelectValue placeholder="Choose a folder" />
                                 </SelectTrigger>
                               </FormControl>
@@ -794,10 +827,10 @@ function Console() {
                         )} />
                       ) : null}
                       <div className="detail-stats">
-                        <div><span className="stat-label">Type</span><span className="stat-value">{selectedFile.contentType}</span></div>
+                        <div><span className="stat-label">Type</span><span className="stat-value" title={selectedFile.contentType}>{selectedFile.contentType}</span></div>
                         <div><span className="stat-label">Size</span><span className="stat-value">{displaySize(selectedFile.sizeBytes)}</span></div>
                         <div><span className="stat-label">Updated</span><span className="stat-value">{new Date(selectedFile.updatedAt).toLocaleDateString()}</span></div>
-                        <div><span className="stat-label">Published at</span><a className="stat-value" href={selectedFile.url} target="_blank" rel="noreferrer" data-testid={`file-public-url-${selectedFile.id}`}>{selectedFile.url}</a></div>
+                        <div><span className="stat-label">Published at</span><a className="stat-value" href={selectedFile.url} target="_blank" rel="noreferrer" title={selectedFile.url} data-testid={`file-public-url-${selectedFile.id}`}>{selectedFile.url}</a></div>
                       </div>
                       <div className="detail-actions">
                         <button className="button button-primary" type="submit" disabled={updateFile.isPending} data-testid="save-file-details"><Check /> Save Details</button>
@@ -825,10 +858,10 @@ function Console() {
                           {fileVersionsQuery.data.map((version, index) => (
                             <li className="revision-item" key={version.id} data-testid={`revision-${version.versionNumber}`}>
                               <div className="revision-item-header">
-                                <strong>Version {version.versionNumber} · {version.action[0].toUpperCase() + version.action.slice(1)}</strong>
-                                <time dateTime={version.createdAt}>{new Date(version.createdAt).toLocaleString()}</time>
+                                <strong title={`Version ${version.versionNumber} · ${version.action[0].toUpperCase() + version.action.slice(1)}`}>Version {version.versionNumber} · {version.action[0].toUpperCase() + version.action.slice(1)}</strong>
+                                <time dateTime={version.createdAt} title={new Date(version.createdAt).toLocaleString()}>{new Date(version.createdAt).toLocaleString()}</time>
                               </div>
-                              <p className="revision-file">{version.title} <span>·</span> {version.name} <span>·</span> {version.folderPath || 'Root folder'} <span>·</span> {version.date}</p>
+                              <p className="revision-file" title={`${version.title} · ${version.name} · ${version.folderPath || 'Root folder'} · ${version.date}`}>{version.title} <span>·</span> {version.name} <span>·</span> {version.folderPath || 'Root folder'} <span>·</span> {version.date}</p>
                               <div className="revision-item-footer">
                                 <a href={version.gitUrl} target="_blank" rel="noreferrer">Commit {version.gitCommitSha.slice(0, 7)}</a>
                                 {index === 0 ? (
@@ -890,7 +923,7 @@ function Console() {
                     <div className="folder-picker-row">
                       <Select value={field.value || ROOT_FOLDER_OPTION} onValueChange={(value) => field.onChange(value === ROOT_FOLDER_OPTION ? '' : value)}>
                         <FormControl>
-                          <SelectTrigger className="field-control folder-picker-trigger" data-testid="select-upload-destination" aria-label="Upload destination folder">
+                          <SelectTrigger className="field-control folder-picker-trigger" title={field.value || 'Root folder'} data-testid="select-upload-destination" aria-label="Upload destination folder">
                             <SelectValue placeholder="Choose a folder" />
                           </SelectTrigger>
                         </FormControl>
@@ -931,7 +964,7 @@ function Console() {
                 <FormLabel className="field-label">Title</FormLabel>
                 <FormControl><input className="field-control" maxLength={220} data-testid="input-upload-title" {...field} /></FormControl>
                 <FormMessage data-testid="error-upload-title" />
-                <p className="field-help">File name: <code data-testid="generated-upload-filename">{generatedUploadName || (uploadMode === 'markdown' ? 'Enter a title to preview the .md filename' : 'Choose a file to preview its filename')}</code></p>
+                <p className="field-help file-name-preview">File name: <code title={generatedUploadName || (uploadMode === 'markdown' ? 'Enter a title to preview the .md filename' : 'Choose a file to preview its filename')} data-testid="generated-upload-filename">{generatedUploadName || (uploadMode === 'markdown' ? 'Enter a title to preview the .md filename' : 'Choose a file to preview its filename')}</code></p>
               </FormItem>
             )} />
             {uploadMode === 'upload' ? (
@@ -1003,8 +1036,8 @@ function FileName({ file }: { file: ContentFile }) {
     <div className="file-name-cell">
       <div className="file-icon">{fileIcon(file)}</div>
       <div className="file-name-wrap">
-        <span className="file-name" data-testid={`text-file-name-${file.id}`}>{file.title}</span>
-        <span className="file-sub">{file.name} · {file.folderPath || 'Root'} · {file.contentType}</span>
+        <span className="file-name" title={file.title} data-testid={`text-file-name-${file.id}`}>{file.title}</span>
+        <span className="file-sub" title={`${file.name} · ${file.folderPath || 'Root'} · ${file.contentType}`}>{file.name} · {file.folderPath || 'Root'} · {file.contentType}</span>
       </div>
     </div>
   );
