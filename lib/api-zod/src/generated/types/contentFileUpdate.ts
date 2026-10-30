@@ -14,14 +14,11 @@ export interface ContentFileUpdate {
   name?: string;
   /**
      * @minLength 1
-     * @maxLength 255
-     */
-  originalFileName?: string;
-  /**
-     * @minLength 1
      * @maxLength 220
      */
   title?: string;
+  /** @maxLength 2000 */
+  description?: string;
   /** @maxLength 1000 */
   folderPath?: string;
   /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */

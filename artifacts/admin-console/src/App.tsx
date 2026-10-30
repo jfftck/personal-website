@@ -66,8 +66,8 @@ function savedThemeOverride(): ThemeOverride {
 }
 
 type FolderFormValues = { name: string };
-type UploadFormValues = { title: string; originalFileName: string; date: string; folderPath: string; isWallpaper: boolean };
-type MetadataFormValues = { title: string; originalFileName: string; date: string; folderPath: string; isWallpaper: boolean };
+type UploadFormValues = { title: string; description: string; date: string; folderPath: string; isWallpaper: boolean };
+type MetadataFormValues = { title: string; description: string; date: string; folderPath: string; isWallpaper: boolean };
 
 function displaySize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -158,10 +158,10 @@ function Console() {
   const restoreFileVersion = useRestoreContentFileVersion();
   const folderForm = useForm<FolderFormValues>({ defaultValues: { name: '' } });
   const uploadForm = useForm<UploadFormValues>({
-    defaultValues: { title: '', originalFileName: '', date: UPLOAD_TODAY, folderPath: '', isWallpaper: false },
+    defaultValues: { title: '', description: '', date: UPLOAD_TODAY, folderPath: '', isWallpaper: false },
   });
   const metadataForm = useForm<MetadataFormValues>({
-    defaultValues: { title: '', originalFileName: '', date: TODAY, folderPath: '', isWallpaper: false },
+    defaultValues: { title: '', description: '', date: TODAY, folderPath: '', isWallpaper: false },
   });
   const resetMetadata = metadataForm.reset;
 
@@ -268,12 +268,12 @@ function Console() {
     if (!selectedFile) return;
     resetMetadata({
       title: selectedFile.title,
-      originalFileName: selectedFile.originalFileName || selectedFile.name,
+      description: selectedFile.description ?? '',
       date: selectedFile.date,
       folderPath: selectedFile.folderPath,
       isWallpaper: selectedFile.isWallpaper,
     });
-  }, [selectedFile?.id, selectedFile?.name, selectedFile?.originalFileName, selectedFile?.title, selectedFile?.date, selectedFile?.folderPath, selectedFile?.isWallpaper, resetMetadata]);
+  }, [selectedFile?.id, selectedFile?.title, selectedFile?.description, selectedFile?.date, selectedFile?.folderPath, selectedFile?.isWallpaper, resetMetadata]);
 
   const folders = treeQuery.data?.folders ?? [];
   const allFiles = treeQuery.data?.files ?? [];
@@ -294,7 +294,7 @@ function Console() {
     const query = search.trim().toLowerCase();
     return allFiles.filter((file) => {
       const inFolder = query || !selectedFolder || file.folderPath === selectedFolder;
-        const matches = !query || `${file.title} ${file.name} ${file.originalFileName} ${file.folderPath} ${file.contentType} ${file.date}`.toLowerCase().includes(query);
+        const matches = !query || `${file.title} ${file.name} ${file.originalFileName} ${file.description} ${file.folderPath} ${file.contentType} ${file.date}`.toLowerCase().includes(query);
       return inFolder && matches;
     });
   }, [allFiles, search, selectedFolder]);
@@ -395,9 +395,7 @@ function Console() {
       return;
     }
     if (!name) return;
-    const originalFileName = creatingMarkdown
-      ? name
-      : (values.originalFileName.trim() || sourceFile.name);
+    const originalFileName = creatingMarkdown ? name : sourceFile.name;
     setUploadBusy(true);
     try {
       const target = await createUpload.mutateAsync({ data: { name, contentType, sizeBytes: sourceFile.size } });
@@ -409,7 +407,7 @@ function Console() {
       if (!response.ok) throw new Error(`File upload failed (${response.status}).`);
       const created = await createFile.mutateAsync({
         data: {
-          name, originalFileName, title: values.title.trim(), folderPath: uploadDestination, date,
+          name, originalFileName, title: values.title.trim(), description: values.description.trim(), folderPath: uploadDestination, date,
           contentType, sizeBytes: sourceFile.size, objectPath: target.objectPath,
           isWallpaper: !creatingMarkdown && isImageFile(sourceFile) && values.isWallpaper,
         },
@@ -421,7 +419,7 @@ function Console() {
       setModal(null);
       setUploadFile(null);
       setUploadMode('upload');
-      uploadForm.reset({ title: '', originalFileName: '', date: localToday(), folderPath: uploadDestination, isWallpaper: false });
+      uploadForm.reset({ title: '', description: '', date: localToday(), folderPath: uploadDestination, isWallpaper: false });
       if (creatingMarkdown) await openTextEditor(created);
     } catch (error) {
       setToastMessage(errorMessage(error));
@@ -432,7 +430,6 @@ function Console() {
     if (!file) return;
     setUploadFile(file);
     uploadForm.setValue('title', titleFromFilename(file.name), { shouldValidate: true });
-    uploadForm.setValue('originalFileName', file.name, { shouldValidate: true });
     uploadForm.setValue('date', localToday(), { shouldValidate: true });
     uploadForm.setValue('isWallpaper', false, { shouldValidate: true });
   };
@@ -450,8 +447,8 @@ function Console() {
       const updated = await updateFile.mutateAsync({
         fileId: selectedFile.id,
         data: {
-          originalFileName: values.originalFileName.trim(),
           title,
+          description: values.description.trim(),
           date,
           folderPath: values.folderPath,
           isWallpaper: isImageFile({ name: selectedFile.name, type: selectedFile.contentType }) && values.isWallpaper,
@@ -543,14 +540,14 @@ function Console() {
   const openUpload = () => {
     setUploadFile(null);
     setUploadMode('upload');
-    uploadForm.reset({ title: '', originalFileName: '', date: localToday(), folderPath: selectedFolder, isWallpaper: false });
+    uploadForm.reset({ title: '', description: '', date: localToday(), folderPath: selectedFolder, isWallpaper: false });
     setModal('upload');
   };
   const openNewDocument = () => {
     setUploadFile(null);
     setUploadMode('markdown');
     const documentFolder = /^(posts|documents)(\/|$)/.test(selectedFolder) ? selectedFolder : 'documents';
-    uploadForm.reset({ title: '', originalFileName: '', date: localToday(), folderPath: documentFolder, isWallpaper: false });
+    uploadForm.reset({ title: '', description: '', date: localToday(), folderPath: documentFolder, isWallpaper: false });
     setModal('upload');
   };
 
@@ -734,12 +731,16 @@ function Console() {
                           ) || 'Choose a title and date'}</code></p>
                         </FormItem>
                       )} />
-                      <FormField control={metadataForm.control} name="originalFileName" rules={{ required: 'Enter an original file name.', maxLength: { value: 255, message: 'Keep the original file name under 256 characters.' } }} render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="field-label">Original file name</FormLabel>
+                        <FormControl><input className="field-control" value={selectedFile.originalFileName ?? ''} readOnly placeholder="Not recorded for this file" data-testid="input-file-original-name" /></FormControl>
+                        <p className="field-help">Captured from the upload and kept unchanged. Edit the title to use a friendlier name.</p>
+                      </FormItem>
+                      <FormField control={metadataForm.control} name="description" render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="field-label">Original file name</FormLabel>
-                          <FormControl><input className="field-control" maxLength={255} data-testid="input-file-original-name" {...field} /></FormControl>
-                          <FormMessage data-testid="error-file-original-name" />
-                          <p className="field-help">The source name is saved separately from the generated library filename.</p>
+                          <FormLabel className="field-label">Description</FormLabel>
+                          <FormControl><textarea className="field-control field-textarea" maxLength={2000} rows={3} placeholder="Add details about this file" data-testid="input-file-description" {...field} /></FormControl>
+                          <FormMessage data-testid="error-file-description" />
                         </FormItem>
                       )} />
                       <FormField control={metadataForm.control} name="date" render={({ field }) => (
@@ -934,15 +935,19 @@ function Console() {
               </FormItem>
             )} />
             {uploadMode === 'upload' ? (
-              <FormField control={uploadForm.control} name="originalFileName" rules={{ required: 'Choose a file to set its original name.', maxLength: { value: 255, message: 'Keep the original file name under 256 characters.' } }} render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="field-label">Original file name</FormLabel>
-                  <FormControl><input className="field-control" maxLength={255} placeholder={uploadFile?.name || 'Choose a file first'} data-testid="input-upload-original-name" {...field} /></FormControl>
-                  <FormMessage data-testid="error-upload-original-name" />
-                  <p className="field-help">Saved separately from the generated library filename.</p>
-                </FormItem>
-              )} />
+              <FormItem>
+                <FormLabel className="field-label">Original file name</FormLabel>
+                <FormControl><input className="field-control" value={uploadFile?.name ?? ''} readOnly placeholder="Choose a file first" data-testid="input-upload-original-name" /></FormControl>
+                <p className="field-help">Captured from the selected file and kept unchanged. Edit the title to use a friendlier name.</p>
+              </FormItem>
             ) : null}
+            <FormField control={uploadForm.control} name="description" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="field-label">Description</FormLabel>
+                <FormControl><textarea className="field-control field-textarea" maxLength={2000} rows={3} placeholder="Add details about this file" data-testid="input-upload-description" {...field} /></FormControl>
+                <FormMessage data-testid="error-upload-description" />
+              </FormItem>
+            )} />
             <FormField control={uploadForm.control} name="date" render={({ field }) => (
               <FormItem>
                 <FormLabel className="field-label">Content date</FormLabel>

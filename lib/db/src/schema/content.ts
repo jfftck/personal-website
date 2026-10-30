@@ -34,6 +34,7 @@ export const contentFilesTable = pgTable(
     name: text("name").notNull(),
     originalFileName: text("original_file_name").notNull().default(""),
     title: text("title").notNull().default(""),
+    description: text("description").notNull().default(""),
     folderPath: text("folder_path").notNull().default(""),
     contentDate: date("content_date", { mode: "string" }).notNull(),
     contentType: text("content_type").notNull(),
@@ -64,6 +65,7 @@ export type ContentFileVersionSnapshot = {
   name: string;
   originalFileName?: string;
   title: string;
+  description?: string;
   folderPath: string;
   contentDate: string;
   contentType: string;

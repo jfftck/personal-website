@@ -64,17 +64,19 @@ test("a date edit records the new date, title, and generated filename together",
   );
 });
 
-test("restoring an older revision returns its title, date, and filename as one unit", () => {
+test("restoring an older revision returns editable metadata without changing the source filename", () => {
   const olderRevision = createContentFileVersionSnapshot({
     ...originalFile,
     originalFileName: "camera-original-name.jpg",
+    description: "A camera photo.",
   });
   const restored = restoreContentFileRevisionMetadata(olderRevision);
 
+  assert.equal(olderRevision.originalFileName, "camera-original-name.jpg");
   assert.deepEqual(restored, {
     name: "20261030_Original_title.md",
-    originalFileName: "camera-original-name.jpg",
     title: "Original title",
+    description: "A camera photo.",
     contentDate: "2026-10-30",
   });
 });

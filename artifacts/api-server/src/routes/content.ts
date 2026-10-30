@@ -150,6 +150,13 @@ function normalizeOriginalFileName(input: unknown): string {
   return value;
 }
 
+function normalizeContentDescription(input: unknown): string {
+  if (typeof input !== "string" || input.length > 2000) {
+    throw new ContentError(400, "Enter a description under 2000 characters.");
+  }
+  return input.trim();
+}
+
 function normalizeContentTitle(input: unknown): string {
   if (typeof input !== "string") {
     throw new ContentError(400, "Enter a title.");
@@ -222,8 +229,9 @@ function toContentFile(file: DbContentFile) {
   return {
     id: file.id,
     name: file.name,
-    originalFileName: file.originalFileName || file.name,
+    originalFileName: file.originalFileName,
     title: file.title?.trim() || titleFromLegacyName(file.name),
+    description: file.description,
     folderPath: file.folderPath,
     date: file.contentDate,
     contentType: file.contentType,
@@ -241,9 +249,9 @@ function toContentFileVersion(version: DbContentFileVersion) {
     versionNumber: version.versionNumber,
     action: version.action,
     name: version.snapshot.name,
-    originalFileName:
-      version.snapshot.originalFileName ?? version.snapshot.name,
+    originalFileName: version.snapshot.originalFileName ?? "",
     title: version.snapshot.title?.trim() || titleFromLegacyName(version.snapshot.name),
+    description: version.snapshot.description ?? "",
     folderPath: version.snapshot.folderPath,
     date: version.snapshot.contentDate,
     contentType: version.snapshot.contentType,
@@ -509,9 +517,10 @@ contentApiRouter.post(
     const input = CreateContentFileBody.parse(req.body);
     const requestedName = normalizeFileName(input.name);
     const originalFileName = normalizeOriginalFileName(
-      input.originalFileName ?? input.name,
+      input.originalFileName,
     );
     const title = normalizeContentTitle(input.title);
+    const description = normalizeContentDescription(input.description ?? "");
     const folderPath = normalizeFolderPath(input.folderPath);
     const date = normalizeContentDate(input.date);
     const contentType = normalizeContentType(input.contentType);
@@ -546,6 +555,7 @@ contentApiRouter.post(
             name,
             originalFileName,
             title,
+            description,
             folderPath,
             contentDate: date,
             contentType,
@@ -577,10 +587,8 @@ contentApiRouter.patch(
         if (!existing) throw new ContentError(404, "That file could not be found.");
 
         const update: Partial<typeof contentFilesTable.$inferInsert> = {};
-        if (input.originalFileName !== undefined) {
-          update.originalFileName = normalizeOriginalFileName(
-            input.originalFileName,
-          );
+        if (input.description !== undefined) {
+          update.description = normalizeContentDescription(input.description);
         }
         const title =
           input.title !== undefined

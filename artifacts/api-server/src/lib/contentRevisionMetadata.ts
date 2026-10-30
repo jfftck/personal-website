@@ -8,8 +8,9 @@ export function createContentFileVersionSnapshot(
 ): ContentFileVersionSnapshot {
   return {
     name: file.name,
-    originalFileName: file.originalFileName || file.name,
+    originalFileName: file.originalFileName ?? "",
     title: file.title,
+    description: file.description ?? "",
     folderPath: file.folderPath,
     contentDate: file.contentDate,
     contentType: file.contentType,
@@ -27,12 +28,12 @@ export function restoreContentFileRevisionMetadata(
   snapshot: ContentFileVersionSnapshot,
 ): Pick<
   ContentFileVersionSnapshot,
-  "name" | "originalFileName" | "title" | "contentDate"
+  "name" | "title" | "description" | "contentDate"
 > {
   return {
     name: snapshot.name,
-    originalFileName: snapshot.originalFileName ?? snapshot.name,
     title: snapshot.title,
+    description: snapshot.description ?? "",
     contentDate: snapshot.contentDate,
   };
 }

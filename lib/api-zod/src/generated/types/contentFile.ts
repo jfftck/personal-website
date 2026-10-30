@@ -11,6 +11,8 @@ export interface ContentFile {
   name: string;
   originalFileName: string;
   title: string;
+  /** @maxLength 2000 */
+  description: string;
   folderPath: string;
   /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
   date: string;

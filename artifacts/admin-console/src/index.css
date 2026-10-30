@@ -160,6 +160,7 @@
 .field-label { display:block; margin:12px 0 5px; color:hsl(var(--muted-foreground)); font:10px var(--app-font-mono); letter-spacing:.03em; }
 .field-control { width:100%; min-height:38px; border:1px solid hsl(var(--input)); border-radius:7px; padding:8px 10px; background:hsl(var(--background)); color:hsl(var(--foreground)); font-size:12px; }
 .field-control:focus { outline:2px solid hsl(var(--ring) / .35); border-color:hsl(var(--ring)); }
+.field-textarea { min-height:76px; resize:vertical; font-size:12px; font-family:inherit; line-height:1.5; }
 .field-help { margin:6px 0 0; color:hsl(var(--muted-foreground)); font-size:10px; line-height:1.5; }
 .field-help code { overflow-wrap:anywhere; font:10px var(--app-font-mono); color:hsl(var(--foreground)); }
 .checkbox-item { display:flex; align-items:flex-start; gap:10px; margin-top:14px; }
