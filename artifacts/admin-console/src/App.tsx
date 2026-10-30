@@ -731,11 +731,11 @@ function Console() {
                           ) || 'Choose a title and date'}</code></p>
                         </FormItem>
                       )} />
-                      <FormItem>
-                        <FormLabel className="field-label">Original file name</FormLabel>
-                        <FormControl><input className="field-control" value={selectedFile.originalFileName ?? ''} readOnly placeholder="Not recorded for this file" data-testid="input-file-original-name" /></FormControl>
+                      <div className="readonly-file-field">
+                        <label className="field-label" htmlFor="input-file-original-name">Original file name</label>
+                        <input id="input-file-original-name" className="field-control" value={selectedFile.originalFileName ?? ''} readOnly placeholder="Not recorded for this file" data-testid="input-file-original-name" />
                         <p className="field-help">Captured from the upload and kept unchanged. Edit the title to use a friendlier name.</p>
-                      </FormItem>
+                      </div>
                       <FormField control={metadataForm.control} name="description" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="field-label">Description</FormLabel>
@@ -935,11 +935,11 @@ function Console() {
               </FormItem>
             )} />
             {uploadMode === 'upload' ? (
-              <FormItem>
-                <FormLabel className="field-label">Original file name</FormLabel>
-                <FormControl><input className="field-control" value={uploadFile?.name ?? ''} readOnly placeholder="Choose a file first" data-testid="input-upload-original-name" /></FormControl>
+              <div className="readonly-file-field">
+                <label className="field-label" htmlFor="input-upload-original-name">Original file name</label>
+                <input id="input-upload-original-name" className="field-control" value={uploadFile?.name ?? ''} readOnly placeholder="Choose a file first" data-testid="input-upload-original-name" />
                 <p className="field-help">Captured from the selected file and kept unchanged. Edit the title to use a friendlier name.</p>
-              </FormItem>
+              </div>
             ) : null}
             <FormField control={uploadForm.control} name="description" render={({ field }) => (
               <FormItem>
