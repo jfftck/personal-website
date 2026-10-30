@@ -25,4 +25,4 @@ Admin-authored posts and documents are Markdown. Their stored filename is genera
 
 **Why:** the user wants documents created in the admin UI to default to `.md`, while all other file types are uploaded and retain their original filename as the title.
 
-**How to apply:** collect the local date as Month, Day, and Year components, validate it as a real calendar date, then store it in ISO format. Keep the title separate from the filename and use the same naming convention when creating or editing content.
+**How to apply:** keep the browser's native date input, read its value after submission, validate and normalize it to ISO format, and store the title separately from the filename.

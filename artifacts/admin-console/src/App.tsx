@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import {
@@ -16,14 +16,13 @@ import {
   type ContentFile, type ContentFileVersion, type ContentFolder,
 } from '@workspace/api-client-react';
 import {
-  dateFromParts,
   filenameFromTitle,
   isImageFile,
   normalizeDateForApi,
   titleFromFilename,
 } from '@/lib/content-formatters';
 import { ErrorBoundary } from '@/components/error-boundary';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, useFormField } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
@@ -51,120 +50,8 @@ const localToday = () => {
 };
 const TODAY = localToday();
 const UPLOAD_TODAY = TODAY;
-const INCOMPLETE_DATE_VALUE = '__incomplete_date__';
 const THEME_STORAGE_KEY = 'jmt-console-theme';
 type ThemeOverride = 'light' | 'dark' | null;
-
-type DateParts = { month: string; day: string; year: string };
-type DatePartsInputProps = {
-  value?: string;
-  onChange: (value: string) => void;
-  onBlur?: () => void;
-  name?: string;
-  testId?: string;
-};
-
-function datePartsFromIso(value: string): DateParts {
-  return {
-    month: String(Number(value.slice(5, 7))),
-    day: String(Number(value.slice(8, 10))),
-    year: value.slice(0, 4),
-  };
-}
-
-const DatePartsInput = forwardRef<HTMLInputElement, DatePartsInputProps>(
-  function DatePartsInput({ value = '', onChange, onBlur, name, testId }, ref) {
-    const { formItemId, formMessageId, error } = useFormField();
-    const normalizedValue = normalizeDateForApi(value);
-    const [parts, setParts] = useState<DateParts>(() =>
-      normalizedValue ? datePartsFromIso(normalizedValue) : { month: '', day: '', year: '' },
-    );
-
-    useEffect(() => {
-      if (!value) {
-        setParts({ month: '', day: '', year: '' });
-        return;
-      }
-      const normalized = normalizeDateForApi(value);
-      if (normalized) setParts(datePartsFromIso(normalized));
-    }, [value]);
-
-    const updatePart = (part: keyof DateParts, raw: string, maxLength: number) => {
-      const next = { ...parts, [part]: raw.replace(/\D/g, '').slice(0, maxLength) };
-      setParts(next);
-      if (!next.month && !next.day && !next.year) {
-        onChange('');
-        return;
-      }
-      onChange(dateFromParts(next.month, next.day, next.year) ?? INCOMPLETE_DATE_VALUE);
-    };
-
-    const describedBy = error ? formMessageId : undefined;
-    return (
-      <div className="date-parts" role="group" data-testid={testId}>
-        <label className="date-part">
-          <span>Month</span>
-          <input
-            ref={ref}
-            id={formItemId}
-            name={name}
-            className="field-control date-part-input"
-            type="text"
-            inputMode="numeric"
-            autoComplete="bday-month"
-            placeholder="MM"
-            maxLength={2}
-            value={parts.month}
-            data-testid={testId ? `${testId}-month` : undefined}
-            onChange={(event) => updatePart('month', event.target.value, 2)}
-            onBlur={onBlur}
-            aria-invalid={Boolean(error)}
-            aria-describedby={describedBy}
-            aria-required="true"
-          />
-        </label>
-        <label className="date-part">
-          <span>Day</span>
-          <input
-            id={`${formItemId}-day`}
-            className="field-control date-part-input"
-            type="text"
-            inputMode="numeric"
-            autoComplete="bday-day"
-            placeholder="DD"
-            maxLength={2}
-            value={parts.day}
-            data-testid={testId ? `${testId}-day` : undefined}
-            onChange={(event) => updatePart('day', event.target.value, 2)}
-            onBlur={onBlur}
-            aria-invalid={Boolean(error)}
-            aria-describedby={describedBy}
-            aria-required="true"
-          />
-        </label>
-        <label className="date-part date-part-year">
-          <span>Year</span>
-          <input
-            id={`${formItemId}-year`}
-            className="field-control date-part-input"
-            type="text"
-            inputMode="numeric"
-            autoComplete="bday-year"
-            placeholder="YYYY"
-            maxLength={4}
-            value={parts.year}
-            data-testid={testId ? `${testId}-year` : undefined}
-            onChange={(event) => updatePart('year', event.target.value, 4)}
-            onBlur={onBlur}
-            aria-invalid={Boolean(error)}
-            aria-describedby={describedBy}
-            aria-required="true"
-          />
-        </label>
-      </div>
-    );
-  },
-);
 
 function systemPrefersDark() {
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
@@ -516,8 +403,12 @@ function Console() {
   const saveMetadata = async (values: MetadataFormValues) => {
     if (!selectedFile) return;
     const title = values.title.trim();
-    const date = values.date;
-    if (!title || !date) return;
+    const date = normalizeDateForApi(values.date);
+    if (!date) {
+      metadataForm.setError('date', { type: 'validate', message: 'Choose a valid date.' });
+      return;
+    }
+    if (!title) return;
     try {
       const updated = await updateFile.mutateAsync({
         fileId: selectedFile.id,
@@ -804,17 +695,11 @@ function Console() {
                           ) || 'Choose a title and date'}</code></p>
                         </FormItem>
                       )} />
-                      <FormField control={metadataForm.control} name="date" rules={{
-                        required: 'Choose a content date.',
-                        validate: (value) => normalizeDateForApi(value) !== null || 'Choose a valid date.',
-                      }} render={({ field }) => (
+                      <FormField control={metadataForm.control} name="date" render={({ field }) => (
                         <FormItem>
-                          <fieldset className="date-fieldset">
-                            <legend className="field-label">Content date</legend>
-                            <DatePartsInput {...field} testId="input-file-date" />
-                          </fieldset>
+                          <FormLabel className="field-label">Content date</FormLabel>
+                          <FormControl><input className="field-control" type="date" data-testid="input-file-date" {...field} onChange={(event) => { field.onChange(event); metadataForm.clearErrors('date'); }} /></FormControl>
                           <FormMessage data-testid="error-file-date" />
-                          <p className="field-help">Enter the month, day, and year.</p>
                         </FormItem>
                       )} />
                       <FormField control={metadataForm.control} name="folderPath" render={({ field }) => (
@@ -970,17 +855,12 @@ function Console() {
                 <p className="field-help">File name: <code data-testid="generated-upload-filename">{generatedUploadName || (uploadMode === 'markdown' ? 'Enter a title to preview the .md filename' : 'Choose a file to preview its filename')}</code></p>
               </FormItem>
             )} />
-            <FormField control={uploadForm.control} name="date" rules={{
-              required: 'Enter a content date.',
-              validate: (value) => normalizeDateForApi(value) !== null || 'Choose a valid date.',
-            }} render={({ field }) => (
+            <FormField control={uploadForm.control} name="date" render={({ field }) => (
               <FormItem>
-                <fieldset className="date-fieldset">
-                  <legend className="field-label">Content date</legend>
-                  <DatePartsInput {...field} testId="input-upload-date" />
-                </fieldset>
+                <FormLabel className="field-label">Content date</FormLabel>
+                <FormControl><input className="field-control" type="date" data-testid="input-upload-date" {...field} onChange={(event) => { field.onChange(event); uploadForm.clearErrors('date'); }} /></FormControl>
                 <FormMessage data-testid="error-upload-date" />
-                <p className="field-help">Enter the month, day, and year.</p>
+                <p className="field-help">The selected local date is saved in ISO format.</p>
               </FormItem>
             )} />
             {uploadFile && isImageFile(uploadFile) ? (
