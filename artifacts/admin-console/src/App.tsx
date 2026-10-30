@@ -18,8 +18,7 @@ import {
 import {
   filenameFromTitle,
   isImageFile,
-  localDateDisplay,
-  normalizeDateInput,
+  normalizeDateForApi,
   titleFromFilename,
 } from '@/lib/content-formatters';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -50,7 +49,7 @@ const localToday = () => {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 };
 const TODAY = localToday();
-const UPLOAD_TODAY = localDateDisplay(TODAY);
+const UPLOAD_TODAY = TODAY;
 const THEME_STORAGE_KEY = 'jmt-console-theme';
 type ThemeOverride = 'light' | 'dark' | null;
 
@@ -337,7 +336,7 @@ function Console() {
     if (!uploadFile || !values.title.trim()) return;
     const contentType = uploadFile.type || 'application/octet-stream';
     const name = filenameFromTitle(values.title, uploadFile.name, contentType);
-    const date = normalizeDateInput(values.date);
+    const date = normalizeDateForApi(values.date);
     if (!date) {
       uploadForm.setError('date', { type: 'validate', message: 'Enter a valid date.' });
       return;
@@ -362,7 +361,7 @@ function Console() {
       setToastMessage('File uploaded to App Storage.');
       setModal(null);
       setUploadFile(null);
-      uploadForm.reset({ title: '', date: localDateDisplay(localToday()), isWallpaper: false });
+      uploadForm.reset({ title: '', date: localToday(), isWallpaper: false });
     } catch (error) {
       setToastMessage(errorMessage(error));
     } finally { setUploadBusy(false); }
@@ -372,7 +371,7 @@ function Console() {
     if (!file) return;
     setUploadFile(file);
     uploadForm.setValue('title', titleFromFilename(file.name), { shouldValidate: true });
-    uploadForm.setValue('date', localDateDisplay(localToday()), { shouldValidate: true });
+    uploadForm.setValue('date', localToday(), { shouldValidate: true });
     uploadForm.setValue('isWallpaper', false, { shouldValidate: true });
   };
 
@@ -476,7 +475,7 @@ function Console() {
   };
   const openUpload = () => {
     setUploadFile(null);
-    uploadForm.reset({ title: '', date: localDateDisplay(localToday()), isWallpaper: false });
+    uploadForm.reset({ title: '', date: localToday(), isWallpaper: false });
     setModal('upload');
   };
 
@@ -805,13 +804,13 @@ function Console() {
             )} />
             <FormField control={uploadForm.control} name="date" rules={{
               required: 'Enter a content date.',
-              validate: (value) => normalizeDateInput(value) !== null || 'Enter a valid date, such as 10/30/2026 or October 30, 2026.',
+              validate: (value) => normalizeDateForApi(value) !== null || 'Choose a valid date.',
             }} render={({ field }) => (
               <FormItem>
                 <FormLabel className="field-label">Content date</FormLabel>
-                <FormControl><input className="field-control" type="text" inputMode="text" autoComplete="off" placeholder="e.g. 10/30/2026 or October 30, 2026" data-testid="input-upload-date" {...field} /></FormControl>
+                <FormControl><input className="field-control" type="date" data-testid="input-upload-date" {...field} /></FormControl>
                 <FormMessage data-testid="error-upload-date" />
-                <p className="field-help">The date is saved in a standard calendar format.</p>
+                <p className="field-help">The selected local date is saved in ISO format.</p>
               </FormItem>
             )} />
             {uploadFile && isImageFile(uploadFile) ? (

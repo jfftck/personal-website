@@ -89,47 +89,10 @@ function isoDate(year: number, month: number, day: number): string | null {
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function localeUsesDayFirst(): boolean {
-  const parts = new Intl.DateTimeFormat(undefined, {
-    day: "numeric",
-    month: "numeric",
-    year: "numeric",
-  }).formatToParts(new Date(2026, 8, 25));
-  const firstDatePart = parts.find((part) => part.type === "day" || part.type === "month");
-  return firstDatePart?.type === "day";
-}
-
-export function normalizeDateInput(input: string): string | null {
-  const value = input.trim();
-  if (!value) return null;
-
-  const yearFirst = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(value);
-  if (yearFirst) {
-    return isoDate(Number(yearFirst[1]), Number(yearFirst[2]), Number(yearFirst[3]));
-  }
-
-  const numeric = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2}|\d{4})$/.exec(value);
-  if (numeric) {
-    const first = Number(numeric[1]);
-    const second = Number(numeric[2]);
-    let year = Number(numeric[3]);
-    if (year < 100) year += year >= 50 ? 1900 : 2000;
-    const dayFirst =
-      first > 12 ? true : second > 12 ? false : localeUsesDayFirst();
-    return dayFirst
-      ? isoDate(year, second, first)
-      : isoDate(year, first, second);
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return isoDate(parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate());
-}
-
-export function localDateDisplay(isoValue: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoValue);
-  if (!match) return isoValue;
-  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString();
+export function normalizeDateForApi(localDate: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(localDate);
+  if (!match) return null;
+  return isoDate(Number(match[1]), Number(match[2]), Number(match[3]));
 }
 
 export function isImageFile(file: Pick<File, "name" | "type">): boolean {
