@@ -4,19 +4,19 @@ import { toolBtn, initResponsiveToolbar } from './toolbar.js';
 
 async function fetchPicturesManifest() {
   try {
-    const r = await fetch('pictures/manifest.json');
+    const r = await fetch('/files/pictures/manifest.json');
     if (!r.ok) return [];
     const json = await r.json();
     return json.map(entry => {
-      const { filename, url: mUrl, size } = entry;
+      const { filename, url: mUrl, size, date: manifestDate } = entry;
+      if (!filename) return null;
       const m = filename.match(/^(\d{4})(\d{2})(\d{2})_(.+)$/);
-      if (!m) return null;
-      const [, yyyy, mm, dd, rest] = m;
+      const rest = m ? m[4] : filename;
       const dotIdx  = rest.lastIndexOf('.');
       const rawName = dotIdx >= 0 ? rest.slice(0, dotIdx) : rest;
       const displayName = rawName.replace(/_/g, ' ');
-      const url = mUrl || `pictures/${encodeURIComponent(filename)}`;
-      return { filename, displayName, url, date: `${yyyy}-${mm}-${dd}`, size: size || '—' };
+      const url = mUrl || `/files/pictures/${encodeURIComponent(filename)}`;
+      return { filename, displayName, url, date: manifestDate || (m ? `${m[1]}-${m[2]}-${m[3]}` : ''), size: size || '—' };
     }).filter(Boolean);
   } catch {
     return [];

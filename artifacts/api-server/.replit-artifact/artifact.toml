@@ -7,7 +7,7 @@ id = "3B4_FFSkEVBkAeYMFRJ2e"
 [[services]]
 localPort = 8080
 name = "API Server"
-paths = ["/api", "/admin", "/clerk-proxy", "/clerk-js", "/posts", "/documents", "/pictures", "/videos", "/welcome"]
+paths = ["/api", "/admin", "/clerk-proxy", "/clerk-js", "/files", "/posts", "/documents", "/pictures", "/videos", "/welcome"]
 
 [services.development]
 run = "pnpm --filter @workspace/api-server run dev"

@@ -9,22 +9,22 @@ const MANIFEST_SOURCES = [
 ];
 
 function parseManifestEntry(folder, entry) {
-  const { filename, url: mUrl, size } = entry;
+  const { filename, url: mUrl, size, date: manifestDate } = entry;
+  if (!filename) return null;
   const m = filename.match(/^(\d{4})(\d{2})(\d{2})_(.+)$/);
-  if (!m) return null;
-  const [, yyyy, mm, dd, rest] = m;
+  const rest = m ? m[4] : filename;
   const dotIdx    = rest.lastIndexOf('.');
   const rawName   = dotIdx >= 0 ? rest.slice(0, dotIdx) : rest;
   const displayName = rawName.replace(/_/g, ' ');
   const ext       = dotIdx >= 0 ? rest.slice(dotIdx + 1).toLowerCase() : 'md';
-  const url       = mUrl || `${folder}/${encodeURIComponent(filename)}`;
-  const date      = `${yyyy}-${mm}-${dd}`;
+  const url       = mUrl || `/files/${folder}/${encodeURIComponent(filename)}`;
+  const date      = manifestDate || (m ? `${m[1]}-${m[2]}-${m[3]}` : '');
   return { filename, displayName, url, ext, date, folder, size: size || '—' };
 }
 
 async function fetchDocManifest(folder) {
   try {
-    const r = await fetch(`${folder}/manifest.json`);
+    const r = await fetch(`/files/${folder}/manifest.json`);
     if (!r.ok) return [];
     const json = await r.json();
     return json.map(e => parseManifestEntry(folder, e)).filter(Boolean);

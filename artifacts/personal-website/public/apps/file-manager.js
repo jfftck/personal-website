@@ -33,11 +33,15 @@ export function buildFileManager(id, ctx) {
   const collapsedGroups = new Set();
 
   function parseEntry(folder, entry) {
-    const { filename, url: mUrl, poster, size } = entry;
+    const { filename, url: mUrl, poster, size, date: manifestDate } = entry;
     const m = filename.match(/^(\d{4})(\d{2})(\d{2})_(.+)$/);
-    if (!m) return null;
-    const [, yyyy, mm, dd, rest] = m;
-    const date    = new Date(+yyyy, +mm - 1, +dd);
+    if (!filename) return null;
+    const rest = m ? m[4] : filename;
+    const date = manifestDate
+      ? new Date(`${manifestDate}T00:00:00`)
+      : m
+        ? new Date(+m[1], +m[2] - 1, +m[3])
+        : new Date();
     const dotIdx  = rest.lastIndexOf('.');
     const ext     = dotIdx >= 0 ? rest.slice(dotIdx).toLowerCase() : '';
     const rawName = dotIdx >= 0 ? rest.slice(0, dotIdx) : rest;
@@ -48,7 +52,7 @@ export function buildFileManager(id, ctx) {
       mp4:'video', webm:'video', mov:'video', avi:'video',
     };
     const type = typeMap[ext.slice(1)] || 'document';
-    const url  = mUrl || `${folder}/${encodeURIComponent(filename)}`;
+    const url  = mUrl || `/files/${folder}/${encodeURIComponent(filename)}`;
     return { filename, displayName, date, type, url, poster: poster || null, size: size || '\u2014', folder };
   }
 
@@ -57,7 +61,7 @@ export function buildFileManager(id, ctx) {
     if (_fetching[folder])               return _fetching[folder];
     _fetching[folder] = (async () => {
       try {
-        const r = await fetch(`${folder}/manifest.json`);
+        const r = await fetch(`/files/${folder}/manifest.json`);
         if (!r.ok) throw new Error(r.status);
         fileCache[folder] = (await r.json()).map(e => parseEntry(folder, e)).filter(Boolean);
       } catch {

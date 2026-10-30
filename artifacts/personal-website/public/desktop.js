@@ -929,7 +929,7 @@ function parseManifestForLauncher(folder, entries) {
 async function ensureLauncherManifest(folder) {
   if (_launcherCache[folder] !== undefined) return _launcherCache[folder];
   try {
-    const response = await fetch(`${folder}/manifest.json`);
+    const response = await fetch(`/files/${folder}/manifest.json`);
     if (!response.ok) throw new Error(`Could not load ${folder} manifest`);
     const entries = await response.json();
     _launcherCache[folder] = Array.isArray(entries)
@@ -2103,9 +2103,9 @@ function closeWinMenu() {
 
 // ── Welcome floating window ───────────────────────────────────
 const _welcomeTabs = {
-  welcome: { url: 'posts/20240101_Welcome.md',  html: null },
-  about:   { url: 'posts/20240115_About_Me.md', html: null },
-  links:   { url: 'posts/20240201_My_Sites.md', html: null },
+  welcome: { url: '/files/posts/20240101_Welcome.md',  html: null },
+  about:   { url: '/files/posts/20240115_About_Me.md', html: null },
+  links:   { url: '/files/posts/20240201_My_Sites.md', html: null },
 };
 let _welcomeActiveTab = 'welcome';
 

@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: content
+    description: Admin content and folder management
 paths:
   /healthz:
     get:
@@ -24,7 +26,230 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /content/tree:
+    get:
+      operationId: getContentTree
+      tags: [content]
+      summary: Get the content folders and files
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Content tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentTree"
+  /content/trash:
+    get:
+      operationId: getContentTrash
+      tags: [content]
+      summary: Get removed files
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Removed files
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ContentFile" }
+  /content/folders:
+    post:
+      operationId: createContentFolder
+      tags: [content]
+      summary: Create a content folder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContentFolderInput"
+      responses:
+        "201":
+          description: Created folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentFolder"
+  /content/folders/{folderId}:
+    patch:
+      operationId: updateContentFolder
+      tags: [content]
+      summary: Rename or move a folder
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: folderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContentFolderUpdate"
+      responses:
+        "200":
+          description: Updated folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentFolder"
+    delete:
+      operationId: deleteContentFolder
+      tags: [content]
+      summary: Delete an empty folder
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: folderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Folder deleted
+  /content/uploads:
+    post:
+      operationId: createContentUpload
+      tags: [content]
+      summary: Create a temporary App Storage upload target
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContentUploadInput"
+      responses:
+        "200":
+          description: Temporary upload target
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentUploadTarget"
+  /content/files:
+    post:
+      operationId: createContentFile
+      tags: [content]
+      summary: Add an uploaded file to the content tree
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContentFileInput"
+      responses:
+        "201":
+          description: Created file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentFile"
+  /content/files/{fileId}:
+    patch:
+      operationId: updateContentFile
+      tags: [content]
+      summary: Rename, move, retitle, or replace a file
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContentFileUpdate"
+      responses:
+        "200":
+          description: Updated file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentFile"
+    delete:
+      operationId: deleteContentFile
+      tags: [content]
+      summary: Remove a file from the published tree
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: File removed
+  /content/files/{fileId}/content:
+    get:
+      operationId: getContentFileContent
+      tags: [content]
+      summary: Read the text content of a stored file
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: UTF-8 text content
+          content:
+            text/plain:
+              schema:
+                type: string
+        "404":
+          description: File not found
+  /content/files/{fileId}/restore:
+    post:
+      operationId: restoreContentFile
+      tags: [content]
+      summary: Restore a removed file
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Restored file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentFile"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +258,78 @@ components:
           type: string
       required:
         - status
+    ContentFolder:
+      type: object
+      required: [id, name, path, parentPath, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        path: { type: string }
+        parentPath: { type: string }
+        createdAt: { type: string, format: date-time }
+    ContentFile:
+      type: object
+      required: [id, name, folderPath, date, contentType, sizeBytes, url, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        folderPath: { type: string }
+        date: { type: string, format: date }
+        contentType: { type: string }
+        sizeBytes: { type: integer }
+        posterUrl: { type: ["string", "null"], format: uri }
+        url: { type: string }
+        updatedAt: { type: string, format: date-time }
+    ContentTree:
+      type: object
+      required: [folders, files]
+      properties:
+        folders:
+          type: array
+          items: { $ref: "#/components/schemas/ContentFolder" }
+        files:
+          type: array
+          items: { $ref: "#/components/schemas/ContentFile" }
+    ContentFolderInput:
+      type: object
+      required: [name, parentPath]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        parentPath: { type: string, maxLength: 1000 }
+    ContentFolderUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+    ContentUploadInput:
+      type: object
+      required: [name, contentType, sizeBytes]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        contentType: { type: string, maxLength: 255 }
+        sizeBytes: { type: integer, minimum: 0 }
+    ContentUploadTarget:
+      type: object
+      required: [uploadUrl, objectPath]
+      properties:
+        uploadUrl: { type: string, format: uri }
+        objectPath: { type: string }
+    ContentFileInput:
+      type: object
+      required: [name, folderPath, date, contentType, sizeBytes, objectPath]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        folderPath: { type: string, maxLength: 1000 }
+        date: { type: string, format: date }
+        contentType: { type: string, maxLength: 255 }
+        sizeBytes: { type: integer, minimum: 0 }
+        objectPath: { type: string }
+    ContentFileUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        folderPath: { type: string, maxLength: 1000 }
+        date: { type: string, format: date }
+        contentType: { type: string, maxLength: 255 }
+        sizeBytes: { type: integer, minimum: 0 }
+        objectPath: { type: string }
 
