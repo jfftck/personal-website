@@ -23,6 +23,7 @@ import {
   recordFileHistory,
   withContentHistoryLock,
 } from "../lib/contentHistory";
+import { restoreContentFileRevisionMetadata } from "../lib/contentRevisionMetadata";
 import {
   assertGeneratedFileNameAvailable,
   ContentNameConflictError,
@@ -747,15 +748,16 @@ contentApiRouter.post(
           }
         }
         await assertFolderExists(version.snapshot.folderPath);
+        const revisionMetadata = restoreContentFileRevisionMetadata(
+          version.snapshot,
+        );
         const [updated] = await tx
           .update(contentFilesTable)
           .set({
-            name: version.snapshot.name,
-            title:
-              version.snapshot.title?.trim() ||
-              titleFromLegacyName(version.snapshot.name),
+            ...revisionMetadata,
+            title: revisionMetadata.title?.trim() ||
+              titleFromLegacyName(revisionMetadata.name),
             folderPath: version.snapshot.folderPath,
-            contentDate: version.snapshot.contentDate,
             contentType: version.snapshot.contentType,
             sizeBytes: version.snapshot.sizeBytes,
             objectPath: version.snapshot.objectPath,

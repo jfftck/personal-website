@@ -269,7 +269,7 @@ function Console() {
       folderPath: selectedFile.folderPath,
       isWallpaper: selectedFile.isWallpaper,
     });
-  }, [selectedFile?.id, selectedFile?.name, selectedFile?.date, selectedFile?.folderPath, selectedFile?.isWallpaper, resetMetadata]);
+  }, [selectedFile?.id, selectedFile?.name, selectedFile?.title, selectedFile?.date, selectedFile?.folderPath, selectedFile?.isWallpaper, resetMetadata]);
 
   const folders = treeQuery.data?.folders ?? [];
   const allFiles = treeQuery.data?.files ?? [];

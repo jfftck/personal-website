@@ -6,6 +6,7 @@ import {
   type ContentFile,
   type ContentFileVersionSnapshot,
 } from "@workspace/db";
+import { createContentFileVersionSnapshot } from "./contentRevisionMetadata";
 
 type HistoryExecutor = Pick<typeof db, "select" | "insert">;
 
@@ -62,23 +63,6 @@ export function withContentHistoryLock<T>(
     () => undefined,
   );
   return result;
-}
-
-function snapshotOf(file: ContentFile): ContentFileVersionSnapshot {
-  return {
-    name: file.name,
-    title: file.title,
-    folderPath: file.folderPath,
-    contentDate: file.contentDate,
-    contentType: file.contentType,
-    sizeBytes: file.sizeBytes,
-    objectPath: file.objectPath,
-    sourceUrl: file.sourceUrl,
-    posterUrl: file.posterUrl,
-    isWallpaper: file.isWallpaper,
-    isPublished: file.isPublished,
-    deletedAt: file.deletedAt?.toISOString() ?? null,
-  };
 }
 
 async function githubRequest<T>(
@@ -202,7 +186,7 @@ export async function recordFileHistory(
         fileId: change.previous.id,
         versionNumber: nextVersion,
         action: "baseline",
-        snapshot: snapshotOf(change.previous),
+        snapshot: createContentFileVersionSnapshot(change.previous),
         gitPath: `history/${change.previous.id}/${baselineId}.json`,
         createdAt: new Date(),
       });
@@ -215,7 +199,7 @@ export async function recordFileHistory(
       fileId: change.file.id,
       versionNumber: nextVersion,
       action: change.action,
-      snapshot: snapshotOf(change.file),
+      snapshot: createContentFileVersionSnapshot(change.file),
       gitPath: `history/${change.file.id}/${id}.json`,
       createdAt: new Date(),
     });
