@@ -9,6 +9,12 @@ Store uploaded posts, documents, pictures, and videos in App Storage. Keep file 
 
 **How to apply:** keep write operations behind Clerk-protected admin endpoints, and have public clients consume only `/files` routes.
 
+For public video GETs, keep the stable `/files/...` URL but redirect to a short-lived signed App Storage read URL instead of streaming the full video through the API. Keep HEAD responses on the public route for metadata.
+
+**Why:** production full-file video GETs were aborted after the API began a 200 response, and the front end returned 500; HEAD and range requests through the API worked. Offloading video bytes avoids sending large streams through that proxy path.
+
+**How to apply:** generate signed GET URLs server-side for published video objects, preserve the public `/files/...` route in manifests and app links, and do not expose storage object paths in manifests.
+
 The private `personal-files` Git repository stores immutable JSON revision records containing metadata snapshots and App Storage object references; it never stores file bytes. The API server uses a repo-scoped GitHub credential stored in Replit Secrets, not workspace-local Git credentials. Keep replaced objects in App Storage so historical versions can be restored. If Git history cannot be written, reject the file mutation rather than silently saving without a revision.
 
 **Why:** the user later approved connecting `personal-files` to the content backend; this supersedes the earlier decision to defer Git history.

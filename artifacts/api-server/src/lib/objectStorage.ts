@@ -100,6 +100,31 @@ export async function getStoredObject(objectPath: string): Promise<File> {
   return file;
 }
 
+export async function createStoredObjectReadUrl(objectPath: string): Promise<string> {
+  const { bucketName, objectName } = resolveObjectPath(objectPath);
+  const response = await fetch(`${SIDECAR_ENDPOINT}/object-storage/signed-object-url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      bucket_name: bucketName,
+      object_name: objectName,
+      method: "GET",
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Could not create App Storage read URL (${response.status}).`);
+  }
+
+  const payload = (await response.json()) as { signed_url?: unknown };
+  if (typeof payload.signed_url !== "string") {
+    throw new Error("App Storage returned an invalid read URL.");
+  }
+  return payload.signed_url;
+}
+
 export async function getStoredObjectMetadata(objectPath: string) {
   const file = await getStoredObject(objectPath);
   const [metadata] = await file.getMetadata();

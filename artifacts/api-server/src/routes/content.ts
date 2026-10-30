@@ -40,6 +40,7 @@ import {
 } from "../lib/contentFileNames";
 import { ensureLegacyContentImported } from "../lib/legacyContentMigration";
 import {
+  createStoredObjectReadUrl,
   createObjectUploadTarget,
   getStoredObject,
   getStoredObjectMetadata,
@@ -1089,16 +1090,23 @@ async function servePublicFile(req: Request, res: Response, parts: string[]) {
     res.status(416).end();
     return;
   }
+  if (req.method === "HEAD") {
+    res.setHeader("Content-Length", String(size));
+    res.end();
+    return;
+  }
+  if (contentType.startsWith("video/")) {
+    const readUrl = await createStoredObjectReadUrl(fileRow.objectPath);
+    res.setHeader("Cache-Control", "private, max-age=60");
+    res.redirect(302, readUrl);
+    return;
+  }
   if (range) {
     res.status(206);
     res.setHeader("Content-Range", `bytes ${range.start}-${range.end}/${size}`);
     res.setHeader("Content-Length", String(range.end - range.start + 1));
   } else {
     res.setHeader("Content-Length", String(size));
-  }
-  if (req.method === "HEAD") {
-    res.end();
-    return;
   }
 
   const stream = range
