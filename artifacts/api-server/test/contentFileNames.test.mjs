@@ -7,11 +7,21 @@ import {
   standardFileName,
 } from "../src/lib/contentFileNames.ts";
 import {
+  dateFromParts,
   filenameFromTitle,
   titleFromFilename,
 } from "../../admin-console/src/lib/content-formatters.ts";
 
 const date = "2026-10-30";
+
+test("month, day, and year inputs compose valid local calendar dates only", () => {
+  assert.equal(dateFromParts("2", "9", "2026"), "2026-02-09");
+  assert.equal(dateFromParts("2", "29", "2024"), "2024-02-29");
+  assert.equal(dateFromParts("2", "29", "2026"), null);
+  assert.equal(dateFromParts("4", "31", "2026"), null);
+  assert.equal(dateFromParts("13", "1", "2026"), null);
+  assert.equal(dateFromParts("10", "30", "26"), null);
+});
 
 test("Markdown creation previews match the server-generated date-prefixed name", () => {
   const preview = filenameFromTitle(

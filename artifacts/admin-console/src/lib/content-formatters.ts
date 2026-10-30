@@ -151,6 +151,13 @@ export function normalizeDateForApi(input: unknown): string | null {
     : isoDate(parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate());
 }
 
+export function dateFromParts(month: string, day: string, year: string): string | null {
+  if (!/^\d{1,2}$/.test(month) || !/^\d{1,2}$/.test(day) || !/^\d{4}$/.test(year)) {
+    return null;
+  }
+  return isoDate(Number(year), Number(month), Number(day));
+}
+
 export function isImageFile(file: Pick<File, "name" | "type">): boolean {
   return (
     file.type.toLowerCase().startsWith("image/") ||
