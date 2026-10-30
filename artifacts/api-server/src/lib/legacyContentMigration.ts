@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { and, eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { contentFilesTable, contentFoldersTable } from "@workspace/db";
+import { invalidatePublicManifestCache } from "./contentManifestInvalidation";
 import { importLegacyContentDirectory } from "./legacyContentImportCore";
 import {
   createStorageObjectPath,
@@ -31,15 +32,19 @@ function titleFor(filename: string): string {
   return withoutDate;
 }
 
+let pendingManifestCacheInvalidation = false;
+
 async function ensureFolder(pathValue: string) {
   const parts = pathValue.split("/").filter(Boolean);
   let parentPath = "";
   for (const name of parts) {
     const folderPath = parentPath ? `${parentPath}/${name}` : name;
-    await db
+    const inserted = await db
       .insert(contentFoldersTable)
       .values({ name, parentPath, path: folderPath })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: contentFoldersTable.id });
+    if (inserted.length) pendingManifestCacheInvalidation = true;
     parentPath = folderPath;
   }
 }
@@ -76,6 +81,7 @@ const importAdapter = {
       .values(file)
       .onConflictDoNothing()
       .returning({ id: contentFilesTable.id });
+    if (inserted.length) pendingManifestCacheInvalidation = true;
     return inserted.length > 0;
   },
   deleteObject: deleteStoredObject,
@@ -87,12 +93,19 @@ export function ensureLegacyContentImported(): Promise<void> {
   if (!migration) {
     migration = (async () => {
       const publicRoot = resolveLegacyPublicRoot();
-      for (const folder of ["posts", "documents", "pictures", "videos", "welcome"]) {
-        await importLegacyContentDirectory(
-          path.join(publicRoot, folder),
-          folder,
-          importAdapter,
-        );
+      try {
+        for (const folder of ["posts", "documents", "pictures", "videos", "welcome"]) {
+          await importLegacyContentDirectory(
+            path.join(publicRoot, folder),
+            folder,
+            importAdapter,
+          );
+        }
+      } finally {
+        if (pendingManifestCacheInvalidation) {
+          await db.transaction((tx) => invalidatePublicManifestCache(tx));
+          pendingManifestCacheInvalidation = false;
+        }
       }
     })().catch((error) => {
       migration = undefined;

@@ -1510,6 +1510,7 @@ body.mod-overview .app-window.focused {
 
 .tool-btn:hover  { background-color: var(--btn-hover); }
 .tool-btn:active { background-color: var(--btn-active); }
+.tool-btn:disabled { cursor: wait; opacity: 0.55; }
 
 .tool-btn:focus-visible {
   outline: 2px solid var(--focus-color);
@@ -2529,6 +2530,18 @@ kbd {
 /* ------------------------------------------------------------
    FILE MANAGER
    ------------------------------------------------------------ */
+.fm-refresh-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .fm-layout {
   container-type: inline-size;
   min-width: 0;

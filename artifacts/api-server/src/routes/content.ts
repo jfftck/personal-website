@@ -12,10 +12,18 @@ import {
   contentFilesTable,
   contentFileVersionsTable,
   contentFoldersTable,
+  contentManifestCacheTable,
+  contentManifestStateTable,
   type ContentFile as DbContentFile,
   type ContentFileVersion as DbContentFileVersion,
   type ContentFolder as DbContentFolder,
 } from "@workspace/db";
+import {
+  createManifestEtag,
+  ifNoneMatchMatches,
+  PUBLIC_MANIFEST_CACHE_KEY,
+} from "../lib/contentManifestCache";
+import { invalidatePublicManifestCache } from "../lib/contentManifestInvalidation";
 import { requireClerkUser } from "../lib/clerkAuth";
 import {
   ContentHistoryError,
@@ -44,6 +52,7 @@ const DEFAULT_FOLDERS = [
   { name: "Pictures", path: "pictures", parentPath: "" },
   { name: "Videos", path: "videos", parentPath: "" },
 ];
+const PUBLIC_MANIFEST_CACHE_CONTROL = "public, max-age=0, must-revalidate";
 
 class ContentError extends Error {
   constructor(
@@ -63,7 +72,12 @@ async function ensureRootFolders() {
       .insert(contentFoldersTable)
       .values(DEFAULT_FOLDERS)
       .onConflictDoNothing()
-      .then(() => undefined)
+      .then(async () => {
+        await db
+          .insert(contentManifestStateTable)
+          .values({ key: PUBLIC_MANIFEST_CACHE_KEY, generation: 1 })
+          .onConflictDoNothing();
+      })
       .catch((error) => {
         rootFolderSeed = undefined;
         throw error;
@@ -375,10 +389,14 @@ contentApiRouter.post(
     const parentPath = normalizeFolderPath(input.parentPath);
     await assertFolderExists(parentPath);
     const path = parentPath ? `${parentPath}/${name}` : name;
-    const [folder] = await db
-      .insert(contentFoldersTable)
-      .values({ name, parentPath, path })
-      .returning();
+    const folder = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(contentFoldersTable)
+        .values({ name, parentPath, path })
+        .returning();
+      await invalidatePublicManifestCache(tx);
+      return created;
+    });
     res.status(201).json(toContentFolder(folder));
   }),
 );
@@ -451,6 +469,7 @@ contentApiRouter.patch(
         }
       }
       await recordFileHistory(tx, changedFiles);
+      await invalidatePublicManifestCache(tx);
       const [updated] = await tx
         .select()
         .from(contentFoldersTable)
@@ -491,7 +510,10 @@ contentApiRouter.delete(
       throw new ContentError(409, "Move or remove this folder’s contents first.");
     }
 
-    await db.delete(contentFoldersTable).where(eq(contentFoldersTable.id, folder.id));
+    await db.transaction(async (tx) => {
+      await tx.delete(contentFoldersTable).where(eq(contentFoldersTable.id, folder.id));
+      await invalidatePublicManifestCache(tx);
+    });
     res.status(204).end();
   }),
 );
@@ -566,6 +588,7 @@ contentApiRouter.post(
           })
           .returning();
         await recordFileHistory(tx, [{ file: created, action: "created" }]);
+        await invalidatePublicManifestCache(tx);
         return created;
       }),
     );
@@ -670,6 +693,7 @@ contentApiRouter.patch(
               ? "renamed"
               : "updated";
         await recordFileHistory(tx, [{ file: updated, previous: existing, action }]);
+        await invalidatePublicManifestCache(tx);
         return updated;
       }),
     );
@@ -696,6 +720,7 @@ contentApiRouter.delete(
         await recordFileHistory(tx, [
           { file: deleted, previous: existing, action: "trashed" },
         ]);
+        await invalidatePublicManifestCache(tx);
         return deleted;
       }),
     );
@@ -722,6 +747,7 @@ contentApiRouter.post(
         await recordFileHistory(tx, [
           { file: restored, previous: existing, action: "restored" },
         ]);
+        await invalidatePublicManifestCache(tx);
         return restored;
       }),
     );
@@ -801,6 +827,7 @@ contentApiRouter.post(
         await recordFileHistory(tx, [
           { file: updated, previous: current, action: "restored" },
         ]);
+        await invalidatePublicManifestCache(tx);
         return updated;
       }),
     );
@@ -858,58 +885,111 @@ function decodePathSegments(rawPath: string): string[] {
   }
 }
 
-async function serveManifest(res: Response, folderPath: string) {
+async function serveManifest(
+  req: Request,
+  res: Response,
+  folderPath: string,
+): Promise<void> {
   await ensureRootFolders();
-  const [folders, files] = await Promise.all([
-    db
-      .select()
-      .from(contentFoldersTable)
-      .orderBy(asc(contentFoldersTable.path)),
-    db
-      .select()
-      .from(contentFilesTable)
-      .where(and(eq(contentFilesTable.folderPath, folderPath), isNull(contentFilesTable.deletedAt), eq(contentFilesTable.isPublished, true)))
-      .orderBy(desc(contentFilesTable.contentDate), asc(contentFilesTable.name)),
-  ]);
+  const [state] = await db
+    .select({ generation: contentManifestStateTable.generation })
+    .from(contentManifestStateTable)
+    .where(eq(contentManifestStateTable.key, PUBLIC_MANIFEST_CACHE_KEY))
+    .limit(1);
+  const generation = state?.generation ?? 0;
+  const [cached] = await db
+    .select()
+    .from(contentManifestCacheTable)
+    .where(
+      and(
+        eq(contentManifestCacheTable.folderPath, folderPath),
+        eq(contentManifestCacheTable.generation, generation),
+      ),
+    )
+    .limit(1);
 
-  if (folderPath) {
-    const [folder] = await db
-      .select({ path: contentFoldersTable.path })
-      .from(contentFoldersTable)
-      .where(eq(contentFoldersTable.path, folderPath))
-      .limit(1);
-    if (!folder) throw new ContentError(404, "Folder not found.");
+  let manifest = cached?.manifest;
+  let etag = cached?.etag;
+  let folderCount = cached?.folderCount ?? 0;
+  if (manifest === undefined || !etag) {
+    const [folders, files] = await Promise.all([
+      db
+        .select()
+        .from(contentFoldersTable)
+        .orderBy(asc(contentFoldersTable.path)),
+      db
+        .select()
+        .from(contentFilesTable)
+        .where(
+          and(
+            eq(contentFilesTable.folderPath, folderPath),
+            isNull(contentFilesTable.deletedAt),
+            eq(contentFilesTable.isPublished, true),
+          ),
+        )
+        .orderBy(desc(contentFilesTable.contentDate), asc(contentFilesTable.name)),
+    ]);
+
+    if (folderPath && !folders.some((folder) => folder.path === folderPath)) {
+      throw new ContentError(404, "Folder not found.");
+    }
+
+    const directFolders = folders
+      .filter((folder) => folder.parentPath === folderPath)
+      .map((folder) => ({
+        name: folder.name,
+        path: folder.path,
+        url: `/files/${folder.path.split("/").map(encodeURIComponent).join("/")}/manifest.json`,
+      }));
+    const entries = files.map((file) => ({
+      filename: file.name,
+      title: file.title?.trim() || titleFromLegacyName(file.name),
+      date: file.contentDate,
+      contentType: file.contentType,
+      sizeBytes: file.sizeBytes,
+      isWallpaper: file.isWallpaper,
+      size: formatSize(file.sizeBytes),
+      url: normalizePublicUrl(file.folderPath, file.name),
+      poster: file.posterUrl ?? undefined,
+    }));
+    manifest = folderPath
+      ? entries
+      : { path: "/", folders: directFolders, files: entries };
+    folderCount = directFolders.length;
+    etag = createManifestEtag({ manifest, folderCount });
+
+    await db
+      .insert(contentManifestCacheTable)
+      .values({
+        folderPath,
+        generation,
+        manifest,
+        etag,
+        folderCount,
+      })
+      .onConflictDoUpdate({
+        target: contentManifestCacheTable.folderPath,
+        set: {
+          generation,
+          manifest,
+          etag,
+          folderCount,
+          cachedAt: new Date(),
+        },
+      });
   }
 
-  const directFolders = folders
-    .filter((folder) => folder.parentPath === folderPath)
-    .map((folder) => ({
-      name: folder.name,
-      path: folder.path,
-      url: `/files/${folder.path.split("/").map(encodeURIComponent).join("/")}/manifest.json`,
-    }));
-  const entries = files.map((file) => ({
-    filename: file.name,
-    title: file.title?.trim() || titleFromLegacyName(file.name),
-    date: file.contentDate,
-    contentType: file.contentType,
-    sizeBytes: file.sizeBytes,
-    isWallpaper: file.isWallpaper,
-    size: formatSize(file.sizeBytes),
-    url: normalizePublicUrl(file.folderPath, file.name),
-    poster: file.posterUrl ?? undefined,
-  }));
-
-  res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=60");
+  res.setHeader("Cache-Control", PUBLIC_MANIFEST_CACHE_CONTROL);
+  res.setHeader("ETag", etag);
   res.type("application/json");
-  if (!folderPath) {
-    res.json({ path: "/", folders: directFolders, files: entries });
+  if (folderPath && folderCount > 0) {
+    res.setHeader("X-Content-Folders", String(folderCount));
+  }
+  if (ifNoneMatchMatches(req.get("If-None-Match"), etag)) {
+    res.status(304).end();
     return;
   }
-  if (directFolders.length) {
-    res.setHeader("X-Content-Folders", String(directFolders.length));
-  }
-  res.json(entries);
+  res.json(manifest);
 }
 
 function formatSize(bytes: number): string {
@@ -1040,11 +1120,11 @@ publicContentRouter.use((req, res, next) => {
     }
     const segments = decodePathSegments(req.path);
     if (segments.at(-1) === "manifest.json") {
-      await serveManifest(res, segments.slice(0, -1).join("/"));
+      await serveManifest(req, res, segments.slice(0, -1).join("/"));
       return;
     }
     if (segments.length === 0) {
-      await serveManifest(res, "");
+      await serveManifest(req, res, "");
       return;
     }
     await servePublicFile(req, res, segments);

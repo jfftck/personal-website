@@ -105,6 +105,33 @@ export const contentFileVersionsTable = pgTable(
   ],
 );
 
+export const contentManifestStateTable = pgTable("content_manifest_state", {
+  key: text("key").primaryKey(),
+  generation: integer("generation").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const insertContentManifestStateSchema = createInsertSchema(
+  contentManifestStateTable,
+).omit({ updatedAt: true });
+
+export const contentManifestCacheTable = pgTable("content_manifest_cache", {
+  folderPath: text("folder_path").primaryKey(),
+  generation: integer("generation").notNull(),
+  manifest: jsonb("manifest").$type<unknown>().notNull(),
+  etag: text("etag").notNull(),
+  folderCount: integer("folder_count").notNull().default(0),
+  cachedAt: timestamp("cached_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const insertContentManifestCacheSchema = createInsertSchema(
+  contentManifestCacheTable,
+).omit({ cachedAt: true });
+
 export const insertContentFolderSchema = createInsertSchema(
   contentFoldersTable,
 ).omit({ id: true, createdAt: true });
@@ -119,3 +146,13 @@ export type InsertContentFile = z.infer<typeof insertContentFileSchema>;
 export type ContentFile = typeof contentFilesTable.$inferSelect;
 export type ContentFileVersion =
   typeof contentFileVersionsTable.$inferSelect;
+export type ContentManifestCache =
+  typeof contentManifestCacheTable.$inferSelect;
+export type InsertContentManifestState = z.infer<
+  typeof insertContentManifestStateSchema
+>;
+export type ContentManifestState =
+  typeof contentManifestStateTable.$inferSelect;
+export type InsertContentManifestCache = z.infer<
+  typeof insertContentManifestCacheSchema
+>;

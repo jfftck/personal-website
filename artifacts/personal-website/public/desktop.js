@@ -855,7 +855,7 @@ function openAppMenu(showGames = false) {
   closeHelp();
   if (showGames) gameMenu.showGames(false);
   else gameMenu.showRoot(false);
-  populateLauncherFiles();
+  if (!showGames) populateLauncherFiles();
   requestAnimationFrame(() => {
     const f = appMenu.querySelector(showGames
       ? '#game-menu-back'
@@ -890,6 +890,10 @@ function requestOpenFile(file) {
 
 // ── App-launcher file listing ─────────────────────────────────
 const _launcherCache = {};
+const _launcherCacheMeta = {};
+const _launcherFetching = {};
+const LAUNCHER_MANIFEST_RECHECK_MS = 5_000;
+const LAUNCHER_MANIFEST_RETRY_MS = 5_000;
 const appFilesSection = $('app-files-section');
 const docFilesList = $('doc-files-list');
 const picFilesList = $('pic-files-list');
@@ -926,19 +930,63 @@ function parseManifestForLauncher(folder, entries) {
   }).filter(Boolean);
 }
 
-async function ensureLauncherManifest(folder) {
-  if (_launcherCache[folder] !== undefined) return _launcherCache[folder];
-  try {
-    const response = await fetch(`/files/${folder}/manifest.json`);
-    if (!response.ok) throw new Error(`Could not load ${folder} manifest`);
-    const entries = await response.json();
-    _launcherCache[folder] = Array.isArray(entries)
-      ? parseManifestForLauncher(folder, entries)
-      : [];
-  } catch {
-    _launcherCache[folder] = [];
+async function ensureLauncherManifest(folder, { force = false } = {}) {
+  const cached = _launcherCache[folder];
+  const metadata = _launcherCacheMeta[folder];
+  const freshnessMs = metadata?.error
+    ? LAUNCHER_MANIFEST_RETRY_MS
+    : LAUNCHER_MANIFEST_RECHECK_MS;
+  if (
+    !force &&
+    cached !== undefined &&
+    Date.now() - (metadata?.checkedAt ?? 0) < freshnessMs
+  ) {
+    return cached;
   }
-  return _launcherCache[folder];
+  if (_launcherFetching[folder]) return _launcherFetching[folder];
+
+  const request = (async () => {
+    try {
+      const headers = metadata?.etag
+        ? { 'If-None-Match': metadata.etag }
+        : {};
+      const response = await fetch(`/files/${folder}/manifest.json`, {
+        headers,
+        cache: 'no-store',
+      });
+      if (response.status === 304 && cached !== undefined) {
+        _launcherCacheMeta[folder] = {
+          etag: response.headers.get('ETag') || metadata?.etag || null,
+          checkedAt: Date.now(),
+          error: false,
+        };
+        return cached;
+      }
+      if (!response.ok) throw new Error(`Could not load ${folder} manifest`);
+      const entries = await response.json();
+      if (!Array.isArray(entries)) throw new Error(`Invalid ${folder} manifest`);
+      _launcherCache[folder] = parseManifestForLauncher(folder, entries);
+      _launcherCacheMeta[folder] = {
+        etag: response.headers.get('ETag'),
+        checkedAt: Date.now(),
+        error: false,
+      };
+    } catch {
+      if (_launcherCache[folder] === undefined) _launcherCache[folder] = [];
+      _launcherCacheMeta[folder] = {
+        ..._launcherCacheMeta[folder],
+        checkedAt: Date.now(),
+        error: true,
+      };
+    }
+    return _launcherCache[folder];
+  })();
+  _launcherFetching[folder] = request;
+  try {
+    return await request;
+  } finally {
+    if (_launcherFetching[folder] === request) delete _launcherFetching[folder];
+  }
 }
 
 function buildFileLauncherBtn(file, iconSvg, iconColor) {
@@ -990,6 +1038,9 @@ async function populateLauncherFiles() {
   videoFilesCount.textContent = allVideos.length ? String(allVideos.length) : '';
   appFilesSection.hidden = allDocs.length === 0 && allPictures.length === 0 && allVideos.length === 0;
   updateLauncherFileSearch();
+  desktopSearchItems = buildDesktopSearchItems();
+  desktopSearchItemsReady = true;
+  if (!desktopSearchSuggestions.hidden) renderDesktopSearchResults();
 }
 
 function updateLauncherFileSearch() {
@@ -1040,6 +1091,7 @@ const desktopSearchResults = $('desktop-search-results');
 const desktopSearchStatus = $('desktop-search-status');
 let desktopSearchItems = [];
 let desktopSearchItemsReady = false;
+let desktopSearchLoadPromise = null;
 let desktopSearchActiveIndex = -1;
 let desktopSearchResultId = 0;
 
@@ -1227,17 +1279,24 @@ function renderDesktopSearchResults() {
 }
 
 async function loadDesktopSearchItems() {
-  if (desktopSearchItemsReady) return;
-  desktopSearchStatus.textContent = 'Loading suggestions…';
-  await Promise.all([
-    ensureLauncherManifest('posts'),
-    ensureLauncherManifest('documents'),
-    ensureLauncherManifest('pictures'),
-    ensureLauncherManifest('videos'),
-  ]);
-  desktopSearchItems = buildDesktopSearchItems();
-  desktopSearchItemsReady = true;
-  renderDesktopSearchResults();
+  if (desktopSearchLoadPromise) return desktopSearchLoadPromise;
+  if (!desktopSearchItemsReady) desktopSearchStatus.textContent = 'Loading suggestions…';
+  desktopSearchLoadPromise = (async () => {
+    await Promise.all([
+      ensureLauncherManifest('posts'),
+      ensureLauncherManifest('documents'),
+      ensureLauncherManifest('pictures'),
+      ensureLauncherManifest('videos'),
+    ]);
+    desktopSearchItems = buildDesktopSearchItems();
+    desktopSearchItemsReady = true;
+    renderDesktopSearchResults();
+  })();
+  try {
+    await desktopSearchLoadPromise;
+  } finally {
+    desktopSearchLoadPromise = null;
+  }
 }
 
 desktopSearchInput.addEventListener('focus', () => {

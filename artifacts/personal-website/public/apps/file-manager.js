@@ -29,7 +29,10 @@ export function buildFileManager(id, ctx) {
   let currentPath = '/';
   let viewMode    = 'tile';
   const fileCache       = {};
+  const fileCacheMeta   = {};
   const _fetching       = {};
+  const MANIFEST_RECHECK_MS = 5_000;
+  const MANIFEST_RETRY_MS = 5_000;
   const collapsedGroups = new Set();
 
   function parseEntry(folder, entry) {
@@ -56,19 +59,54 @@ export function buildFileManager(id, ctx) {
     return { filename, displayName, date, type, url, poster: poster || null, size: size || '\u2014', folder };
   }
 
-  async function ensureFolder(folder) {
-    if (fileCache[folder] !== undefined) return;
-    if (_fetching[folder])               return _fetching[folder];
+  async function ensureFolder(folder, { force = false } = {}) {
+    const cached = fileCache[folder];
+    const metadata = fileCacheMeta[folder];
+    const checkedAt = metadata?.checkedAt ?? 0;
+    const freshnessMs = metadata?.error ? MANIFEST_RETRY_MS : MANIFEST_RECHECK_MS;
+    if (!force && cached !== undefined && Date.now() - checkedAt < freshnessMs) {
+      return cached;
+    }
+    if (_fetching[folder]) return _fetching[folder];
     _fetching[folder] = (async () => {
       try {
-        const r = await fetch(`/files/${folder}/manifest.json`);
+        const headers = metadata?.etag
+          ? { 'If-None-Match': metadata.etag }
+          : {};
+        const r = await fetch(`/files/${folder}/manifest.json`, {
+          headers,
+          cache: 'no-store',
+        });
+        if (r.status === 304 && cached !== undefined) {
+          fileCacheMeta[folder] = {
+            etag: r.headers.get('ETag') || metadata?.etag || null,
+            checkedAt: Date.now(),
+            error: false,
+          };
+          return cached;
+        }
         if (!r.ok) throw new Error(r.status);
-        fileCache[folder] = (await r.json()).map(e => parseEntry(folder, e)).filter(Boolean);
+        const entries = await r.json();
+        if (!Array.isArray(entries)) throw new Error('Invalid manifest');
+        fileCache[folder] = entries.map(e => parseEntry(folder, e)).filter(Boolean);
+        fileCacheMeta[folder] = {
+          etag: r.headers.get('ETag'),
+          checkedAt: Date.now(),
+          error: false,
+        };
       } catch {
-        fileCache[folder] = [];
+        if (fileCache[folder] === undefined) fileCache[folder] = [];
+        fileCacheMeta[folder] = {
+          ...fileCacheMeta[folder],
+          checkedAt: Date.now(),
+          error: true,
+        };
       }
-      delete _fetching[folder];
+      return fileCache[folder];
     })();
+    _fetching[folder] = _fetching[folder].finally(() => {
+      delete _fetching[folder];
+    });
     return _fetching[folder];
   }
 
@@ -88,8 +126,16 @@ export function buildFileManager(id, ctx) {
         <span class="lbl">List</span>
       </button>
     </div>
+    <button class="tool-btn fm-refresh-btn" type="button" title="Refresh current folder" aria-label="Refresh current folder">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M19 12a7 7 0 1 1-2-4.9L20 12"/></svg>
+      <span class="lbl">Refresh</span>
+    </button>
   `;
   initResponsiveToolbar(toolbar);
+  const refreshStatus = document.createElement('span');
+  refreshStatus.className = 'fm-refresh-status';
+  refreshStatus.setAttribute('role', 'status');
+  refreshStatus.setAttribute('aria-live', 'polite');
 
   const content = document.createElement('div');
   content.className = 'app-content';
@@ -299,20 +345,10 @@ export function buildFileManager(id, ctx) {
     });
   }
 
-  function loadFolderCountsInBackground() {
-    const uncached = FOLDERS_DEF.filter(fd => fileCache[fd.id] === undefined);
-    if (!uncached.length) return;
-    let rendered = false;
-    uncached.forEach(fd => {
-      ensureFolder(fd.id).then(() => {
-        updateSidebarCounts();
-        if (currentPath === '/') {
-          if (!rendered) { rendered = true; renderContent(); }
-          // small delay to batch rapid completions into one re-render
-          rendered = false;
-          setTimeout(() => { if (currentPath === '/') renderContent(); }, 0);
-        }
-      });
+  function loadFolderCountsInBackground({ force = false } = {}) {
+    Promise.all(FOLDERS_DEF.map(fd => ensureFolder(fd.id, { force }))).then(() => {
+      updateSidebarCounts();
+      if (currentPath === '/') renderContent();
     });
   }
 
@@ -335,13 +371,17 @@ export function buildFileManager(id, ctx) {
       loadFolderCountsInBackground();
       return;
     }
-    const pending = fileCache[currentPath] === undefined ? [currentPath] : [];
-    if (pending.length > 0) {
+    const requestedPath = currentPath;
+    const hasCachedFiles = fileCache[requestedPath] !== undefined;
+    if (!hasCachedFiles) {
       scroll.innerHTML = '<p class="fm-empty-msg">Loading\u2026</p>';
-      Promise.all(pending.map(ensureFolder)).then(() => { renderContent(); updateSidebarCounts(); });
-    } else {
-      renderContent();
     }
+    if (hasCachedFiles) renderContent();
+    ensureFolder(requestedPath).then(() => {
+      if (currentPath !== requestedPath) return;
+      renderContent();
+      updateSidebarCounts();
+    });
   }
 
   function updateSidebar() {
@@ -362,6 +402,11 @@ export function buildFileManager(id, ctx) {
 
   // ── Events ────────────────────────────────────────────────────
   toolbar.addEventListener('click', e => {
+    const refresh = e.target.closest('.fm-refresh-btn');
+    if (refresh) {
+      refreshCurrentFolder();
+      return;
+    }
     const btn = e.target.closest('.fm-view-btn');
     if (!btn) return;
     viewMode = btn.dataset.view;
@@ -370,6 +415,27 @@ export function buildFileManager(id, ctx) {
     });
     render();
   });
+
+  async function refreshCurrentFolder() {
+    const paths = currentPath === '/'
+      ? FOLDERS_DEF.map(folder => folder.id)
+      : [currentPath];
+    const refreshButton = toolbar.querySelector('.fm-refresh-btn');
+    refreshButton.disabled = true;
+    refreshButton.setAttribute('aria-busy', 'true');
+    refreshStatus.textContent = 'Refreshing…';
+    try {
+      await Promise.all(paths.map(folder => ensureFolder(folder, { force: true })));
+      updateSidebarCounts();
+      renderContent();
+      refreshStatus.textContent = paths.some(folder => fileCacheMeta[folder]?.error)
+        ? 'Refresh failed. Showing the last available files.'
+        : 'Folder refreshed.';
+    } finally {
+      refreshButton.disabled = false;
+      refreshButton.removeAttribute('aria-busy');
+    }
+  }
 
   sidebar.addEventListener('click', e => {
     const btn = e.target.closest('.fm-sidebar-btn');
@@ -381,6 +447,7 @@ export function buildFileManager(id, ctx) {
   ctx.setAppTitle(id, '/home');
 
   main.appendChild(scroll);
+  toolbar.appendChild(refreshStatus);
   layout.appendChild(sidebar);
   layout.appendChild(main);
   content.appendChild(layout);
