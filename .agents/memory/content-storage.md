@@ -14,3 +14,9 @@ The private `personal-files` Git repository stores immutable JSON revision recor
 **Why:** the user later approved connecting `personal-files` to the content backend; this supersedes the earlier decision to defer Git history.
 
 **How to apply:** make every create, metadata/content update, move/rename, trash, and restore write a Git revision record as part of the protected admin flow. Keep the GitHub credential server-side, scoped only to this repository's contents, and present missing/invalid access as an explicit failure.
+
+Do not seed sample or test videos; the user will add their own video files. Import only real local files or uploads.
+
+**Why:** the user asked to exclude test videos and add their own.
+
+**How to apply:** avoid external placeholder video records in the legacy importer and keep placeholder examples out of the active library.
