@@ -1,9 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-import { promisify } from "node:util";
 import { desc, eq } from "drizzle-orm";
 import {
   db,
@@ -14,9 +9,7 @@ import {
 
 type HistoryExecutor = Pick<typeof db, "select" | "insert">;
 
-const execFileAsync = promisify(execFile);
-const REPOSITORY_URL =
-  "https://github.replit.internal/jfftck/personal-files";
+const REPOSITORY_API = "https://api.github.com/repos/jfftck/personal-files";
 const MAIN_BRANCH = "main";
 
 export type FileHistoryAction =
@@ -51,6 +44,13 @@ export class ContentHistoryError extends Error {
   }
 }
 
+class GitHubRequestError extends Error {
+  constructor(readonly status: number) {
+    super("GitHub request failed.");
+    this.name = "GitHubRequestError";
+  }
+}
+
 let historyQueue = Promise.resolve();
 
 export function withContentHistoryLock<T>(
@@ -79,43 +79,35 @@ function snapshotOf(file: ContentFile): ContentFileVersionSnapshot {
   };
 }
 
-async function runGit(
-  args: string[],
-  cwd?: string,
-): Promise<string> {
-  const result = await execFileAsync("git", args, {
-    cwd,
-    timeout: 120_000,
-    maxBuffer: 2 * 1024 * 1024,
-    env: {
-      ...process.env,
-      GIT_TERMINAL_PROMPT: "0",
+async function githubRequest<T>(
+  path: string,
+  options: { method?: string; body?: unknown } = {},
+): Promise<T> {
+  const token = process.env.PERSONAL_FILES_GITHUB_TOKEN;
+  if (!token) throw new ContentHistoryError();
+
+  const response = await fetch(`${REPOSITORY_API}${path}`, {
+    method: options.method ?? "GET",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
     },
+    ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+    signal: AbortSignal.timeout(30_000),
   });
-  return result.stdout.trim();
+  if (!response.ok) throw new GitHubRequestError(response.status);
+  return (await response.json()) as T;
 }
 
 async function pushEntriesToGit(
   entries: FileHistoryEntry[],
 ): Promise<string> {
-  const directory = await mkdtemp(
-    path.join(os.tmpdir(), "personal-files-history-"),
-  );
   try {
-    await runGit(["clone", REPOSITORY_URL, directory]);
-    await runGit(["config", "user.name", "Personal Files History"], directory);
-    await runGit(
-      ["config", "user.email", "personal-files-history@users.noreply.github.com"],
-      directory,
-    );
-
-    for (const entry of entries) {
-      const relativePath = entry.gitPath;
-      const destination = path.join(directory, relativePath);
-      await mkdir(path.dirname(destination), { recursive: true });
-      await writeFile(
-        destination,
-        `${JSON.stringify(
+    const treeEntries = await Promise.all(
+      entries.map(async (entry) => {
+        const record = `${JSON.stringify(
           {
             schemaVersion: 1,
             id: entry.id,
@@ -127,40 +119,61 @@ async function pushEntriesToGit(
           },
           null,
           2,
-        )}\n`,
-        "utf8",
-      );
-    }
-
-    await runGit(["add", "history"], directory);
-    await runGit(
-      [
-        "commit",
-        "-m",
-        entries.length === 1
-          ? `Record ${entries[0].action} revision`
-          : `Record ${entries.length} content revisions`,
-      ],
-      directory,
+        )}\n`;
+        const blob = await githubRequest<{ sha: string }>("/git/blobs", {
+          method: "POST",
+          body: { content: record, encoding: "utf-8" },
+        });
+        return {
+          path: entry.gitPath,
+          mode: "100644",
+          type: "blob",
+          sha: blob.sha,
+        };
+      }),
     );
-    const commitSha = await runGit(["rev-parse", "HEAD"], directory);
 
-    try {
-      await runGit(["push", "origin", `HEAD:${MAIN_BRANCH}`], directory);
-    } catch {
-      await runGit(["fetch", "origin", MAIN_BRANCH], directory);
-      await runGit(
-        ["rebase", `origin/${MAIN_BRANCH}`],
-        directory,
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const reference = await githubRequest<{ object: { sha: string } }>(
+        `/git/ref/heads/${MAIN_BRANCH}`,
       );
-      await runGit(["push", "origin", `HEAD:${MAIN_BRANCH}`], directory);
+      const currentCommit = await githubRequest<{ tree: { sha: string } }>(
+        `/git/commits/${reference.object.sha}`,
+      );
+      const tree = await githubRequest<{ sha: string }>("/git/trees", {
+        method: "POST",
+        body: { base_tree: currentCommit.tree.sha, tree: treeEntries },
+      });
+      const commit = await githubRequest<{ sha: string }>("/git/commits", {
+        method: "POST",
+        body: {
+          message:
+            entries.length === 1
+              ? `Record ${entries[0].action} revision`
+              : `Record ${entries.length} content revisions`,
+          tree: tree.sha,
+          parents: [reference.object.sha],
+        },
+      });
+
+      try {
+        await githubRequest(`/git/refs/heads/${MAIN_BRANCH}`, {
+          method: "PATCH",
+          body: { sha: commit.sha, force: false },
+        });
+        return commit.sha;
+      } catch (error) {
+        const canRetry =
+          error instanceof GitHubRequestError &&
+          (error.status === 409 || error.status === 422) &&
+          attempt < 2;
+        if (!canRetry) throw error;
+      }
     }
 
-    return commitSha;
+    throw new Error("Could not update the repository branch.");
   } catch {
     throw new ContentHistoryError();
-  } finally {
-    await rm(directory, { recursive: true, force: true });
   }
 }
 
