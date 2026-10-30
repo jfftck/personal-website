@@ -20,6 +20,9 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Get the content folders and files
  */
+export const getContentTreeResponseFilesItemDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const GetContentTreeResponse = zod.object({
   "folders": zod.array(zod.object({
   "id": zod.string().uuid(),
@@ -33,7 +36,7 @@ export const GetContentTreeResponse = zod.object({
   "name": zod.string(),
   "title": zod.string(),
   "folderPath": zod.string(),
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(getContentTreeResponseFilesItemDateRegExp),
   "contentType": zod.string(),
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
@@ -47,12 +50,15 @@ export const GetContentTreeResponse = zod.object({
 /**
  * @summary Get removed files
  */
+export const getContentTrashResponseDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const GetContentTrashResponseItem = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
   "title": zod.string(),
   "folderPath": zod.string(),
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(getContentTrashResponseDateRegExp),
   "contentType": zod.string(),
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
@@ -152,6 +158,7 @@ export const createContentFileBodyTitleMax = 220;
 
 export const createContentFileBodyFolderPathMax = 1000;
 
+export const createContentFileBodyDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const createContentFileBodyContentTypeMax = 255;
 
 export const createContentFileBodySizeBytesMin = 0;
@@ -162,19 +169,22 @@ export const CreateContentFileBody = zod.object({
   "name": zod.string().min(1).max(createContentFileBodyNameMax),
   "title": zod.string().min(1).max(createContentFileBodyTitleMax),
   "folderPath": zod.string().max(createContentFileBodyFolderPathMax),
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(createContentFileBodyDateRegExp),
   "contentType": zod.string().max(createContentFileBodyContentTypeMax),
   "sizeBytes": zod.number().int().min(createContentFileBodySizeBytesMin),
   "objectPath": zod.string(),
   "isWallpaper": zod.boolean().optional()
 })
 
+export const createContentFileResponseDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const CreateContentFileResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
   "title": zod.string(),
   "folderPath": zod.string(),
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(createContentFileResponseDateRegExp),
   "contentType": zod.string(),
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
@@ -197,6 +207,7 @@ export const updateContentFileBodyTitleMax = 220;
 
 export const updateContentFileBodyFolderPathMax = 1000;
 
+export const updateContentFileBodyDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const updateContentFileBodyContentTypeMax = 255;
 
 export const updateContentFileBodySizeBytesMin = 0;
@@ -207,19 +218,22 @@ export const UpdateContentFileBody = zod.object({
   "name": zod.string().min(1).max(updateContentFileBodyNameMax).optional(),
   "title": zod.string().min(1).max(updateContentFileBodyTitleMax).optional(),
   "folderPath": zod.string().max(updateContentFileBodyFolderPathMax).optional(),
-  "date": zod.coerce.date().optional(),
+  "date": zod.string().regex(updateContentFileBodyDateRegExp).optional(),
   "contentType": zod.string().max(updateContentFileBodyContentTypeMax).optional(),
   "sizeBytes": zod.number().int().min(updateContentFileBodySizeBytesMin).optional(),
   "objectPath": zod.string().optional(),
   "isWallpaper": zod.boolean().optional()
 })
 
+export const updateContentFileResponseDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const UpdateContentFileResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
   "title": zod.string(),
   "folderPath": zod.string(),
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(updateContentFileResponseDateRegExp),
   "contentType": zod.string(),
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
@@ -256,6 +270,9 @@ export const GetContentFileVersionsParams = zod.object({
   "fileId": zod.coerce.string().uuid()
 })
 
+export const getContentFileVersionsResponseDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const GetContentFileVersionsResponseItem = zod.object({
   "id": zod.string().uuid(),
   "versionNumber": zod.number().int(),
@@ -263,7 +280,7 @@ export const GetContentFileVersionsResponseItem = zod.object({
   "name": zod.string(),
   "title": zod.string(),
   "folderPath": zod.string(),
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(getContentFileVersionsResponseDateRegExp),
   "contentType": zod.string(),
   "sizeBytes": zod.number().int(),
   "isWallpaper": zod.boolean(),
@@ -283,12 +300,15 @@ export const RestoreContentFileVersionParams = zod.object({
   "versionId": zod.coerce.string().uuid()
 })
 
+export const restoreContentFileVersionResponseDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const RestoreContentFileVersionResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
   "title": zod.string(),
   "folderPath": zod.string(),
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(restoreContentFileVersionResponseDateRegExp),
   "contentType": zod.string(),
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
@@ -305,12 +325,15 @@ export const RestoreContentFileParams = zod.object({
   "fileId": zod.coerce.string().uuid()
 })
 
+export const restoreContentFileResponseDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const RestoreContentFileResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
   "title": zod.string(),
   "folderPath": zod.string(),
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(restoreContentFileResponseDateRegExp),
   "contentType": zod.string(),
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),

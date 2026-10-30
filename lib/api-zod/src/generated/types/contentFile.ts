@@ -11,7 +11,8 @@ export interface ContentFile {
   name: string;
   title: string;
   folderPath: string;
-  date: Date;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  date: string;
   contentType: string;
   sizeBytes: number;
   /** @nullable */

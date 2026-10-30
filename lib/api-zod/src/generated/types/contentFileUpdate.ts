@@ -19,7 +19,8 @@ export interface ContentFileUpdate {
   title?: string;
   /** @maxLength 1000 */
   folderPath?: string;
-  date?: Date;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  date?: string;
   /** @maxLength 255 */
   contentType?: string;
   /** @minimum 0 */

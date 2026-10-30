@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { CreateContentFileBody } from "../../../lib/api-zod/src/generated/api.ts";
 import {
   assertGeneratedFileNameAvailable,
   CONTENT_NAME_CONFLICT_MESSAGE,
@@ -18,6 +19,21 @@ test("native date input values normalize after submission", () => {
   assert.equal(normalizeDateForApi("2026-10-30"), "2026-10-30");
   assert.equal(normalizeDateForApi("2026-02-30"), null);
   assert.equal(normalizeDateForApi(""), null);
+});
+
+test("the API body schema keeps a date-only value as an ISO string", () => {
+  const parsed = CreateContentFileBody.parse({
+    name: "20261030_Beach_Photo.jpg",
+    title: "Beach Photo.JPG",
+    folderPath: "",
+    date,
+    contentType: "image/jpeg",
+    sizeBytes: 1024,
+    objectPath: "uploads/test-image",
+  });
+
+  assert.equal(parsed.date, date);
+  assert.equal(typeof parsed.date, "string");
 });
 
 test("Markdown creation previews match the server-generated date-prefixed name", () => {
