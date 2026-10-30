@@ -661,7 +661,7 @@ function Console() {
           {view === 'trash' ? (
             <section className="panel">
               <div className="list-toolbar"><div className="list-title"><Archive size={16} /> Removed files <span className="count-pill">{visibleTrash.length}</span></div><span className="list-hint">Restoring returns the file to its original folder</span></div>
-              {trashQuery.isLoading ? <SkeletonRows /> : trashQuery.isError ? <ErrorState onRetry={() => void trashQuery.refetch()} /> : visibleTrash.length === 0 ? (
+              {trashQuery.isLoading ? <SkeletonRows /> : trashQuery.isError ? <ErrorState error={trashQuery.error} onRetry={() => void trashQuery.refetch()} /> : visibleTrash.length === 0 ? (
                 <EmptyState title={search ? 'No matches in trash' : 'Nothing in the bin'} description={search ? 'Try another search term.' : 'Deleted files will stay here until you restore them.'} />
               ) : (
                 <div className="trash-list">
@@ -676,7 +676,7 @@ function Console() {
                 </div>
               )}
             </section>
-          ) : treeQuery.isLoading ? <div className="panel"><SkeletonRows /></div> : treeQuery.isError ? <ErrorState onRetry={() => void treeQuery.refetch()} /> : (
+          ) : treeQuery.isLoading ? <div className="panel"><SkeletonRows /></div> : treeQuery.isError ? <ErrorState error={treeQuery.error} onRetry={() => void treeQuery.refetch()} /> : (
             <div className="workspace-grid">
               <section className="panel list-panel" aria-label="Files">
                 <div className="list-toolbar">
@@ -1060,8 +1060,12 @@ function SkeletonRows() {
   return <div className="loading-state" role="status" aria-label="Loading files" data-testid="status-loading-files"><div style={{ width: '100%' }}>{[0, 1, 2, 3].map((item) => <div key={item} className="skeleton" style={{ width: `${88 - item * 8}%`, height: 38, margin: '12px auto' }} />)}</div></div>;
 }
 
-function ErrorState({ onRetry }: { onRetry: () => void }) {
-  return <div className="error-state" role="alert" data-testid="status-load-error"><div><div className="empty-art"><RefreshCw /></div><h3>Couldn’t load the library</h3><p>Check your connection and try again. Your files haven’t been changed.</p><button className="button button-primary" type="button" onClick={onRetry} data-testid="retry-load"><RefreshCw /> Try Again</button></div></div>;
+function ErrorState({ error, onRetry }: { error?: unknown; onRetry: () => void }) {
+  const detail = error instanceof Error ? errorMessage(error) : '';
+  const message = detail
+    ? `${detail} Your files haven’t been changed.`
+    : 'Check your connection and try again. Your files haven’t been changed.';
+  return <div className="error-state" role="alert" data-testid="status-load-error"><div><div className="empty-art"><RefreshCw /></div><h3>Couldn’t load the library</h3><p>{message}</p><button className="button button-primary" type="button" onClick={onRetry} data-testid="retry-load"><RefreshCw /> Try Again</button></div></div>;
 }
 
 function LoadingAuth() {
