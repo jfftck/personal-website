@@ -135,6 +135,48 @@ function normalizeContentDate(input: unknown): string {
   return input;
 }
 
+function normalizeContentTitle(input: unknown): string {
+  if (typeof input !== "string") {
+    throw new ContentError(400, "Enter a title.");
+  }
+  const title = input.normalize("NFC").trim();
+  if (!title || title.length > 220 || /[\u0000-\u001f]/.test(title)) {
+    throw new ContentError(400, "The title is not valid.");
+  }
+  return title;
+}
+
+function titleFromLegacyName(name: string): string {
+  const withoutDate = name.replace(/^\d{8}_/, "");
+  if (/\.(md|markdown)$/i.test(withoutDate)) {
+    return withoutDate.replace(/\.(md|markdown)$/i, "").replace(/_/g, " ").trim() || withoutDate;
+  }
+  return withoutDate || name;
+}
+
+function fileExtension(name: string): string | null {
+  const compound = /(\.tar\.(?:bz2|gz|xz))$/i.exec(name);
+  if (compound) return compound[1].toLowerCase();
+  return /(\.[a-z0-9]{1,12})$/i.exec(name)?.[1].toLowerCase() ?? null;
+}
+
+function standardFileName(title: string, date: string, extension: string): string {
+  const safeExtension = extension.startsWith(".") ? extension.toLowerCase() : `.${extension.toLowerCase()}`;
+  const titleExtension = fileExtension(title);
+  const titleStem = titleExtension === safeExtension ? title.slice(0, -titleExtension.length) : title;
+  const prefix = `${date.replaceAll("-", "")}_`;
+  let stem = titleStem
+    .normalize("NFC")
+    .replace(/[\\/\u0000-\u001f]+/g, "_")
+    .replace(/[^\p{L}\p{N}]+/gu, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (!stem) stem = "Untitled";
+  const maxLength = Math.max(1, 255 - prefix.length - safeExtension.length);
+  stem = Array.from(stem).slice(0, maxLength).join("").replace(/_+$/g, "");
+  return normalizeFileName(`${prefix}${stem || "Untitled"}${safeExtension}`);
+}
+
 function normalizeContentType(input: unknown): string {
   if (typeof input !== "string" || input.length > 255) {
     throw new ContentError(400, "The file type is not valid.");
@@ -188,6 +230,7 @@ function toContentFile(file: DbContentFile) {
   return {
     id: file.id,
     name: file.name,
+    title: file.title?.trim() || titleFromLegacyName(file.name),
     folderPath: file.folderPath,
     date: file.contentDate,
     contentType: file.contentType,
@@ -205,6 +248,7 @@ function toContentFileVersion(version: DbContentFileVersion) {
     versionNumber: version.versionNumber,
     action: version.action,
     name: version.snapshot.name,
+    title: version.snapshot.title?.trim() || titleFromLegacyName(version.snapshot.name),
     folderPath: version.snapshot.folderPath,
     date: version.snapshot.contentDate,
     contentType: version.snapshot.contentType,
@@ -464,11 +508,16 @@ contentApiRouter.post(
   apiHandler(async (req, res) => {
     await ensureRootFolders();
     const input = CreateContentFileBody.parse(req.body);
-    const name = normalizeFileName(input.name);
+    const requestedName = normalizeFileName(input.name);
+    const title = normalizeContentTitle(input.title);
     const folderPath = normalizeFolderPath(input.folderPath);
     const date = normalizeContentDate(input.date);
     const contentType = normalizeContentType(input.contentType);
     const sizeBytes = normalizeSize(input.sizeBytes);
+    const extension =
+      fileExtension(requestedName) ??
+      (contentType.toLowerCase().startsWith("text/markdown") ? ".md" : ".bin");
+    const name = standardFileName(title, date, extension);
     if (input.isWallpaper && !isImageAsset(contentType, name)) {
       throw new ContentError(400, "Only image files can be used as desktop wallpaper.");
     }
@@ -477,10 +526,25 @@ contentApiRouter.post(
 
     const file = await withContentHistoryLock(() =>
       db.transaction(async (tx) => {
+        const [collision] = await tx
+          .select({ id: contentFilesTable.id })
+          .from(contentFilesTable)
+          .where(
+            and(
+              eq(contentFilesTable.folderPath, folderPath),
+              eq(contentFilesTable.name, name),
+              isNull(contentFilesTable.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (collision) {
+          throw new ContentError(409, "A file with this title and date already exists in that folder.");
+        }
         const [created] = await tx
           .insert(contentFilesTable)
           .values({
             name,
+            title,
             folderPath,
             contentDate: date,
             contentType,
@@ -512,12 +576,29 @@ contentApiRouter.patch(
         if (!existing) throw new ContentError(404, "That file could not be found.");
 
         const update: Partial<typeof contentFilesTable.$inferInsert> = {};
-        if (input.name !== undefined) update.name = normalizeFileName(input.name);
+        const title =
+          input.title !== undefined
+            ? normalizeContentTitle(input.title)
+            : existing.title.trim() || titleFromLegacyName(existing.name);
+        const date =
+          input.date !== undefined
+            ? normalizeContentDate(input.date)
+            : existing.contentDate;
+        if (input.title !== undefined || input.date !== undefined) {
+          update.title = title;
+          update.contentDate = date;
+          update.name = standardFileName(
+            title,
+            date,
+            fileExtension(existing.name) ?? ".md",
+          );
+        } else if (input.name !== undefined) {
+          update.name = normalizeFileName(input.name);
+        }
         if (input.folderPath !== undefined) {
           update.folderPath = normalizeFolderPath(input.folderPath);
           await assertFolderExists(update.folderPath);
         }
-        if (input.date !== undefined) update.contentDate = normalizeContentDate(input.date);
         if (input.contentType !== undefined) update.contentType = normalizeContentType(input.contentType);
         if (input.sizeBytes !== undefined) update.sizeBytes = normalizeSize(input.sizeBytes);
         if (input.isWallpaper !== undefined) {
@@ -543,6 +624,25 @@ contentApiRouter.patch(
         if (!isImageAsset(update.contentType ?? existing.contentType, update.name ?? existing.name)) {
           update.isWallpaper = false;
         }
+        const nextFolderPath = update.folderPath ?? existing.folderPath;
+        const nextName = update.name ?? existing.name;
+        if (nextName !== existing.name || nextFolderPath !== existing.folderPath) {
+          const [collision] = await tx
+            .select({ id: contentFilesTable.id })
+            .from(contentFilesTable)
+            .where(
+              and(
+                eq(contentFilesTable.folderPath, nextFolderPath),
+                eq(contentFilesTable.name, nextName),
+                isNull(contentFilesTable.deletedAt),
+                sql`${contentFilesTable.id} <> ${existing.id}`,
+              ),
+            )
+            .limit(1);
+          if (collision) {
+            throw new ContentError(409, "A file with this title and date already exists in that folder.");
+          }
+        }
         if (Object.keys(update).length === 0) {
           throw new ContentError(400, "There are no changes to save.");
         }
@@ -556,7 +656,7 @@ contentApiRouter.patch(
         const action =
           input.folderPath !== undefined && input.folderPath !== existing.folderPath
             ? "moved"
-            : input.name !== undefined && input.name !== existing.name
+            : update.name !== undefined && update.name !== existing.name
               ? "renamed"
               : "updated";
         await recordFileHistory(tx, [{ file: updated, previous: existing, action }]);
@@ -670,6 +770,9 @@ contentApiRouter.post(
           .update(contentFilesTable)
           .set({
             name: version.snapshot.name,
+            title:
+              version.snapshot.title?.trim() ||
+              titleFromLegacyName(version.snapshot.name),
             folderPath: version.snapshot.folderPath,
             contentDate: version.snapshot.contentDate,
             contentType: version.snapshot.contentType,
@@ -776,6 +879,7 @@ async function serveManifest(res: Response, folderPath: string) {
     }));
   const entries = files.map((file) => ({
     filename: file.name,
+    title: file.title?.trim() || titleFromLegacyName(file.name),
     date: file.contentDate,
     contentType: file.contentType,
     sizeBytes: file.sizeBytes,

@@ -319,10 +319,11 @@ components:
         createdAt: { type: string, format: date-time }
     ContentFile:
       type: object
-      required: [id, name, folderPath, date, contentType, sizeBytes, isWallpaper, url, updatedAt]
+      required: [id, name, title, folderPath, date, contentType, sizeBytes, isWallpaper, url, updatedAt]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
+        title: { type: string }
         folderPath: { type: string }
         date: { type: string, format: date }
         contentType: { type: string }
@@ -333,12 +334,13 @@ components:
         updatedAt: { type: string, format: date-time }
     ContentFileVersion:
       type: object
-      required: [id, versionNumber, action, name, folderPath, date, contentType, sizeBytes, isWallpaper, isDeleted, createdAt, gitCommitSha, gitUrl]
+      required: [id, versionNumber, action, name, title, folderPath, date, contentType, sizeBytes, isWallpaper, isDeleted, createdAt, gitCommitSha, gitUrl]
       properties:
         id: { type: string, format: uuid }
         versionNumber: { type: integer }
         action: { type: string, enum: [baseline, created, updated, renamed, moved, trashed, restored] }
         name: { type: string }
+        title: { type: string }
         folderPath: { type: string }
         date: { type: string, format: date }
         contentType: { type: string }
@@ -383,9 +385,10 @@ components:
         objectPath: { type: string }
     ContentFileInput:
       type: object
-      required: [name, folderPath, date, contentType, sizeBytes, objectPath]
+      required: [name, title, folderPath, date, contentType, sizeBytes, objectPath]
       properties:
         name: { type: string, minLength: 1, maxLength: 255 }
+        title: { type: string, minLength: 1, maxLength: 220 }
         folderPath: { type: string, maxLength: 1000 }
         date: { type: string, format: date }
         contentType: { type: string, maxLength: 255 }
@@ -396,6 +399,7 @@ components:
       type: object
       properties:
         name: { type: string, minLength: 1, maxLength: 255 }
+        title: { type: string, minLength: 1, maxLength: 220 }
         folderPath: { type: string, maxLength: 1000 }
         date: { type: string, format: date }
         contentType: { type: string, maxLength: 255 }

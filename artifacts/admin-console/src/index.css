@@ -170,6 +170,11 @@
 .upload-destination span,.upload-destination strong { display:block; }
 .upload-destination span { color:hsl(var(--muted-foreground)); font:9px var(--app-font-mono); letter-spacing:.08em; text-transform:uppercase; }
 .upload-destination strong { overflow-wrap:anywhere; margin-top:4px; color:hsl(var(--foreground)); font-size:12px; font-weight:600; }
+.markdown-create-note { display:flex; align-items:center; gap:11px; margin-bottom:14px; padding:12px; border:1px solid hsl(var(--border)); border-radius:9px; background:hsl(var(--muted) / .35); }
+.markdown-create-note > svg { width:18px; height:18px; flex:none; color:hsl(var(--primary)); }
+.markdown-create-note strong,.markdown-create-note span { display:block; }
+.markdown-create-note strong { color:hsl(var(--foreground)); font-size:12px; }
+.markdown-create-note span { margin-top:4px; color:hsl(var(--muted-foreground)); font-size:10px; }
 .detail-stats { margin:16px 0; padding:12px 0; border-block:1px solid hsl(var(--border)); display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .stat-label { display:block; color:hsl(var(--muted-foreground)); font:9px var(--app-font-mono); text-transform:uppercase; letter-spacing:.08em; }
 .stat-value { display:block; margin-top:5px; font:11px var(--app-font-mono); overflow-wrap:anywhere; }

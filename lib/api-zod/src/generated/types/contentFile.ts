@@ -9,6 +9,7 @@
 export interface ContentFile {
   id: string;
   name: string;
+  title: string;
   folderPath: string;
   date: Date;
   contentType: string;

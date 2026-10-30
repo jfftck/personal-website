@@ -20,3 +20,9 @@ Do not seed sample or test videos; the user will add their own video files. Impo
 **Why:** the user asked to exclude test videos and add their own.
 
 **How to apply:** avoid external placeholder video records in the legacy importer and keep placeholder examples out of the active library.
+
+Admin-authored posts and documents are Markdown. Their stored filename is generated as `YYYYMMDD_Title.md` from the selected content date and title. For uploaded assets, preserve the uploaded filename as the title and generate the stored filename from the date, title, and original extension. Editing a title or date regenerates the stored filename.
+
+**Why:** the user wants documents created in the admin UI to default to `.md`, while all other file types are uploaded and retain their original filename as the title.
+
+**How to apply:** keep the native local-date field, store the title separately from the filename, and use the same naming convention when creating or editing content.

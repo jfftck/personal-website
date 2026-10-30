@@ -20,6 +20,7 @@ export interface ContentFolder {
 export interface ContentFile {
   id: string;
   name: string;
+  title: string;
   folderPath: string;
   date: string;
   contentType: string;
@@ -49,6 +50,7 @@ export interface ContentFileVersion {
   versionNumber: number;
   action: ContentFileVersionAction;
   name: string;
+  title: string;
   folderPath: string;
   date: string;
   contentType: string;
@@ -106,6 +108,11 @@ export interface ContentFileInput {
      * @maxLength 255
      */
   name: string;
+  /**
+     * @minLength 1
+     * @maxLength 220
+     */
+  title: string;
   /** @maxLength 1000 */
   folderPath: string;
   date: string;
@@ -123,6 +130,11 @@ export interface ContentFileUpdate {
      * @maxLength 255
      */
   name?: string;
+  /**
+     * @minLength 1
+     * @maxLength 220
+     */
+  title?: string;
   /** @maxLength 1000 */
   folderPath?: string;
   date?: string;

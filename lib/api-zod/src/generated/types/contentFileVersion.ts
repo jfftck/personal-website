@@ -12,6 +12,7 @@ export interface ContentFileVersion {
   versionNumber: number;
   action: ContentFileVersionAction;
   name: string;
+  title: string;
   folderPath: string;
   date: Date;
   contentType: string;

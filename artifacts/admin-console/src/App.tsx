@@ -65,7 +65,7 @@ function savedThemeOverride(): ThemeOverride {
 
 type FolderFormValues = { name: string };
 type UploadFormValues = { title: string; date: string; isWallpaper: boolean };
-type MetadataFormValues = { name: string; date: string; folderPath: string; isWallpaper: boolean };
+type MetadataFormValues = { title: string; date: string; folderPath: string; isWallpaper: boolean };
 
 function displaySize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -123,6 +123,7 @@ function Console() {
   const [folderParent, setFolderParent] = useState('');
   const [editingFolder, setEditingFolder] = useState<ContentFolder | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadMode, setUploadMode] = useState<'upload' | 'markdown'>('upload');
   const [uploadBusy, setUploadBusy] = useState(false);
   const [editorFile, setEditorFile] = useState<ContentFile | null>(null);
   const [editorText, setEditorText] = useState('');
@@ -157,7 +158,7 @@ function Console() {
     defaultValues: { title: '', date: UPLOAD_TODAY, isWallpaper: false },
   });
   const metadataForm = useForm<MetadataFormValues>({
-    defaultValues: { name: '', date: TODAY, folderPath: '', isWallpaper: false },
+    defaultValues: { title: '', date: TODAY, folderPath: '', isWallpaper: false },
   });
   const resetMetadata = metadataForm.reset;
 
@@ -263,7 +264,7 @@ function Console() {
   useEffect(() => {
     if (!selectedFile) return;
     resetMetadata({
-      name: selectedFile.name,
+      title: selectedFile.title,
       date: selectedFile.date,
       folderPath: selectedFile.folderPath,
       isWallpaper: selectedFile.isWallpaper,
@@ -275,21 +276,30 @@ function Console() {
   const trash = trashQuery.data ?? [];
   const folderByPath = useMemo(() => new Map(folders.map((folder) => [folder.path, folder])), [folders]);
   const selectedFolderLabel = selectedFolder ? folderByPath.get(selectedFolder)?.name ?? selectedFolder : 'All files';
-  const uploadTitle = uploadForm.watch('title');
-  const generatedUploadName = uploadFile && uploadTitle.trim()
-    ? filenameFromTitle(uploadTitle, uploadFile.name, uploadFile.type || 'application/octet-stream')
+  const uploadTitle = uploadForm.watch('title') ?? '';
+  const uploadDate = uploadForm.watch('date') ?? '';
+  const uploadDestination =
+    uploadMode === 'markdown' && !/^posts(?:\/|$)|^documents(?:\/|$)/.test(selectedFolder)
+      ? 'documents'
+      : selectedFolder;
+  const generatedUploadName = uploadTitle.trim()
+    ? uploadMode === 'markdown'
+      ? filenameFromTitle(uploadTitle, uploadDate, 'new-document.md', 'text/markdown', '.md')
+      : uploadFile
+        ? filenameFromTitle(uploadTitle, uploadDate, uploadFile.name, uploadFile.type || 'application/octet-stream', '.bin')
+        : ''
     : '';
   const visibleFiles = useMemo(() => {
     const query = search.trim().toLowerCase();
     return allFiles.filter((file) => {
       const inFolder = query || !selectedFolder || file.folderPath === selectedFolder;
-      const matches = !query || `${file.name} ${file.folderPath} ${file.contentType} ${file.date}`.toLowerCase().includes(query);
+      const matches = !query || `${file.title} ${file.name} ${file.folderPath} ${file.contentType} ${file.date}`.toLowerCase().includes(query);
       return inFolder && matches;
     });
   }, [allFiles, search, selectedFolder]);
   const visibleTrash = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return trash.filter((file) => !query || `${file.name} ${file.folderPath} ${file.contentType}`.toLowerCase().includes(query));
+    return trash.filter((file) => !query || `${file.title} ${file.name} ${file.folderPath} ${file.contentType}`.toLowerCase().includes(query));
   }, [trash, search]);
 
   const folderChildren = (path: string) => folders.filter((folder) => folder.parentPath === path);
@@ -333,35 +343,50 @@ function Console() {
   };
 
   const uploadSelected = async (values: UploadFormValues) => {
-    if (!uploadFile || !values.title.trim()) return;
-    const contentType = uploadFile.type || 'application/octet-stream';
-    const name = filenameFromTitle(values.title, uploadFile.name, contentType);
+    const creatingMarkdown = uploadMode === 'markdown';
+    const sourceFile = creatingMarkdown
+      ? new window.File([`# ${values.title.trim()}\n\n`], 'new-document.md', { type: 'text/markdown' })
+      : uploadFile;
+    if (!sourceFile || !values.title.trim()) return;
+    const contentType = sourceFile.type || 'application/octet-stream';
+    const name = filenameFromTitle(
+      values.title,
+      values.date,
+      sourceFile.name,
+      contentType,
+      creatingMarkdown ? '.md' : '.bin',
+    );
     const date = normalizeDateForApi(values.date);
     if (!date) {
-      uploadForm.setError('date', { type: 'validate', message: 'Enter a valid date.' });
+      uploadForm.setError('date', { type: 'validate', message: 'Choose a valid date.' });
       return;
     }
+    if (!name) return;
     setUploadBusy(true);
     try {
-      const target = await createUpload.mutateAsync({ data: { name, contentType, sizeBytes: uploadFile.size } });
+      const target = await createUpload.mutateAsync({ data: { name, contentType, sizeBytes: sourceFile.size } });
       const response = await fetch(target.uploadUrl, {
         method: 'PUT',
         headers: { 'Content-Type': contentType },
-        body: uploadFile,
+        body: sourceFile,
       });
       if (!response.ok) throw new Error(`File upload failed (${response.status}).`);
-      await createFile.mutateAsync({
+      const created = await createFile.mutateAsync({
         data: {
-          name, folderPath: selectedFolder, date,
-          contentType, sizeBytes: uploadFile.size, objectPath: target.objectPath,
-          isWallpaper: isImageFile(uploadFile) && values.isWallpaper,
+          name, title: values.title.trim(), folderPath: uploadDestination, date,
+          contentType, sizeBytes: sourceFile.size, objectPath: target.objectPath,
+          isWallpaper: !creatingMarkdown && isImageFile(sourceFile) && values.isWallpaper,
         },
       });
+      setSelectedFolder(uploadDestination);
+      setSelectedFile(created);
       await invalidateContent();
-      setToastMessage('File uploaded to App Storage.');
+      setToastMessage(creatingMarkdown ? 'Markdown document created.' : 'File uploaded to App Storage.');
       setModal(null);
       setUploadFile(null);
+      setUploadMode('upload');
       uploadForm.reset({ title: '', date: localToday(), isWallpaper: false });
+      if (creatingMarkdown) await openTextEditor(created);
     } catch (error) {
       setToastMessage(errorMessage(error));
     } finally { setUploadBusy(false); }
@@ -377,14 +402,14 @@ function Console() {
 
   const saveMetadata = async (values: MetadataFormValues) => {
     if (!selectedFile) return;
-    const name = values.name.trim();
+    const title = values.title.trim();
     const date = values.date;
-    if (!name || !date) return;
+    if (!title || !date) return;
     try {
       const updated = await updateFile.mutateAsync({
         fileId: selectedFile.id,
         data: {
-          name,
+          title,
           date,
           folderPath: values.folderPath,
           isWallpaper: isImageFile({ name: selectedFile.name, type: selectedFile.contentType }) && values.isWallpaper,
@@ -398,7 +423,7 @@ function Console() {
   };
 
   const removeFile = async (file: ContentFile) => {
-    if (!window.confirm(`Move “${file.name}” to trash?`)) return;
+    if (!window.confirm(`Move “${file.title}” to trash?`)) return;
     try {
       await deleteFile.mutateAsync({ fileId: file.id });
       if (selectedFile?.id === file.id) setSelectedFile(null);
@@ -417,7 +442,7 @@ function Console() {
 
   const restoreRevision = async (version: ContentFileVersion) => {
     if (!selectedFile) return;
-    if (!window.confirm(`Restore version ${version.versionNumber} of “${selectedFile.name}”?`)) return;
+    if (!window.confirm(`Restore version ${version.versionNumber} of “${selectedFile.title}”?`)) return;
     try {
       const updated = await restoreFileVersion.mutateAsync({
         fileId: selectedFile.id,
@@ -475,6 +500,13 @@ function Console() {
   };
   const openUpload = () => {
     setUploadFile(null);
+    setUploadMode('upload');
+    uploadForm.reset({ title: '', date: localToday(), isWallpaper: false });
+    setModal('upload');
+  };
+  const openNewDocument = () => {
+    setUploadFile(null);
+    setUploadMode('markdown');
     uploadForm.reset({ title: '', date: localToday(), isWallpaper: false });
     setModal('upload');
   };
@@ -581,7 +613,8 @@ function Console() {
             </div>
             {view === 'library' ? <div className="heading-actions">
               <button className="button button-quiet" type="button" onClick={() => openFolderModal(selectedFolder)} data-testid="new-folder"><FolderPlus /> New Folder</button>
-              <button className="button button-primary" type="button" onClick={openUpload} data-testid="upload-file"><Plus /> Add a File</button>
+              <button className="button button-quiet" type="button" onClick={openNewDocument} data-testid="new-markdown-document"><FileText /> New Document</button>
+              <button className="button button-primary" type="button" onClick={openUpload} data-testid="upload-file"><Plus /> Upload a File</button>
             </div> : null}
           </div>
 
@@ -610,7 +643,7 @@ function Console() {
                   <div className="list-title"><Folder size={16} /> Files <span className="count-pill">{visibleFiles.length}</span></div>
                   <span className="list-hint">{search ? 'Search results across the library' : selectedFolder ? selectedFolder : 'Private library · public delivery enabled'}</span>
                 </div>
-                <div className="file-table-head"><span>Name</span><span>Content date</span><span>Size</span><span /></div>
+                <div className="file-table-head"><span>Title</span><span>Content date</span><span>Size</span><span /></div>
                 {visibleFiles.length === 0 ? (
                   <EmptyState title={search ? 'No files found' : 'This folder is ready'} description={search ? 'Try a different name, folder, or file type.' : 'New uploads are stored in App Storage and published from stable /files URLs.'} action={!search ? <button className="button button-primary" type="button" onClick={openUpload} data-testid="empty-upload"><Upload /> Upload a File</button> : undefined} />
                 ) : visibleFiles.map((file) => (
@@ -619,14 +652,14 @@ function Console() {
                     className={`file-row ${selectedFile?.id === file.id ? 'selected' : ''}`}
                     role="button" tabIndex={0} onClick={() => setSelectedFile(file)}
                     onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedFile(file); } }}
-                    aria-label={`Select ${file.name}`} data-testid={`file-row-${file.id}`}
+                    aria-label={`Select ${file.title}`} data-testid={`file-row-${file.id}`}
                   >
                     <FileName file={file} />
                     <span className="table-meta table-date">{file.date}</span>
                     <span className="table-meta table-size">{displaySize(file.sizeBytes)}</span>
                     <div className="row-actions">
-                      {isEditableText(file) ? <button className="mini-action" type="button" title="Edit Text" aria-label={`Edit ${file.name}`} onClick={(event) => { event.stopPropagation(); void openTextEditor(file); }} data-testid={`edit-text-${file.id}`}><Pencil /></button> : null}
-                      <button className="mini-action" type="button" title="Move to Trash" aria-label={`Move ${file.name} to trash`} onClick={(event) => { event.stopPropagation(); void removeFile(file); }} data-testid={`trash-file-${file.id}`}><Trash2 /></button>
+                      {isEditableText(file) ? <button className="mini-action" type="button" title="Edit Text" aria-label={`Edit ${file.title}`} onClick={(event) => { event.stopPropagation(); void openTextEditor(file); }} data-testid={`edit-text-${file.id}`}><Pencil /></button> : null}
+                      <button className="mini-action" type="button" title="Move to Trash" aria-label={`Move ${file.title} to trash`} onClick={(event) => { event.stopPropagation(); void removeFile(file); }} data-testid={`trash-file-${file.id}`}><Trash2 /></button>
                     </div>
                   </div>
                 ))}
@@ -635,20 +668,27 @@ function Console() {
               <aside className="panel detail-panel" aria-label="Selected file details">
                 <div className="detail-top"><h2>File details</h2>{selectedFile ? <button className="mini-action" type="button" aria-label="Close file details" onClick={() => setSelectedFile(null)} data-testid="close-file-details"><X /></button> : null}</div>
                 {!selectedFile ? (
-                  <div className="detail-empty"><div><div className="detail-empty-icon"><MoreHorizontal /></div><p>Select a file to edit its name, content date, or text.</p></div></div>
+                  <div className="detail-empty"><div><div className="detail-empty-icon"><MoreHorizontal /></div><p>Select a file to edit its title, content date, or text.</p></div></div>
                 ) : (
                   <>
                     <div className="detail-file">
                       <div className="detail-file-icon">{fileIcon(selectedFile)}</div>
-                      <h3>{selectedFile.name}</h3><p>{selectedFile.folderPath || 'Root folder'}</p>
+                      <h3>{selectedFile.title}</h3><p>{selectedFile.name} · {selectedFile.folderPath || 'Root folder'}</p>
                     </div>
                     <Form {...metadataForm}>
                     <form key={`${selectedFile.id}-${selectedFile.updatedAt}`} onSubmit={metadataForm.handleSubmit(saveMetadata)}>
-                      <FormField control={metadataForm.control} name="name" rules={{ required: 'Enter a file name.' }} render={({ field }) => (
+                      <FormField control={metadataForm.control} name="title" rules={{ required: 'Enter a title.' }} render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="field-label">File name</FormLabel>
-                          <FormControl><input className="field-control" maxLength={255} data-testid="input-file-name" {...field} /></FormControl>
-                          <FormMessage data-testid="error-file-name" />
+                          <FormLabel className="field-label">Title</FormLabel>
+                          <FormControl><input className="field-control" maxLength={220} data-testid="input-file-title" {...field} /></FormControl>
+                          <FormMessage data-testid="error-file-title" />
+                          <p className="field-help">File name: <code data-testid="generated-file-name">{filenameFromTitle(
+                            metadataForm.watch('title') ?? '',
+                            metadataForm.watch('date') ?? '',
+                            selectedFile.name,
+                            selectedFile.contentType,
+                            '.md',
+                          ) || 'Choose a title and date'}</code></p>
                         </FormItem>
                       )} />
                       <FormField control={metadataForm.control} name="date" rules={{ required: 'Choose a content date.' }} render={({ field }) => (
@@ -728,7 +768,7 @@ function Console() {
                                 <strong>Version {version.versionNumber} · {version.action[0].toUpperCase() + version.action.slice(1)}</strong>
                                 <time dateTime={version.createdAt}>{new Date(version.createdAt).toLocaleString()}</time>
                               </div>
-                              <p className="revision-file">{version.name} <span>·</span> {version.folderPath || 'Root folder'} <span>·</span> {version.date}</p>
+                              <p className="revision-file">{version.title} <span>·</span> {version.name} <span>·</span> {version.folderPath || 'Root folder'} <span>·</span> {version.date}</p>
                               <div className="revision-item-footer">
                                 <a href={version.gitUrl} target="_blank" rel="noreferrer">Commit {version.gitCommitSha.slice(0, 7)}</a>
                                 {index === 0 ? (
@@ -780,26 +820,35 @@ function Console() {
         <div className="overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !uploadBusy) setModal(null); }}>
           <Form {...uploadForm}>
           <form className="dialog" onSubmit={uploadForm.handleSubmit(uploadSelected)} aria-labelledby="upload-dialog-title">
-            <div className="dialog-head"><div><h2 id="upload-dialog-title">Add to the library</h2><p>Stored in App Storage</p></div><button className="mini-action" type="button" aria-label="Close upload dialog" disabled={uploadBusy} onClick={() => setModal(null)} data-testid="close-upload-dialog"><X /></button></div>
+            <div className="dialog-head"><div><h2 id="upload-dialog-title">{uploadMode === 'markdown' ? 'New Markdown Document' : 'Add to the library'}</h2><p>{uploadMode === 'markdown' ? 'Creates an editable .md file.' : 'Stored in App Storage'}</p></div><button className="mini-action" type="button" aria-label="Close upload dialog" disabled={uploadBusy} onClick={() => setModal(null)} data-testid="close-upload-dialog"><X /></button></div>
             <div className="upload-destination" data-testid="upload-destination">
               <Folder aria-hidden="true" />
-              <div><span>Upload destination</span><strong>{selectedFolder || 'Root folder'}</strong></div>
+              <div><span>{uploadMode === 'markdown' ? 'Document destination' : 'Upload destination'}</span><strong>{uploadDestination || 'Root folder'}</strong></div>
             </div>
-            <input ref={fileInputRef} type="file" hidden onChange={(event) => chooseUpload(event.target.files?.[0])} data-testid="input-upload-file" />
-            <div className={`dropzone ${dragging ? 'dragging' : ''}`} role="button" tabIndex={0}
-              onClick={() => fileInputRef.current?.click()}
-              onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') fileInputRef.current?.click(); }}
-              onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
-              onDragLeave={() => setDragging(false)} onDrop={handleDrop}
-              data-testid="upload-dropzone">
-              <div><Upload /><strong>{uploadFile ? uploadFile.name : 'Choose a file or drop it here'}</strong><span>{uploadFile ? `${displaySize(uploadFile.size)} · ${uploadFile.type || 'application/octet-stream'}` : 'File type and size are read from the actual file.'}</span></div>
-            </div>
+            {uploadMode === 'markdown' ? (
+              <div className="markdown-create-note">
+                <FileText aria-hidden="true" />
+                <div><strong>Markdown (.md)</strong><span>A starter heading is created; edit the document after saving.</span></div>
+              </div>
+            ) : (
+              <>
+                <input ref={fileInputRef} type="file" hidden onChange={(event) => chooseUpload(event.target.files?.[0])} data-testid="input-upload-file" />
+                <div className={`dropzone ${dragging ? 'dragging' : ''}`} role="button" tabIndex={0}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') fileInputRef.current?.click(); }}
+                  onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+                  onDragLeave={() => setDragging(false)} onDrop={handleDrop}
+                  data-testid="upload-dropzone">
+                  <div><Upload /><strong>{uploadFile ? uploadFile.name : 'Choose a file or drop it here'}</strong><span>{uploadFile ? `${displaySize(uploadFile.size)} · ${uploadFile.type || 'application/octet-stream'}` : 'File type and size are read from the actual file.'}</span></div>
+                </div>
+              </>
+            )}
             <FormField control={uploadForm.control} name="title" rules={{ required: 'Enter a title.' }} render={({ field }) => (
               <FormItem>
                 <FormLabel className="field-label">Title</FormLabel>
                 <FormControl><input className="field-control" maxLength={220} data-testid="input-upload-title" {...field} /></FormControl>
                 <FormMessage data-testid="error-upload-title" />
-                <p className="field-help">File name: <code data-testid="generated-upload-filename">{generatedUploadName || 'Choose a file to preview its extension'}</code></p>
+                <p className="field-help">File name: <code data-testid="generated-upload-filename">{generatedUploadName || (uploadMode === 'markdown' ? 'Enter a title to preview the .md filename' : 'Choose a file to preview its filename')}</code></p>
               </FormItem>
             )} />
             <FormField control={uploadForm.control} name="date" rules={{
@@ -834,7 +883,7 @@ function Console() {
                 </FormItem>
               )} />
             ) : null}
-            <div className="dialog-footer"><button className="button button-quiet" type="button" disabled={uploadBusy} onClick={() => setModal(null)} data-testid="cancel-upload">Cancel</button><button className="button button-primary" type="submit" disabled={!uploadFile || !uploadForm.watch('title')?.trim() || uploadBusy} data-testid="submit-upload">{uploadBusy ? 'Uploading…' : 'Upload File'}</button></div>
+            <div className="dialog-footer"><button className="button button-quiet" type="button" disabled={uploadBusy} onClick={() => setModal(null)} data-testid="cancel-upload">Cancel</button><button className="button button-primary" type="submit" disabled={(uploadMode === 'upload' && !uploadFile) || !uploadForm.watch('title')?.trim() || uploadBusy} data-testid="submit-upload">{uploadBusy ? 'Saving…' : uploadMode === 'markdown' ? 'Create Document' : 'Upload File'}</button></div>
           </form>
           </Form>
         </div>
@@ -860,8 +909,8 @@ function FileName({ file }: { file: ContentFile }) {
     <div className="file-name-cell">
       <div className="file-icon">{fileIcon(file)}</div>
       <div className="file-name-wrap">
-        <span className="file-name" data-testid={`text-file-name-${file.id}`}>{file.name}</span>
-        <span className="file-sub">{file.folderPath || 'Root'} · {file.contentType}</span>
+        <span className="file-name" data-testid={`text-file-name-${file.id}`}>{file.title}</span>
+        <span className="file-sub">{file.name} · {file.folderPath || 'Root'} · {file.contentType}</span>
       </div>
     </div>
   );

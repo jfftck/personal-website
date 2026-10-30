@@ -36,32 +36,40 @@ function sourceExtension(filename: string): string | null {
   return /^\.[a-z0-9]{1,12}$/i.test(suffix) ? suffix.toLowerCase() : null;
 }
 
-export function titleFromFilename(filename: string): string {
-  const basename = filename.split(/[\\/]/).at(-1) ?? filename;
-  const extension = sourceExtension(basename);
-  return extension ? basename.slice(0, -extension.length) : basename;
-}
-
 export function filenameFromTitle(
   title: string,
+  date: string,
   sourceName: string,
   contentType: string,
+  fallbackExtension = ".md",
 ): string {
+  const isoDate = normalizeDateForApi(date);
+  if (!isoDate || !title.trim()) return "";
   const extension =
     sourceExtension(sourceName) ??
     MIME_EXTENSIONS[contentType.toLowerCase().split(";")[0].trim()] ??
-    ".bin";
-  let stem = title
-    .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
-    .replace(/[^\p{L}\p{N}]+/gu, "-")
-    .replace(/^-+|-+$/g, "")
-    .toLowerCase();
-  if (!stem) stem = "file";
-  stem = Array.from(stem).slice(0, Math.max(1, 255 - extension.length)).join("").replace(/-+$/g, "");
-  let filename = `${stem || "file"}${extension}`;
-  if (filename.toLowerCase() === "manifest.json") filename = `manifest-file${extension}`;
-  return filename;
+    fallbackExtension;
+  const titleExtension = sourceExtension(title);
+  const titleStem =
+    titleExtension && titleExtension === extension
+      ? title.slice(0, -titleExtension.length)
+      : title;
+  const prefix = `${isoDate.replaceAll("-", "")}_`;
+  const safeExtension = extension.startsWith(".") ? extension : `.${extension}`;
+  let stem = titleStem
+    .normalize("NFC")
+    .replace(/[\\/\u0000-\u001f]+/g, "_")
+    .replace(/[^\p{L}\p{N}]+/gu, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (!stem) stem = "Untitled";
+  const maxStemLength = Math.max(1, 255 - prefix.length - safeExtension.length);
+  stem = Array.from(stem).slice(0, maxStemLength).join("").replace(/_+$/g, "");
+  return `${prefix}${stem || "Untitled"}${safeExtension}`;
+}
+
+export function titleFromFilename(filename: string): string {
+  return filename.split(/[\\/]/).at(-1) ?? filename;
 }
 
 function isoDate(year: number, month: number, day: number): string | null {

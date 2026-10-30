@@ -12,6 +12,11 @@ export interface ContentFileInput {
      * @maxLength 255
      */
   name: string;
+  /**
+     * @minLength 1
+     * @maxLength 220
+     */
+  title: string;
   /** @maxLength 1000 */
   folderPath: string;
   date: Date;

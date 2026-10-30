@@ -67,6 +67,7 @@ export function withContentHistoryLock<T>(
 function snapshotOf(file: ContentFile): ContentFileVersionSnapshot {
   return {
     name: file.name,
+    title: file.title,
     folderPath: file.folderPath,
     contentDate: file.contentDate,
     contentType: file.contentType,

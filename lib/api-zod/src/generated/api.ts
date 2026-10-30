@@ -31,6 +31,7 @@ export const GetContentTreeResponse = zod.object({
   "files": zod.array(zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "title": zod.string(),
   "folderPath": zod.string(),
   "date": zod.coerce.date(),
   "contentType": zod.string(),
@@ -49,6 +50,7 @@ export const GetContentTreeResponse = zod.object({
 export const GetContentTrashResponseItem = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "title": zod.string(),
   "folderPath": zod.string(),
   "date": zod.coerce.date(),
   "contentType": zod.string(),
@@ -146,6 +148,8 @@ export const CreateContentUploadResponse = zod.object({
  */
 export const createContentFileBodyNameMax = 255;
 
+export const createContentFileBodyTitleMax = 220;
+
 export const createContentFileBodyFolderPathMax = 1000;
 
 export const createContentFileBodyContentTypeMax = 255;
@@ -156,6 +160,7 @@ export const createContentFileBodySizeBytesMin = 0;
 
 export const CreateContentFileBody = zod.object({
   "name": zod.string().min(1).max(createContentFileBodyNameMax),
+  "title": zod.string().min(1).max(createContentFileBodyTitleMax),
   "folderPath": zod.string().max(createContentFileBodyFolderPathMax),
   "date": zod.coerce.date(),
   "contentType": zod.string().max(createContentFileBodyContentTypeMax),
@@ -167,6 +172,7 @@ export const CreateContentFileBody = zod.object({
 export const CreateContentFileResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "title": zod.string(),
   "folderPath": zod.string(),
   "date": zod.coerce.date(),
   "contentType": zod.string(),
@@ -187,6 +193,8 @@ export const UpdateContentFileParams = zod.object({
 
 export const updateContentFileBodyNameMax = 255;
 
+export const updateContentFileBodyTitleMax = 220;
+
 export const updateContentFileBodyFolderPathMax = 1000;
 
 export const updateContentFileBodyContentTypeMax = 255;
@@ -197,6 +205,7 @@ export const updateContentFileBodySizeBytesMin = 0;
 
 export const UpdateContentFileBody = zod.object({
   "name": zod.string().min(1).max(updateContentFileBodyNameMax).optional(),
+  "title": zod.string().min(1).max(updateContentFileBodyTitleMax).optional(),
   "folderPath": zod.string().max(updateContentFileBodyFolderPathMax).optional(),
   "date": zod.coerce.date().optional(),
   "contentType": zod.string().max(updateContentFileBodyContentTypeMax).optional(),
@@ -208,6 +217,7 @@ export const UpdateContentFileBody = zod.object({
 export const UpdateContentFileResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "title": zod.string(),
   "folderPath": zod.string(),
   "date": zod.coerce.date(),
   "contentType": zod.string(),
@@ -251,6 +261,7 @@ export const GetContentFileVersionsResponseItem = zod.object({
   "versionNumber": zod.number().int(),
   "action": zod.enum(['baseline', 'created', 'updated', 'renamed', 'moved', 'trashed', 'restored']),
   "name": zod.string(),
+  "title": zod.string(),
   "folderPath": zod.string(),
   "date": zod.coerce.date(),
   "contentType": zod.string(),
@@ -275,6 +286,7 @@ export const RestoreContentFileVersionParams = zod.object({
 export const RestoreContentFileVersionResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "title": zod.string(),
   "folderPath": zod.string(),
   "date": zod.coerce.date(),
   "contentType": zod.string(),
@@ -296,6 +308,7 @@ export const RestoreContentFileParams = zod.object({
 export const RestoreContentFileResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "title": zod.string(),
   "folderPath": zod.string(),
   "date": zod.coerce.date(),
   "contentType": zod.string(),

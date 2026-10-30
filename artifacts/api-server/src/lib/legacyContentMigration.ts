@@ -55,6 +55,14 @@ function dateFor(filename: string, modifiedAt: Date): string {
   return modifiedAt.toISOString().slice(0, 10);
 }
 
+function titleFor(filename: string): string {
+  const withoutDate = filename.replace(/^\d{8}_/, "");
+  if (/\.(md|markdown)$/i.test(withoutDate)) {
+    return withoutDate.replace(/\.(md|markdown)$/i, "").replace(/_/g, " ").trim();
+  }
+  return withoutDate;
+}
+
 async function ensureFolder(pathValue: string) {
   const parts = pathValue.split("/").filter(Boolean);
   let parentPath = "";
@@ -104,6 +112,7 @@ async function importDirectory(root: string, folderPath: string) {
         await saveStoredObject(objectPath, fullPath, contentTypeFor(item.name));
         await db.insert(contentFilesTable).values({
           name: item.name,
+          title: titleFor(item.name),
           folderPath: currentFolderPath,
           contentDate: dateFor(item.name, fileInfo.mtime),
           contentType: contentTypeFor(item.name),
