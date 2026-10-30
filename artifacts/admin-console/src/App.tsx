@@ -68,6 +68,7 @@ function savedThemeOverride(): ThemeOverride {
 type FolderFormValues = { name: string };
 type UploadFormValues = { title: string; description: string; date: string; folderPath: string; isWallpaper: boolean };
 type MetadataFormValues = { title: string; description: string; date: string; folderPath: string; isWallpaper: boolean };
+type ContentTreeData = { folders: ContentFolder[]; files: ContentFile[] };
 
 function displaySize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -165,18 +166,34 @@ function Console() {
   });
   const resetMetadata = metadataForm.reset;
 
-  const invalidateContent = useCallback(async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: getGetContentTreeQueryKey() }),
-      queryClient.invalidateQueries({ queryKey: getGetContentTrashQueryKey() }),
-      queryClient.invalidateQueries({
-        predicate: (query) =>
-          typeof query.queryKey[0] === 'string' &&
-          query.queryKey[0].startsWith('/api/content/files/') &&
-          query.queryKey[0].endsWith('/versions'),
-      }),
-    ]);
+  const patchTreeCache = useCallback((update: (tree: ContentTreeData) => ContentTreeData) => {
+    const queryKey = getGetContentTreeQueryKey();
+    if (!queryClient.getQueryData<ContentTreeData>(queryKey)) {
+      void queryClient.invalidateQueries({ queryKey });
+      return;
+    }
+    queryClient.setQueryData<ContentTreeData>(queryKey, (current) => current ? update(current) : current);
   }, [queryClient]);
+  const patchTrashCache = useCallback((update: (files: ContentFile[]) => ContentFile[]) => {
+    const queryKey = getGetContentTrashQueryKey();
+    if (!queryClient.getQueryData<ContentFile[]>(queryKey)) {
+      void queryClient.invalidateQueries({ queryKey });
+      return;
+    }
+    queryClient.setQueryData<ContentFile[]>(queryKey, (current) => current ? update(current) : current);
+  }, [queryClient]);
+  const refreshTree = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: getGetContentTreeQueryKey() }),
+    [queryClient],
+  );
+  const refreshTrash = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: getGetContentTrashQueryKey() }),
+    [queryClient],
+  );
+  const refreshFileVersions = useCallback(
+    (fileId: string) => queryClient.invalidateQueries({ queryKey: getGetContentFileVersionsQueryKey(fileId) }),
+    [queryClient],
+  );
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -349,8 +366,18 @@ function Console() {
           : path;
         setSelectedFolder((current) => rebase(current));
         setSelectedFile((current) => current ? { ...current, folderPath: rebase(current.folderPath) } : current);
+        await Promise.all([refreshTree(), refreshTrash()]);
+      } else if (updated) {
+        patchTreeCache((tree) => ({
+          ...tree,
+          folders: tree.folders.map((folder) => folder.id === updated!.id ? updated! : folder),
+        }));
+      } else if (created) {
+        patchTreeCache((tree) => ({
+          ...tree,
+          folders: [...tree.folders.filter((folder) => folder.id !== created!.id), created!],
+        }));
       }
-      await invalidateContent();
       setToastMessage(editingFolder ? 'Folder renamed.' : 'Folder created.');
       if (created && folderModalReturnTo === 'upload') {
         uploadForm.setValue('folderPath', created.path, { shouldDirty: true });
@@ -370,7 +397,10 @@ function Console() {
     try {
       await deleteFolder.mutateAsync({ folderId: folder.id });
       if (selectedFolder === folder.path) setSelectedFolder(folder.parentPath);
-      await invalidateContent();
+      patchTreeCache((tree) => ({
+        ...tree,
+        folders: tree.folders.filter((item) => item.id !== folder.id),
+      }));
       setToastMessage('Folder deleted.');
     } catch (error) { setToastMessage(errorMessage(error)); }
   };
@@ -414,7 +444,10 @@ function Console() {
       });
       setSelectedFolder(uploadDestination);
       setSelectedFile(created);
-      await invalidateContent();
+      patchTreeCache((tree) => ({
+        ...tree,
+        files: [...tree.files.filter((item) => item.id !== created.id), created],
+      }));
       setToastMessage(creatingMarkdown ? 'Markdown document created.' : 'File uploaded to App Storage.');
       setModal(null);
       setUploadFile(null);
@@ -456,7 +489,11 @@ function Console() {
       });
       setSelectedFile(updated);
       if (updated.folderPath !== selectedFile.folderPath) setSelectedFolder(updated.folderPath);
-      await invalidateContent();
+      patchTreeCache((tree) => ({
+        ...tree,
+        files: tree.files.map((item) => item.id === updated.id ? updated : item),
+      }));
+      await refreshFileVersions(updated.id);
       setToastMessage('File details saved.');
     } catch (error) { setToastMessage(errorMessage(error)); }
   };
@@ -466,15 +503,25 @@ function Console() {
     try {
       await deleteFile.mutateAsync({ fileId: file.id });
       if (selectedFile?.id === file.id) setSelectedFile(null);
-      await invalidateContent();
+      patchTreeCache((tree) => ({
+        ...tree,
+        files: tree.files.filter((item) => item.id !== file.id),
+      }));
+      patchTrashCache((files) => files.some((item) => item.id === file.id) ? files : [file, ...files]);
+      await refreshFileVersions(file.id);
       setToastMessage('Moved to trash.');
     } catch (error) { setToastMessage(errorMessage(error)); }
   };
 
   const restore = async (file: ContentFile) => {
     try {
-      await restoreFile.mutateAsync({ fileId: file.id });
-      await invalidateContent();
+      const restored = await restoreFile.mutateAsync({ fileId: file.id });
+      patchTreeCache((tree) => ({
+        ...tree,
+        files: [...tree.files.filter((item) => item.id !== restored.id), restored],
+      }));
+      patchTrashCache((files) => files.filter((item) => item.id !== restored.id));
+      await refreshFileVersions(restored.id);
       setToastMessage('File restored.');
     } catch (error) { setToastMessage(errorMessage(error)); }
   };
@@ -488,10 +535,11 @@ function Console() {
         versionId: version.id,
       });
       setSelectedFile(updated);
-      await invalidateContent();
-      await queryClient.invalidateQueries({
-        queryKey: getGetContentFileVersionsQueryKey(selectedFile.id),
-      });
+      patchTreeCache((tree) => ({
+        ...tree,
+        files: tree.files.map((item) => item.id === updated.id ? updated : item),
+      }));
+      await refreshFileVersions(selectedFile.id);
       setToastMessage(`Restored version ${version.versionNumber}.`);
     } catch (error) { setToastMessage(errorMessage(error)); }
   };
@@ -524,7 +572,11 @@ function Console() {
         data: { objectPath: target.objectPath, contentType, sizeBytes: blob.size },
       });
       setSelectedFile(updated);
-      await invalidateContent();
+      patchTreeCache((tree) => ({
+        ...tree,
+        files: tree.files.map((item) => item.id === updated.id ? updated : item),
+      }));
+      await refreshFileVersions(updated.id);
       setEditorFile(null);
       setToastMessage('Text file saved.');
     } catch (error) { setToastMessage(errorMessage(error)); }
