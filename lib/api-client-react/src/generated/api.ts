@@ -28,6 +28,7 @@ import type {
   ContentFile,
   ContentFileInput,
   ContentFileUpdate,
+  ContentFileVersion,
   ContentFolder,
   ContentFolderInput,
   ContentFolderUpdate,
@@ -1058,6 +1059,183 @@ export function useGetContentFileContent<TData = Awaited<ReturnType<typeof getCo
 
 
 
+
+export const getGetContentFileVersionsUrl = (fileId: string,) => {
+
+
+
+
+  return `/api/content/files/${fileId}/versions`
+}
+
+/**
+ * @summary Get the revision history for a file
+ */
+export const getContentFileVersions = async (fileId: string, options?: Parameters<typeof customFetch>[1]): Promise<ContentFileVersion[]> => {
+
+  return customFetch<ContentFileVersion[]>(getGetContentFileVersionsUrl(fileId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetContentFileVersionsQueryKey = (fileId: string,) => {
+    return [
+    `/api/content/files/${fileId}/versions`
+    ] as const;
+    }
+
+
+export const getGetContentFileVersionsQueryOptions = <TData = Awaited<ReturnType<typeof getContentFileVersions>>, TError = ErrorType<unknown>>(fileId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getContentFileVersions>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetContentFileVersionsQueryKey(fileId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getContentFileVersions>>> = ({ signal }) => getContentFileVersions(fileId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: fileId !== null && fileId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getContentFileVersions>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetContentFileVersionsQueryResult = NonNullable<Awaited<ReturnType<typeof getContentFileVersions>>>
+export type GetContentFileVersionsQueryError = ErrorType<unknown>
+
+
+export function useGetContentFileVersions<TData = Awaited<ReturnType<typeof getContentFileVersions>>, TError = ErrorType<unknown>>(
+ fileId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getContentFileVersions>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getContentFileVersions>>,
+          TError,
+          Awaited<ReturnType<typeof getContentFileVersions>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetContentFileVersions<TData = Awaited<ReturnType<typeof getContentFileVersions>>, TError = ErrorType<unknown>>(
+ fileId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getContentFileVersions>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getContentFileVersions>>,
+          TError,
+          Awaited<ReturnType<typeof getContentFileVersions>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetContentFileVersions<TData = Awaited<ReturnType<typeof getContentFileVersions>>, TError = ErrorType<unknown>>(
+ fileId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getContentFileVersions>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get the revision history for a file
+ */
+
+export function useGetContentFileVersions<TData = Awaited<ReturnType<typeof getContentFileVersions>>, TError = ErrorType<unknown>>(
+ fileId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getContentFileVersions>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetContentFileVersionsQueryOptions(fileId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRestoreContentFileVersionUrl = (fileId: string,
+    versionId: string,) => {
+
+
+
+
+  return `/api/content/files/${fileId}/versions/${versionId}/restore`
+}
+
+/**
+ * @summary Restore a previous file revision
+ */
+export const restoreContentFileVersion = async (fileId: string,
+    versionId: string, options?: Parameters<typeof customFetch>[1]): Promise<ContentFile> => {
+
+  return customFetch<ContentFile>(getRestoreContentFileVersionUrl(fileId,versionId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRestoreContentFileVersionMutationKey = () => ['restoreContentFileVersion'] as const;
+
+export const getRestoreContentFileVersionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreContentFileVersion>>, TError,RestoreContentFileVersionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restoreContentFileVersion>>, TError,RestoreContentFileVersionMutationVariables, TContext> => {
+
+const mutationKey = getRestoreContentFileVersionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreContentFileVersion>>, RestoreContentFileVersionMutationVariables> = (props) => {
+          const {fileId,versionId} = props ?? {};
+
+          return  restoreContentFileVersion(fileId,versionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestoreContentFileVersionMutationResult = NonNullable<Awaited<ReturnType<typeof restoreContentFileVersion>>>
+
+    export type RestoreContentFileVersionMutationError = ErrorType<unknown>
+    export type RestoreContentFileVersionMutationVariables = {fileId: string;versionId: string}
+
+    /**
+ * @summary Restore a previous file revision
+ */
+export const useRestoreContentFileVersion = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreContentFileVersion>>, TError,RestoreContentFileVersionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof restoreContentFileVersion>>,
+        TError,
+        RestoreContentFileVersionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRestoreContentFileVersionMutationOptions(options), queryClient);
+    }
 
 export const getRestoreContentFileUrl = (fileId: string,) => {
 

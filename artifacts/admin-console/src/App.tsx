@@ -8,11 +8,12 @@ import {
 } from 'lucide-react';
 import {
   getContentFileContent,
-  getGetContentTrashQueryKey, getGetContentTreeQueryKey, setAuthTokenGetter,
+  getGetContentFileVersionsQueryKey, getGetContentTrashQueryKey, getGetContentTreeQueryKey, setAuthTokenGetter,
   useCreateContentFile, useCreateContentFolder, useCreateContentUpload,
   useDeleteContentFile, useDeleteContentFolder, useGetContentTrash,
-  useGetContentTree, useRestoreContentFile, useUpdateContentFile, useUpdateContentFolder,
-  type ContentFile, type ContentFolder,
+  useGetContentFileVersions, useGetContentTree, useRestoreContentFile,
+  useRestoreContentFileVersion, useUpdateContentFile, useUpdateContentFolder,
+  type ContentFile, type ContentFileVersion, type ContentFolder,
 } from '@workspace/api-client-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -114,6 +115,9 @@ function Console() {
   const treeQuery = useGetContentTree({
     query: { enabled: signedIn, queryKey: getGetContentTreeQueryKey() },
   });
+  const fileVersionsQuery = useGetContentFileVersions(selectedFile?.id ?? '', {
+    query: { enabled: signedIn && Boolean(selectedFile) },
+  });
   const trashQuery = useGetContentTrash({
     query: { enabled: signedIn, queryKey: getGetContentTrashQueryKey() },
   });
@@ -125,6 +129,7 @@ function Console() {
   const updateFile = useUpdateContentFile();
   const deleteFile = useDeleteContentFile();
   const restoreFile = useRestoreContentFile();
+  const restoreFileVersion = useRestoreContentFileVersion();
   const folderForm = useForm<FolderFormValues>({ defaultValues: { name: '' } });
   const uploadForm = useForm<UploadFormValues>({ defaultValues: { name: '', date: TODAY } });
   const metadataForm = useForm<MetadataFormValues>({
@@ -136,6 +141,12 @@ function Console() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: getGetContentTreeQueryKey() }),
       queryClient.invalidateQueries({ queryKey: getGetContentTrashQueryKey() }),
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          typeof query.queryKey[0] === 'string' &&
+          query.queryKey[0].startsWith('/api/content/files/') &&
+          query.queryKey[0].endsWith('/versions'),
+      }),
     ]);
   }, [queryClient]);
 
@@ -143,6 +154,10 @@ function Console() {
     document.documentElement.classList.toggle('dark', dark);
     localStorage.setItem('jmt-console-theme', dark ? 'dark' : 'light');
   }, [dark]);
+
+  useEffect(() => {
+    if (!signedIn) queryClient.clear();
+  }, [signedIn, queryClient]);
 
   useEffect(() => {
     let cancelled = false;
@@ -341,6 +356,23 @@ function Console() {
       await restoreFile.mutateAsync({ fileId: file.id });
       await invalidateContent();
       setToastMessage('File restored.');
+    } catch (error) { setToastMessage(errorMessage(error)); }
+  };
+
+  const restoreRevision = async (version: ContentFileVersion) => {
+    if (!selectedFile) return;
+    if (!window.confirm(`Restore version ${version.versionNumber} of “${selectedFile.name}”?`)) return;
+    try {
+      const updated = await restoreFileVersion.mutateAsync({
+        fileId: selectedFile.id,
+        versionId: version.id,
+      });
+      setSelectedFile(updated);
+      await invalidateContent();
+      await queryClient.invalidateQueries({
+        queryKey: getGetContentFileVersionsQueryKey(selectedFile.id),
+      });
+      setToastMessage(`Restored version ${version.versionNumber}.`);
     } catch (error) { setToastMessage(errorMessage(error)); }
   };
 
@@ -589,6 +621,50 @@ function Console() {
                     </form>
                     </Form>
                     <p className="status-line">Choose the destination folder above.</p>
+                    <section className="revision-history" aria-labelledby="revision-history-title" data-testid="revision-history">
+                      <div className="revision-history-heading">
+                        <div>
+                          <h3 id="revision-history-title">Revision History</h3>
+                          <p>File bytes stay in App Storage; Git records each revision.</p>
+                        </div>
+                        <a className="button button-quiet revision-repository-link" href="https://github.com/jfftck/personal-files" target="_blank" rel="noreferrer">Repository</a>
+                      </div>
+                      {fileVersionsQuery.isLoading ? (
+                        <div className="revision-loading" role="status">Loading revisions…</div>
+                      ) : fileVersionsQuery.isError ? (
+                        <div className="revision-error" role="alert">{errorMessage(fileVersionsQuery.error)}</div>
+                      ) : !fileVersionsQuery.data?.length ? (
+                        <div className="revision-empty">No revisions are available yet.</div>
+                      ) : (
+                        <ol className="revision-list">
+                          {fileVersionsQuery.data.map((version, index) => (
+                            <li className="revision-item" key={version.id} data-testid={`revision-${version.versionNumber}`}>
+                              <div className="revision-item-header">
+                                <strong>Version {version.versionNumber} · {version.action[0].toUpperCase() + version.action.slice(1)}</strong>
+                                <time dateTime={version.createdAt}>{new Date(version.createdAt).toLocaleString()}</time>
+                              </div>
+                              <p className="revision-file">{version.name} <span>·</span> {version.folderPath || 'Root folder'} <span>·</span> {version.date}</p>
+                              <div className="revision-item-footer">
+                                <a href={version.gitUrl} target="_blank" rel="noreferrer">Commit {version.gitCommitSha.slice(0, 7)}</a>
+                                {index === 0 ? (
+                                  <span className="revision-current">Current</span>
+                                ) : (
+                                  <button
+                                    className="button button-quiet revision-restore"
+                                    type="button"
+                                    disabled={restoreFileVersion.isPending}
+                                    onClick={() => void restoreRevision(version)}
+                                    data-testid={`restore-revision-${version.versionNumber}`}
+                                  >
+                                    Restore This Version
+                                  </button>
+                                )}
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </section>
                   </>
                 )}
               </aside>

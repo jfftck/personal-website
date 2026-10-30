@@ -30,6 +30,34 @@ export interface ContentFile {
   updatedAt: string;
 }
 
+export type ContentFileVersionAction = typeof ContentFileVersionAction[keyof typeof ContentFileVersionAction];
+
+
+export const ContentFileVersionAction = {
+  baseline: 'baseline',
+  created: 'created',
+  updated: 'updated',
+  renamed: 'renamed',
+  moved: 'moved',
+  trashed: 'trashed',
+  restored: 'restored',
+} as const;
+
+export interface ContentFileVersion {
+  id: string;
+  versionNumber: number;
+  action: ContentFileVersionAction;
+  name: string;
+  folderPath: string;
+  date: string;
+  contentType: string;
+  sizeBytes: number;
+  isDeleted: boolean;
+  createdAt: string;
+  gitCommitSha: string;
+  gitUrl: string;
+}
+
 export interface ContentTree {
   folders: ContentFolder[];
   files: ContentFile[];

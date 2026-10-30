@@ -10,15 +10,22 @@ import {
 import { db } from "@workspace/db";
 import {
   contentFilesTable,
+  contentFileVersionsTable,
   contentFoldersTable,
   type ContentFile as DbContentFile,
+  type ContentFileVersion as DbContentFileVersion,
   type ContentFolder as DbContentFolder,
 } from "@workspace/db";
 import { requireClerkUser } from "../lib/clerkAuth";
+import {
+  ContentHistoryError,
+  getFileHistory,
+  recordFileHistory,
+  withContentHistoryLock,
+} from "../lib/contentHistory";
 import { ensureLegacyContentImported } from "../lib/legacyContentMigration";
 import {
   createObjectUploadTarget,
-  deleteStoredObject,
   getStoredObject,
   getStoredObjectMetadata,
 } from "../lib/objectStorage";
@@ -184,6 +191,23 @@ function toContentFile(file: DbContentFile) {
   };
 }
 
+function toContentFileVersion(version: DbContentFileVersion) {
+  return {
+    id: version.id,
+    versionNumber: version.versionNumber,
+    action: version.action,
+    name: version.snapshot.name,
+    folderPath: version.snapshot.folderPath,
+    date: version.snapshot.contentDate,
+    contentType: version.snapshot.contentType,
+    sizeBytes: version.snapshot.sizeBytes,
+    isDeleted: Boolean(version.snapshot.deletedAt),
+    createdAt: version.createdAt.toISOString(),
+    gitCommitSha: version.gitCommitSha,
+    gitUrl: `https://github.com/jfftck/personal-files/commit/${version.gitCommitSha}`,
+  };
+}
+
 async function assertFolderExists(path: string) {
   if (!path) return;
   const [folder] = await db
@@ -214,6 +238,10 @@ async function validateUploadObject(objectPath: unknown, expectedSize: number) {
 function apiError(error: unknown, res: Response, next: (error?: unknown) => void) {
   if (error instanceof ContentError) {
     res.status(error.status).json({ error: error.message });
+    return;
+  }
+  if (error instanceof ContentHistoryError) {
+    res.status(503).json({ error: error.message });
     return;
   }
   if (
@@ -317,7 +345,8 @@ contentApiRouter.patch(
       throw new ContentError(400, "A folder cannot be moved inside itself.");
     }
 
-    const updatedFolder = await db.transaction(async (tx) => {
+    const updatedFolder = await withContentHistoryLock(() =>
+      db.transaction(async (tx) => {
       const [collision] = await tx
         .select({ id: contentFoldersTable.id })
         .from(contentFoldersTable)
@@ -327,6 +356,12 @@ contentApiRouter.patch(
 
       const folders = await tx.select().from(contentFoldersTable);
       const files = await tx.select().from(contentFilesTable);
+      const changedAt = new Date();
+      const changedFiles: Array<{
+        file: DbContentFile;
+        previous: DbContentFile;
+        action: "moved";
+      }> = [];
       for (const child of folders) {
         if (child.path === folder.path || child.path.startsWith(`${folder.path}/`)) {
           const suffix = child.path.slice(folder.path.length);
@@ -343,19 +378,27 @@ contentApiRouter.patch(
       for (const file of files) {
         if (file.folderPath === folder.path || file.folderPath.startsWith(`${folder.path}/`)) {
           const suffix = file.folderPath.slice(folder.path.length);
+          const updatedFile = {
+            ...file,
+            folderPath: `${newPath}${suffix}`,
+            updatedAt: changedAt,
+          };
           await tx
             .update(contentFilesTable)
-            .set({ folderPath: `${newPath}${suffix}`, updatedAt: new Date() })
+            .set({ folderPath: updatedFile.folderPath, updatedAt: changedAt })
             .where(eq(contentFilesTable.id, file.id));
+          changedFiles.push({ file: updatedFile, previous: file, action: "moved" });
         }
       }
+      await recordFileHistory(tx, changedFiles);
       const [updated] = await tx
         .select()
         .from(contentFoldersTable)
         .where(eq(contentFoldersTable.id, folderId))
         .limit(1);
       return updated;
-    });
+      }),
+    );
     res.json(toContentFolder(updatedFolder));
   }),
 );
@@ -420,18 +463,24 @@ contentApiRouter.post(
     await assertFolderExists(folderPath);
     await validateUploadObject(input.objectPath, sizeBytes);
 
-    const [file] = await db
-      .insert(contentFilesTable)
-      .values({
-        name,
-        folderPath,
-        contentDate: date,
-        contentType,
-        sizeBytes,
-        objectPath: input.objectPath,
-        isPublished: true,
-      })
-      .returning();
+    const file = await withContentHistoryLock(() =>
+      db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(contentFilesTable)
+          .values({
+            name,
+            folderPath,
+            contentDate: date,
+            contentType,
+            sizeBytes,
+            objectPath: input.objectPath,
+            isPublished: true,
+          })
+          .returning();
+        await recordFileHistory(tx, [{ file: created, action: "created" }]);
+        return created;
+      }),
+    );
     res.status(201).json(toContentFile(file));
   }),
 );
@@ -440,50 +489,55 @@ contentApiRouter.patch(
   "/content/files/:fileId",
   apiHandler(async (req, res) => {
     const input = UpdateContentFileBody.parse(req.body);
-    const [existing] = await db
-      .select()
-      .from(contentFilesTable)
-      .where(and(eq(contentFilesTable.id, normalizeId(req.params.fileId)), isNull(contentFilesTable.deletedAt)))
-      .limit(1);
-    if (!existing) throw new ContentError(404, "That file could not be found.");
+    const file = await withContentHistoryLock(() =>
+      db.transaction(async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(contentFilesTable)
+          .where(and(eq(contentFilesTable.id, normalizeId(req.params.fileId)), isNull(contentFilesTable.deletedAt)))
+          .limit(1);
+        if (!existing) throw new ContentError(404, "That file could not be found.");
 
-    const update: Partial<typeof contentFilesTable.$inferInsert> = {};
-    if (input.name !== undefined) update.name = normalizeFileName(input.name);
-    if (input.folderPath !== undefined) {
-      update.folderPath = normalizeFolderPath(input.folderPath);
-      await assertFolderExists(update.folderPath);
-    }
-    if (input.date !== undefined) update.contentDate = normalizeContentDate(input.date);
-    if (input.contentType !== undefined) update.contentType = normalizeContentType(input.contentType);
-    if (input.sizeBytes !== undefined) update.sizeBytes = normalizeSize(input.sizeBytes);
+        const update: Partial<typeof contentFilesTable.$inferInsert> = {};
+        if (input.name !== undefined) update.name = normalizeFileName(input.name);
+        if (input.folderPath !== undefined) {
+          update.folderPath = normalizeFolderPath(input.folderPath);
+          await assertFolderExists(update.folderPath);
+        }
+        if (input.date !== undefined) update.contentDate = normalizeContentDate(input.date);
+        if (input.contentType !== undefined) update.contentType = normalizeContentType(input.contentType);
+        if (input.sizeBytes !== undefined) update.sizeBytes = normalizeSize(input.sizeBytes);
 
-    if (input.objectPath !== undefined) {
-      const size = input.sizeBytes ?? existing.sizeBytes;
-      const { metadata } = await validateUploadObject(input.objectPath, size);
-      update.objectPath = input.objectPath;
-      update.sourceUrl = null;
-      update.sizeBytes = size;
-      if (metadata.contentType && input.contentType === undefined) {
-        update.contentType = String(metadata.contentType);
-      }
-    }
-    if (Object.keys(update).length === 0) {
-      throw new ContentError(400, "There are no changes to save.");
-    }
-    update.updatedAt = new Date();
+        if (input.objectPath !== undefined) {
+          const size = input.sizeBytes ?? existing.sizeBytes;
+          const { metadata } = await validateUploadObject(input.objectPath, size);
+          update.objectPath = input.objectPath;
+          update.sourceUrl = null;
+          update.sizeBytes = size;
+          if (metadata.contentType && input.contentType === undefined) {
+            update.contentType = String(metadata.contentType);
+          }
+        }
+        if (Object.keys(update).length === 0) {
+          throw new ContentError(400, "There are no changes to save.");
+        }
+        update.updatedAt = new Date();
 
-    const [file] = await db
-      .update(contentFilesTable)
-      .set(update)
-      .where(eq(contentFilesTable.id, existing.id))
-      .returning();
-    if (
-      input.objectPath !== undefined &&
-      existing.objectPath &&
-      existing.objectPath !== input.objectPath
-    ) {
-      await deleteStoredObject(existing.objectPath).catch(() => undefined);
-    }
+        const [updated] = await tx
+          .update(contentFilesTable)
+          .set(update)
+          .where(eq(contentFilesTable.id, existing.id))
+          .returning();
+        const action =
+          input.folderPath !== undefined && input.folderPath !== existing.folderPath
+            ? "moved"
+            : input.name !== undefined && input.name !== existing.name
+              ? "renamed"
+              : "updated";
+        await recordFileHistory(tx, [{ file: updated, previous: existing, action }]);
+        return updated;
+      }),
+    );
     res.json(toContentFile(file));
   }),
 );
@@ -491,12 +545,25 @@ contentApiRouter.patch(
 contentApiRouter.delete(
   "/content/files/:fileId",
   apiHandler(async (req, res) => {
-    const [file] = await db
-      .update(contentFilesTable)
-      .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(and(eq(contentFilesTable.id, normalizeId(req.params.fileId)), isNull(contentFilesTable.deletedAt)))
-      .returning();
-    if (!file) throw new ContentError(404, "That file could not be found.");
+    const file = await withContentHistoryLock(() =>
+      db.transaction(async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(contentFilesTable)
+          .where(and(eq(contentFilesTable.id, normalizeId(req.params.fileId)), isNull(contentFilesTable.deletedAt)))
+          .limit(1);
+        if (!existing) throw new ContentError(404, "That file could not be found.");
+        const [deleted] = await tx
+          .update(contentFilesTable)
+          .set({ deletedAt: new Date(), updatedAt: new Date() })
+          .where(eq(contentFilesTable.id, existing.id))
+          .returning();
+        await recordFileHistory(tx, [
+          { file: deleted, previous: existing, action: "trashed" },
+        ]);
+        return deleted;
+      }),
+    );
     res.status(204).end();
   }),
 );
@@ -504,13 +571,100 @@ contentApiRouter.delete(
 contentApiRouter.post(
   "/content/files/:fileId/restore",
   apiHandler(async (req, res) => {
-    const [file] = await db
-      .update(contentFilesTable)
-      .set({ deletedAt: null, updatedAt: new Date() })
-      .where(eq(contentFilesTable.id, normalizeId(req.params.fileId)))
-      .returning();
-    if (!file) throw new ContentError(404, "That file could not be found.");
+    const file = await withContentHistoryLock(() =>
+      db.transaction(async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(contentFilesTable)
+          .where(and(eq(contentFilesTable.id, normalizeId(req.params.fileId)), sql`${contentFilesTable.deletedAt} IS NOT NULL`))
+          .limit(1);
+        if (!existing) throw new ContentError(404, "That removed file could not be found.");
+        const [restored] = await tx
+          .update(contentFilesTable)
+          .set({ deletedAt: null, updatedAt: new Date() })
+          .where(eq(contentFilesTable.id, existing.id))
+          .returning();
+        await recordFileHistory(tx, [
+          { file: restored, previous: existing, action: "restored" },
+        ]);
+        return restored;
+      }),
+    );
     res.json(toContentFile(file));
+  }),
+);
+
+contentApiRouter.get(
+  "/content/files/:fileId/versions",
+  apiHandler(async (req, res) => {
+    const fileId = normalizeId(req.params.fileId);
+    const [file] = await db
+      .select()
+      .from(contentFilesTable)
+      .where(eq(contentFilesTable.id, fileId))
+      .limit(1);
+    if (!file) throw new ContentError(404, "That file could not be found.");
+    const versions = await getFileHistory(fileId, file);
+    res.json(versions.map(toContentFileVersion));
+  }),
+);
+
+contentApiRouter.post(
+  "/content/files/:fileId/versions/:versionId/restore",
+  apiHandler(async (req, res) => {
+    const fileId = normalizeId(req.params.fileId);
+    const versionId = normalizeId(req.params.versionId);
+    const restored = await withContentHistoryLock(() =>
+      db.transaction(async (tx) => {
+        const [current] = await tx
+          .select()
+          .from(contentFilesTable)
+          .where(eq(contentFilesTable.id, fileId))
+          .limit(1);
+        if (!current) throw new ContentError(404, "That file could not be found.");
+        const [version] = await tx
+          .select()
+          .from(contentFileVersionsTable)
+          .where(
+            and(
+              eq(contentFileVersionsTable.id, versionId),
+              eq(contentFileVersionsTable.fileId, fileId),
+            ),
+          )
+          .limit(1);
+        if (!version) throw new ContentError(404, "That revision could not be found.");
+        if (version.snapshot.objectPath) {
+          try {
+            await getStoredObject(version.snapshot.objectPath);
+          } catch {
+            throw new ContentError(410, "The stored file for this revision is no longer available.");
+          }
+        }
+        await assertFolderExists(version.snapshot.folderPath);
+        const [updated] = await tx
+          .update(contentFilesTable)
+          .set({
+            name: version.snapshot.name,
+            folderPath: version.snapshot.folderPath,
+            contentDate: version.snapshot.contentDate,
+            contentType: version.snapshot.contentType,
+            sizeBytes: version.snapshot.sizeBytes,
+            objectPath: version.snapshot.objectPath,
+            sourceUrl: version.snapshot.sourceUrl,
+            posterUrl: version.snapshot.posterUrl,
+            isPublished: version.snapshot.isPublished,
+            deletedAt: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(contentFilesTable.id, fileId))
+          .returning();
+        await recordFileHistory(tx, [
+          { file: updated, previous: current, action: "restored" },
+        ]);
+        return updated;
+      }),
+    );
+    res.json(toContentFile(restored));
   }),
 );
 

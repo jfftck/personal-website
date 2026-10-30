@@ -224,6 +224,56 @@ paths:
                 type: string
         "404":
           description: File not found
+  /content/files/{fileId}/versions:
+    get:
+      operationId: getContentFileVersions
+      tags: [content]
+      summary: Get the revision history for a file
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: File revisions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContentFileVersion"
+  /content/files/{fileId}/versions/{versionId}/restore:
+    post:
+      operationId: restoreContentFileVersion
+      tags: [content]
+      summary: Restore a previous file revision
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Restored file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentFile"
   /content/files/{fileId}/restore:
     post:
       operationId: restoreContentFile
@@ -280,6 +330,22 @@ components:
         posterUrl: { type: ["string", "null"], format: uri }
         url: { type: string }
         updatedAt: { type: string, format: date-time }
+    ContentFileVersion:
+      type: object
+      required: [id, versionNumber, action, name, folderPath, date, contentType, sizeBytes, isDeleted, createdAt, gitCommitSha, gitUrl]
+      properties:
+        id: { type: string, format: uuid }
+        versionNumber: { type: integer }
+        action: { type: string, enum: [baseline, created, updated, renamed, moved, trashed, restored] }
+        name: { type: string }
+        folderPath: { type: string }
+        date: { type: string, format: date }
+        contentType: { type: string }
+        sizeBytes: { type: integer }
+        isDeleted: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        gitCommitSha: { type: string }
+        gitUrl: { type: string, format: uri }
     ContentTree:
       type: object
       required: [folders, files]

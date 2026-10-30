@@ -3,4 +3,4 @@
 - [Reminder behavior](reminder-behavior.md) — keep reminders page-open only; do not rely on background execution or a server.
 - [Calculator keyboard shortcuts](calculator-keyboard-shortcuts.md) — global shortcuts must leave native controls’ Enter and Space activation to the browser.
 - [Calculator compact layout](calculator-compact-layout.md) — explicit compact button line heights prevent keypad rows overflowing their grid tracks.
-- [Content storage architecture](content-storage.md) — App Storage holds file bytes, `/files` serves generated public manifests, and Git history is explicitly deferred.
+- [Content storage architecture](content-storage.md) — App Storage holds file bytes, `/files` serves generated public manifests, and private Git stores revision snapshots and object references.

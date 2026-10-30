@@ -234,6 +234,51 @@ export const GetContentFileContentResponse = zod.string()
 
 
 /**
+ * @summary Get the revision history for a file
+ */
+export const GetContentFileVersionsParams = zod.object({
+  "fileId": zod.coerce.string().uuid()
+})
+
+export const GetContentFileVersionsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "versionNumber": zod.number().int(),
+  "action": zod.enum(['baseline', 'created', 'updated', 'renamed', 'moved', 'trashed', 'restored']),
+  "name": zod.string(),
+  "folderPath": zod.string(),
+  "date": zod.coerce.date(),
+  "contentType": zod.string(),
+  "sizeBytes": zod.number().int(),
+  "isDeleted": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "gitCommitSha": zod.string(),
+  "gitUrl": zod.string().url()
+})
+export const GetContentFileVersionsResponse = zod.array(GetContentFileVersionsResponseItem)
+
+
+/**
+ * @summary Restore a previous file revision
+ */
+export const RestoreContentFileVersionParams = zod.object({
+  "fileId": zod.coerce.string().uuid(),
+  "versionId": zod.coerce.string().uuid()
+})
+
+export const RestoreContentFileVersionResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "folderPath": zod.string(),
+  "date": zod.coerce.date(),
+  "contentType": zod.string(),
+  "sizeBytes": zod.number().int(),
+  "posterUrl": zod.string().url().nullish(),
+  "url": zod.string(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Restore a removed file
  */
 export const RestoreContentFileParams = zod.object({

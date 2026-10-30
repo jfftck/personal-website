@@ -9,8 +9,8 @@ Store uploaded posts, documents, pictures, and videos in App Storage. Keep file 
 
 **How to apply:** keep write operations behind Clerk-protected admin endpoints, and have public clients consume only `/files` routes.
 
-Git-backed revision history is deferred. The user chose to proceed without Git history while GitHub access was unavailable. The current trash/restore flow is not historical version recovery.
+The private `personal-files` Git repository stores immutable JSON revision records containing metadata snapshots and App Storage object references; it never stores file bytes. Keep replaced objects in App Storage so historical versions can be restored. If Git history cannot be written, reject the file mutation rather than silently saving without a revision.
 
-**Why:** the user explicitly chose to continue without Git history for this implementation.
+**Why:** the user later approved connecting `personal-files` to the content backend; this supersedes the earlier decision to defer Git history.
 
-**How to apply:** do not promise revision comparison or historical restore until a version-history backend is separately approved and implemented.
+**How to apply:** make every create, metadata/content update, move/rename, trash, and restore write a Git revision record as part of the protected admin flow. Ensure the API server can reach the private Git host in each environment before enabling writes there.

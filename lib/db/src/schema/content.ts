@@ -4,6 +4,7 @@ import {
   boolean,
   date,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -56,6 +57,46 @@ export const contentFilesTable = pgTable(
   ],
 );
 
+export type ContentFileVersionSnapshot = {
+  name: string;
+  folderPath: string;
+  contentDate: string;
+  contentType: string;
+  sizeBytes: number;
+  objectPath: string | null;
+  sourceUrl: string | null;
+  posterUrl: string | null;
+  isPublished: boolean;
+  deletedAt: string | null;
+};
+
+export const contentFileVersionsTable = pgTable(
+  "content_file_versions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => contentFilesTable.id, { onDelete: "cascade" }),
+    versionNumber: integer("version_number").notNull(),
+    action: text("action").notNull(),
+    snapshot: jsonb("snapshot")
+      .$type<ContentFileVersionSnapshot>()
+      .notNull(),
+    gitPath: text("git_path").notNull(),
+    gitCommitSha: text("git_commit_sha").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("content_file_versions_number_unique").on(
+      table.fileId,
+      table.versionNumber,
+    ),
+    uniqueIndex("content_file_versions_git_path_unique").on(table.gitPath),
+  ],
+);
+
 export const insertContentFolderSchema = createInsertSchema(
   contentFoldersTable,
 ).omit({ id: true, createdAt: true });
@@ -68,3 +109,5 @@ export type InsertContentFolder = z.infer<typeof insertContentFolderSchema>;
 export type ContentFolder = typeof contentFoldersTable.$inferSelect;
 export type InsertContentFile = z.infer<typeof insertContentFileSchema>;
 export type ContentFile = typeof contentFilesTable.$inferSelect;
+export type ContentFileVersion =
+  typeof contentFileVersionsTable.$inferSelect;
