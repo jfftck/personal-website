@@ -146,6 +146,7 @@
 .table-meta { color:hsl(var(--muted-foreground)); font:10px var(--app-font-mono); white-space:nowrap; }
 .row-actions { display:flex; align-items:center; justify-content:flex-end; gap:3px; }
 .detail-panel { min-width:0; padding:18px; position:sticky; top:16px; }
+.detail-backdrop { display:none; }
 .detail-top { display:flex; align-items:center; justify-content:space-between; padding-bottom:14px; border-bottom:1px solid hsl(var(--border)); }
 .detail-top h2 { margin:0; font:500 18px 'Newsreader',serif; }
 .detail-empty { min-height:270px; display:grid; place-items:center; text-align:center; padding:20px; color:hsl(var(--muted-foreground)); }
@@ -256,6 +257,10 @@
 @media (max-width: 760px) {
   .sidebar { position:fixed; z-index:15; width:min(84vw,290px); min-height:100dvh; transform:translateX(-102%); transition:transform .22s ease; box-shadow:12px 0 40px hsl(190 25% 10% / .08); }
   .sidebar.mobile-open { transform:translateX(0); }
+  .detail-backdrop { display:block; position:fixed; z-index:16; inset:0; width:100%; height:100%; border:0; padding:0; background:hsl(190 25% 10% / .34); backdrop-filter:blur(3px); opacity:0; visibility:hidden; pointer-events:none; touch-action:none; transition:opacity .24s ease, visibility 0s linear .24s; }
+  .detail-backdrop.visible { opacity:1; visibility:visible; pointer-events:auto; transition:opacity .24s ease, visibility 0s; }
+  .detail-panel { position:fixed; z-index:17; inset:0 0 0 auto; width:min(94vw,460px); height:100dvh; max-height:100dvh; overflow-y:auto; overscroll-behavior:contain; margin:0; padding:max(18px,env(safe-area-inset-top)) 18px max(20px,env(safe-area-inset-bottom)); border-radius:16px 0 0 16px; box-shadow:-18px 0 48px hsl(190 25% 10% / .2); transform:translateX(104%); visibility:hidden; pointer-events:none; transition:transform .24s ease, visibility 0s linear .24s; }
+  .detail-panel.mobile-visible { transform:translateX(0); visibility:visible; pointer-events:auto; transition:transform .24s ease, visibility 0s; }
   .mobile-toggle { display:grid; }
   .topbar { min-height:62px; padding:10px 14px; }
   .searchbox { width:min(42vw,240px); }

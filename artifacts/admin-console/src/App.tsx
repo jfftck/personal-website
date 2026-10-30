@@ -705,7 +705,16 @@ function Console() {
                 ))}
               </section>
 
-              <aside className="panel detail-panel" aria-label="Selected file details">
+              <button
+                className={`detail-backdrop ${selectedFile ? 'visible' : ''}`}
+                type="button"
+                disabled={!selectedFile}
+                aria-hidden={!selectedFile}
+                aria-label="Close file details"
+                onClick={() => setSelectedFile(null)}
+                data-testid="detail-panel-backdrop"
+              />
+              <aside className={`panel detail-panel ${selectedFile ? 'mobile-visible' : ''}`} aria-label="Selected file details">
                 <div className="detail-top"><h2>File details</h2>{selectedFile ? <button className="mini-action" type="button" aria-label="Close file details" onClick={() => setSelectedFile(null)} data-testid="close-file-details"><X /></button> : null}</div>
                 {!selectedFile ? (
                   <div className="detail-empty"><div><div className="detail-empty-icon"><MoreHorizontal /></div><p>Select a file to edit its title, content date, or text.</p></div></div>
