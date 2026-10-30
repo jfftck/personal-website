@@ -26,6 +26,7 @@ export interface ContentFile {
   sizeBytes: number;
   /** @nullable */
   posterUrl?: string | null;
+  isWallpaper: boolean;
   url: string;
   updatedAt: string;
 }
@@ -52,6 +53,7 @@ export interface ContentFileVersion {
   date: string;
   contentType: string;
   sizeBytes: number;
+  isWallpaper: boolean;
   isDeleted: boolean;
   createdAt: string;
   gitCommitSha: string;
@@ -112,6 +114,7 @@ export interface ContentFileInput {
   /** @minimum 0 */
   sizeBytes: number;
   objectPath: string;
+  isWallpaper?: boolean;
 }
 
 export interface ContentFileUpdate {
@@ -128,5 +131,6 @@ export interface ContentFileUpdate {
   /** @minimum 0 */
   sizeBytes?: number;
   objectPath?: string;
+  isWallpaper?: boolean;
 }
 

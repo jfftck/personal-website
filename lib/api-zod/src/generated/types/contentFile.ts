@@ -15,6 +15,7 @@ export interface ContentFile {
   sizeBytes: number;
   /** @nullable */
   posterUrl?: string | null;
+  isWallpaper: boolean;
   url: string;
   updatedAt: Date;
 }

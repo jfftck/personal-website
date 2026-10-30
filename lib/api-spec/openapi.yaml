@@ -319,7 +319,7 @@ components:
         createdAt: { type: string, format: date-time }
     ContentFile:
       type: object
-      required: [id, name, folderPath, date, contentType, sizeBytes, url, updatedAt]
+      required: [id, name, folderPath, date, contentType, sizeBytes, isWallpaper, url, updatedAt]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -328,11 +328,12 @@ components:
         contentType: { type: string }
         sizeBytes: { type: integer }
         posterUrl: { type: ["string", "null"], format: uri }
+        isWallpaper: { type: boolean }
         url: { type: string }
         updatedAt: { type: string, format: date-time }
     ContentFileVersion:
       type: object
-      required: [id, versionNumber, action, name, folderPath, date, contentType, sizeBytes, isDeleted, createdAt, gitCommitSha, gitUrl]
+      required: [id, versionNumber, action, name, folderPath, date, contentType, sizeBytes, isWallpaper, isDeleted, createdAt, gitCommitSha, gitUrl]
       properties:
         id: { type: string, format: uuid }
         versionNumber: { type: integer }
@@ -342,6 +343,7 @@ components:
         date: { type: string, format: date }
         contentType: { type: string }
         sizeBytes: { type: integer }
+        isWallpaper: { type: boolean }
         isDeleted: { type: boolean }
         createdAt: { type: string, format: date-time }
         gitCommitSha: { type: string }
@@ -389,6 +391,7 @@ components:
         contentType: { type: string, maxLength: 255 }
         sizeBytes: { type: integer, minimum: 0 }
         objectPath: { type: string }
+        isWallpaper: { type: boolean }
     ContentFileUpdate:
       type: object
       properties:
@@ -398,4 +401,5 @@ components:
         contentType: { type: string, maxLength: 255 }
         sizeBytes: { type: integer, minimum: 0 }
         objectPath: { type: string }
+        isWallpaper: { type: boolean }
 

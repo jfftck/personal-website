@@ -142,6 +142,13 @@ function normalizeContentType(input: unknown): string {
   return input.trim() || "application/octet-stream";
 }
 
+function isImageAsset(contentType: string, name: string): boolean {
+  return (
+    contentType.toLowerCase().startsWith("image/") ||
+    /\.(avif|bmp|gif|heic|heif|jpe?g|png|svg|tiff?|webp)$/i.test(name)
+  );
+}
+
 function normalizeSize(input: unknown): number {
   if (
     typeof input !== "number" ||
@@ -186,6 +193,7 @@ function toContentFile(file: DbContentFile) {
     contentType: file.contentType,
     sizeBytes: file.sizeBytes,
     posterUrl: file.posterUrl,
+    isWallpaper: file.isWallpaper,
     url: normalizePublicUrl(file.folderPath, file.name),
     updatedAt: file.updatedAt.toISOString(),
   };
@@ -201,6 +209,7 @@ function toContentFileVersion(version: DbContentFileVersion) {
     date: version.snapshot.contentDate,
     contentType: version.snapshot.contentType,
     sizeBytes: version.snapshot.sizeBytes,
+    isWallpaper: version.snapshot.isWallpaper ?? false,
     isDeleted: Boolean(version.snapshot.deletedAt),
     createdAt: version.createdAt.toISOString(),
     gitCommitSha: version.gitCommitSha,
@@ -460,6 +469,9 @@ contentApiRouter.post(
     const date = normalizeContentDate(input.date);
     const contentType = normalizeContentType(input.contentType);
     const sizeBytes = normalizeSize(input.sizeBytes);
+    if (input.isWallpaper && !isImageAsset(contentType, name)) {
+      throw new ContentError(400, "Only image files can be used as desktop wallpaper.");
+    }
     await assertFolderExists(folderPath);
     await validateUploadObject(input.objectPath, sizeBytes);
 
@@ -474,6 +486,7 @@ contentApiRouter.post(
             contentType,
             sizeBytes,
             objectPath: input.objectPath,
+            isWallpaper: Boolean(input.isWallpaper && isImageAsset(contentType, name)),
             isPublished: true,
           })
           .returning();
@@ -507,6 +520,15 @@ contentApiRouter.patch(
         if (input.date !== undefined) update.contentDate = normalizeContentDate(input.date);
         if (input.contentType !== undefined) update.contentType = normalizeContentType(input.contentType);
         if (input.sizeBytes !== undefined) update.sizeBytes = normalizeSize(input.sizeBytes);
+        if (input.isWallpaper !== undefined) {
+          if (
+            input.isWallpaper &&
+            !isImageAsset(update.contentType ?? existing.contentType, update.name ?? existing.name)
+          ) {
+            throw new ContentError(400, "Only image files can be used as desktop wallpaper.");
+          }
+          update.isWallpaper = input.isWallpaper;
+        }
 
         if (input.objectPath !== undefined) {
           const size = input.sizeBytes ?? existing.sizeBytes;
@@ -517,6 +539,9 @@ contentApiRouter.patch(
           if (metadata.contentType && input.contentType === undefined) {
             update.contentType = String(metadata.contentType);
           }
+        }
+        if (!isImageAsset(update.contentType ?? existing.contentType, update.name ?? existing.name)) {
+          update.isWallpaper = false;
         }
         if (Object.keys(update).length === 0) {
           throw new ContentError(400, "There are no changes to save.");
@@ -652,6 +677,7 @@ contentApiRouter.post(
             objectPath: version.snapshot.objectPath,
             sourceUrl: version.snapshot.sourceUrl,
             posterUrl: version.snapshot.posterUrl,
+            isWallpaper: version.snapshot.isWallpaper ?? false,
             isPublished: version.snapshot.isPublished,
             deletedAt: null,
             updatedAt: new Date(),
@@ -753,6 +779,7 @@ async function serveManifest(res: Response, folderPath: string) {
     date: file.contentDate,
     contentType: file.contentType,
     sizeBytes: file.sizeBytes,
+    isWallpaper: file.isWallpaper,
     size: formatSize(file.sizeBytes),
     url: normalizePublicUrl(file.folderPath, file.name),
     poster: file.posterUrl ?? undefined,

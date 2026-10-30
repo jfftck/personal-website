@@ -16,6 +16,7 @@ export interface ContentFileVersion {
   date: Date;
   contentType: string;
   sizeBytes: number;
+  isWallpaper: boolean;
   isDeleted: boolean;
   createdAt: Date;
   gitCommitSha: string;

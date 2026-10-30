@@ -39,6 +39,7 @@ export const contentFilesTable = pgTable(
     objectPath: text("object_path"),
     sourceUrl: text("source_url"),
     posterUrl: text("poster_url"),
+    isWallpaper: boolean("is_wallpaper").notNull().default(false),
     isPublished: boolean("is_published").notNull().default(true),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -66,6 +67,7 @@ export type ContentFileVersionSnapshot = {
   objectPath: string | null;
   sourceUrl: string | null;
   posterUrl: string | null;
+  isWallpaper: boolean;
   isPublished: boolean;
   deletedAt: string | null;
 };

@@ -74,6 +74,7 @@ function snapshotOf(file: ContentFile): ContentFileVersionSnapshot {
     objectPath: file.objectPath,
     sourceUrl: file.sourceUrl,
     posterUrl: file.posterUrl,
+    isWallpaper: file.isWallpaper,
     isPublished: file.isPublished,
     deletedAt: file.deletedAt?.toISOString() ?? null,
   };

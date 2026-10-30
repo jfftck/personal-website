@@ -20,4 +20,5 @@ export interface ContentFileInput {
   /** @minimum 0 */
   sizeBytes: number;
   objectPath: string;
+  isWallpaper?: boolean;
 }

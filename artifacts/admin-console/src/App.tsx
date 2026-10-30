@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import {
@@ -15,6 +15,13 @@ import {
   useRestoreContentFileVersion, useUpdateContentFile, useUpdateContentFolder,
   type ContentFile, type ContentFileVersion, type ContentFolder,
 } from '@workspace/api-client-react';
+import {
+  filenameFromTitle,
+  isImageFile,
+  localDateDisplay,
+  normalizeDateInput,
+  titleFromFilename,
+} from '@/lib/content-formatters';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Toaster } from '@/components/ui/toaster';
@@ -43,9 +50,23 @@ const localToday = () => {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 };
 const TODAY = localToday();
+const UPLOAD_TODAY = localDateDisplay(TODAY);
+const THEME_STORAGE_KEY = 'jmt-console-theme';
+type ThemeOverride = 'light' | 'dark' | null;
+
+function systemPrefersDark() {
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+}
+
+function savedThemeOverride(): ThemeOverride {
+  const saved = localStorage.getItem(THEME_STORAGE_KEY);
+  if (saved !== 'light' && saved !== 'dark') return null;
+  return (saved === 'dark') === systemPrefersDark() ? null : saved;
+}
+
 type FolderFormValues = { name: string };
-type UploadFormValues = { name: string; date: string };
-type MetadataFormValues = { name: string; date: string; folderPath: string };
+type UploadFormValues = { title: string; date: string; isWallpaper: boolean };
+type MetadataFormValues = { name: string; date: string; folderPath: string; isWallpaper: boolean };
 
 function displaySize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -91,7 +112,9 @@ function Console() {
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState('');
   const [signedIn, setSignedIn] = useState(false);
-  const [dark, setDark] = useState(() => localStorage.getItem('jmt-console-theme') === 'dark');
+  const [systemDark, setSystemDark] = useState(systemPrefersDark);
+  const [themeOverride, setThemeOverride] = useState<ThemeOverride>(savedThemeOverride);
+  const dark = themeOverride ? themeOverride === 'dark' : systemDark;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [view, setView] = useState<'library' | 'trash'>('library');
   const [selectedFolder, setSelectedFolder] = useState('');
@@ -131,9 +154,11 @@ function Console() {
   const restoreFile = useRestoreContentFile();
   const restoreFileVersion = useRestoreContentFileVersion();
   const folderForm = useForm<FolderFormValues>({ defaultValues: { name: '' } });
-  const uploadForm = useForm<UploadFormValues>({ defaultValues: { name: '', date: TODAY } });
+  const uploadForm = useForm<UploadFormValues>({
+    defaultValues: { title: '', date: UPLOAD_TODAY, isWallpaper: false },
+  });
   const metadataForm = useForm<MetadataFormValues>({
-    defaultValues: { name: '', date: TODAY, folderPath: '' },
+    defaultValues: { name: '', date: TODAY, folderPath: '', isWallpaper: false },
   });
   const resetMetadata = metadataForm.reset;
 
@@ -151,9 +176,23 @@ function Console() {
   }, [queryClient]);
 
   useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const syncSystemAppearance = () => setSystemDark(media.matches);
+    media.addEventListener?.('change', syncSystemAppearance);
+    return () => media.removeEventListener?.('change', syncSystemAppearance);
+  }, []);
+
+  useEffect(() => {
+    if (themeOverride && (themeOverride === 'dark') === systemDark) {
+      setThemeOverride(null);
+    }
+  }, [themeOverride, systemDark]);
+
+  useLayoutEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
-    localStorage.setItem('jmt-console-theme', dark ? 'dark' : 'light');
-  }, [dark]);
+    if (themeOverride) localStorage.setItem(THEME_STORAGE_KEY, themeOverride);
+    else localStorage.removeItem(THEME_STORAGE_KEY);
+  }, [dark, themeOverride]);
 
   useEffect(() => {
     if (!signedIn) queryClient.clear();
@@ -228,14 +267,19 @@ function Console() {
       name: selectedFile.name,
       date: selectedFile.date,
       folderPath: selectedFile.folderPath,
+      isWallpaper: selectedFile.isWallpaper,
     });
-  }, [selectedFile?.id, selectedFile?.name, selectedFile?.date, selectedFile?.folderPath, resetMetadata]);
+  }, [selectedFile?.id, selectedFile?.name, selectedFile?.date, selectedFile?.folderPath, selectedFile?.isWallpaper, resetMetadata]);
 
   const folders = treeQuery.data?.folders ?? [];
   const allFiles = treeQuery.data?.files ?? [];
   const trash = trashQuery.data ?? [];
   const folderByPath = useMemo(() => new Map(folders.map((folder) => [folder.path, folder])), [folders]);
   const selectedFolderLabel = selectedFolder ? folderByPath.get(selectedFolder)?.name ?? selectedFolder : 'All files';
+  const uploadTitle = uploadForm.watch('title');
+  const generatedUploadName = uploadFile && uploadTitle.trim()
+    ? filenameFromTitle(uploadTitle, uploadFile.name, uploadFile.type || 'application/octet-stream')
+    : '';
   const visibleFiles = useMemo(() => {
     const query = search.trim().toLowerCase();
     return allFiles.filter((file) => {
@@ -290,11 +334,17 @@ function Console() {
   };
 
   const uploadSelected = async (values: UploadFormValues) => {
-    if (!uploadFile || !values.name.trim()) return;
-    setUploadBusy(true);
+    if (!uploadFile || !values.title.trim()) return;
     const contentType = uploadFile.type || 'application/octet-stream';
+    const name = filenameFromTitle(values.title, uploadFile.name, contentType);
+    const date = normalizeDateInput(values.date);
+    if (!date) {
+      uploadForm.setError('date', { type: 'validate', message: 'Enter a valid date.' });
+      return;
+    }
+    setUploadBusy(true);
     try {
-      const target = await createUpload.mutateAsync({ data: { name: values.name.trim(), contentType, sizeBytes: uploadFile.size } });
+      const target = await createUpload.mutateAsync({ data: { name, contentType, sizeBytes: uploadFile.size } });
       const response = await fetch(target.uploadUrl, {
         method: 'PUT',
         headers: { 'Content-Type': contentType },
@@ -303,15 +353,16 @@ function Console() {
       if (!response.ok) throw new Error(`File upload failed (${response.status}).`);
       await createFile.mutateAsync({
         data: {
-          name: values.name.trim(), folderPath: selectedFolder, date: values.date,
+          name, folderPath: selectedFolder, date,
           contentType, sizeBytes: uploadFile.size, objectPath: target.objectPath,
+          isWallpaper: isImageFile(uploadFile) && values.isWallpaper,
         },
       });
       await invalidateContent();
       setToastMessage('File uploaded to App Storage.');
       setModal(null);
       setUploadFile(null);
-      uploadForm.reset({ name: '', date: localToday() });
+      uploadForm.reset({ title: '', date: localDateDisplay(localToday()), isWallpaper: false });
     } catch (error) {
       setToastMessage(errorMessage(error));
     } finally { setUploadBusy(false); }
@@ -320,8 +371,9 @@ function Console() {
   const chooseUpload = (file?: File) => {
     if (!file) return;
     setUploadFile(file);
-    uploadForm.setValue('name', file.name, { shouldValidate: true });
-    uploadForm.setValue('date', localToday(), { shouldValidate: true });
+    uploadForm.setValue('title', titleFromFilename(file.name), { shouldValidate: true });
+    uploadForm.setValue('date', localDateDisplay(localToday()), { shouldValidate: true });
+    uploadForm.setValue('isWallpaper', false, { shouldValidate: true });
   };
 
   const saveMetadata = async (values: MetadataFormValues) => {
@@ -332,7 +384,12 @@ function Console() {
     try {
       const updated = await updateFile.mutateAsync({
         fileId: selectedFile.id,
-        data: { name, date, folderPath: values.folderPath },
+        data: {
+          name,
+          date,
+          folderPath: values.folderPath,
+          isWallpaper: isImageFile({ name: selectedFile.name, type: selectedFile.contentType }) && values.isWallpaper,
+        },
       });
       setSelectedFile(updated);
       if (updated.folderPath !== selectedFile.folderPath) setSelectedFolder(updated.folderPath);
@@ -419,7 +476,7 @@ function Console() {
   };
   const openUpload = () => {
     setUploadFile(null);
-    uploadForm.reset({ name: '', date: localToday() });
+    uploadForm.reset({ title: '', date: localDateDisplay(localToday()), isWallpaper: false });
     setModal('upload');
   };
 
@@ -484,7 +541,15 @@ function Console() {
           {folders.length === 0 && !treeQuery.isLoading ? <p style={{ padding: '0 10px', color: 'hsl(var(--muted-foreground))', fontSize: 11 }}>No folders yet.</p> : null}
         </div>
         <div className="sidebar-bottom">
-          <button className="side-button" type="button" onClick={() => setDark((value) => !value)} data-testid="toggle-theme">
+          <button
+            className="side-button"
+            type="button"
+            onClick={() => {
+              const nextDark = !dark;
+              setThemeOverride(nextDark === systemDark ? null : nextDark ? 'dark' : 'light');
+            }}
+            data-testid="toggle-theme"
+          >
             {dark ? <Sun /> : <Moon />} {dark ? 'Light Appearance' : 'Dark Appearance'}
           </button>
           <button className="side-button" type="button" onClick={() => void window.Clerk?.signOut?.()} data-testid="sign-out">
@@ -493,7 +558,7 @@ function Console() {
         </div>
       </aside>
 
-      {mobileOpen ? <button type="button" aria-label="Close navigation" className="overlay" style={{ border: 0, padding: 0 }} onClick={() => setMobileOpen(false)} data-testid="close-mobile-navigation" /> : null}
+      {mobileOpen ? <button type="button" aria-label="Close navigation" className="mobile-backdrop" onClick={() => setMobileOpen(false)} data-testid="close-mobile-navigation" /> : null}
       <div className="main-column">
         <header className="topbar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -608,6 +673,27 @@ function Console() {
                           <FormMessage data-testid="error-file-destination" />
                         </FormItem>
                       )} />
+                      {isImageFile({ name: selectedFile.name, type: selectedFile.contentType }) ? (
+                        <FormField control={metadataForm.control} name="isWallpaper" render={({ field }) => (
+                          <FormItem className="checkbox-item">
+                            <FormControl>
+                              <input
+                                type="checkbox"
+                                checked={field.value}
+                                onChange={(event) => field.onChange(event.target.checked)}
+                                onBlur={field.onBlur}
+                                name={field.name}
+                                ref={field.ref}
+                                data-testid="checkbox-file-wallpaper"
+                              />
+                            </FormControl>
+                            <div>
+                              <FormLabel className="checkbox-label">Allow as desktop wallpaper</FormLabel>
+                              <p className="field-help">This image will be marked as eligible in the public file manifest.</p>
+                            </div>
+                          </FormItem>
+                        )} />
+                      ) : null}
                       <div className="detail-stats">
                         <div><span className="stat-label">Type</span><span className="stat-value">{selectedFile.contentType}</span></div>
                         <div><span className="stat-label">Size</span><span className="stat-value">{displaySize(selectedFile.sizeBytes)}</span></div>
@@ -695,7 +781,11 @@ function Console() {
         <div className="overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !uploadBusy) setModal(null); }}>
           <Form {...uploadForm}>
           <form className="dialog" onSubmit={uploadForm.handleSubmit(uploadSelected)} aria-labelledby="upload-dialog-title">
-            <div className="dialog-head"><div><h2 id="upload-dialog-title">Add to the library</h2><p>Stored in App Storage · delivered from {selectedFolder || 'the root folder'}</p></div><button className="mini-action" type="button" aria-label="Close upload dialog" disabled={uploadBusy} onClick={() => setModal(null)} data-testid="close-upload-dialog"><X /></button></div>
+            <div className="dialog-head"><div><h2 id="upload-dialog-title">Add to the library</h2><p>Stored in App Storage</p></div><button className="mini-action" type="button" aria-label="Close upload dialog" disabled={uploadBusy} onClick={() => setModal(null)} data-testid="close-upload-dialog"><X /></button></div>
+            <div className="upload-destination" data-testid="upload-destination">
+              <Folder aria-hidden="true" />
+              <div><span>Upload destination</span><strong>{selectedFolder || 'Root folder'}</strong></div>
+            </div>
             <input ref={fileInputRef} type="file" hidden onChange={(event) => chooseUpload(event.target.files?.[0])} data-testid="input-upload-file" />
             <div className={`dropzone ${dragging ? 'dragging' : ''}`} role="button" tabIndex={0}
               onClick={() => fileInputRef.current?.click()}
@@ -705,21 +795,47 @@ function Console() {
               data-testid="upload-dropzone">
               <div><Upload /><strong>{uploadFile ? uploadFile.name : 'Choose a file or drop it here'}</strong><span>{uploadFile ? `${displaySize(uploadFile.size)} · ${uploadFile.type || 'application/octet-stream'}` : 'File type and size are read from the actual file.'}</span></div>
             </div>
-            <FormField control={uploadForm.control} name="name" rules={{ required: 'Enter a file name.' }} render={({ field }) => (
+            <FormField control={uploadForm.control} name="title" rules={{ required: 'Enter a title.' }} render={({ field }) => (
               <FormItem>
-                <FormLabel className="field-label">File name</FormLabel>
-                <FormControl><input className="field-control" maxLength={255} data-testid="input-upload-name" {...field} /></FormControl>
-                <FormMessage data-testid="error-upload-name" />
+                <FormLabel className="field-label">Title</FormLabel>
+                <FormControl><input className="field-control" maxLength={220} data-testid="input-upload-title" {...field} /></FormControl>
+                <FormMessage data-testid="error-upload-title" />
+                <p className="field-help">File name: <code data-testid="generated-upload-filename">{generatedUploadName || 'Choose a file to preview its extension'}</code></p>
               </FormItem>
             )} />
-            <FormField control={uploadForm.control} name="date" rules={{ required: 'Choose a content date.' }} render={({ field }) => (
+            <FormField control={uploadForm.control} name="date" rules={{
+              required: 'Enter a content date.',
+              validate: (value) => normalizeDateInput(value) !== null || 'Enter a valid date, such as 10/30/2026 or October 30, 2026.',
+            }} render={({ field }) => (
               <FormItem>
                 <FormLabel className="field-label">Content date</FormLabel>
-                <FormControl><input className="field-control" type="date" data-testid="input-upload-date" {...field} /></FormControl>
+                <FormControl><input className="field-control" type="text" inputMode="text" autoComplete="off" placeholder="e.g. 10/30/2026 or October 30, 2026" data-testid="input-upload-date" {...field} /></FormControl>
                 <FormMessage data-testid="error-upload-date" />
+                <p className="field-help">The date is saved in a standard calendar format.</p>
               </FormItem>
             )} />
-            <div className="dialog-footer"><button className="button button-quiet" type="button" disabled={uploadBusy} onClick={() => setModal(null)} data-testid="cancel-upload">Cancel</button><button className="button button-primary" type="submit" disabled={!uploadFile || !uploadForm.watch('name')?.trim() || uploadBusy} data-testid="submit-upload">{uploadBusy ? 'Uploading…' : 'Upload File'}</button></div>
+            {uploadFile && isImageFile(uploadFile) ? (
+              <FormField control={uploadForm.control} name="isWallpaper" render={({ field }) => (
+                <FormItem className="checkbox-item">
+                  <FormControl>
+                    <input
+                      type="checkbox"
+                      checked={field.value}
+                      onChange={(event) => field.onChange(event.target.checked)}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
+                      data-testid="checkbox-upload-wallpaper"
+                    />
+                  </FormControl>
+                  <div>
+                    <FormLabel className="checkbox-label">Allow as desktop wallpaper</FormLabel>
+                    <p className="field-help">This image will be marked as eligible in the public file manifest.</p>
+                  </div>
+                </FormItem>
+              )} />
+            ) : null}
+            <div className="dialog-footer"><button className="button button-quiet" type="button" disabled={uploadBusy} onClick={() => setModal(null)} data-testid="cancel-upload">Cancel</button><button className="button button-primary" type="submit" disabled={!uploadFile || !uploadForm.watch('title')?.trim() || uploadBusy} data-testid="submit-upload">{uploadBusy ? 'Uploading…' : 'Upload File'}</button></div>
           </form>
           </Form>
         </div>

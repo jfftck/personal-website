@@ -36,6 +36,7 @@ export const GetContentTreeResponse = zod.object({
   "contentType": zod.string(),
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
+  "isWallpaper": zod.boolean(),
   "url": zod.string(),
   "updatedAt": zod.coerce.date()
 }))
@@ -53,6 +54,7 @@ export const GetContentTrashResponseItem = zod.object({
   "contentType": zod.string(),
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
+  "isWallpaper": zod.boolean(),
   "url": zod.string(),
   "updatedAt": zod.coerce.date()
 })
@@ -158,7 +160,8 @@ export const CreateContentFileBody = zod.object({
   "date": zod.coerce.date(),
   "contentType": zod.string().max(createContentFileBodyContentTypeMax),
   "sizeBytes": zod.number().int().min(createContentFileBodySizeBytesMin),
-  "objectPath": zod.string()
+  "objectPath": zod.string(),
+  "isWallpaper": zod.boolean().optional()
 })
 
 export const CreateContentFileResponse = zod.object({
@@ -169,6 +172,7 @@ export const CreateContentFileResponse = zod.object({
   "contentType": zod.string(),
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
+  "isWallpaper": zod.boolean(),
   "url": zod.string(),
   "updatedAt": zod.coerce.date()
 })
@@ -197,7 +201,8 @@ export const UpdateContentFileBody = zod.object({
   "date": zod.coerce.date().optional(),
   "contentType": zod.string().max(updateContentFileBodyContentTypeMax).optional(),
   "sizeBytes": zod.number().int().min(updateContentFileBodySizeBytesMin).optional(),
-  "objectPath": zod.string().optional()
+  "objectPath": zod.string().optional(),
+  "isWallpaper": zod.boolean().optional()
 })
 
 export const UpdateContentFileResponse = zod.object({
@@ -208,6 +213,7 @@ export const UpdateContentFileResponse = zod.object({
   "contentType": zod.string(),
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
+  "isWallpaper": zod.boolean(),
   "url": zod.string(),
   "updatedAt": zod.coerce.date()
 })
@@ -249,6 +255,7 @@ export const GetContentFileVersionsResponseItem = zod.object({
   "date": zod.coerce.date(),
   "contentType": zod.string(),
   "sizeBytes": zod.number().int(),
+  "isWallpaper": zod.boolean(),
   "isDeleted": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "gitCommitSha": zod.string(),
@@ -273,6 +280,7 @@ export const RestoreContentFileVersionResponse = zod.object({
   "contentType": zod.string(),
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
+  "isWallpaper": zod.boolean(),
   "url": zod.string(),
   "updatedAt": zod.coerce.date()
 })
@@ -293,6 +301,7 @@ export const RestoreContentFileResponse = zod.object({
   "contentType": zod.string(),
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
+  "isWallpaper": zod.boolean(),
   "url": zod.string(),
   "updatedAt": zod.coerce.date()
 })

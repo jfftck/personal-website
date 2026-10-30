@@ -20,4 +20,5 @@ export interface ContentFileUpdate {
   /** @minimum 0 */
   sizeBytes?: number;
   objectPath?: string;
+  isWallpaper?: boolean;
 }
