@@ -36,6 +36,15 @@ function sourceExtension(filename: string): string | null {
   return /^\.[a-z0-9]{1,12}$/i.test(suffix) ? suffix.toLowerCase() : null;
 }
 
+function truncateUtf16(value: string, maxLength: number): string {
+  let result = "";
+  for (const character of value) {
+    if (result.length + character.length > maxLength) break;
+    result += character;
+  }
+  return result;
+}
+
 export function filenameFromTitle(
   title: string,
   date: string,
@@ -64,7 +73,7 @@ export function filenameFromTitle(
     .replace(/^_+|_+$/g, "");
   if (!stem) stem = "Untitled";
   const maxStemLength = Math.max(1, 255 - prefix.length - safeExtension.length);
-  stem = Array.from(stem).slice(0, maxStemLength).join("").replace(/_+$/g, "");
+  stem = truncateUtf16(stem, maxStemLength).replace(/_+$/g, "");
   return `${prefix}${stem || "Untitled"}${safeExtension}`;
 }
 

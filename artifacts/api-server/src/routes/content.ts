@@ -23,6 +23,12 @@ import {
   recordFileHistory,
   withContentHistoryLock,
 } from "../lib/contentHistory";
+import {
+  assertGeneratedFileNameAvailable,
+  ContentNameConflictError,
+  fileExtension,
+  standardFileName,
+} from "../lib/contentFileNames";
 import { ensureLegacyContentImported } from "../lib/legacyContentMigration";
 import {
   createObjectUploadTarget,
@@ -154,29 +160,6 @@ function titleFromLegacyName(name: string): string {
   return withoutDate || name;
 }
 
-function fileExtension(name: string): string | null {
-  const compound = /(\.tar\.(?:bz2|gz|xz))$/i.exec(name);
-  if (compound) return compound[1].toLowerCase();
-  return /(\.[a-z0-9]{1,12})$/i.exec(name)?.[1].toLowerCase() ?? null;
-}
-
-function standardFileName(title: string, date: string, extension: string): string {
-  const safeExtension = extension.startsWith(".") ? extension.toLowerCase() : `.${extension.toLowerCase()}`;
-  const titleExtension = fileExtension(title);
-  const titleStem = titleExtension === safeExtension ? title.slice(0, -titleExtension.length) : title;
-  const prefix = `${date.replaceAll("-", "")}_`;
-  let stem = titleStem
-    .normalize("NFC")
-    .replace(/[\\/\u0000-\u001f]+/g, "_")
-    .replace(/[^\p{L}\p{N}]+/gu, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  if (!stem) stem = "Untitled";
-  const maxLength = Math.max(1, 255 - prefix.length - safeExtension.length);
-  stem = Array.from(stem).slice(0, maxLength).join("").replace(/_+$/g, "");
-  return normalizeFileName(`${prefix}${stem || "Untitled"}${safeExtension}`);
-}
-
 function normalizeContentType(input: unknown): string {
   if (typeof input !== "string" || input.length > 255) {
     throw new ContentError(400, "The file type is not valid.");
@@ -290,6 +273,10 @@ async function validateUploadObject(objectPath: unknown, expectedSize: number) {
 
 function apiError(error: unknown, res: Response, next: (error?: unknown) => void) {
   if (error instanceof ContentError) {
+    res.status(error.status).json({ error: error.message });
+    return;
+  }
+  if (error instanceof ContentNameConflictError) {
     res.status(error.status).json({ error: error.message });
     return;
   }
@@ -517,7 +504,7 @@ contentApiRouter.post(
     const extension =
       fileExtension(requestedName) ??
       (contentType.toLowerCase().startsWith("text/markdown") ? ".md" : ".bin");
-    const name = standardFileName(title, date, extension);
+    const name = normalizeFileName(standardFileName(title, date, extension));
     if (input.isWallpaper && !isImageAsset(contentType, name)) {
       throw new ContentError(400, "Only image files can be used as desktop wallpaper.");
     }
@@ -537,9 +524,7 @@ contentApiRouter.post(
             ),
           )
           .limit(1);
-        if (collision) {
-          throw new ContentError(409, "A file with this title and date already exists in that folder.");
-        }
+        assertGeneratedFileNameAvailable(Boolean(collision));
         const [created] = await tx
           .insert(contentFilesTable)
           .values({
@@ -587,10 +572,8 @@ contentApiRouter.patch(
         if (input.title !== undefined || input.date !== undefined) {
           update.title = title;
           update.contentDate = date;
-          update.name = standardFileName(
-            title,
-            date,
-            fileExtension(existing.name) ?? ".md",
+          update.name = normalizeFileName(
+            standardFileName(title, date, fileExtension(existing.name) ?? ".md"),
           );
         } else if (input.name !== undefined) {
           update.name = normalizeFileName(input.name);
@@ -639,9 +622,7 @@ contentApiRouter.patch(
               ),
             )
             .limit(1);
-          if (collision) {
-            throw new ContentError(409, "A file with this title and date already exists in that folder.");
-          }
+          assertGeneratedFileNameAvailable(Boolean(collision));
         }
         if (Object.keys(update).length === 0) {
           throw new ContentError(400, "There are no changes to save.");
