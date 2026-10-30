@@ -23,6 +23,7 @@ import {
 } from '@/lib/content-formatters';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
@@ -50,6 +51,7 @@ const localToday = () => {
 };
 const TODAY = localToday();
 const UPLOAD_TODAY = TODAY;
+const ROOT_FOLDER_OPTION = '__library_root__';
 const THEME_STORAGE_KEY = 'jmt-console-theme';
 type ThemeOverride = 'light' | 'dark' | null;
 
@@ -64,8 +66,8 @@ function savedThemeOverride(): ThemeOverride {
 }
 
 type FolderFormValues = { name: string };
-type UploadFormValues = { title: string; date: string; isWallpaper: boolean };
-type MetadataFormValues = { title: string; date: string; folderPath: string; isWallpaper: boolean };
+type UploadFormValues = { title: string; originalFileName: string; date: string; folderPath: string; isWallpaper: boolean };
+type MetadataFormValues = { title: string; originalFileName: string; date: string; folderPath: string; isWallpaper: boolean };
 
 function displaySize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -122,6 +124,7 @@ function Console() {
   const [modal, setModal] = useState<'folder' | 'upload' | null>(null);
   const [folderParent, setFolderParent] = useState('');
   const [editingFolder, setEditingFolder] = useState<ContentFolder | null>(null);
+  const [folderModalReturnTo, setFolderModalReturnTo] = useState<'upload' | 'edit' | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadMode, setUploadMode] = useState<'upload' | 'markdown'>('upload');
   const [uploadBusy, setUploadBusy] = useState(false);
@@ -155,10 +158,10 @@ function Console() {
   const restoreFileVersion = useRestoreContentFileVersion();
   const folderForm = useForm<FolderFormValues>({ defaultValues: { name: '' } });
   const uploadForm = useForm<UploadFormValues>({
-    defaultValues: { title: '', date: UPLOAD_TODAY, isWallpaper: false },
+    defaultValues: { title: '', originalFileName: '', date: UPLOAD_TODAY, folderPath: '', isWallpaper: false },
   });
   const metadataForm = useForm<MetadataFormValues>({
-    defaultValues: { title: '', date: TODAY, folderPath: '', isWallpaper: false },
+    defaultValues: { title: '', originalFileName: '', date: TODAY, folderPath: '', isWallpaper: false },
   });
   const resetMetadata = metadataForm.reset;
 
@@ -265,11 +268,12 @@ function Console() {
     if (!selectedFile) return;
     resetMetadata({
       title: selectedFile.title,
+      originalFileName: selectedFile.originalFileName || selectedFile.name,
       date: selectedFile.date,
       folderPath: selectedFile.folderPath,
       isWallpaper: selectedFile.isWallpaper,
     });
-  }, [selectedFile?.id, selectedFile?.name, selectedFile?.title, selectedFile?.date, selectedFile?.folderPath, selectedFile?.isWallpaper, resetMetadata]);
+  }, [selectedFile?.id, selectedFile?.name, selectedFile?.originalFileName, selectedFile?.title, selectedFile?.date, selectedFile?.folderPath, selectedFile?.isWallpaper, resetMetadata]);
 
   const folders = treeQuery.data?.folders ?? [];
   const allFiles = treeQuery.data?.files ?? [];
@@ -278,10 +282,7 @@ function Console() {
   const selectedFolderLabel = selectedFolder ? folderByPath.get(selectedFolder)?.name ?? selectedFolder : 'All files';
   const uploadTitle = uploadForm.watch('title') ?? '';
   const uploadDate = uploadForm.watch('date') ?? '';
-  const uploadDestination =
-    uploadMode === 'markdown' && !/^posts(?:\/|$)|^documents(?:\/|$)/.test(selectedFolder)
-      ? 'documents'
-      : selectedFolder;
+  const uploadDestination = uploadForm.watch('folderPath') ?? '';
   const generatedUploadName = uploadTitle.trim()
     ? uploadMode === 'markdown'
       ? filenameFromTitle(uploadTitle, uploadDate, 'new-document.md', 'text/markdown', '.md')
@@ -293,7 +294,7 @@ function Console() {
     const query = search.trim().toLowerCase();
     return allFiles.filter((file) => {
       const inFolder = query || !selectedFolder || file.folderPath === selectedFolder;
-      const matches = !query || `${file.title} ${file.name} ${file.folderPath} ${file.contentType} ${file.date}`.toLowerCase().includes(query);
+        const matches = !query || `${file.title} ${file.name} ${file.originalFileName} ${file.folderPath} ${file.contentType} ${file.date}`.toLowerCase().includes(query);
       return inFolder && matches;
     });
   }, [allFiles, search, selectedFolder]);
@@ -304,9 +305,31 @@ function Console() {
 
   const folderChildren = (path: string) => folders.filter((folder) => folder.parentPath === path);
   const openFolderModal = (parent: string, folder?: ContentFolder) => {
+    setFolderModalReturnTo(null);
     setFolderParent(parent);
     setEditingFolder(folder ?? null);
     folderForm.reset({ name: folder?.name ?? '' });
+    setModal('folder');
+  };
+
+  const closeFolderModal = () => {
+    setModal(folderModalReturnTo === 'upload' ? 'upload' : null);
+    setFolderModalReturnTo(null);
+  };
+
+  const openFolderModalForUpload = () => {
+    setFolderModalReturnTo('upload');
+    setFolderParent(uploadDestination);
+    setEditingFolder(null);
+    folderForm.reset({ name: '' });
+    setModal('folder');
+  };
+
+  const openFolderModalForEdit = () => {
+    setFolderModalReturnTo('edit');
+    setFolderParent(metadataForm.getValues('folderPath'));
+    setEditingFolder(null);
+    folderForm.reset({ name: '' });
     setModal('folder');
   };
 
@@ -315,8 +338,9 @@ function Console() {
     if (!name) return;
     try {
       let updated: ContentFolder | undefined;
+      let created: ContentFolder | undefined;
       if (editingFolder) updated = await updateFolder.mutateAsync({ folderId: editingFolder.id, data: { name } });
-      else await createFolder.mutateAsync({ data: { name, parentPath: folderParent } });
+      else created = await createFolder.mutateAsync({ data: { name, parentPath: folderParent } });
       if (editingFolder && updated && updated.path !== editingFolder.path) {
         const oldPath = editingFolder.path;
         const newPath = updated.path;
@@ -328,7 +352,16 @@ function Console() {
       }
       await invalidateContent();
       setToastMessage(editingFolder ? 'Folder renamed.' : 'Folder created.');
-      setModal(null);
+      if (created && folderModalReturnTo === 'upload') {
+        uploadForm.setValue('folderPath', created.path, { shouldDirty: true });
+        setModal('upload');
+      } else {
+        if (created && folderModalReturnTo === 'edit') {
+          metadataForm.setValue('folderPath', created.path, { shouldDirty: true });
+        }
+        setModal(null);
+      }
+      setFolderModalReturnTo(null);
     } catch (error) { setToastMessage(errorMessage(error)); }
   };
 
@@ -362,6 +395,9 @@ function Console() {
       return;
     }
     if (!name) return;
+    const originalFileName = creatingMarkdown
+      ? name
+      : (values.originalFileName.trim() || sourceFile.name);
     setUploadBusy(true);
     try {
       const target = await createUpload.mutateAsync({ data: { name, contentType, sizeBytes: sourceFile.size } });
@@ -373,7 +409,7 @@ function Console() {
       if (!response.ok) throw new Error(`File upload failed (${response.status}).`);
       const created = await createFile.mutateAsync({
         data: {
-          name, title: values.title.trim(), folderPath: uploadDestination, date,
+          name, originalFileName, title: values.title.trim(), folderPath: uploadDestination, date,
           contentType, sizeBytes: sourceFile.size, objectPath: target.objectPath,
           isWallpaper: !creatingMarkdown && isImageFile(sourceFile) && values.isWallpaper,
         },
@@ -385,7 +421,7 @@ function Console() {
       setModal(null);
       setUploadFile(null);
       setUploadMode('upload');
-      uploadForm.reset({ title: '', date: localToday(), isWallpaper: false });
+      uploadForm.reset({ title: '', originalFileName: '', date: localToday(), folderPath: uploadDestination, isWallpaper: false });
       if (creatingMarkdown) await openTextEditor(created);
     } catch (error) {
       setToastMessage(errorMessage(error));
@@ -396,6 +432,7 @@ function Console() {
     if (!file) return;
     setUploadFile(file);
     uploadForm.setValue('title', titleFromFilename(file.name), { shouldValidate: true });
+    uploadForm.setValue('originalFileName', file.name, { shouldValidate: true });
     uploadForm.setValue('date', localToday(), { shouldValidate: true });
     uploadForm.setValue('isWallpaper', false, { shouldValidate: true });
   };
@@ -413,6 +450,7 @@ function Console() {
       const updated = await updateFile.mutateAsync({
         fileId: selectedFile.id,
         data: {
+          originalFileName: values.originalFileName.trim(),
           title,
           date,
           folderPath: values.folderPath,
@@ -505,13 +543,14 @@ function Console() {
   const openUpload = () => {
     setUploadFile(null);
     setUploadMode('upload');
-    uploadForm.reset({ title: '', date: localToday(), isWallpaper: false });
+    uploadForm.reset({ title: '', originalFileName: '', date: localToday(), folderPath: selectedFolder, isWallpaper: false });
     setModal('upload');
   };
   const openNewDocument = () => {
     setUploadFile(null);
     setUploadMode('markdown');
-    uploadForm.reset({ title: '', date: localToday(), isWallpaper: false });
+    const documentFolder = /^(posts|documents)(\/|$)/.test(selectedFolder) ? selectedFolder : 'documents';
+    uploadForm.reset({ title: '', originalFileName: '', date: localToday(), folderPath: documentFolder, isWallpaper: false });
     setModal('upload');
   };
 
@@ -695,6 +734,14 @@ function Console() {
                           ) || 'Choose a title and date'}</code></p>
                         </FormItem>
                       )} />
+                      <FormField control={metadataForm.control} name="originalFileName" rules={{ required: 'Enter an original file name.', maxLength: { value: 255, message: 'Keep the original file name under 256 characters.' } }} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="field-label">Original file name</FormLabel>
+                          <FormControl><input className="field-control" maxLength={255} data-testid="input-file-original-name" {...field} /></FormControl>
+                          <FormMessage data-testid="error-file-original-name" />
+                          <p className="field-help">The source name is saved separately from the generated library filename.</p>
+                        </FormItem>
+                      )} />
                       <FormField control={metadataForm.control} name="date" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="field-label">Content date</FormLabel>
@@ -705,14 +752,22 @@ function Console() {
                       <FormField control={metadataForm.control} name="folderPath" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="field-label">Destination folder</FormLabel>
-                          <FormControl>
-                            <select className="field-control" data-testid="select-file-destination" {...field}>
-                              <option value="">Root folder</option>
-                              {[...folders].sort((a, b) => a.path.localeCompare(b.path)).map((folder) => (
-                                <option key={folder.id} value={folder.path}>{folder.path}</option>
-                              ))}
-                            </select>
-                          </FormControl>
+                          <div className="folder-picker-row">
+                            <Select value={field.value || ROOT_FOLDER_OPTION} onValueChange={(value) => field.onChange(value === ROOT_FOLDER_OPTION ? '' : value)}>
+                              <FormControl>
+                                <SelectTrigger className="field-control folder-picker-trigger" data-testid="select-file-destination" aria-label="Destination folder">
+                                  <SelectValue placeholder="Choose a folder" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value={ROOT_FOLDER_OPTION}>Root folder</SelectItem>
+                                {[...folders].sort((a, b) => a.path.localeCompare(b.path)).map((folder) => (
+                                  <SelectItem key={folder.id} value={folder.path}>{folder.path}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <button className="button button-quiet folder-picker-create" type="button" onClick={openFolderModalForEdit} data-testid="create-folder-from-edit"><FolderPlus /> New Folder</button>
+                          </div>
                           <FormMessage data-testid="error-file-destination" />
                         </FormItem>
                       )} />
@@ -803,10 +858,10 @@ function Console() {
       </div>
 
       {modal === 'folder' ? (
-        <div className="overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setModal(null); }}>
+        <div className="overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeFolderModal(); }}>
           <Form {...folderForm}>
           <form className="dialog" onSubmit={folderForm.handleSubmit(saveFolder)} aria-labelledby="folder-dialog-title">
-            <div className="dialog-head"><div><h2 id="folder-dialog-title">{editingFolder ? 'Rename folder' : 'Create folder'}</h2><p>{editingFolder ? editingFolder.path : folderParent ? `Inside ${folderParent}` : 'At the top level of your library'}</p></div><button className="mini-action" type="button" aria-label="Close dialog" onClick={() => setModal(null)} data-testid="close-folder-dialog"><X /></button></div>
+            <div className="dialog-head"><div><h2 id="folder-dialog-title">{editingFolder ? 'Rename folder' : 'Create folder'}</h2><p>{editingFolder ? editingFolder.path : folderParent ? `Inside ${folderParent}` : 'At the top level of your library'}</p></div><button className="mini-action" type="button" aria-label="Close dialog" onClick={closeFolderModal} data-testid="close-folder-dialog"><X /></button></div>
             <FormField control={folderForm.control} name="name" rules={{ required: 'Enter a folder name.' }} render={({ field }) => (
               <FormItem>
                 <FormLabel className="field-label">Folder name</FormLabel>
@@ -814,7 +869,7 @@ function Console() {
                 <FormMessage data-testid="error-folder-name" />
               </FormItem>
             )} />
-            <div className="dialog-footer"><button className="button button-quiet" type="button" onClick={() => setModal(null)} data-testid="cancel-folder">Cancel</button><button className="button button-primary" type="submit" disabled={!folderForm.watch('name')?.trim() || createFolder.isPending || updateFolder.isPending} data-testid="save-folder">{editingFolder ? 'Save Name' : 'Create Folder'}</button></div>
+            <div className="dialog-footer"><button className="button button-quiet" type="button" onClick={closeFolderModal} data-testid="cancel-folder">Cancel</button><button className="button button-primary" type="submit" disabled={!folderForm.watch('name')?.trim() || createFolder.isPending || updateFolder.isPending} data-testid="save-folder">{editingFolder ? 'Save Name' : 'Create Folder'}</button></div>
           </form>
           </Form>
         </div>
@@ -827,7 +882,30 @@ function Console() {
             <div className="dialog-head"><div><h2 id="upload-dialog-title">{uploadMode === 'markdown' ? 'New Markdown Document' : 'Add to the library'}</h2><p>{uploadMode === 'markdown' ? 'Creates an editable .md file.' : 'Stored in App Storage'}</p></div><button className="mini-action" type="button" aria-label="Close upload dialog" disabled={uploadBusy} onClick={() => setModal(null)} data-testid="close-upload-dialog"><X /></button></div>
             <div className="upload-destination" data-testid="upload-destination">
               <Folder aria-hidden="true" />
-              <div><span>{uploadMode === 'markdown' ? 'Document destination' : 'Upload destination'}</span><strong>{uploadDestination || 'Root folder'}</strong></div>
+              <div className="upload-destination-main">
+                <span>{uploadMode === 'markdown' ? 'Document destination' : 'Upload destination'}</span>
+                <FormField control={uploadForm.control} name="folderPath" render={({ field }) => (
+                  <FormItem>
+                    <div className="folder-picker-row">
+                      <Select value={field.value || ROOT_FOLDER_OPTION} onValueChange={(value) => field.onChange(value === ROOT_FOLDER_OPTION ? '' : value)}>
+                        <FormControl>
+                          <SelectTrigger className="field-control folder-picker-trigger" data-testid="select-upload-destination" aria-label="Upload destination folder">
+                            <SelectValue placeholder="Choose a folder" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value={ROOT_FOLDER_OPTION}>Root folder</SelectItem>
+                          {[...folders].sort((a, b) => a.path.localeCompare(b.path)).map((folder) => (
+                            <SelectItem key={folder.id} value={folder.path}>{folder.path}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <button className="button button-quiet folder-picker-create" type="button" onClick={openFolderModalForUpload} data-testid="create-folder-from-upload"><FolderPlus /> New Folder</button>
+                    </div>
+                    <FormMessage data-testid="error-upload-destination" />
+                  </FormItem>
+                )} />
+              </div>
             </div>
             {uploadMode === 'markdown' ? (
               <div className="markdown-create-note">
@@ -855,6 +933,16 @@ function Console() {
                 <p className="field-help">File name: <code data-testid="generated-upload-filename">{generatedUploadName || (uploadMode === 'markdown' ? 'Enter a title to preview the .md filename' : 'Choose a file to preview its filename')}</code></p>
               </FormItem>
             )} />
+            {uploadMode === 'upload' ? (
+              <FormField control={uploadForm.control} name="originalFileName" rules={{ required: 'Choose a file to set its original name.', maxLength: { value: 255, message: 'Keep the original file name under 256 characters.' } }} render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="field-label">Original file name</FormLabel>
+                  <FormControl><input className="field-control" maxLength={255} placeholder={uploadFile?.name || 'Choose a file first'} data-testid="input-upload-original-name" {...field} /></FormControl>
+                  <FormMessage data-testid="error-upload-original-name" />
+                  <p className="field-help">Saved separately from the generated library filename.</p>
+                </FormItem>
+              )} />
+            ) : null}
             <FormField control={uploadForm.control} name="date" render={({ field }) => (
               <FormItem>
                 <FormLabel className="field-label">Content date</FormLabel>

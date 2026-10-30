@@ -12,6 +12,7 @@ export interface ContentFileVersion {
   versionNumber: number;
   action: ContentFileVersionAction;
   name: string;
+  originalFileName: string;
   title: string;
   folderPath: string;
   /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */

@@ -14,6 +14,11 @@ export interface ContentFileUpdate {
   name?: string;
   /**
      * @minLength 1
+     * @maxLength 255
+     */
+  originalFileName?: string;
+  /**
+     * @minLength 1
      * @maxLength 220
      */
   title?: string;

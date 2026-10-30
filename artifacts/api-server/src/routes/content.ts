@@ -142,6 +142,14 @@ function normalizeContentDate(input: unknown): string {
   return input;
 }
 
+function normalizeOriginalFileName(input: unknown): string {
+  const value = typeof input === "string" ? input.trim() : "";
+  if (!value || value.length > 255 || /[\\/\u0000-\u001f]/.test(value)) {
+    throw new ContentError(400, "Enter a valid original file name.");
+  }
+  return value;
+}
+
 function normalizeContentTitle(input: unknown): string {
   if (typeof input !== "string") {
     throw new ContentError(400, "Enter a title.");
@@ -214,6 +222,7 @@ function toContentFile(file: DbContentFile) {
   return {
     id: file.id,
     name: file.name,
+    originalFileName: file.originalFileName || file.name,
     title: file.title?.trim() || titleFromLegacyName(file.name),
     folderPath: file.folderPath,
     date: file.contentDate,
@@ -232,6 +241,8 @@ function toContentFileVersion(version: DbContentFileVersion) {
     versionNumber: version.versionNumber,
     action: version.action,
     name: version.snapshot.name,
+    originalFileName:
+      version.snapshot.originalFileName ?? version.snapshot.name,
     title: version.snapshot.title?.trim() || titleFromLegacyName(version.snapshot.name),
     folderPath: version.snapshot.folderPath,
     date: version.snapshot.contentDate,
@@ -497,6 +508,9 @@ contentApiRouter.post(
     await ensureRootFolders();
     const input = CreateContentFileBody.parse(req.body);
     const requestedName = normalizeFileName(input.name);
+    const originalFileName = normalizeOriginalFileName(
+      input.originalFileName ?? input.name,
+    );
     const title = normalizeContentTitle(input.title);
     const folderPath = normalizeFolderPath(input.folderPath);
     const date = normalizeContentDate(input.date);
@@ -530,6 +544,7 @@ contentApiRouter.post(
           .insert(contentFilesTable)
           .values({
             name,
+            originalFileName,
             title,
             folderPath,
             contentDate: date,
@@ -562,6 +577,11 @@ contentApiRouter.patch(
         if (!existing) throw new ContentError(404, "That file could not be found.");
 
         const update: Partial<typeof contentFilesTable.$inferInsert> = {};
+        if (input.originalFileName !== undefined) {
+          update.originalFileName = normalizeOriginalFileName(
+            input.originalFileName,
+          );
+        }
         const title =
           input.title !== undefined
             ? normalizeContentTitle(input.title)

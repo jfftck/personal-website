@@ -34,6 +34,7 @@ export const GetContentTreeResponse = zod.object({
   "files": zod.array(zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "originalFileName": zod.string(),
   "title": zod.string(),
   "folderPath": zod.string(),
   "date": zod.string().regex(getContentTreeResponseFilesItemDateRegExp),
@@ -56,6 +57,7 @@ export const getContentTrashResponseDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-
 export const GetContentTrashResponseItem = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "originalFileName": zod.string(),
   "title": zod.string(),
   "folderPath": zod.string(),
   "date": zod.string().regex(getContentTrashResponseDateRegExp),
@@ -154,6 +156,8 @@ export const CreateContentUploadResponse = zod.object({
  */
 export const createContentFileBodyNameMax = 255;
 
+export const createContentFileBodyOriginalFileNameMax = 255;
+
 export const createContentFileBodyTitleMax = 220;
 
 export const createContentFileBodyFolderPathMax = 1000;
@@ -167,6 +171,7 @@ export const createContentFileBodySizeBytesMin = 0;
 
 export const CreateContentFileBody = zod.object({
   "name": zod.string().min(1).max(createContentFileBodyNameMax),
+  "originalFileName": zod.string().min(1).max(createContentFileBodyOriginalFileNameMax).optional(),
   "title": zod.string().min(1).max(createContentFileBodyTitleMax),
   "folderPath": zod.string().max(createContentFileBodyFolderPathMax),
   "date": zod.string().regex(createContentFileBodyDateRegExp),
@@ -182,6 +187,7 @@ export const createContentFileResponseDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2
 export const CreateContentFileResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "originalFileName": zod.string(),
   "title": zod.string(),
   "folderPath": zod.string(),
   "date": zod.string().regex(createContentFileResponseDateRegExp),
@@ -203,6 +209,8 @@ export const UpdateContentFileParams = zod.object({
 
 export const updateContentFileBodyNameMax = 255;
 
+export const updateContentFileBodyOriginalFileNameMax = 255;
+
 export const updateContentFileBodyTitleMax = 220;
 
 export const updateContentFileBodyFolderPathMax = 1000;
@@ -216,6 +224,7 @@ export const updateContentFileBodySizeBytesMin = 0;
 
 export const UpdateContentFileBody = zod.object({
   "name": zod.string().min(1).max(updateContentFileBodyNameMax).optional(),
+  "originalFileName": zod.string().min(1).max(updateContentFileBodyOriginalFileNameMax).optional(),
   "title": zod.string().min(1).max(updateContentFileBodyTitleMax).optional(),
   "folderPath": zod.string().max(updateContentFileBodyFolderPathMax).optional(),
   "date": zod.string().regex(updateContentFileBodyDateRegExp).optional(),
@@ -231,6 +240,7 @@ export const updateContentFileResponseDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2
 export const UpdateContentFileResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "originalFileName": zod.string(),
   "title": zod.string(),
   "folderPath": zod.string(),
   "date": zod.string().regex(updateContentFileResponseDateRegExp),
@@ -278,6 +288,7 @@ export const GetContentFileVersionsResponseItem = zod.object({
   "versionNumber": zod.number().int(),
   "action": zod.enum(['baseline', 'created', 'updated', 'renamed', 'moved', 'trashed', 'restored']),
   "name": zod.string(),
+  "originalFileName": zod.string(),
   "title": zod.string(),
   "folderPath": zod.string(),
   "date": zod.string().regex(getContentFileVersionsResponseDateRegExp),
@@ -306,6 +317,7 @@ export const restoreContentFileVersionResponseDateRegExp = new RegExp('^[0-9]{4}
 export const RestoreContentFileVersionResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "originalFileName": zod.string(),
   "title": zod.string(),
   "folderPath": zod.string(),
   "date": zod.string().regex(restoreContentFileVersionResponseDateRegExp),
@@ -331,6 +343,7 @@ export const restoreContentFileResponseDateRegExp = new RegExp('^[0-9]{4}-[0-9]{
 export const RestoreContentFileResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "originalFileName": zod.string(),
   "title": zod.string(),
   "folderPath": zod.string(),
   "date": zod.string().regex(restoreContentFileResponseDateRegExp),

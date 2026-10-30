@@ -167,9 +167,15 @@
 .checkbox-label { display:block; color:hsl(var(--foreground)); font-size:12px; font-weight:600; cursor:pointer; }
 .upload-destination { display:flex; align-items:center; gap:11px; margin-bottom:14px; padding:11px 12px; border:1px solid hsl(var(--border)); border-radius:9px; background:hsl(var(--background)); }
 .upload-destination > svg { width:17px; height:17px; flex:none; color:hsl(var(--primary)); }
+.upload-destination-main { flex:1; min-width:0; }
+.upload-destination-main > span { margin-bottom:6px; }
 .upload-destination span,.upload-destination strong { display:block; }
 .upload-destination span { color:hsl(var(--muted-foreground)); font:9px var(--app-font-mono); letter-spacing:.08em; text-transform:uppercase; }
 .upload-destination strong { overflow-wrap:anywhere; margin-top:4px; color:hsl(var(--foreground)); font-size:12px; font-weight:600; }
+.folder-picker-row { display:flex; align-items:center; gap:8px; min-width:0; }
+.folder-picker-row [role="combobox"] { min-width:0; flex:1 1 auto; text-align:left; }
+.folder-picker-create { flex:none; min-height:38px; white-space:nowrap; }
+.folder-picker-create svg { width:14px; height:14px; }
 .markdown-create-note { display:flex; align-items:center; gap:11px; margin-bottom:14px; padding:12px; border:1px solid hsl(var(--border)); border-radius:9px; background:hsl(var(--muted) / .35); }
 .markdown-create-note > svg { width:18px; height:18px; flex:none; color:hsl(var(--primary)); }
 .markdown-create-note strong,.markdown-create-note span { display:block; }

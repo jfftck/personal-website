@@ -32,6 +32,7 @@ export const contentFilesTable = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     name: text("name").notNull(),
+    originalFileName: text("original_file_name").notNull().default(""),
     title: text("title").notNull().default(""),
     folderPath: text("folder_path").notNull().default(""),
     contentDate: date("content_date", { mode: "string" }).notNull(),
@@ -61,6 +62,7 @@ export const contentFilesTable = pgTable(
 
 export type ContentFileVersionSnapshot = {
   name: string;
+  originalFileName?: string;
   title: string;
   folderPath: string;
   contentDate: string;

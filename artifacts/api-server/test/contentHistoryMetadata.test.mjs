@@ -65,11 +65,15 @@ test("a date edit records the new date, title, and generated filename together",
 });
 
 test("restoring an older revision returns its title, date, and filename as one unit", () => {
-  const olderRevision = createContentFileVersionSnapshot(originalFile);
+  const olderRevision = createContentFileVersionSnapshot({
+    ...originalFile,
+    originalFileName: "camera-original-name.jpg",
+  });
   const restored = restoreContentFileRevisionMetadata(olderRevision);
 
   assert.deepEqual(restored, {
     name: "20261030_Original_title.md",
+    originalFileName: "camera-original-name.jpg",
     title: "Original title",
     contentDate: "2026-10-30",
   });

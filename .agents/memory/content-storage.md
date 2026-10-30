@@ -21,8 +21,8 @@ Do not seed sample or test videos; the user will add their own video files. Impo
 
 **How to apply:** avoid external placeholder video records in the legacy importer and keep placeholder examples out of the active library.
 
-Admin-authored posts and documents are Markdown. Their stored filename is generated as `YYYYMMDD_Title.md` from the selected content date and title. For uploaded assets, preserve the uploaded filename as the title and generate the stored filename from the date, title, and original extension. Editing a title or date regenerates the stored filename.
+Admin-authored posts and documents are Markdown. Their stored filename is generated as `YYYYMMDD_Title.md` from the selected content date and title. For uploaded assets, keep the original upload filename as separate editable metadata, while generating the stored filename from the date, title, and actual file extension. Editing a title or date regenerates the stored filename; original-name edits remain part of revision history without changing the stored object.
 
-**Why:** the user wants documents created in the admin UI to default to `.md`, while all other file types are uploaded and retain their original filename as the title.
+**Why:** the user wants the source filename visible and editable independently from the title and generated library filename.
 
-**How to apply:** keep the browser's native date input, read its value after submission, validate and normalize it to ISO format, and store the title separately from the filename.
+**How to apply:** keep the browser's native date input, validate and normalize its value after submission, preserve the upload's actual extension, and include source-name changes in content revisions.

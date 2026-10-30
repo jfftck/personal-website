@@ -24,6 +24,7 @@ test("native date input values normalize after submission", () => {
 test("the API body schema keeps a date-only value as an ISO string", () => {
   const parsed = CreateContentFileBody.parse({
     name: "20261030_Beach_Photo.jpg",
+    originalFileName: "beach-photo-original.jpg",
     title: "Beach Photo.JPG",
     folderPath: "",
     date,
@@ -34,6 +35,7 @@ test("the API body schema keeps a date-only value as an ISO string", () => {
 
   assert.equal(parsed.date, date);
   assert.equal(typeof parsed.date, "string");
+  assert.equal(parsed.originalFileName, "beach-photo-original.jpg");
 });
 
 test("Markdown creation previews match the server-generated date-prefixed name", () => {
