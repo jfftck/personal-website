@@ -85,7 +85,6 @@ export function buildMediaPlayer(id, ctx) {
     ctx.setAppTitle(id, name);
     video.poster = poster || '';
     video.src    = url;
-    video.load();
     emptyDiv.hidden = true;
     video.hidden    = false;
     updateSidebarActive();
