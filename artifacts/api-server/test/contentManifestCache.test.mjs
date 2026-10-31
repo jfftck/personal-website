@@ -39,6 +39,9 @@ test("content mutations keep calling shared manifest invalidation", async () => 
     /(?=contentApiRouter\.(?:get|post|patch|delete)\()/,
   );
   const routes = [
+    ["post", '"/content/folders"'],
+    ["patch", '"/content/folders/:folderId"'],
+    ["delete", '"/content/folders/:folderId"'],
     ["post", '"/content/files"'],
     ["patch", '"/content/files/:fileId"'],
     ["delete", '"/content/files/:fileId"'],
@@ -53,7 +56,7 @@ test("content mutations keep calling shared manifest invalidation", async () => 
     ),
   );
 
-  assert.equal(mutationBlocks.length, 5);
+  assert.equal(mutationBlocks.length, routes.length);
   for (const [index, block] of mutationBlocks.entries()) {
     assert.ok(block, `expected route ${routes[index][0]} ${routes[index][1]}`);
     assert.match(block, /await invalidatePublicManifestCache\(tx\)/);
@@ -81,8 +84,11 @@ test(
     const initialTitle = `Current ${suffix}`;
     const restoredTitle = `Restored ${suffix}`;
     const createdTitle = `Created ${suffix}`;
+    const createdFolderPath = `manifest-folder-created-${suffix}`;
+    const renamedFolderPath = `manifest-folder-renamed-${suffix}`;
     let initialFileId;
     let createdFileId;
+    let testFolderId;
     let firstServer;
     let secondServer;
 
@@ -115,7 +121,11 @@ test(
         child,
         baseUrl,
         manifestUrl: `${baseUrl}/files/manifest.json`,
-        folderManifestUrl: `${baseUrl}/files/${encodeURIComponent(destinationPath)}/manifest.json`,
+        folderManifestUrl: (folderPath) =>
+          `${baseUrl}/files/${folderPath
+            .split("/")
+            .map(encodeURIComponent)
+            .join("/")}/manifest.json`,
       };
     };
 
@@ -301,7 +311,9 @@ test(
           );
         },
       );
-      const movedManifest = await readManifest(secondServer.folderManifestUrl);
+      const movedManifest = await readManifest(
+        secondServer.folderManifestUrl(destinationPath),
+      );
       assert.equal(movedManifest.response.status, 200);
       assert.ok(
         movedManifest.manifest.some((file) => file.filename === initialName),
@@ -362,6 +374,95 @@ test(
           );
         },
       );
+
+      await applyMutationAndCheckOtherServer(
+        async (client) => {
+          const {
+            rows: [folder],
+          } = await client.query(
+            `INSERT INTO content_folders (name, path, parent_path)
+             VALUES ($1, $1, '')
+             RETURNING id`,
+            [createdFolderPath],
+          );
+          testFolderId = folder.id;
+        },
+        (manifest) => {
+          const folder = manifest.folders.find(
+            (entry) => entry.path === createdFolderPath,
+          );
+          assert.equal(folder?.name, createdFolderPath);
+          assert.equal(
+            folder?.url,
+            `/files/${encodeURIComponent(createdFolderPath)}/manifest.json`,
+          );
+        },
+      );
+      const createdFolderManifest = await readManifest(
+        secondServer.folderManifestUrl(createdFolderPath),
+      );
+      assert.equal(createdFolderManifest.response.status, 200);
+      assert.deepEqual(createdFolderManifest.manifest, []);
+
+      await applyMutationAndCheckOtherServer(
+        async (client) => {
+          await client.query(
+            "UPDATE content_folders SET name = $1, path = $1 WHERE id = $2",
+            [renamedFolderPath, testFolderId],
+          );
+        },
+        (manifest) => {
+          assert.ok(
+            !manifest.folders.some(
+              (entry) => entry.path === createdFolderPath,
+            ),
+          );
+          const folder = manifest.folders.find(
+            (entry) => entry.path === renamedFolderPath,
+          );
+          assert.equal(folder?.name, renamedFolderPath);
+          assert.equal(
+            folder?.url,
+            `/files/${encodeURIComponent(renamedFolderPath)}/manifest.json`,
+          );
+        },
+      );
+      assert.equal(
+        (
+          await readManifest(
+            secondServer.folderManifestUrl(createdFolderPath),
+          )
+        ).response.status,
+        404,
+      );
+      const renamedFolderManifest = await readManifest(
+        secondServer.folderManifestUrl(renamedFolderPath),
+      );
+      assert.equal(renamedFolderManifest.response.status, 200);
+      assert.deepEqual(renamedFolderManifest.manifest, []);
+
+      await applyMutationAndCheckOtherServer(
+        async (client) => {
+          await client.query("DELETE FROM content_folders WHERE id = $1", [
+            testFolderId,
+          ]);
+        },
+        (manifest) => {
+          assert.ok(
+            !manifest.folders.some(
+              (entry) => entry.path === renamedFolderPath,
+            ),
+          );
+        },
+      );
+      assert.equal(
+        (
+          await readManifest(
+            secondServer.folderManifestUrl(renamedFolderPath),
+          )
+        ).response.status,
+        404,
+      );
     } finally {
       await Promise.all([stopServer(firstServer), stopServer(secondServer)]);
       const client = await pool.connect();
@@ -384,6 +485,15 @@ test(
         await client.query("DELETE FROM content_folders WHERE path = $1", [
           destinationPath,
         ]);
+        if (testFolderId) {
+          await client.query("DELETE FROM content_folders WHERE id = $1", [
+            testFolderId,
+          ]);
+        }
+        await client.query(
+          "DELETE FROM content_folders WHERE path = ANY($1::text[])",
+          [[createdFolderPath, renamedFolderPath]],
+        );
         await client.query(
           `INSERT INTO content_manifest_state (key, generation)
            VALUES ('public-v1', 1)
