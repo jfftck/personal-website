@@ -5,3 +5,4 @@
 - [Calculator compact layout](calculator-compact-layout.md) — explicit compact button line heights prevent keypad rows overflowing their grid tracks.
 - [Content storage architecture](content-storage.md) — App Storage holds file bytes, `/files` serves generated public manifests, and private Git stores revision snapshots and object references.
 - [Clerk plan constraint](clerk-auth-plan-constraint.md) — do not require a plan change just to keep production authentication working on this personal page.
+- [Authenticated API integration tests](authenticated-api-tests.md) — test protected endpoints with signed Clerk tokens and an ephemeral JWT verification key, never an auth bypass.

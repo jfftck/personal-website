@@ -7,18 +7,23 @@ export const requireClerkUser: RequestHandler = async (req, res, next) => {
     ? authorization.slice(7).trim()
     : "";
   const secretKey = process.env.CLERK_SECRET_KEY;
+  const jwtKey = process.env.CLERK_JWT_KEY;
 
   if (!token) {
     res.status(401).json({ error: "Authentication required." });
     return;
   }
-  if (!secretKey) {
+  if (!secretKey && !jwtKey) {
     res.status(500).json({ error: "Authentication is not configured." });
     return;
   }
 
   try {
-    await verifyToken(token, { secretKey });
+    if (jwtKey) {
+      await verifyToken(token, { jwtKey });
+    } else {
+      await verifyToken(token, { secretKey: secretKey! });
+    }
     next();
   } catch {
     res.status(401).json({ error: "The sign-in session is invalid or expired." });

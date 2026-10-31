@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { generateKeyPairSync, randomUUID, sign } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
@@ -77,6 +77,30 @@ test(
     const { Pool } = requireFromDatabasePackage("pg");
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
     const suffix = randomUUID();
+    const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+      modulusLength: 2048,
+    });
+    const clerkJwtKey = publicKey.export({ type: "spki", format: "pem" });
+    const now = Math.floor(Date.now() / 1000);
+    const encodedHeader = Buffer.from(
+      JSON.stringify({ alg: "RS256", typ: "JWT" }),
+    ).toString("base64url");
+    const encodedClaims = Buffer.from(
+      JSON.stringify({
+        sub: `user_test_${suffix}`,
+        sid: `sess_test_${suffix}`,
+        iss: "https://test.clerk.accounts.dev",
+        iat: now,
+        nbf: now,
+        exp: now + 300,
+      }),
+    ).toString("base64url");
+    const unsignedToken = `${encodedHeader}.${encodedClaims}`;
+    const adminToken = `${unsignedToken}.${sign(
+      "RSA-SHA256",
+      Buffer.from(unsignedToken),
+      privateKey,
+    ).toString("base64url")}`;
     const destinationPath = `manifest-test-${suffix}`;
     const initialName = `manifest-current-${suffix}.txt`;
     const restoredName = `manifest-restored-${suffix}.txt`;
@@ -115,7 +139,11 @@ test(
       const port = await availablePort();
       const child = spawn(process.execPath, ["dist/index.mjs"], {
         cwd: artifactDir,
-        env: { ...process.env, PORT: String(port) },
+        env: {
+          ...process.env,
+          CLERK_JWT_KEY: clerkJwtKey,
+          PORT: String(port),
+        },
         stdio: "ignore",
       });
       const baseUrl = `http://127.0.0.1:${port}`;
@@ -147,6 +175,22 @@ test(
         response,
         manifest: response.status === 200 ? await response.json() : undefined,
       };
+    };
+
+    const adminRequest = async (server, route, options = {}) =>
+      fetch(`${server.baseUrl}/api${route}`, {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          ...(options.body ? { "Content-Type": "application/json" } : {}),
+          ...options.headers,
+        },
+      });
+
+    const readAdminTree = async (server) => {
+      const response = await adminRequest(server, "/content/tree");
+      assert.equal(response.status, 200);
+      return response.json();
     };
 
     const applyMutationAndInvalidate = async (mutate) => {
@@ -498,28 +542,51 @@ test(
         },
       );
 
-      await applyMutationAndCheckOtherServer(
-        async (client) => {
-          const {
-            rows: [folder],
-          } = await client.query(
-            `INSERT INTO content_folders (name, path, parent_path)
-             VALUES ($1, $1, '')
-             RETURNING id`,
-            [createdFolderPath],
-          );
-          testFolderId = folder.id;
+      let beforeFolderManifest = await readManifest(firstServer.manifestUrl);
+      assert.equal(beforeFolderManifest.response.status, 200);
+      const createFolderResponse = await adminRequest(
+        firstServer,
+        "/content/folders",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: createdFolderPath,
+            parentPath: "",
+          }),
         },
-        (manifest) => {
-          const folder = manifest.folders.find(
-            (entry) => entry.path === createdFolderPath,
-          );
-          assert.equal(folder?.name, createdFolderPath);
-          assert.equal(
-            folder?.url,
-            `/files/${encodeURIComponent(createdFolderPath)}/manifest.json`,
-          );
-        },
+      );
+      assert.equal(createFolderResponse.status, 201);
+      const createdFolder = await createFolderResponse.json();
+      testFolderId = createdFolder.id;
+      assert.equal(createdFolder.path, createdFolderPath);
+      let adminTree = await readAdminTree(firstServer);
+      assert.ok(
+        adminTree.folders.some(
+          (folder) =>
+            folder.id === testFolderId && folder.path === createdFolderPath,
+        ),
+        "the admin tree should include a folder created through the authenticated endpoint",
+      );
+      let publicRoot = await readManifest(
+        secondServer.manifestUrl,
+        beforeFolderManifest.response.headers.get("etag"),
+      );
+      assert.equal(publicRoot.response.status, 200);
+      assert.ok(
+        publicRoot.manifest.folders.some(
+          (folder) => folder.path === createdFolderPath,
+        ),
+        "the second API instance should publish the new folder",
+      );
+      assert.equal(
+        (
+          await readManifest(
+            secondServer.manifestUrl,
+            publicRoot.response.headers.get("etag"),
+          )
+        ).response.status,
+        304,
+        "an unchanged public manifest should return 304",
       );
       const createdFolderManifest = await readManifest(
         secondServer.folderManifestUrl(createdFolderPath),
@@ -527,28 +594,54 @@ test(
       assert.equal(createdFolderManifest.response.status, 200);
       assert.deepEqual(createdFolderManifest.manifest, []);
 
-      await applyMutationAndCheckOtherServer(
-        async (client) => {
-          await client.query(
-            "UPDATE content_folders SET name = $1, path = $1 WHERE id = $2",
-            [renamedFolderPath, testFolderId],
-          );
+      beforeFolderManifest = await readManifest(firstServer.manifestUrl);
+      const renameFolderResponse = await adminRequest(
+        firstServer,
+        `/content/folders/${testFolderId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ name: renamedFolderPath }),
         },
-        (manifest) => {
-          assert.ok(
-            !manifest.folders.some(
-              (entry) => entry.path === createdFolderPath,
-            ),
-          );
-          const folder = manifest.folders.find(
-            (entry) => entry.path === renamedFolderPath,
-          );
-          assert.equal(folder?.name, renamedFolderPath);
-          assert.equal(
-            folder?.url,
-            `/files/${encodeURIComponent(renamedFolderPath)}/manifest.json`,
-          );
-        },
+      );
+      assert.equal(renameFolderResponse.status, 200);
+      const renamedFolder = await renameFolderResponse.json();
+      assert.equal(renamedFolder.path, renamedFolderPath);
+      adminTree = await readAdminTree(firstServer);
+      assert.ok(
+        adminTree.folders.some(
+          (folder) =>
+            folder.id === testFolderId && folder.path === renamedFolderPath,
+        ),
+        "the admin tree should show the folder’s new path after rename",
+      );
+      assert.ok(
+        !adminTree.folders.some((folder) => folder.path === createdFolderPath),
+        "the admin tree should no longer show the old folder path",
+      );
+      publicRoot = await readManifest(
+        secondServer.manifestUrl,
+        beforeFolderManifest.response.headers.get("etag"),
+      );
+      assert.equal(publicRoot.response.status, 200);
+      assert.ok(
+        !publicRoot.manifest.folders.some(
+          (folder) => folder.path === createdFolderPath,
+        ),
+      );
+      assert.ok(
+        publicRoot.manifest.folders.some(
+          (folder) => folder.path === renamedFolderPath,
+        ),
+        "the second API instance should publish the renamed folder",
+      );
+      assert.equal(
+        (
+          await readManifest(
+            secondServer.manifestUrl,
+            publicRoot.response.headers.get("etag"),
+          )
+        ).response.status,
+        304,
       );
       assert.equal(
         (
@@ -564,19 +657,39 @@ test(
       assert.equal(renamedFolderManifest.response.status, 200);
       assert.deepEqual(renamedFolderManifest.manifest, []);
 
-      await applyMutationAndCheckOtherServer(
-        async (client) => {
-          await client.query("DELETE FROM content_folders WHERE id = $1", [
-            testFolderId,
-          ]);
-        },
-        (manifest) => {
-          assert.ok(
-            !manifest.folders.some(
-              (entry) => entry.path === renamedFolderPath,
-            ),
-          );
-        },
+      beforeFolderManifest = await readManifest(firstServer.manifestUrl);
+      const deleteFolderResponse = await adminRequest(
+        firstServer,
+        `/content/folders/${testFolderId}`,
+        { method: "DELETE" },
+      );
+      assert.equal(deleteFolderResponse.status, 204);
+      adminTree = await readAdminTree(firstServer);
+      assert.ok(
+        !adminTree.folders.some(
+          (folder) => folder.id === testFolderId || folder.path === renamedFolderPath,
+        ),
+        "the admin tree should no longer show the deleted folder",
+      );
+      publicRoot = await readManifest(
+        secondServer.manifestUrl,
+        beforeFolderManifest.response.headers.get("etag"),
+      );
+      assert.equal(publicRoot.response.status, 200);
+      assert.ok(
+        !publicRoot.manifest.folders.some(
+          (folder) => folder.path === renamedFolderPath,
+        ),
+        "the second API instance should stop publishing the deleted folder",
+      );
+      assert.equal(
+        (
+          await readManifest(
+            secondServer.manifestUrl,
+            publicRoot.response.headers.get("etag"),
+          )
+        ).response.status,
+        304,
       );
       assert.equal(
         (
