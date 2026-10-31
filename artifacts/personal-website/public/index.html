@@ -87,15 +87,14 @@
         <strong id="system-panel-time">--:--</strong>
         <span id="system-panel-date"></span>
       </div>
+      <button id="settings-open-btn" class="icon-btn system-settings-button" type="button" aria-label="Open Settings" title="Settings">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94a7.5 7.5 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.28 7.28 0 0 0-1.63-.94l-.36-2.54a.49.49 0 0 0-.49-.42h-3.84a.49.49 0 0 0-.49.42l-.36 2.54c-.59.23-1.14.55-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.61 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.5 7.5 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.49.39 1.04.71 1.63.94l.36 2.54a.49.49 0 0 0 .49.42h3.84a.49.49 0 0 0 .49-.42l.36-2.54c.59-.23 1.14-.55 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+      </button>
     </header>
     <div class="quick-toggles" aria-label="Quick settings">
       <button id="time-format-toggle" class="quick-toggle" aria-pressed="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 11h5v-2h-4V6h-2v7h1z"/></svg>
         <span>24-hour time</span>
-      </button>
-      <button id="wallpaper-settings-open" class="quick-toggle" type="button" aria-haspopup="dialog" aria-controls="wallpaper-settings-dialog">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2ZM5 5h14v9l-3.5-3.5-3 3L9 10l-4 5V5Zm3 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/></svg>
-        <span>Desktop wallpaper</span>
       </button>
       <button id="reminder-notification-toggle" class="quick-toggle" type="button" aria-pressed="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6V11a7 7 0 0 0-6-6.92V2h-2v2.08A7 7 0 0 0 5 11v5l-2 2v1h18v-1z"/></svg>
@@ -141,51 +140,6 @@
       <div id="reminder-list" aria-live="polite"></div>
     </section>
   </section>
-
-  <dialog id="wallpaper-settings-dialog" aria-labelledby="wallpaper-settings-title">
-    <form id="wallpaper-settings-form">
-      <header class="wallpaper-dialog-header">
-        <div>
-          <h2 id="wallpaper-settings-title">Desktop Wallpaper</h2>
-          <p>Choose pictures marked for wallpaper in the file library.</p>
-        </div>
-        <button id="wallpaper-dialog-close" class="icon-btn" type="button" aria-label="Close wallpaper settings">×</button>
-      </header>
-      <div id="wallpaper-settings-status" class="wallpaper-settings-status" role="status" aria-live="polite"></div>
-      <fieldset class="wallpaper-choice-group">
-        <legend>Available wallpapers</legend>
-        <div id="wallpaper-image-list" class="wallpaper-image-list"></div>
-      </fieldset>
-      <div class="wallpaper-options">
-        <fieldset>
-          <legend>Selection order</legend>
-          <label><input type="radio" name="wallpaper-mode" value="random"> Random</label>
-          <label><input type="radio" name="wallpaper-mode" value="cycle"> Cycle in order</label>
-        </fieldset>
-        <fieldset>
-          <legend>Change wallpaper</legend>
-          <label><input type="radio" name="wallpaper-rotation" value="visit"> On each visit</label>
-          <label><input type="radio" name="wallpaper-rotation" value="interval"> On a time delay</label>
-          <label class="wallpaper-interval-label" for="wallpaper-interval">Change every
-            <select id="wallpaper-interval" name="wallpaper-interval">
-              <option value="5">5 minutes</option>
-              <option value="15">15 minutes</option>
-              <option value="30">30 minutes</option>
-              <option value="60">1 hour</option>
-              <option value="360">6 hours</option>
-              <option value="1440">24 hours</option>
-            </select>
-          </label>
-        </fieldset>
-      </div>
-      <footer class="wallpaper-dialog-actions">
-        <button id="wallpaper-use-default" type="button">Use Default Random Wallpaper</button>
-        <span></span>
-        <button id="wallpaper-cancel" type="button">Cancel</button>
-        <button id="wallpaper-save" type="submit">Save</button>
-      </footer>
-    </form>
-  </dialog>
 
   <div id="help-overlay" role="dialog" aria-modal="true" aria-label="Help" hidden>
     <div id="help-inner">
@@ -303,6 +257,14 @@
 
   <div id="app-menu" role="dialog" aria-modal="false" aria-label="App launcher" hidden>
     <div id="app-menu-inner">
+      <label class="app-files-search-label sr-only" for="launcher-file-search">Search apps and files</label>
+      <input id="launcher-file-search" class="app-files-search" type="search"
+             placeholder="Search apps and files…" autocomplete="off"
+             aria-controls="app-list doc-files-list pic-files-list video-files-list">
+      <p id="launcher-file-search-empty" class="app-files-search-empty" role="status" hidden>
+        No apps, documents, pictures, or videos match your search.
+      </p>
+      <p id="launcher-file-search-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
       <div class="app-menu-header">
         <button id="game-menu-back" class="icon-btn" type="button" aria-label="Back to root app menu" hidden>←</button>
         <p id="app-menu-title" class="app-menu-heading" style="margin:0" aria-live="polite" aria-atomic="true">Apps</p>
@@ -364,6 +326,12 @@
             <span class="app-launcher-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 18a5 5 0 1 1 .8-9.9A6 6 0 0 1 19 10a4 4 0 0 1 0 8H7zm5-16v3h2V2h-2zM3.5 5.1 2.1 6.5l2.1 2.1 1.4-1.4-2.1-2.1zm17 0-2.1 2.1 1.4 1.4 2.1-2.1-1.4-1.4z"/></svg></span>
             <span class="app-launcher-name">Weather</span>
           </button>
+          <button class="app-launcher" data-type="settings">
+            <span class="app-launcher-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94a7.5 7.5 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.28 7.28 0 0 0-1.63-.94l-.36-2.54a.49.49 0 0 0-.49-.42h-3.84a.49.49 0 0 0-.49.42l-.36 2.54c-.59.23-1.14.55-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.61 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.5 7.5 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.49.39 1.04.71 1.63.94l.36 2.54a.49.49 0 0 0 .49.42h3.84a.49.49 0 0 0 .49-.42l.36-2.54c.59-.23 1.14-.55 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+            </span>
+            <span class="app-launcher-name">Settings</span>
+          </button>
           <button id="game-center-entry" class="app-launcher" type="button" aria-expanded="false" aria-controls="game-submenu">
             <span class="app-launcher-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 6h10a4 4 0 0 1 3.9 3.1l1.5 6.6a3 3 0 0 1-5 2.8L15 16H9l-2.4 2.5a3 3 0 0 1-5-2.8l1.5-6.6A4 4 0 0 1 7 6zm0 3v2H5v2h2v2h2v-2h2v-2H9V9zm9 1a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm3 3a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z"/></svg>
@@ -373,14 +341,6 @@
         </div>
 
         <div id="app-files-section" hidden>
-          <label class="app-files-search-label sr-only" for="launcher-file-search">Find a document, picture, or video</label>
-          <input id="launcher-file-search" class="app-files-search" type="search"
-                 placeholder="Search by name…" autocomplete="off"
-                 aria-controls="doc-files-list pic-files-list video-files-list">
-          <p id="launcher-file-search-empty" class="app-files-search-empty" role="status" hidden>
-            No documents, pictures, or videos match your search.
-          </p>
-          <p id="launcher-file-search-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
           <p id="doc-files-heading" class="app-menu-heading app-files-heading">
             <span>Documents</span>
             <span class="app-files-count" id="doc-files-count"></span>

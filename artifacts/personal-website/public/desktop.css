@@ -121,6 +121,8 @@ html, body {
 }
 
 body {
+  position: relative;
+  isolation: isolate;
   background-image:
     repeating-linear-gradient(to right, transparent 0, transparent 2px, #0004 2px, #0004 4px),
     repeating-linear-gradient(to bottom, transparent 0, transparent 2px, #0004 2px, #0004 4px),
@@ -131,6 +133,23 @@ body {
   background-attachment: fixed;
   background-color: #069;
   color: var(--app-text);
+}
+
+.desktop-wallpaper-transition {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background-position: center center;
+  background-size: cover;
+  background-attachment: fixed;
+  transition-property: opacity;
+  transition-timing-function: ease;
+}
+.desktop-wallpaper-transition.is-visible { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .desktop-wallpaper-transition { transition-duration: 0ms !important; }
 }
 
 /* ------------------------------------------------------------
@@ -225,8 +244,28 @@ body {
   backdrop-filter: var(--backdrop);
 }
 #system-panel[hidden] { display: none; }
+.system-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+}
 .system-panel-header strong { display: block; font-size: 2rem; font-variant-numeric: tabular-nums; }
 .system-panel-header span { display: block; margin-top: .2rem; font-size: .8rem; opacity: .65; }
+.system-settings-button {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--topbar-border);
+  border-radius: 50%;
+  background: var(--btn-hover);
+  color: inherit;
+  cursor: pointer;
+}
+.system-settings-button:hover { background: var(--btn-active); }
+.system-settings-button svg { width: 1.1rem; height: 1.1rem; }
 .quick-toggles { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin: 1rem 0; }
 .quick-toggle {
   min-height: 3rem;
@@ -246,7 +285,6 @@ body {
 .quick-toggle[hidden] { display: none; }
 .quick-toggle svg, #theme-reset svg { width: 1.15rem; height: 1.15rem; fill: currentColor; flex: 0 0 auto; }
 #time-format-toggle,
-#wallpaper-settings-open,
 #reminder-notification-toggle { grid-column: 1 / -1; }
 #reminder-notification-state:not(:empty)::before { content: " — "; }
 .wallpaper-dialog-header {
@@ -655,9 +693,9 @@ body {
 }
 
 .app-files-search {
-  margin-top: 1.75rem;
+  margin-top: 0;
   width: 100%;
-  margin-bottom: 0.5rem;
+  margin-bottom: 1rem;
   padding: 0.625rem 0.75rem;
   border: 1px solid var(--app-border);
   border-radius: 999px;
@@ -711,7 +749,8 @@ body {
 .app-files-heading[hidden],
 .app-files-list[hidden],
 .app-file-btn[hidden],
-.app-files-search-empty[hidden] { display: none; }
+.app-files-search-empty[hidden],
+#app-list .app-launcher[hidden] { display: none; }
 
 .app-file-btn {
   display: flex;
