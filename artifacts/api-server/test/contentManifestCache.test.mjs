@@ -81,11 +81,15 @@ test(
     const initialName = `manifest-current-${suffix}.txt`;
     const restoredName = `manifest-restored-${suffix}.txt`;
     const createdName = `manifest-created-${suffix}.txt`;
+    const publishingName = `manifest-publishing-${suffix}.txt`;
+    const wallpaperName = `manifest-wallpaper-${suffix}.jpg`;
     const initialTitle = `Current ${suffix}`;
     const restoredTitle = `Restored ${suffix}`;
     const createdTitle = `Created ${suffix}`;
     const createdFolderPath = `manifest-folder-created-${suffix}`;
     const renamedFolderPath = `manifest-folder-renamed-${suffix}`;
+    let publishingFileId;
+    let wallpaperFileId;
     let initialFileId;
     let createdFileId;
     let testFolderId;
@@ -167,20 +171,31 @@ test(
       }
     };
 
-    const applyMutationAndCheckOtherServer = async (mutate, check) => {
-      const before = await readManifest(firstServer.manifestUrl);
+    const applyMutationAndCheckOtherServer = async (
+      mutate,
+      check,
+      manifestUrl = firstServer.manifestUrl,
+    ) => {
+      const before = await readManifest(manifestUrl);
       assert.equal(before.response.status, 200);
       const oldEtag = before.response.headers.get("etag");
       assert.ok(oldEtag);
 
       await applyMutationAndInvalidate(mutate);
 
-      const after = await readManifest(secondServer.manifestUrl, oldEtag);
+      const secondServerManifestUrl = manifestUrl.replace(
+        new URL(manifestUrl).origin,
+        secondServer.baseUrl,
+      );
+      const after = await readManifest(secondServerManifestUrl, oldEtag);
       assert.equal(after.response.status, 200);
       assert.notEqual(after.response.headers.get("etag"), oldEtag);
       check(after.manifest);
 
-      const unchanged = await readManifest(firstServer.manifestUrl, after.response.headers.get("etag"));
+      const unchanged = await readManifest(
+        manifestUrl,
+        after.response.headers.get("etag"),
+      );
       assert.equal(unchanged.response.status, 304);
     };
 
@@ -216,6 +231,22 @@ test(
           [initialName, initialTitle],
         );
         initialFileId = initialFile.id;
+        const { rows: [publishingFile] } = await client.query(
+          `INSERT INTO content_files
+             (name, title, folder_path, content_date, content_type, size_bytes, is_published)
+           VALUES ($1, 'Publishing check', 'posts', '2026-10-31', 'text/plain', 1, false)
+           RETURNING id`,
+          [publishingName],
+        );
+        publishingFileId = publishingFile.id;
+        const { rows: [wallpaperFile] } = await client.query(
+          `INSERT INTO content_files
+             (name, title, folder_path, content_date, content_type, size_bytes, is_published, is_wallpaper)
+           VALUES ($1, 'Wallpaper check', 'posts', '2026-10-31', 'image/jpeg', 1, true, false)
+           RETURNING id`,
+          [wallpaperName],
+        );
+        wallpaperFileId = wallpaperFile.id;
         const snapshot = {
           name: restoredName,
           originalFileName: restoredName,
@@ -281,6 +312,98 @@ test(
         baseline.response.headers.get("etag"),
       );
       assert.equal(unchanged.response.status, 304);
+
+      await applyMutationAndCheckOtherServer(
+        async (client) => {
+          await client.query(
+            "UPDATE content_files SET is_published = true WHERE id = $1",
+            [publishingFileId],
+          );
+        },
+        (manifest) => {
+          assert.ok(
+            manifest.some((file) => file.filename === publishingName),
+            "publishing should add the file to its folder manifest",
+          );
+        },
+        firstServer.folderManifestUrl("posts"),
+      );
+
+      await applyMutationAndCheckOtherServer(
+        async (client) => {
+          await client.query(
+            "UPDATE content_files SET is_published = false WHERE id = $1",
+            [publishingFileId],
+          );
+        },
+        (manifest) => {
+          assert.ok(
+            !manifest.some((file) => file.filename === publishingName),
+            "unpublishing should remove the file from its folder manifest",
+          );
+        },
+        firstServer.folderManifestUrl("posts"),
+      );
+
+      await applyMutationAndCheckOtherServer(
+        async (client) => {
+          await client.query(
+            "UPDATE content_files SET is_wallpaper = true WHERE id = $1",
+            [wallpaperFileId],
+          );
+        },
+        (manifest) => {
+          assert.ok(
+            manifest.wallpapers.some((file) => file.filename === wallpaperName),
+            "wallpaper changes should update the root wallpaper list",
+          );
+        },
+      );
+
+      await applyMutationAndCheckOtherServer(
+        async (client) => {
+          await client.query(
+            "UPDATE content_files SET is_published = false WHERE id = $1",
+            [wallpaperFileId],
+          );
+        },
+        (manifest) => {
+          assert.ok(
+            !manifest.wallpapers.some((file) => file.filename === wallpaperName),
+            "unpublishing a wallpaper should remove it from the root wallpaper list",
+          );
+        },
+      );
+
+      await applyMutationAndCheckOtherServer(
+        async (client) => {
+          await client.query(
+            "UPDATE content_files SET is_published = true WHERE id = $1",
+            [wallpaperFileId],
+          );
+        },
+        (manifest) => {
+          assert.ok(
+            manifest.wallpapers.some((file) => file.filename === wallpaperName),
+            "republishing a wallpaper should restore it to the root wallpaper list",
+          );
+        },
+      );
+
+      await applyMutationAndCheckOtherServer(
+        async (client) => {
+          await client.query(
+            "UPDATE content_files SET is_wallpaper = false WHERE id = $1",
+            [wallpaperFileId],
+          );
+        },
+        (manifest) => {
+          assert.ok(
+            !manifest.wallpapers.some((file) => file.filename === wallpaperName),
+            "removing wallpaper status should update the root wallpaper list",
+          );
+        },
+      );
 
       await applyMutationAndCheckOtherServer(
         async (client) => {
@@ -480,6 +603,16 @@ test(
         if (createdFileId) {
           await client.query("DELETE FROM content_files WHERE id = $1", [
             createdFileId,
+          ]);
+        }
+        if (publishingFileId) {
+          await client.query("DELETE FROM content_files WHERE id = $1", [
+            publishingFileId,
+          ]);
+        }
+        if (wallpaperFileId) {
+          await client.query("DELETE FROM content_files WHERE id = $1", [
+            wallpaperFileId,
           ]);
         }
         await client.query("DELETE FROM content_folders WHERE path = $1", [
