@@ -4,8 +4,13 @@ let manifests;
 let manifestRequests;
 let failedFolders;
 let errors;
+let initialPostsRequestStarted;
+let signalInitialPostsRequest;
+let releaseInitialPostsRequest;
+let holdInitialPostsRequest;
+let initialPostsRequestHeld;
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page }, testInfo) => {
   manifests = {
     posts: [
       { filename: '20261001_Old_Post.md' },
@@ -18,21 +23,38 @@ test.beforeEach(async ({ page }) => {
   manifestRequests = { posts: 0, documents: 0, pictures: 0, videos: 0 };
   failedFolders = new Set();
   errors = [];
+  holdInitialPostsRequest = false;
+  initialPostsRequestHeld = false;
+  initialPostsRequestStarted = new Promise(resolve => {
+    signalInitialPostsRequest = resolve;
+  });
+  let releasePostsRequest;
+  const initialPostsRequestGate = new Promise(resolve => {
+    releasePostsRequest = resolve;
+  });
+  releaseInitialPostsRequest = releasePostsRequest;
 
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/files/*/manifest.json', async route => {
     const folder = new URL(route.request().url()).pathname.split('/')[2];
     manifestRequests[folder]++;
+    const responseManifest = structuredClone(manifests[folder]);
+    if (holdInitialPostsRequest && !initialPostsRequestHeld && folder === 'posts') {
+      initialPostsRequestHeld = true;
+      signalInitialPostsRequest();
+      await initialPostsRequestGate;
+    }
     if (failedFolders.has(folder)) {
       await route.fulfill({ status: 503, body: 'Manifest unavailable' });
       return;
     }
-    await route.fulfill({ json: manifests[folder] });
+    await route.fulfill({ json: responseManifest });
   });
 
   await page.goto('/');
   await page.locator('#welcome-win-close').click();
   await page.locator('#app-menu-btn').click();
+  holdInitialPostsRequest = testInfo.title === 'refresh revalidates after the initial folder request settles';
   await page.locator('#app-list .app-launcher[data-type="file-manager"]').click();
 });
 
@@ -47,6 +69,30 @@ function rootFolderTile(page, label) {
 function fileTileName(fileManager, name) {
   return fileManager.locator('.fm-tile-name').filter({ hasText: name });
 }
+
+test('refresh revalidates after the initial folder request settles', async ({ page }) => {
+  const fileManager = page.locator('.app-window[data-type="file-manager"]');
+  const refresh = fileManager.getByRole('button', { name: 'Refresh current folder' });
+  const status = fileManager.locator('.fm-refresh-status');
+
+  await initialPostsRequestStarted;
+  await fileManager.locator('.fm-sidebar-btn[data-path="posts"]').click();
+  manifests.posts = [
+    { filename: '20261002_Keep_Post.md' },
+    { filename: '20261007_Latest_Post.md' },
+  ];
+
+  try {
+    await refresh.click();
+  } finally {
+    releaseInitialPostsRequest();
+  }
+
+  await expect(status).toHaveText('Folder refreshed.');
+  await expect.poll(() => manifestRequests.posts).toBeGreaterThan(1);
+  await expect(fileTileName(fileManager, 'Latest Post')).toBeVisible();
+  await expect(fileTileName(fileManager, 'Old Post')).toHaveCount(0);
+});
 
 test('refresh replaces active folder files and updates root counts', async ({ page }) => {
   const fileManager = page.locator('.app-window[data-type="file-manager"]');

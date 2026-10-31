@@ -67,7 +67,12 @@ export function buildFileManager(id, ctx) {
     if (!force && cached !== undefined && Date.now() - checkedAt < freshnessMs) {
       return cached;
     }
-    if (_fetching[folder]) return _fetching[folder];
+    if (_fetching[folder]) {
+      const pendingRequest = _fetching[folder];
+      if (!force) return pendingRequest;
+      await pendingRequest;
+      return ensureFolder(folder, { force: true });
+    }
     _fetching[folder] = (async () => {
       try {
         const headers = metadata?.etag
