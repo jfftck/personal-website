@@ -107,16 +107,22 @@ test(
     const createdName = `manifest-created-${suffix}.txt`;
     const publishingName = `manifest-publishing-${suffix}.txt`;
     const wallpaperName = `manifest-wallpaper-${suffix}.jpg`;
+    const childFileName = `manifest-child-file-${suffix}.txt`;
     const initialTitle = `Current ${suffix}`;
     const restoredTitle = `Restored ${suffix}`;
     const createdTitle = `Created ${suffix}`;
     const createdFolderPath = `manifest-folder-created-${suffix}`;
     const renamedFolderPath = `manifest-folder-renamed-${suffix}`;
+    const childFolderName = `manifest-child-${suffix}`;
+    const createdChildFolderPath = `${createdFolderPath}/${childFolderName}`;
+    const renamedChildFolderPath = `${renamedFolderPath}/${childFolderName}`;
     let publishingFileId;
     let wallpaperFileId;
     let initialFileId;
     let createdFileId;
     let testFolderId;
+    let childFolderId;
+    let childFileId;
     let firstServer;
     let secondServer;
 
@@ -559,6 +565,21 @@ test(
       const createdFolder = await createFolderResponse.json();
       testFolderId = createdFolder.id;
       assert.equal(createdFolder.path, createdFolderPath);
+      const createChildFolderResponse = await adminRequest(
+        firstServer,
+        "/content/folders",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: childFolderName,
+            parentPath: createdFolderPath,
+          }),
+        },
+      );
+      assert.equal(createChildFolderResponse.status, 201);
+      const createdChildFolder = await createChildFolderResponse.json();
+      childFolderId = createdChildFolder.id;
+      assert.equal(createdChildFolder.path, createdChildFolderPath);
       let adminTree = await readAdminTree(firstServer);
       assert.ok(
         adminTree.folders.some(
@@ -592,7 +613,27 @@ test(
         secondServer.folderManifestUrl(createdFolderPath),
       );
       assert.equal(createdFolderManifest.response.status, 200);
-      assert.deepEqual(createdFolderManifest.manifest, []);
+
+      await applyMutationAndInvalidate(async (client) => {
+        const { rows: [childFile] } = await client.query(
+          `INSERT INTO content_files
+             (name, title, folder_path, content_date, content_type, size_bytes, is_published)
+           VALUES ($1, 'Published child file', $2, '2026-10-31', 'text/plain', 1, true)
+           RETURNING id`,
+          [childFileName, createdChildFolderPath],
+        );
+        childFileId = childFile.id;
+      });
+      const createdChildManifest = await readManifest(
+        secondServer.folderManifestUrl(createdChildFolderPath),
+      );
+      assert.equal(createdChildManifest.response.status, 200);
+      assert.ok(
+        createdChildManifest.manifest.some(
+          (file) => file.filename === childFileName,
+        ),
+        "the child manifest should contain its published file",
+      );
 
       beforeFolderManifest = await readManifest(firstServer.manifestUrl);
       const renameFolderResponse = await adminRequest(
@@ -630,9 +671,12 @@ test(
       );
       assert.ok(
         publicRoot.manifest.folders.some(
-          (folder) => folder.path === renamedFolderPath,
+          (folder) =>
+            folder.path === renamedFolderPath &&
+            folder.url ===
+              `/files/${encodeURIComponent(renamedFolderPath)}/manifest.json`,
         ),
-        "the second API instance should publish the renamed folder",
+        "the second API instance should publish the renamed folder link",
       );
       assert.equal(
         (
@@ -655,7 +699,41 @@ test(
         secondServer.folderManifestUrl(renamedFolderPath),
       );
       assert.equal(renamedFolderManifest.response.status, 200);
-      assert.deepEqual(renamedFolderManifest.manifest, []);
+      assert.equal(
+        (
+          await readManifest(
+            secondServer.folderManifestUrl(createdChildFolderPath),
+          )
+        ).response.status,
+        404,
+        "the old child manifest path should no longer be available",
+      );
+      const renamedChildManifest = await readManifest(
+        secondServer.folderManifestUrl(renamedChildFolderPath),
+      );
+      assert.equal(renamedChildManifest.response.status, 200);
+      assert.ok(
+        renamedChildManifest.manifest.some(
+          (file) =>
+            file.filename === childFileName &&
+            file.url ===
+              `/files/${encodeURIComponent(renamedFolderPath)}/${encodeURIComponent(childFolderName)}/${encodeURIComponent(childFileName)}`,
+        ),
+        "the renamed child manifest should contain the published file at its new path",
+      );
+
+      await applyMutationAndInvalidate(async (client) => {
+        await client.query("DELETE FROM content_files WHERE id = $1", [
+          childFileId,
+        ]);
+        childFileId = undefined;
+      });
+      const deleteChildFolderResponse = await adminRequest(
+        firstServer,
+        `/content/folders/${childFolderId}`,
+        { method: "DELETE" },
+      );
+      assert.equal(deleteChildFolderResponse.status, 204);
 
       beforeFolderManifest = await readManifest(firstServer.manifestUrl);
       const deleteFolderResponse = await adminRequest(
@@ -728,6 +806,11 @@ test(
             wallpaperFileId,
           ]);
         }
+        if (childFileId) {
+          await client.query("DELETE FROM content_files WHERE id = $1", [
+            childFileId,
+          ]);
+        }
         await client.query("DELETE FROM content_folders WHERE path = $1", [
           destinationPath,
         ]);
@@ -738,7 +821,14 @@ test(
         }
         await client.query(
           "DELETE FROM content_folders WHERE path = ANY($1::text[])",
-          [[createdFolderPath, renamedFolderPath]],
+          [
+            [
+              createdFolderPath,
+              renamedFolderPath,
+              createdChildFolderPath,
+              renamedChildFolderPath,
+            ],
+          ],
         );
         await client.query(
           `INSERT INTO content_manifest_state (key, generation)
