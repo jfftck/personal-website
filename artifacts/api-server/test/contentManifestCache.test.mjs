@@ -249,6 +249,43 @@ test(
       assert.equal(unchanged.response.status, 304);
     };
 
+    const applyAdminMutationAndCheckOtherServer = async (
+      fileId,
+      body,
+      check,
+      manifestUrl = firstServer.manifestUrl,
+    ) => {
+      const before = await readManifest(manifestUrl);
+      assert.equal(before.response.status, 200);
+      const oldEtag = before.response.headers.get("etag");
+      assert.ok(oldEtag);
+
+      const mutationResponse = await adminRequest(
+        firstServer,
+        `/content/files/${fileId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        },
+      );
+      assert.equal(mutationResponse.status, 200);
+
+      const secondServerManifestUrl = manifestUrl.replace(
+        new URL(manifestUrl).origin,
+        secondServer.baseUrl,
+      );
+      const after = await readManifest(secondServerManifestUrl, oldEtag);
+      assert.equal(after.response.status, 200);
+      assert.notEqual(after.response.headers.get("etag"), oldEtag);
+      check(after.manifest);
+
+      const unchanged = await readManifest(
+        manifestUrl,
+        after.response.headers.get("etag"),
+      );
+      assert.equal(unchanged.response.status, 304);
+    };
+
     const waitForServer = async (child, healthUrl) => {
       const deadline = Date.now() + 20_000;
       while (Date.now() < deadline) {
@@ -362,6 +399,52 @@ test(
         baseline.response.headers.get("etag"),
       );
       assert.equal(unchanged.response.status, 304);
+
+      await applyAdminMutationAndCheckOtherServer(
+        publishingFileId,
+        { isPublished: true },
+        (manifest) => {
+          assert.ok(
+            manifest.some((file) => file.filename === publishingName),
+            "publishing through the content API should add the file to its folder manifest",
+          );
+        },
+        firstServer.folderManifestUrl("posts"),
+      );
+
+      await applyAdminMutationAndCheckOtherServer(
+        publishingFileId,
+        { isPublished: false },
+        (manifest) => {
+          assert.ok(
+            !manifest.some((file) => file.filename === publishingName),
+            "unpublishing through the content API should remove the file from its folder manifest",
+          );
+        },
+        firstServer.folderManifestUrl("posts"),
+      );
+
+      await applyAdminMutationAndCheckOtherServer(
+        wallpaperFileId,
+        { isWallpaper: true },
+        (manifest) => {
+          assert.ok(
+            manifest.wallpapers.some((file) => file.filename === wallpaperName),
+            "wallpaper edits through the content API should update the root wallpaper list",
+          );
+        },
+      );
+
+      await applyAdminMutationAndCheckOtherServer(
+        wallpaperFileId,
+        { isWallpaper: false },
+        (manifest) => {
+          assert.ok(
+            !manifest.wallpapers.some((file) => file.filename === wallpaperName),
+            "removing wallpaper status through the content API should update the root wallpaper list",
+          );
+        },
+      );
 
       await applyMutationAndCheckOtherServer(
         async (client) => {

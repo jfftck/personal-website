@@ -163,5 +163,6 @@ export interface ContentFileUpdate {
   sizeBytes?: number;
   objectPath?: string;
   isWallpaper?: boolean;
+  isPublished?: boolean;
 }
 

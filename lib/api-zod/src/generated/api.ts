@@ -243,7 +243,8 @@ export const UpdateContentFileBody = zod.object({
   "contentType": zod.string().max(updateContentFileBodyContentTypeMax).optional(),
   "sizeBytes": zod.number().int().min(updateContentFileBodySizeBytesMin).optional(),
   "objectPath": zod.string().optional(),
-  "isWallpaper": zod.boolean().optional()
+  "isWallpaper": zod.boolean().optional(),
+  "isPublished": zod.boolean().optional()
 })
 
 export const updateContentFileResponseDescriptionMax = 2000;

@@ -646,6 +646,9 @@ contentApiRouter.patch(
           }
           update.isWallpaper = input.isWallpaper;
         }
+        if (input.isPublished !== undefined) {
+          update.isPublished = input.isPublished;
+        }
 
         if (input.objectPath !== undefined) {
           const size = input.sizeBytes ?? existing.sizeBytes;

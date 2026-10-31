@@ -413,4 +413,5 @@ components:
         sizeBytes: { type: integer, minimum: 0 }
         objectPath: { type: string }
         isWallpaper: { type: boolean }
+        isPublished: { type: boolean }
 
