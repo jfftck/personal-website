@@ -46,6 +46,7 @@ const themeSplit  = themeToggle.closest('.theme-split');
 const themeMedia  = matchMedia('(prefers-color-scheme: dark)');
 const THEME_KEY   = 'desktop-theme';
 const TIME_KEY    = 'desktop-time-24h';
+const WALLPAPER_KEY = 'desktop-wallpaper-settings-v1';
 const REMINDER_KEY = 'desktop-reminders';
 const REMINDER_BACKGROUND_KEY = 'desktop-reminder-background';
 let calendarDate  = new Date();
@@ -926,7 +927,16 @@ function parseManifestForLauncher(folder, entries) {
     const type = videoExtensions.includes(extension)
       ? 'video'
       : imageExtensions.includes(extension) ? 'image' : 'document';
-    return { displayName, url, type, folder, poster: entry.poster || '' };
+    return {
+      displayName,
+      url,
+      type,
+      folder,
+      poster: entry.poster || '',
+      isWallpaper: entry.isWallpaper === true,
+      title: typeof entry.title === 'string' ? entry.title : displayName,
+      filename,
+    };
   }).filter(Boolean);
 }
 
@@ -950,7 +960,10 @@ async function ensureLauncherManifest(folder, { force = false } = {}) {
       const headers = metadata?.etag
         ? { 'If-None-Match': metadata.etag }
         : {};
-      const response = await fetch(`/files/${folder}/manifest.json`, {
+      const manifestUrl = folder === 'wallpapers'
+        ? '/files/manifest.json'
+        : `/files/${folder}/manifest.json`;
+      const response = await fetch(manifestUrl, {
         headers,
         cache: 'no-store',
       });
@@ -963,9 +976,13 @@ async function ensureLauncherManifest(folder, { force = false } = {}) {
         return cached;
       }
       if (!response.ok) throw new Error(`Could not load ${folder} manifest`);
-      const entries = await response.json();
+      const manifest = await response.json();
+      const entries = folder === 'wallpapers' ? manifest?.wallpapers : manifest;
       if (!Array.isArray(entries)) throw new Error(`Invalid ${folder} manifest`);
-      _launcherCache[folder] = parseManifestForLauncher(folder, entries);
+      _launcherCache[folder] = parseManifestForLauncher(
+        folder === 'wallpapers' ? 'pictures' : folder,
+        entries,
+      );
       _launcherCacheMeta[folder] = {
         etag: response.headers.get('ETag'),
         checkedAt: Date.now(),
@@ -988,6 +1005,280 @@ async function ensureLauncherManifest(folder, { force = false } = {}) {
     if (_launcherFetching[folder] === request) delete _launcherFetching[folder];
   }
 }
+
+// ── Desktop wallpaper preferences ─────────────────────────────
+const wallpaperDialog = $('wallpaper-settings-dialog');
+const wallpaperForm = $('wallpaper-settings-form');
+const wallpaperList = $('wallpaper-image-list');
+const wallpaperStatus = $('wallpaper-settings-status');
+const wallpaperSaveButton = $('wallpaper-save');
+const wallpaperModeInputs = [...wallpaperForm.querySelectorAll('[name="wallpaper-mode"]')];
+const wallpaperRotationInputs = [...wallpaperForm.querySelectorAll('[name="wallpaper-rotation"]')];
+const wallpaperInterval = $('wallpaper-interval');
+let wallpaperFiles = [];
+let wallpaperTimer = 0;
+
+function readWallpaperSettings() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(WALLPAPER_KEY) || '{}');
+    return {
+      selected: Array.isArray(stored.selected) ? stored.selected.filter(url => typeof url === 'string') : [],
+      mode: stored.mode === 'cycle' ? 'cycle' : 'random',
+      rotation: stored.rotation === 'interval' ? 'interval' : 'visit',
+      intervalMinutes: [5, 15, 30, 60, 360, 1440].includes(Number(stored.intervalMinutes))
+        ? Number(stored.intervalMinutes)
+        : 60,
+      currentUrl: typeof stored.currentUrl === 'string' ? stored.currentUrl : '',
+      nextChangeAt: Number.isFinite(stored.nextChangeAt) ? stored.nextChangeAt : 0,
+    };
+  } catch {
+    return { selected: [], mode: 'random', rotation: 'visit', intervalMinutes: 60, currentUrl: '', nextChangeAt: 0 };
+  }
+}
+
+let wallpaperSettings = readWallpaperSettings();
+let wallpaperDraft = null;
+
+function saveWallpaperSettings() {
+  localStorage.setItem(WALLPAPER_KEY, JSON.stringify(wallpaperSettings));
+}
+
+function setDesktopWallpaper(url) {
+  if (!url) {
+    document.body.style.removeProperty('--desktop-wallpaper-image');
+    return;
+  }
+  const absoluteUrl = new URL(url, window.location.href).href;
+  document.body.style.setProperty('--desktop-wallpaper-image', `url(${JSON.stringify(absoluteUrl)})`);
+}
+
+function pickNextWallpaper(settings) {
+  const { selected } = settings;
+  if (!selected.length) return '';
+  if (settings.mode === 'cycle') {
+    const currentIndex = selected.indexOf(settings.currentUrl);
+    return selected[(currentIndex + 1 + selected.length) % selected.length];
+  }
+  if (selected.length === 1) return selected[0];
+  const choices = selected.filter(url => url !== settings.currentUrl);
+  return choices[Math.floor(Math.random() * choices.length)];
+}
+
+function applyNextWallpaper() {
+  window.clearTimeout(wallpaperTimer);
+  wallpaperTimer = 0;
+  wallpaperSettings.selected = wallpaperSettings.selected.filter(url =>
+    wallpaperFiles.some(file => file.isWallpaper && file.url === url));
+  if (!wallpaperSettings.selected.length) {
+    wallpaperSettings.currentUrl = '';
+    wallpaperSettings.nextChangeAt = 0;
+    setDesktopWallpaper('');
+    saveWallpaperSettings();
+    return;
+  }
+  wallpaperSettings.currentUrl = pickNextWallpaper(wallpaperSettings);
+  wallpaperSettings.nextChangeAt = wallpaperSettings.rotation === 'interval'
+    ? Date.now() + wallpaperSettings.intervalMinutes * 60_000
+    : 0;
+  setDesktopWallpaper(wallpaperSettings.currentUrl);
+  saveWallpaperSettings();
+  scheduleWallpaperChange();
+}
+
+function scheduleWallpaperChange() {
+  window.clearTimeout(wallpaperTimer);
+  wallpaperTimer = 0;
+  if (
+    wallpaperSettings.rotation !== 'interval' ||
+    wallpaperSettings.selected.length < 2 ||
+    !wallpaperSettings.currentUrl
+  ) return;
+  const delay = Math.max(0, wallpaperSettings.nextChangeAt - Date.now());
+  wallpaperTimer = window.setTimeout(async () => {
+    const files = await ensureLauncherManifest('wallpapers');
+    if (!_launcherCacheMeta.wallpapers?.error) {
+      wallpaperFiles = files.filter(file => file.type === 'image' && file.isWallpaper);
+    }
+    applyNextWallpaper();
+  }, delay);
+}
+
+function initializeDesktopWallpaper() {
+  ensureLauncherManifest('wallpapers').then(files => {
+    if (_launcherCacheMeta.wallpapers?.error) {
+      if (wallpaperSettings.currentUrl) setDesktopWallpaper(wallpaperSettings.currentUrl);
+      return;
+    }
+    wallpaperFiles = files.filter(file => file.type === 'image' && file.isWallpaper);
+    const validUrls = new Set(wallpaperFiles.map(file => file.url));
+    wallpaperSettings.selected = wallpaperSettings.selected.filter(url => validUrls.has(url));
+    if (wallpaperSettings.rotation === 'interval' &&
+        wallpaperSettings.selected.length > 0 &&
+        wallpaperSettings.selected.includes(wallpaperSettings.currentUrl) &&
+        wallpaperSettings.nextChangeAt > Date.now()) {
+      setDesktopWallpaper(wallpaperSettings.currentUrl);
+      saveWallpaperSettings();
+      scheduleWallpaperChange();
+    } else {
+      applyNextWallpaper();
+    }
+  });
+}
+
+function updateWallpaperOptionAvailability() {
+  const hasMultiple = wallpaperDraft.selected.length > 1;
+  for (const input of [...wallpaperModeInputs, ...wallpaperRotationInputs]) {
+    input.disabled = !hasMultiple;
+  }
+  wallpaperInterval.disabled = !hasMultiple ||
+    wallpaperDraft.rotation !== 'interval';
+}
+
+function renderWallpaperImageList() {
+  wallpaperList.replaceChildren();
+  if (!wallpaperFiles.length) {
+    const empty = document.createElement('p');
+    empty.className = 'wallpaper-empty';
+    empty.textContent = 'No wallpaper-eligible pictures are available.';
+    wallpaperList.append(empty);
+    return;
+  }
+  wallpaperFiles.forEach((file, index) => {
+    const row = document.createElement('div');
+    row.className = 'wallpaper-image-row';
+    const label = document.createElement('label');
+    label.className = 'wallpaper-image-choice';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = wallpaperDraft.selected.includes(file.url);
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        if (!wallpaperDraft.selected.includes(file.url)) wallpaperDraft.selected.push(file.url);
+      } else {
+        wallpaperDraft.selected = wallpaperDraft.selected.filter(url => url !== file.url);
+      }
+      renderWallpaperImageList();
+      updateWallpaperOptionAvailability();
+    });
+    const thumbnail = document.createElement('img');
+    thumbnail.src = file.url;
+    thumbnail.alt = '';
+    thumbnail.loading = 'lazy';
+    thumbnail.decoding = 'async';
+    thumbnail.fetchPriority = 'low';
+    const title = document.createElement('span');
+    title.className = 'wallpaper-image-title';
+    title.textContent = file.title || file.displayName;
+    title.title = title.textContent;
+    label.append(checkbox, thumbnail, title);
+    row.append(label);
+
+    if (wallpaperDraft.mode === 'cycle' && wallpaperDraft.selected.includes(file.url)) {
+      const position = wallpaperDraft.selected.indexOf(file.url);
+      const order = document.createElement('span');
+      order.className = 'wallpaper-image-order';
+      order.textContent = String(position + 1);
+      order.setAttribute('aria-label', `Position ${position + 1}`);
+      row.append(order);
+      for (const direction of ['up', 'down']) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'wallpaper-order-button';
+        button.textContent = direction === 'up' ? '↑' : '↓';
+        button.title = `Move ${direction}`;
+        button.setAttribute('aria-label', `Move ${file.title || file.displayName} ${direction}`);
+        button.disabled = direction === 'up' ? position === 0 : position === wallpaperDraft.selected.length - 1;
+        button.addEventListener('click', () => {
+          const nextPosition = direction === 'up' ? position - 1 : position + 1;
+          const [moved] = wallpaperDraft.selected.splice(position, 1);
+          wallpaperDraft.selected.splice(nextPosition, 0, moved);
+          renderWallpaperImageList();
+          updateWallpaperOptionAvailability();
+        });
+        row.append(button);
+      }
+    }
+    wallpaperList.append(row);
+  });
+}
+
+async function openWallpaperSettings() {
+  wallpaperDraft = {
+    ...wallpaperSettings,
+    selected: [...wallpaperSettings.selected],
+  };
+  for (const input of wallpaperModeInputs) input.checked = input.value === wallpaperDraft.mode;
+  for (const input of wallpaperRotationInputs) input.checked = input.value === wallpaperDraft.rotation;
+  wallpaperInterval.value = String(wallpaperDraft.intervalMinutes);
+  wallpaperStatus.textContent = 'Loading wallpaper-eligible pictures…';
+  wallpaperSaveButton.disabled = true;
+  wallpaperList.replaceChildren();
+  wallpaperDialog.showModal();
+  const manifestFiles = await ensureLauncherManifest('wallpapers');
+  const loadFailed = Boolean(_launcherCacheMeta.wallpapers?.error);
+  if (!loadFailed) {
+    wallpaperFiles = manifestFiles.filter(file => file.type === 'image' && file.isWallpaper);
+    wallpaperDraft.selected = wallpaperDraft.selected.filter(url =>
+      wallpaperFiles.some(file => file.url === url));
+  }
+  renderWallpaperImageList();
+  updateWallpaperOptionAvailability();
+  wallpaperStatus.textContent = loadFailed
+    ? 'Could not load the picture library. Close and reopen to try again.'
+    : '';
+  wallpaperSaveButton.disabled = loadFailed;
+}
+
+$('wallpaper-settings-open').addEventListener('click', () => {
+  closeSystemPanel();
+  openWallpaperSettings();
+});
+$('wallpaper-dialog-close').addEventListener('click', () => wallpaperDialog.close());
+$('wallpaper-cancel').addEventListener('click', () => wallpaperDialog.close());
+wallpaperDialog.addEventListener('close', () => systemTimeBtn.focus());
+wallpaperModeInputs.forEach(input => input.addEventListener('change', () => {
+  if (!input.checked) return;
+  wallpaperDraft.mode = input.value;
+  renderWallpaperImageList();
+}));
+wallpaperRotationInputs.forEach(input => input.addEventListener('change', () => {
+  if (!input.checked) return;
+  wallpaperDraft.rotation = input.value;
+  updateWallpaperOptionAvailability();
+}));
+wallpaperInterval.addEventListener('change', () => {
+  wallpaperDraft.intervalMinutes = Number(wallpaperInterval.value);
+});
+$('wallpaper-use-default').addEventListener('click', () => {
+  wallpaperSettings = {
+    selected: [],
+    mode: 'random',
+    rotation: 'visit',
+    intervalMinutes: 60,
+    currentUrl: '',
+    nextChangeAt: 0,
+  };
+  window.clearTimeout(wallpaperTimer);
+  setDesktopWallpaper('');
+  saveWallpaperSettings();
+  wallpaperDialog.close();
+});
+wallpaperForm.addEventListener('submit', event => {
+  event.preventDefault();
+  wallpaperSettings = {
+    ...wallpaperSettings,
+    selected: [...wallpaperDraft.selected],
+    mode: wallpaperDraft.mode,
+    rotation: wallpaperDraft.rotation,
+    intervalMinutes: wallpaperDraft.intervalMinutes,
+    currentUrl: '',
+    nextChangeAt: 0,
+  };
+  applyNextWallpaper();
+  wallpaperDialog.close();
+});
+
+void initializeDesktopWallpaper();
 
 function buildFileLauncherBtn(file, iconSvg, iconColor) {
   const button = document.createElement('button');

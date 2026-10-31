@@ -9,6 +9,12 @@ Store uploaded posts, documents, pictures, and videos in App Storage. Keep file 
 
 **How to apply:** keep write operations behind Clerk-protected admin endpoints, and have public clients consume only `/files` routes.
 
+When changing the shape of a server-cached manifest, version its cache key or invalidate the cached record as part of the change. A deployment alone does not advance the content generation, so an older JSON shape can otherwise remain cached until a file mutation happens.
+
+**Why:** manifest JSON is persisted in the database and keyed by content generation, which changes for data mutations but not for code deployments.
+
+**How to apply:** include cache-shape changes in the manifest cache versioning plan; keep the public URL stable while ensuring the first request after deployment rebuilds the new response shape.
+
 For public video GETs, keep the stable `/files/...` URL but redirect to a short-lived signed App Storage read URL instead of streaming the full video through the API. Keep HEAD responses on the public route for metadata.
 
 **Why:** production full-file video GETs were aborted after the API began a 200 response, and the front end returned 500; HEAD and range requests through the API worked. Offloading video bytes avoids sending large streams through that proxy path.

@@ -125,7 +125,7 @@ body {
     repeating-linear-gradient(to right, transparent 0, transparent 2px, #0004 2px, #0004 4px),
     repeating-linear-gradient(to bottom, transparent 0, transparent 2px, #0004 2px, #0004 4px),
     repeating-radial-gradient(transparent 0, transparent 3px, #0001 3px, #0001 6px),
-    url("https://jeffreytackett.us/ssl/resources/scripts/random_picture.php");
+    var(--desktop-wallpaper-image, url("https://jeffreytackett.us/ssl/resources/scripts/random_picture.php"));
   background-position: center center;
   background-size: cover;
   background-attachment: fixed;
@@ -246,8 +246,143 @@ body {
 .quick-toggle[hidden] { display: none; }
 .quick-toggle svg, #theme-reset svg { width: 1.15rem; height: 1.15rem; fill: currentColor; flex: 0 0 auto; }
 #time-format-toggle,
+#wallpaper-settings-open,
 #reminder-notification-toggle { grid-column: 1 / -1; }
 #reminder-notification-state:not(:empty)::before { content: " — "; }
+.wallpaper-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.wallpaper-dialog-header h2 { margin: 0; font-size: 1.15rem; }
+.wallpaper-dialog-header p { margin: .35rem 0 0; color: color-mix(in srgb, var(--app-text) 72%, transparent); font-size: .82rem; }
+#wallpaper-settings-dialog {
+  width: min(42rem, calc(100vw - 1.25rem));
+  max-width: none;
+  max-height: calc(100dvh - 1.25rem);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background: var(--app-bg);
+  color: var(--app-text);
+  box-shadow: 0 1.5rem 4rem rgba(0,0,0,.38);
+}
+#wallpaper-settings-dialog::backdrop { background: rgba(5,12,18,.52); backdrop-filter: blur(4px); }
+#wallpaper-settings-form {
+  display: grid;
+  gap: 1rem;
+  max-height: calc(100dvh - 1.25rem);
+  padding: 1.15rem;
+  overflow: auto;
+}
+#wallpaper-dialog-close {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  background: var(--btn-hover);
+  color: inherit;
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+.wallpaper-settings-status { min-height: 1.1em; font-size: .78rem; opacity: .75; }
+.wallpaper-choice-group,
+.wallpaper-options fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: .75rem;
+  border: 1px solid var(--app-border);
+  border-radius: .75rem;
+}
+.wallpaper-choice-group legend,
+.wallpaper-options legend { padding: 0 .3rem; font-size: .8rem; font-weight: 700; }
+.wallpaper-image-list {
+  display: grid;
+  gap: .35rem;
+  max-height: min(34dvh, 17rem);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.wallpaper-image-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.75rem 2rem 2rem;
+  align-items: center;
+  gap: .3rem;
+  min-width: 0;
+  padding: .25rem;
+  border-radius: .55rem;
+}
+.wallpaper-image-row:hover { background: var(--btn-hover); }
+.wallpaper-image-choice {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  min-width: 0;
+  cursor: pointer;
+}
+.wallpaper-image-choice input { accent-color: var(--accent); flex: 0 0 auto; }
+.wallpaper-image-choice img {
+  width: 4rem;
+  height: 2.6rem;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border: 1px solid var(--app-border);
+  border-radius: .35rem;
+  background: var(--toolbar-bg);
+}
+.wallpaper-image-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .82rem; }
+.wallpaper-image-order { text-align: center; font-size: .75rem; font-variant-numeric: tabular-nums; opacity: .7; }
+.wallpaper-order-button {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--app-border);
+  border-radius: .45rem;
+  background: var(--toolbar-bg);
+  color: inherit;
+  cursor: pointer;
+}
+.wallpaper-order-button:disabled { opacity: .35; cursor: default; }
+.wallpaper-options { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+.wallpaper-options fieldset { display: grid; align-content: start; gap: .55rem; }
+.wallpaper-options label { display: flex; align-items: center; gap: .5rem; font-size: .82rem; }
+.wallpaper-options input { accent-color: var(--accent); }
+.wallpaper-interval-label { flex-wrap: wrap; }
+#wallpaper-interval {
+  max-width: 100%;
+  padding: .35rem .5rem;
+  border: 1px solid var(--app-border);
+  border-radius: .45rem;
+  background: var(--toolbar-bg);
+  color: inherit;
+}
+.wallpaper-dialog-actions { display: grid; grid-template-columns: auto 1fr auto auto; gap: .5rem; align-items: center; }
+.wallpaper-dialog-actions button {
+  min-height: 2.25rem;
+  padding: .4rem .7rem;
+  border: 1px solid var(--app-border);
+  border-radius: .6rem;
+  background: var(--toolbar-bg);
+  color: inherit;
+  font: inherit;
+  font-size: .78rem;
+  cursor: pointer;
+}
+.wallpaper-dialog-actions button[type="submit"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+.wallpaper-empty { margin: .35rem; font-size: .82rem; opacity: .7; }
+@media (max-width: 520px) {
+  .wallpaper-options { grid-template-columns: minmax(0, 1fr); }
+  .wallpaper-dialog-actions { grid-template-columns: 1fr 1fr; }
+  .wallpaper-dialog-actions button:first-child { grid-column: 1 / -1; }
+  .wallpaper-dialog-actions span { display: none; }
+}
 .theme-split {
   display: grid; grid-template-columns: 1fr 0; grid-column: 1 / -1;
   transition: grid-template-columns 180ms ease;

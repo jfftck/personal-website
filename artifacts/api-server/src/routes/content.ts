@@ -891,6 +891,7 @@ async function serveManifest(
   res: Response,
   folderPath: string,
 ): Promise<void> {
+  const cacheFolderPath = folderPath === "" ? "__root_manifest_wallpapers_v1__" : folderPath;
   await ensureRootFolders();
   const [state] = await db
     .select({ generation: contentManifestStateTable.generation })
@@ -903,7 +904,7 @@ async function serveManifest(
     .from(contentManifestCacheTable)
     .where(
       and(
-        eq(contentManifestCacheTable.folderPath, folderPath),
+        eq(contentManifestCacheTable.folderPath, cacheFolderPath),
         eq(contentManifestCacheTable.generation, generation),
       ),
     )
@@ -913,7 +914,7 @@ async function serveManifest(
   let etag = cached?.etag;
   let folderCount = cached?.folderCount ?? 0;
   if (manifest === undefined || !etag) {
-    const [folders, files] = await Promise.all([
+    const [folders, files, wallpaperFiles] = await Promise.all([
       db
         .select()
         .from(contentFoldersTable)
@@ -929,6 +930,19 @@ async function serveManifest(
           ),
         )
         .orderBy(desc(contentFilesTable.contentDate), asc(contentFilesTable.name)),
+      folderPath
+        ? Promise.resolve([])
+        : db
+            .select()
+            .from(contentFilesTable)
+            .where(
+              and(
+                isNull(contentFilesTable.deletedAt),
+                eq(contentFilesTable.isPublished, true),
+                eq(contentFilesTable.isWallpaper, true),
+              ),
+            )
+            .orderBy(desc(contentFilesTable.contentDate), asc(contentFilesTable.name)),
     ]);
 
     if (folderPath && !folders.some((folder) => folder.path === folderPath)) {
@@ -953,16 +967,27 @@ async function serveManifest(
       url: normalizePublicUrl(file.folderPath, file.name),
       poster: file.posterUrl ?? undefined,
     }));
+    const wallpaperEntries = wallpaperFiles.map((file) => ({
+      filename: file.name,
+      title: file.title?.trim() || titleFromLegacyName(file.name),
+      date: file.contentDate,
+      contentType: file.contentType,
+      sizeBytes: file.sizeBytes,
+      isWallpaper: file.isWallpaper,
+      size: formatSize(file.sizeBytes),
+      url: normalizePublicUrl(file.folderPath, file.name),
+      poster: file.posterUrl ?? undefined,
+    }));
     manifest = folderPath
       ? entries
-      : { path: "/", folders: directFolders, files: entries };
+      : { path: "/", folders: directFolders, files: entries, wallpapers: wallpaperEntries };
     folderCount = directFolders.length;
     etag = createManifestEtag({ manifest, folderCount });
 
     await db
       .insert(contentManifestCacheTable)
       .values({
-        folderPath,
+        folderPath: cacheFolderPath,
         generation,
         manifest,
         etag,

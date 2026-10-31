@@ -93,6 +93,10 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 11h5v-2h-4V6h-2v7h1z"/></svg>
         <span>24-hour time</span>
       </button>
+      <button id="wallpaper-settings-open" class="quick-toggle" type="button" aria-haspopup="dialog" aria-controls="wallpaper-settings-dialog">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2ZM5 5h14v9l-3.5-3.5-3 3L9 10l-4 5V5Zm3 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/></svg>
+        <span>Desktop wallpaper</span>
+      </button>
       <button id="reminder-notification-toggle" class="quick-toggle" type="button" aria-pressed="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6V11a7 7 0 0 0-6-6.92V2h-2v2.08A7 7 0 0 0 5 11v5l-2 2v1h18v-1z"/></svg>
         <span>System notifications<b id="reminder-notification-state"></b></span>
@@ -137,6 +141,51 @@
       <div id="reminder-list" aria-live="polite"></div>
     </section>
   </section>
+
+  <dialog id="wallpaper-settings-dialog" aria-labelledby="wallpaper-settings-title">
+    <form id="wallpaper-settings-form">
+      <header class="wallpaper-dialog-header">
+        <div>
+          <h2 id="wallpaper-settings-title">Desktop Wallpaper</h2>
+          <p>Choose pictures marked for wallpaper in the file library.</p>
+        </div>
+        <button id="wallpaper-dialog-close" class="icon-btn" type="button" aria-label="Close wallpaper settings">×</button>
+      </header>
+      <div id="wallpaper-settings-status" class="wallpaper-settings-status" role="status" aria-live="polite"></div>
+      <fieldset class="wallpaper-choice-group">
+        <legend>Available wallpapers</legend>
+        <div id="wallpaper-image-list" class="wallpaper-image-list"></div>
+      </fieldset>
+      <div class="wallpaper-options">
+        <fieldset>
+          <legend>Selection order</legend>
+          <label><input type="radio" name="wallpaper-mode" value="random"> Random</label>
+          <label><input type="radio" name="wallpaper-mode" value="cycle"> Cycle in order</label>
+        </fieldset>
+        <fieldset>
+          <legend>Change wallpaper</legend>
+          <label><input type="radio" name="wallpaper-rotation" value="visit"> On each visit</label>
+          <label><input type="radio" name="wallpaper-rotation" value="interval"> On a time delay</label>
+          <label class="wallpaper-interval-label" for="wallpaper-interval">Change every
+            <select id="wallpaper-interval" name="wallpaper-interval">
+              <option value="5">5 minutes</option>
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+              <option value="60">1 hour</option>
+              <option value="360">6 hours</option>
+              <option value="1440">24 hours</option>
+            </select>
+          </label>
+        </fieldset>
+      </div>
+      <footer class="wallpaper-dialog-actions">
+        <button id="wallpaper-use-default" type="button">Use Default Random Wallpaper</button>
+        <span></span>
+        <button id="wallpaper-cancel" type="button">Cancel</button>
+        <button id="wallpaper-save" type="submit">Save</button>
+      </footer>
+    </form>
+  </dialog>
 
   <div id="help-overlay" role="dialog" aria-modal="true" aria-label="Help" hidden>
     <div id="help-inner">
