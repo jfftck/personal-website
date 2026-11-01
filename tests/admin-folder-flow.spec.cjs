@@ -82,6 +82,7 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
 
   const suffix = randomUUID();
   const createdPath = `admin-folder-created-${suffix}`;
+  const correctedPath = `admin-folder-corrected-${suffix}`;
   const renamedPath = `admin-folder-renamed-${suffix}`;
   const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   const jwtKey = publicKey.export({ type: 'spki', format: 'pem' });
@@ -115,6 +116,7 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
 
   let folderId;
   let childFolderId;
+  let correctedFolderId;
   try {
     expect(await waitForHttp(api, `${apiBaseUrl}/api/healthz`)).toBe(true);
     expect(await waitForHttp(secondApi, `${secondApiBaseUrl}/api/healthz`)).toBe(true);
@@ -168,6 +170,39 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
     const createdFolder = await createdResponse.json();
     folderId = createdFolder.id;
     await expect(page.getByTestId(`select-folder-${folderId}`)).toHaveText(createdPath);
+
+    const duplicateCreateResponsePromise = page.waitForResponse(response =>
+      response.url().includes('/api/content/folders') &&
+      response.request().method() === 'POST',
+    );
+    await page.getByTestId('create-folder').click();
+    await page.getByTestId('input-folder-name').fill(createdPath);
+    await page.getByTestId('save-folder').click();
+    const duplicateCreateResponse = await duplicateCreateResponsePromise;
+    expect(duplicateCreateResponse.status()).toBe(409);
+    expect((await duplicateCreateResponse.json()).error).toBe(
+      'A folder with that name already exists in this location.',
+    );
+    await expect(page.getByRole('heading', { name: 'Create folder' })).toBeVisible();
+    await expect(page.getByTestId('input-folder-name')).toHaveValue(createdPath);
+    await expect(page.getByTestId('error-folder-name')).toHaveText(
+      'A folder with that name already exists in this location.',
+    );
+    await expect(page.getByTestId(`select-folder-${folderId}`)).toHaveText(createdPath);
+    await expect(page.getByTestId(`select-folder-${folderId}`)).toHaveCount(1);
+
+    const correctedCreateResponsePromise = page.waitForResponse(response =>
+      response.url().includes('/api/content/folders') &&
+      response.request().method() === 'POST',
+    );
+    await page.getByTestId('input-folder-name').fill(correctedPath);
+    await expect(page.getByTestId('error-folder-name')).toHaveCount(0);
+    await page.getByTestId('save-folder').click();
+    const correctedCreateResponse = await correctedCreateResponsePromise;
+    expect(correctedCreateResponse.status()).toBe(201);
+    correctedFolderId = (await correctedCreateResponse.json()).id;
+    await expect(page.getByTestId(`select-folder-${folderId}`)).toHaveText(createdPath);
+    await expect(page.getByTestId(`select-folder-${correctedFolderId}`)).toHaveText(correctedPath);
 
     let publicRoot = await readManifest(
       `${secondApiBaseUrl}/files/manifest.json`,
@@ -273,6 +308,12 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
   } finally {
     if (childFolderId) {
       await fetch(`${apiBaseUrl}/api/content/folders/${childFolderId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
+    if (correctedFolderId) {
+      await fetch(`${apiBaseUrl}/api/content/folders/${correctedFolderId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => {});

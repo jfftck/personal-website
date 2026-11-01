@@ -6,3 +6,4 @@
 - [Content storage architecture](content-storage.md) — App Storage holds file bytes, `/files` serves generated public manifests, and private Git stores revision snapshots and object references.
 - [Clerk plan constraint](clerk-auth-plan-constraint.md) — do not require a plan change just to keep production authentication working on this personal page.
 - [Authenticated API integration tests](authenticated-api-tests.md) — test protected endpoints with signed Clerk tokens and an ephemeral JWT verification key, never an auth bypass.
+- [Folder conflict handling](folder-conflict-handling.md) — check the composed folder path before insertion so duplicate-name conflicts return a useful 409.

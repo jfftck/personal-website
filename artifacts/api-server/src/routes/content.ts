@@ -330,16 +330,22 @@ function apiError(error: unknown, res: Response, next: (error?: unknown) => void
     });
     return;
   }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "23505"
-  ) {
+  if (hasErrorCode(error, "23505")) {
     res.status(409).json({ error: "A file or folder with that name already exists." });
     return;
   }
   next(error);
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  const visited = new Set<object>();
+  let current = error;
+  while (typeof current === "object" && current !== null && !visited.has(current)) {
+    visited.add(current);
+    if ("code" in current && current.code === code) return true;
+    current = "cause" in current ? current.cause : undefined;
+  }
+  return false;
 }
 
 function apiHandler(
@@ -390,6 +396,14 @@ contentApiRouter.post(
     const parentPath = normalizeFolderPath(input.parentPath);
     await assertFolderExists(parentPath);
     const path = parentPath ? `${parentPath}/${name}` : name;
+    const [existingFolder] = await db
+      .select({ id: contentFoldersTable.id })
+      .from(contentFoldersTable)
+      .where(eq(contentFoldersTable.path, path))
+      .limit(1);
+    if (existingFolder) {
+      throw new ContentError(409, "A folder with that name already exists in this location.");
+    }
     const folder = await db.transaction(async (tx) => {
       const [created] = await tx
         .insert(contentFoldersTable)

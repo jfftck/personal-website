@@ -389,7 +389,9 @@ function Console() {
         setModal(null);
       }
       setFolderModalReturnTo(null);
-    } catch (error) { setToastMessage(errorMessage(error)); }
+    } catch (error) {
+      folderForm.setError('name', { type: 'server', message: errorMessage(error) });
+    }
   };
 
   const handleDeleteFolder = async (folder: ContentFolder) => {
@@ -960,8 +962,8 @@ function Console() {
             <FormField control={folderForm.control} name="name" rules={{ required: 'Enter a folder name.' }} render={({ field }) => (
               <FormItem>
                 <FormLabel className="field-label">Folder name</FormLabel>
-                <FormControl><input className="field-control" maxLength={120} autoFocus data-testid="input-folder-name" {...field} /></FormControl>
-                <FormMessage data-testid="error-folder-name" />
+                <FormControl><input className="field-control" maxLength={120} autoFocus data-testid="input-folder-name" {...field} onChange={(event) => { field.onChange(event); folderForm.clearErrors('name'); }} /></FormControl>
+                <FormMessage role="alert" data-testid="error-folder-name" />
               </FormItem>
             )} />
             <div className="dialog-footer"><button className="button button-quiet" type="button" onClick={closeFolderModal} data-testid="cancel-folder">Cancel</button><button className="button button-primary" type="submit" disabled={!folderForm.watch('name')?.trim() || createFolder.isPending || updateFolder.isPending} data-testid="save-folder">{editingFolder ? 'Save Name' : 'Create Folder'}</button></div>
