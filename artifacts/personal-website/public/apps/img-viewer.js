@@ -26,6 +26,9 @@ async function fetchPicturesManifest() {
 // ── Image Viewer ───────────────────────────────────────────────
 export function buildImgViewer(id, ctx, initialState = null) {
   let scale = 1, rot = 0, panX = 0, panY = 0;
+  const MIN_SCALE = 0.01;
+  const MAX_SCALE = 8;
+  let fitPending = false;
   let isPanning = false, panStartX = 0, panStartY = 0, panOriginX = 0, panOriginY = 0;
   let pinching = false, pinchDist0 = 0, scale0 = 1;
   let currentFile = null;
@@ -50,6 +53,8 @@ export function buildImgViewer(id, ctx, initialState = null) {
     <span class="img-counter" aria-live="polite"></span>
     ${toolBtn('next',     'next',     'Next image')}
     <span class="toolbar-sep"></span>
+    ${toolBtn('fit',      'fit',      'Fit Image')}
+    ${toolBtn('actual-size', 'actualSize', '100% Zoom')}
     ${toolBtn('zoom-out', 'zoomOut',  'Zoom Out')}
     ${toolBtn('zoom-in',  'zoomIn',   'Zoom In')}
     ${toolBtn('rotate',   'rotate',   'Rotate')}
@@ -99,6 +104,45 @@ export function buildImgViewer(id, ctx, initialState = null) {
   }
 
   function resetTransform() { scale = 1; rot = 0; panX = 0; panY = 0; applyTransform(); }
+
+  function fitImageToFrame() {
+    const width = img.naturalWidth;
+    const height = img.naturalHeight;
+    const frameWidth = viewport.clientWidth;
+    const frameHeight = viewport.clientHeight;
+    if (!width || !height) return;
+    if (!frameWidth || !frameHeight) {
+      fitPending = true;
+      return;
+    }
+    const rotated = Math.abs(rot % 180) === 90;
+    const imageWidth = rotated ? height : width;
+    const imageHeight = rotated ? width : height;
+    scale = Math.min(frameWidth / imageWidth, frameHeight / imageHeight, MAX_SCALE);
+    fitPending = false;
+    panX = 0;
+    panY = 0;
+    applyTransform();
+  }
+
+  new ResizeObserver(() => {
+    if (fitPending) fitImageToFrame();
+  }).observe(viewport);
+
+  function sizeLoadedImage() {
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    img.style.width = `${img.naturalWidth}px`;
+    img.style.height = `${img.naturalHeight}px`;
+    requestAnimationFrame(fitImageToFrame);
+  }
+
+  img.addEventListener('load', sizeLoadedImage);
+
+  function setImageSource(url, alt) {
+    img.alt = alt;
+    img.src = url;
+    if (img.complete && img.naturalWidth) sizeLoadedImage();
+  }
 
   // ── Gallery navigation ────────────────────────────────────────
   function updateCounter() {
@@ -160,8 +204,7 @@ export function buildImgViewer(id, ctx, initialState = null) {
     const item  = gallery[galleryIdx];
     currentFile = { url: item.url, name: item.displayName };
     ctx.setAppTitle(id, item.displayName);
-    img.src = item.url;
-    img.alt = item.displayName;
+    setImageSource(item.url, item.displayName);
     resetTransform();
     updateCounter();
     updateSidebarActive();
@@ -218,8 +261,7 @@ export function buildImgViewer(id, ctx, initialState = null) {
     } else if (gallery.length === 0) {
       pendingState = null;
       ctx.saveSession?.();
-      img.src = 'https://picsum.photos/seed/default/1200/800';
-      img.alt = 'Sample image';
+      setImageSource('https://picsum.photos/seed/default/1200/800', 'Sample image');
       counterEl.textContent = '';
     }
   }
@@ -237,8 +279,7 @@ export function buildImgViewer(id, ctx, initialState = null) {
       } else {
         currentFile = { url, name };
         ctx.setAppTitle(id, name);
-        img.src = url;
-        img.alt = name;
+        setImageSource(url, name);
         resetTransform();
         counterEl.textContent = '';
         updateSidebarActive();
@@ -255,8 +296,10 @@ export function buildImgViewer(id, ctx, initialState = null) {
       case 'open':     toggleSidebar(); break;
       case 'prev':     showGalleryItem(galleryIdx - 1); break;
       case 'next':     showGalleryItem(galleryIdx + 1); break;
-      case 'zoom-in':  scale = Math.min(scale * 1.25, 8);   applyTransform(); break;
-      case 'zoom-out': scale = Math.max(scale / 1.25, 0.1); applyTransform(); break;
+      case 'fit':      fitImageToFrame(); break;
+      case 'actual-size': scale = 1; panX = 0; panY = 0; applyTransform(); break;
+      case 'zoom-in':  scale = Math.min(scale * 1.25, MAX_SCALE);   applyTransform(); break;
+      case 'zoom-out': scale = Math.max(scale / 1.25, MIN_SCALE); applyTransform(); break;
       case 'rotate':   rot = (rot + 90) % 360;              applyTransform(); break;
       case 'share': {
         const url = currentFile ? new URL(currentFile.url, location.href).href : img.src;
@@ -282,7 +325,7 @@ export function buildImgViewer(id, ctx, initialState = null) {
   // ── Pan (mouse) ───────────────────────────────────────────────
   viewport.addEventListener('wheel', e => {
     e.preventDefault();
-    scale = Math.min(Math.max(scale * (e.deltaY < 0 ? 1.1 : 0.9), 0.1), 8);
+    scale = Math.min(Math.max(scale * (e.deltaY < 0 ? 1.1 : 0.9), MIN_SCALE), MAX_SCALE);
     applyTransform();
   }, { passive: false });
 
@@ -313,7 +356,7 @@ export function buildImgViewer(id, ctx, initialState = null) {
   }, { passive: true });
   viewport.addEventListener('touchmove', e => {
     if (!pinching || e.touches.length < 2) return;
-    scale = Math.min(Math.max(scale0 * (touchDist(e.touches) / pinchDist0), 0.1), 8);
+    scale = Math.min(Math.max(scale0 * (touchDist(e.touches) / pinchDist0), MIN_SCALE), MAX_SCALE);
     applyTransform();
   }, { passive: true });
   viewport.addEventListener('touchend', () => { pinching = false; });
