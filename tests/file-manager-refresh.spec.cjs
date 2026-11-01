@@ -54,7 +54,10 @@ test.beforeEach(async ({ page }, testInfo) => {
   await page.goto('/');
   await page.locator('#welcome-win-close').click();
   await page.locator('#app-menu-btn').click();
-  holdInitialPostsRequest = testInfo.title === 'refresh revalidates after the initial folder request settles';
+  holdInitialPostsRequest = [
+    'refresh revalidates after the initial folder request settles',
+    'refresh updates home folder totals while initial counts are loading',
+  ].includes(testInfo.title);
   await page.locator('#app-list .app-launcher[data-type="file-manager"]').click();
 });
 
@@ -92,6 +95,30 @@ test('refresh revalidates after the initial folder request settles', async ({ pa
   await expect.poll(() => manifestRequests.posts).toBeGreaterThan(1);
   await expect(fileTileName(fileManager, 'Latest Post')).toBeVisible();
   await expect(fileTileName(fileManager, 'Old Post')).toHaveCount(0);
+});
+
+test('refresh updates home folder totals while initial counts are loading', async ({ page }) => {
+  const fileManager = page.locator('.app-window[data-type="file-manager"]');
+  const refresh = fileManager.getByRole('button', { name: 'Refresh current folder' });
+  const status = fileManager.locator('.fm-refresh-status');
+
+  await initialPostsRequestStarted;
+  manifests.posts = [
+    { filename: '20261002_Keep_Post.md' },
+    { filename: '20261007_Latest_Post.md' },
+    { filename: '20261008_Another_Post.md' },
+  ];
+  manifests.documents.push({ filename: '20261009_New_Document.pdf' });
+
+  try {
+    await refresh.click();
+  } finally {
+    releaseInitialPostsRequest();
+  }
+
+  await expect(status).toHaveText('Folder refreshed.');
+  await expect(rootFolderTile(page, 'Posts').locator('.fm-tile-date')).toHaveText('3');
+  await expect(rootFolderTile(page, 'Documents').locator('.fm-tile-date')).toHaveText('2');
 });
 
 test('refresh replaces active folder files and updates root counts', async ({ page }) => {
