@@ -114,6 +114,7 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
   });
 
   let folderId;
+  let childFolderId;
   try {
     expect(await waitForHttp(api, `${apiBaseUrl}/api/healthz`)).toBe(true);
     expect(await waitForHttp(secondApi, `${secondApiBaseUrl}/api/healthz`)).toBe(true);
@@ -209,6 +210,19 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
       `${secondApiBaseUrl}/files/${encodeURIComponent(renamedPath)}/manifest.json`,
     )).response.status).toBe(200);
 
+    const childPath = `child-${suffix}`;
+    const childCreateResponsePromise = page.waitForResponse(response =>
+      response.url().includes('/api/content/folders') &&
+      response.request().method() === 'POST',
+    );
+    await page.getByTestId(`add-subfolder-${folderId}`).click();
+    await page.getByTestId('input-folder-name').fill(childPath);
+    await page.getByTestId('save-folder').click();
+    const childCreateResponse = await childCreateResponsePromise;
+    expect(childCreateResponse.status()).toBe(201);
+    childFolderId = (await childCreateResponse.json()).id;
+    await expect(page.getByTestId(`select-folder-${childFolderId}`)).toHaveText(childPath);
+
     const beforeDelete = await readManifest(`${apiBaseUrl}/files/manifest.json`);
     page.once('dialog', dialog => dialog.accept());
     const deleteResponsePromise = page.waitForResponse(response =>
@@ -216,7 +230,31 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
       response.request().method() === 'DELETE',
     );
     await page.getByTestId(`delete-folder-${folderId}`).click();
-    expect((await deleteResponsePromise).status()).toBe(204);
+    const rejectedDeleteResponse = await deleteResponsePromise;
+    expect(rejectedDeleteResponse.status()).toBe(409);
+    expect((await rejectedDeleteResponse.json()).error).toBe('Move or remove this folder’s contents first.');
+    await expect(page.getByTestId(`select-folder-${folderId}`)).toHaveText(renamedPath);
+    await expect(page.getByTestId(`select-folder-${childFolderId}`)).toHaveText(childPath);
+    await expect(page.getByTestId('status-toast')).toHaveText(
+      'Move or remove this folder’s contents first.',
+    );
+
+    page.once('dialog', dialog => dialog.accept());
+    const deleteChildResponsePromise = page.waitForResponse(response =>
+      response.url().includes(`/api/content/folders/${childFolderId}`) &&
+      response.request().method() === 'DELETE',
+    );
+    await page.getByTestId(`delete-folder-${childFolderId}`).click();
+    expect((await deleteChildResponsePromise).status()).toBe(204);
+    await expect(page.getByTestId(`select-folder-${childFolderId}`)).toHaveCount(0);
+
+    page.once('dialog', dialog => dialog.accept());
+    const deleteParentResponsePromise = page.waitForResponse(response =>
+      response.url().includes(`/api/content/folders/${folderId}`) &&
+      response.request().method() === 'DELETE',
+    );
+    await page.getByTestId(`delete-folder-${folderId}`).click();
+    expect((await deleteParentResponsePromise).status()).toBe(204);
     await expect(page.getByTestId(`select-folder-${folderId}`)).toHaveCount(0);
 
     publicRoot = await readManifest(
@@ -233,6 +271,12 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
       `${secondApiBaseUrl}/files/${encodeURIComponent(renamedPath)}/manifest.json`,
     )).response.status).toBe(404);
   } finally {
+    if (childFolderId) {
+      await fetch(`${apiBaseUrl}/api/content/folders/${childFolderId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
     if (folderId) {
       await fetch(`${apiBaseUrl}/api/content/folders/${folderId}`, {
         method: 'DELETE',
