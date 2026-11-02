@@ -35,13 +35,6 @@ function copyWallpaper(settings) {
 
 export function buildSettings(id, ctx, initialState) {
   const settings = ctx?.settings;
-  if (!document.querySelector('link[data-settings-app-styles]')) {
-    const stylesheet = document.createElement('link');
-    stylesheet.rel = 'stylesheet';
-    stylesheet.href = new URL('./settings.css', import.meta.url).href;
-    stylesheet.dataset.settingsAppStyles = 'true';
-    document.head.append(stylesheet);
-  }
   const root = el('section', 'utility-app settings-app');
   root.setAttribute('aria-label', 'Settings');
   root.innerHTML = `
