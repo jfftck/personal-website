@@ -1,7 +1,7 @@
 import { refreshCustomSelect } from '../custom-select.js';
 
 import { Chess, chessStatus } from './chess.js';
-import { createReversi, reversiMoves, playReversi, reversiScore, chooseReversiMove } from './reversi.js';
+import { createReversi, reversiMoves, playReversi, reversiScore } from './reversi.js';
 import {
   gameShell, button, toolbarButton, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt, showNewGameScreen,
 } from './ui.js';
@@ -14,6 +14,9 @@ import { boardWinAnimationChoices, getWinAnimationPreference, setWinAnimationPre
 const names = { k: 'King', q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight', p: 'Pawn' };
 const squareName = index => `${'abcdefgh'[index % 8]}${8 - Math.floor(index / 8)}`;
 const difficultyOptions = [['easy', 'Easy'], ['medium', 'Medium'], ['hard', 'Hard']];
+const computerMoveTimeoutMs = 5000;
+const maxComputerMoveFailures = 3;
+const retryBackoffBaseMs = 500;
 
 export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSvg) {
   const isChess = kind === 'chess';
@@ -39,11 +42,17 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
       snapshots = savedSnapshots;
     }
   }
-  let worker = null, timer = null, thinking = false, disposed = false, aiError = '';
+  let worker = null, timer = null, thinking = false, disposed = false;
+  let aiFailures = 0, aiNotice = '', aiAttemptId = 0;
   let endScreenTimer = null, newGameScreenCleanup = null, endScreenShown = false;
   let celebrationCleanup = null;
   const undo = toolbarButton('Undo', 'undo', undoMove);
-  const retry = toolbarButton('Retry Computer Move', 'retry', () => { aiError = ''; maybeComputer(); render(); });
+  const retry = toolbarButton('Retry Computer Move', 'retry', () => {
+    if (aiFailures < maxComputerMoveFailures) return;
+    aiFailures = 0;
+    aiNotice = '';
+    maybeComputer();
+  });
   retry.hidden = true;
   toolbarLeft.append(undo, retry);
   toolbarCenter.append(toolbarButton('New game', 'newGame', restart));
@@ -75,8 +84,10 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
   const removeThemeResetControl = addGameThemeResetControl(settings.appearanceOptions);
 
   function cancelComputer() {
+    aiAttemptId += 1;
     worker?.terminate(); worker = null;
-    clearTimeout(timer); timer = null; thinking = false; aiError = '';
+    clearTimeout(timer); timer = null; thinking = false;
+    aiNotice = '';
   }
   function clearEndSequence() {
     clearTimeout(endScreenTimer); endScreenTimer = null;
@@ -88,6 +99,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     newGameScreenCleanup?.(); newGameScreenCleanup = null;
     endScreenShown = false;
     cancelComputer();
+    aiFailures = 0;
     pendingRestore = false;
     game = isChess ? new Chess() : createReversi();
     selected = null; promotion = null; snapshots = []; render(); persist(); maybeComputer();
@@ -107,6 +119,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     newGameScreenCleanup?.(); newGameScreenCleanup = null;
     endScreenShown = false;
     cancelComputer(); selected = null; promotion = null;
+    aiFailures = 0;
     let transition = null;
     if (isChess) {
       const moves = [...chessMoveSegments(game.undo(), true)];
@@ -153,6 +166,8 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
           before[index] && before[index] !== piece ? [{ index, from: before[index] }] : []),
       };
     }
+    aiFailures = 0;
+    aiNotice = '';
     selected = null; promotion = null;
     render(transition); persist(); maybeComputer();
     if (ended()) {
@@ -229,38 +244,57 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
   function persist() {
     if (!pendingRestore) ctx.saveSession();
   }
-  function failComputer(message) {
-    cancelComputer(); aiError = `Computer could not move: ${message}. Retry or choose local two-player.`;
+  function failComputer(message, attemptId) {
+    if (attemptId !== aiAttemptId || disposed) return;
+    aiAttemptId += 1;
+    worker?.terminate(); worker = null;
+    clearTimeout(timer); timer = null; thinking = false;
+    aiFailures += 1;
+    if (aiFailures < maxComputerMoveFailures) {
+      const delay = retryBackoffBaseMs * (2 ** (aiFailures - 1));
+      aiNotice = `Computer move failed (${aiFailures} of ${maxComputerMoveFailures}). Retrying in ${delay / 1000} second${delay === 1000 ? '' : 's'}…`;
+      render();
+      const retryId = aiAttemptId;
+      timer = setTimeout(() => {
+        if (retryId !== aiAttemptId) return;
+        timer = null;
+        maybeComputer();
+      }, delay);
+      return;
+    }
+    aiNotice = `The computer couldn't recover after ${maxComputerMoveFailures} attempts: ${message}. You can retry or switch to local two-player.`;
     render();
   }
   function maybeComputer() {
-    if (disposed || thinking || !computerTurn()) return;
+    if (disposed || thinking || !computerTurn() || aiFailures >= maxComputerMoveFailures) return;
     thinking = true;
-    status.textContent += ' Computer is thinking…';
-    if (isChess) {
-      try {
-        worker = new Worker(new URL('./chess-worker.js', import.meta.url), { type: 'module' });
-        worker.onmessage = event => {
-          if (event.data.error || !event.data.move) {
-            failComputer(event.data.error || 'no move returned'); return;
-          }
-          const move = event.data.move;
-          cancelComputer();
-          try { commit(move); } catch (error) { failComputer(error.message); }
-        };
-        worker.onerror = event => { event.preventDefault(); failComputer(event.message || 'worker unavailable'); };
-        worker.postMessage({ history: game.history(), difficulty });
-      } catch (error) { failComputer(error.message); }
-    } else {
-      timer = setTimeout(() => {
-        try {
-          const depth = difficulty === 'easy' ? 1 : difficulty === 'hard' ? 5 : 3;
-          const move = chooseReversiMove(game, depth);
-          thinking = false;
-          if (move === null) throw new Error('no legal move');
-          commit(move);
-        } catch (error) { failComputer(error.message); }
-      }, 220);
+    aiNotice = aiFailures
+      ? `Computer is retrying (attempt ${aiFailures + 1} of ${maxComputerMoveFailures})…`
+      : '';
+    const attemptId = ++aiAttemptId;
+    render();
+    try {
+      worker = new Worker(new URL(isChess ? './chess-worker.js' : './reversi-worker.js', import.meta.url), { type: 'module' });
+      worker.onmessage = event => {
+        if (attemptId !== aiAttemptId) return;
+        const move = event.data.move;
+        if (event.data.error || move == null) {
+          failComputer(event.data.error || 'no move returned', attemptId); return;
+        }
+        cancelComputer();
+        try { commit(move); } catch (error) { failComputer(error.message, aiAttemptId); }
+      };
+      worker.onerror = event => {
+        if (attemptId !== aiAttemptId) return;
+        event.preventDefault();
+        failComputer(event.message || 'worker unavailable', attemptId);
+      };
+      timer = setTimeout(() => failComputer(`move timed out after ${computerMoveTimeoutMs / 1000} seconds`, attemptId), computerMoveTimeoutMs);
+      worker.postMessage(isChess
+        ? { history: game.history(), difficulty }
+        : { state: game, depth: difficulty === 'easy' ? 1 : difficulty === 'hard' ? 5 : 3 });
+    } catch (error) {
+      failComputer(error.message || 'worker unavailable', attemptId);
     }
   }
   function clickSquare(index) {
@@ -327,7 +361,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
       return;
     }
     undo.disabled = isChess ? !game.history().length : !snapshots.length;
-    retry.hidden = !aiError;
+    retry.hidden = aiFailures < maxComputerMoveFailures;
     if (isChess) status.textContent = chessStatus(game);
     else {
       const score = reversiScore(game.board);
@@ -337,7 +371,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     }
     if (promotion) status.textContent += ' Choose a promotion piece.';
     if (thinking) status.textContent += ' Computer is thinking…';
-    if (aiError) status.textContent = aiError;
+    if (aiNotice) status.textContent = aiNotice;
     preserveFocus(area, () => {
       const board = document.createElement('div');
       board.className = `game-board ${isChess ? 'chess-board' : 'reversi-board'}`;
