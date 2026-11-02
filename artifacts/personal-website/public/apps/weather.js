@@ -1,4 +1,5 @@
 import { enhanceSelects, focusCustomSelect, refreshCustomSelect } from './custom-select.js';
+import { SETTINGS_ICON } from './toolbar.js';
 
 const PREF_KEY = 'personal-desktop-weather-setup-v1';
 const CONDITIONS = {
@@ -218,7 +219,7 @@ export function buildWeather(id, ctx) {
           <div class="weather-location-menu menu-popover" id="${id || 'weather'}-location-menu" role="menu" aria-label="Saved weather locations" hidden></div>
         </div>
         <button class="weather-settings-button" type="button" aria-label="Weather settings" title="Settings">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Zm9 4.8a9.2 9.2 0 0 0 0-2l2-1.5-2-3.5-2.4 1a8.2 8.2 0 0 0-1.7-1L16.5 3h-4l-.4 2.7a8.2 8.2 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a9.2 9.2 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a8.2 8.2 0 0 0 1.7 1l.4 2.7h4l.4-2.7a8.2 8.2 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5Z"/></svg>
+          ${SETTINGS_ICON}
           <span class="sr-only">Settings</span>
         </button>
       </div>

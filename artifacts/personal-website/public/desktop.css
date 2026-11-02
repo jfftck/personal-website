@@ -3606,6 +3606,8 @@ kbd {
   min-height:2rem; padding:.3rem .55rem; border:1px solid var(--app-border); border-radius:.5rem;
   background:var(--util-surface); color:var(--app-text); cursor:pointer; font:inherit;
 }
+.calc-header-graph-actions .calc-open-settings { display:inline-flex; align-items:center; gap:.35rem; }
+.calc-header-graph-actions .calc-open-settings svg { width:1rem; height:1rem; flex:none; }
 .calc-header-graph-actions button:hover { background:var(--util-surface-strong); }
 .calc-header-graph-actions button:focus-visible { outline:2px solid var(--focus-color); outline-offset:2px; }
 .calc-workspace {

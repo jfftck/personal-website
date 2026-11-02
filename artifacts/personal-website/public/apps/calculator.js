@@ -3,6 +3,7 @@
 import { enhanceSelect, refreshCustomSelect } from './custom-select.js';
 import { NOTE_COLORS } from './sticky-notes.js';
 import '../shared/app-controls.js';
+import { SETTINGS_ICON } from './toolbar.js';
 
 const BASIC_KEYS = [
   ['AC', 'clear'], ['±', 'sign'], ['%', 'percent'], ['÷', 'operator'],
@@ -318,7 +319,7 @@ export function buildCalculator(id, ctx) {
           </div>
           <div class="calc-header-graph-actions" role="group" aria-label="Graph editing" hidden>
             <button type="button" class="calc-open-editor" aria-label="Edit functions">y = f(x)</button>
-            <button type="button" class="calc-open-settings" aria-label="Graph settings">Settings</button>
+            <button type="button" class="calc-open-settings" aria-label="Graph settings">${SETTINGS_ICON}<span>Settings</span></button>
           </div>
         </div>
         <app-select class="calc-mode-select">

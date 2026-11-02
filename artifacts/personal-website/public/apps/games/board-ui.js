@@ -13,12 +13,13 @@ import { boardWinAnimationChoices, getWinAnimationPreference, setWinAnimationPre
 
 const names = { k: 'King', q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight', p: 'Pawn' };
 const squareName = index => `${'abcdefgh'[index % 8]}${8 - Math.floor(index / 8)}`;
+const difficultyOptions = [['easy', 'Easy'], ['medium', 'Medium'], ['hard', 'Hard']];
 
 export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSvg) {
   const isChess = kind === 'chess';
   const { el, toolbarLeft, toolbarCenter, status, area, settings } = gameShell(id, title, isChess
-    ? 'White moves first. Select a piece, then a highlighted destination. Checkmate the opposing king to win. Castling, en passant, pawn promotion, stalemate, repetition, insufficient material, and the fifty-move rule are supported. In computer mode, choose your color in Settings. Arrow keys move between squares; Enter or Space selects.'
-      : 'Black moves first. Place a disc so it brackets at least one opposing disc between the new disc and one of yours, in any direction. All bracketed discs flip. Legal moves are marked. A player with no move automatically passes; the game ends when neither player can move. Most discs wins. In computer mode, choose your color in Settings. Arrow keys navigate; Enter or Space plays.', ctx, iconSvg);
+    ? 'White moves first. Select a piece, then a highlighted destination. Checkmate the opposing king to win. Castling, en passant, pawn promotion, stalemate, repetition, insufficient material, and the fifty-move rule are supported. In computer mode, choose your color and difficulty in Settings. Arrow keys move between squares; Enter or Space selects.'
+      : 'Black moves first. Place a disc so it brackets at least one opposing disc between the new disc and one of yours, in any direction. All bracketed discs flip. Legal moves are marked. A player with no move automatically passes; the game ends when neither player can move. Most discs wins. In computer mode, choose your color and difficulty in Settings. Arrow keys navigate; Enter or Space plays.', ctx, iconSvg);
   const restored = inspectGameSession(kind, initialState);
   let game = isChess ? new Chess() : createReversi();
   let mode = restored.status === 'valid' || restored.status === 'finished'
@@ -26,6 +27,8 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
   let playerColor = restored.status === 'valid' || restored.status === 'finished'
     ? restored.options.playerColor || (isChess ? 'white' : 'black')
     : isChess ? 'white' : 'black';
+  let difficulty = restored.status === 'valid' || restored.status === 'finished'
+    ? restored.options.difficulty || 'medium' : 'medium';
   let pendingRestore = initialState != null && restored.status !== 'finished';
   let selected = null, promotion = null, snapshots = [];
   if (restored.status === 'finished') {
@@ -40,7 +43,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
   let endScreenTimer = null, newGameScreenCleanup = null, endScreenShown = false;
   let celebrationCleanup = null;
   const undo = toolbarButton('Undo', 'undo', undoMove);
-  const retry = toolbarButton('Retry computer', 'retry', () => { aiError = ''; maybeComputer(); render(); });
+  const retry = toolbarButton('Retry Computer Move', 'retry', () => { aiError = ''; maybeComputer(); render(); });
   retry.hidden = true;
   toolbarLeft.append(undo, retry);
   toolbarCenter.append(toolbarButton('New game', 'newGame', restart));
@@ -48,12 +51,18 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     playerColor = value; restart();
   });
   colorControl.hidden = mode !== 'computer';
+  const difficultyControl = selectControl('Difficulty', difficultyOptions, difficulty, value => {
+    difficulty = value; restart();
+  });
+  difficultyControl.hidden = mode !== 'computer';
   settings.addGameOption(selectControl('Opponent', [['computer', 'Computer'], ['local', 'Local two-player']], mode, value => {
     mode = value;
     colorControl.hidden = mode !== 'computer';
+    difficultyControl.hidden = mode !== 'computer';
     restart();
   }));
   settings.addGameOption(colorControl);
+  settings.addGameOption(difficultyControl);
   settings.addGameOption(selectControl(
     'Win animation',
     boardWinAnimationChoices,
@@ -189,10 +198,17 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
         choices: [['white', 'White'], ['black', 'Black']],
         value: playerColor,
         visibleWhen: nextOptions => nextOptions.mode === 'computer',
+      }, {
+        name: 'difficulty',
+        label: 'Difficulty',
+        choices: difficultyOptions,
+        value: difficulty,
+        visibleWhen: nextOptions => nextOptions.mode === 'computer',
       }],
       nextOptions => {
         mode = nextOptions.mode;
         if (nextOptions.playerColor) playerColor = nextOptions.playerColor;
+        if (nextOptions.difficulty) difficulty = nextOptions.difficulty;
         const toolbarSelect = settings.element.querySelector('select[data-game-option="Opponent"]');
         if (toolbarSelect) {
           toolbarSelect.value = mode;
@@ -201,7 +217,11 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
         const playerColorSelect = colorControl.querySelector('select');
         playerColorSelect.value = playerColor;
         refreshCustomSelect(playerColorSelect);
+        const difficultySelect = difficultyControl.querySelector('select');
+        difficultySelect.value = difficulty;
+        refreshCustomSelect(difficultySelect);
         colorControl.hidden = mode !== 'computer';
+        difficultyControl.hidden = mode !== 'computer';
         restart();
       },
     );
@@ -229,12 +249,13 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
           try { commit(move); } catch (error) { failComputer(error.message); }
         };
         worker.onerror = event => { event.preventDefault(); failComputer(event.message || 'worker unavailable'); };
-        worker.postMessage({ history: game.history() });
+        worker.postMessage({ history: game.history(), difficulty });
       } catch (error) { failComputer(error.message); }
     } else {
       timer = setTimeout(() => {
         try {
-          const move = chooseReversiMove(game);
+          const depth = difficulty === 'easy' ? 1 : difficulty === 'hard' ? 5 : 3;
+          const move = chooseReversiMove(game, depth);
           thinking = false;
           if (move === null) throw new Error('no legal move');
           commit(move);
@@ -384,7 +405,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
       if (pendingRestore) return initialState;
       const state = isChess ? { history: game.history() }
         : { ...structuredClone(game), snapshots: structuredClone(snapshots) };
-      return createGameSession(kind, { mode, playerColor }, state);
+      return createGameSession(kind, { mode, playerColor, difficulty }, state);
     },
     destroy() {
       disposed = true;

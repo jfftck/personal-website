@@ -132,6 +132,7 @@ function validMinesweeper(options, state) {
 function validChess(options, state) {
   if (!['computer', 'local'].includes(options?.mode)
     || (options.playerColor !== undefined && !['white', 'black'].includes(options.playerColor))
+    || (options.difficulty !== undefined && !['easy', 'medium', 'hard'].includes(options.difficulty))
     || !Array.isArray(state?.history)
     || state.history.length > 500 || state.history.some(move => typeof move !== 'string')) return false;
   try {
@@ -159,6 +160,7 @@ function validReversiPosition(state) {
 function validReversi(options, state) {
   if (!['computer', 'local'].includes(options?.mode)
     || (options.playerColor !== undefined && !['white', 'black'].includes(options.playerColor))
+    || (options.difficulty !== undefined && !['easy', 'medium', 'hard'].includes(options.difficulty))
     || !validReversiPosition(state)) return false;
   if (state.snapshots !== undefined && (!Array.isArray(state.snapshots) || state.snapshots.length > 64
     || state.snapshots.some(snapshot => !validReversiPosition(snapshot)))) return false;
