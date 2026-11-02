@@ -248,7 +248,10 @@ export function enhanceSelect(select) {
     const rect = trigger.getBoundingClientRect();
     const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
     const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
-    const width = Math.min(Math.max(rect.width, Math.min(224, viewportWidth - 16)), viewportWidth - 16);
+    const gameSettingsDialog = select.closest('.game-settings-dialog');
+    const width = gameSettingsDialog
+      ? Math.min(rect.width, viewportWidth - 16)
+      : Math.min(Math.max(rect.width, Math.min(224, viewportWidth - 16)), viewportWidth - 16);
     popup.style.width = `${width}px`;
 
     if (anchorSupported) {
