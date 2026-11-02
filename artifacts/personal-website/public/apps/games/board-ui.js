@@ -3,7 +3,7 @@ import { refreshCustomSelect } from '../custom-select.js';
 import { Chess, chessStatus } from './chess.js';
 import { createReversi, reversiMoves, playReversi, reversiScore, chooseReversiMove } from './reversi.js';
 import {
-  gameShell, button, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt, showNewGameScreen,
+  gameShell, button, toolbarButton, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt, showNewGameScreen,
 } from './ui.js';
 import { createGameSession, inspectGameSession, restoreChess } from './game-state.js';
 import { addGameThemeControl, addGameThemeResetControl } from './themes.js';
@@ -39,11 +39,11 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
   let worker = null, timer = null, thinking = false, disposed = false, aiError = '';
   let endScreenTimer = null, newGameScreenCleanup = null, endScreenShown = false;
   let celebrationCleanup = null;
-  const undo = button('Undo', undoMove);
-  const retry = button('Retry computer', () => { aiError = ''; maybeComputer(); render(); });
+  const undo = toolbarButton('Undo', 'undo', undoMove);
+  const retry = toolbarButton('Retry computer', 'retry', () => { aiError = ''; maybeComputer(); render(); });
   retry.hidden = true;
   toolbarLeft.append(undo, retry);
-  toolbarCenter.append(button('New game', restart));
+  toolbarCenter.append(toolbarButton('New game', 'newGame', restart));
   const colorControl = selectControl('Play as', [['white', 'White'], ['black', 'Black']], playerColor, value => {
     playerColor = value; restart();
   });

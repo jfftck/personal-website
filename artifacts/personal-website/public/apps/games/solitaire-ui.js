@@ -6,7 +6,7 @@ import {
 import { chooseConfiguredWinCelebration, createWinCelebration } from './celebrations.js';
 import { paintCardFace } from './card-artwork.js';
 import {
-  gameShell, button, selectControl, preserveFocus, showRestorePrompt, showNewGameScreen,
+  gameShell, button, toolbarButton, selectControl, preserveFocus, showRestorePrompt, showNewGameScreen,
 } from './ui.js';
 import { createGameSession, inspectGameSession } from './game-state.js';
 import { addGameThemeControl, addGameThemeResetControl } from './themes.js';
@@ -50,7 +50,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     newGameScreenCleanup?.();
     newGameScreenCleanup = null;
   }
-  const undo = button('Undo', () => {
+  const undo = toolbarButton('Undo', 'undo', () => {
     if (!history.length) return;
     clearCelebration();
     clearNewGameScreen();
@@ -63,9 +63,9 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     pendingRestore = false;
     state = createSolitaire(kind, options); history = []; selected = null; render(); persist();
   }
-  toolbarCenter.append(button('New deal', restart));
+  toolbarCenter.append(toolbarButton('New deal', 'newGame', restart));
   toolbarLeft.append(undo);
-  if (kind === 'klondike' || kind === 'freecell') toolbarLeft.append(button('Send home', () => {
+  if (kind === 'klondike' || kind === 'freecell') toolbarLeft.append(toolbarButton('Send home', 'sendHome', () => {
     const alreadyHome = new Set(state.foundations.flat().map(card => card.id));
     const moved = action(() => sendEligibleCardsHome(state));
     if (!moved) status.textContent = 'No card can move home yet. An Ace starts a home pile; the next card must match its suit.';

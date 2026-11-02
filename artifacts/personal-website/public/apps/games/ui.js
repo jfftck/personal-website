@@ -1,11 +1,28 @@
 import { enhanceSelect } from '../custom-select.js';
 
+const TOOLBAR_ICONS = {
+  settings: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 0 1-2.4-2.4l.1-.1a1.7 1.7 0 0 0-1.2-2.9H4a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 0 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2V2a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 0 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z"/></svg>',
+  undo: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></svg>',
+  retry: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7v5h-5"/><path d="M19 12a7 7 0 1 0 1 4"/></svg>',
+  newGame: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  sendHome: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7"/><path d="M5.5 9v11h13V9M12 16V9m-3 3 3-3 3 3"/></svg>',
+  flag: '<svg class="game-flag-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="game-flag-stem-shape" d="M5.25 2.5v19M2.5 21.5h9"/><path class="game-flag-pennant-shape" d="M6.5 3.5h13l-5 5.3 5 5.3h-13z"/></svg>',
+};
+
 export function button(text, onClick, className = '') {
   const el = document.createElement('button');
   el.type = 'button';
   el.className = className;
   el.textContent = text;
   el.addEventListener('click', onClick);
+  return el;
+}
+
+export function toolbarButton(text, icon, onClick, className = '') {
+  const el = button(text, onClick, `game-toolbar-icon-button ${className}`.trim());
+  el.title = text;
+  el.setAttribute('aria-label', text);
+  el.innerHTML = TOOLBAR_ICONS[icon] || '';
   return el;
 }
 
@@ -34,7 +51,7 @@ function createGameSettings(root, toolbar, title, id) {
   const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g, '-');
   const buttonId = `game-settings-${safeId}`;
   const dialogId = `${buttonId}-dialog`;
-  const toggle = button('Settings', open, 'game-settings-toggle');
+  const toggle = toolbarButton('Settings', 'settings', open, 'game-settings-toggle');
   toggle.id = buttonId;
   toggle.setAttribute('aria-haspopup', 'dialog');
   toggle.setAttribute('aria-expanded', 'false');
@@ -158,15 +175,14 @@ export function gameShell(id, title, rules, ctx, iconSvg) {
   const toolbarRight = document.createElement('div');
   toolbarRight.className = 'game-toolbar-group game-toolbar-right';
   const instructionsId = `game-instructions-${String(id).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-  const instructionsButton = button('Instructions', () => setInstructionsOpen(!instructionsOpen));
-  instructionsButton.classList.add('game-instructions-toggle');
-  const instructionsIcon = document.createElement('span');
-  instructionsIcon.className = 'game-instructions-icon';
-  instructionsIcon.setAttribute('aria-hidden', 'true');
-  instructionsIcon.innerHTML = iconSvg;
-  const instructionsLabel = document.createElement('span');
-  instructionsLabel.textContent = 'Instructions';
-  instructionsButton.replaceChildren(instructionsIcon, instructionsLabel);
+  const instructionsButton = button(
+    'Instructions',
+    () => setInstructionsOpen(!instructionsOpen),
+    'game-toolbar-icon-button game-instructions-toggle',
+  );
+  instructionsButton.title = 'Instructions';
+  instructionsButton.setAttribute('aria-label', 'Instructions');
+  instructionsButton.innerHTML = `<span class="game-instructions-icon" aria-hidden="true">${iconSvg || ''}</span><span class="game-instructions-label">Instructions</span>`;
   instructionsButton.setAttribute('aria-expanded', 'false');
   instructionsButton.setAttribute('aria-controls', instructionsId);
   const instructionsControl = document.createElement('div');

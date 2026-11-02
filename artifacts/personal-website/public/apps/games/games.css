@@ -329,14 +329,44 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  width: auto;
+  min-width: 2.35rem;
+  padding-inline: 0.62rem;
 }
 .game-instructions-icon {
   display: inline-flex;
-  width: 1rem;
-  height: 1rem;
+  width: 1.15rem;
+  height: 1.15rem;
   flex: 0 0 auto;
 }
 .game-instructions-icon svg { width: 100%; height: 100%; }
+.game-instructions-label { display: none; }
+.game-toolbar .game-toolbar-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 2.35rem;
+  min-width: 2.35rem;
+  height: 2.35rem;
+  padding: 0.45rem;
+  line-height: 1;
+}
+.game-toolbar .game-toolbar-icon-button svg {
+  display: block;
+  width: 1.15rem;
+  height: 1.15rem;
+}
+.game-toolbar .game-flag-toggle {
+  width: auto;
+  min-width: 4.45rem;
+  padding-inline: 0.42rem;
+}
+.game-toolbar .game-flag-toggle[aria-checked="true"] {
+  border-color: color-mix(in srgb, var(--focus-color) 68%, var(--game-line));
+  background: color-mix(in srgb, var(--accent) 25%, var(--app-bg));
+}
+.game-toolbar .game-flag-toggle[aria-checked="true"]:hover {
+  background: color-mix(in srgb, var(--accent) 32%, var(--app-bg));
+}
 .game-toolbar > label,
 .game-toolbar .game-toolbar-label {
   color: var(--game-muted);
@@ -1704,11 +1734,18 @@
 
 @container game-window (width < 360px) {
   .game-toolbar { grid-template-columns:minmax(0,1fr) auto; padding:.35rem; }
-  .game-toolbar .game-instructions-toggle { gap:.25rem; }
-  .game-toolbar .game-instructions-toggle span:last-child { display:none; }
+  .game-toolbar .game-instructions-toggle { gap:.25rem; padding-inline:.4rem; }
   .game-toolbar button,.game-toolbar select { padding:.3rem .4rem; font-size:.72rem; }
+  .game-toolbar .game-toolbar-icon-button { width:2rem; min-width:2rem; height:2rem; padding:.3rem; }
+  .game-toolbar .game-toolbar-icon-button svg { width:1.05rem; height:1.05rem; }
+  .game-instructions-icon { width:1.05rem; height:1.05rem; }
   .game-area { padding:.45rem; }
   .game-settings-overlay { padding:.35rem; }
+}
+
+@container game-window (width >= 620px) {
+  .game-toolbar .game-instructions-toggle { padding-inline: 0.72rem; }
+  .game-instructions-label { display: inline; }
 }
 
 @media (prefers-reduced-motion: reduce) {

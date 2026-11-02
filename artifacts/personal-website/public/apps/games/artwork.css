@@ -76,10 +76,13 @@
   background: repeating-radial-gradient(ellipse at center, transparent 0 2px, currentColor 3px 4px, transparent 5px 7px);
 }
 .game-toolbar .game-flag-toggle {
-  display: inline-flex; align-items: center; gap: .45rem;
-  border: 0; padding-inline: .15rem; background: transparent; box-shadow: none; white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
 }
-.game-toolbar .game-flag-toggle:hover { background: transparent; }
+.game-flag-icon { display: block; width: 1.05rem; height: 1.05rem; flex: 0 0 auto; }
+.game-flag-pennant-shape { fill: var(--mine-flag-color, #8e1b1b); }
+.game-flag-stem-shape {
+  fill: none; stroke: var(--mine-flag-stem, #303944); stroke-width: 2; stroke-linecap: round;
+}
 .game-flag-track {
   display: inline-block; position: relative; width: 2.2rem; height: 1.25rem;
   border: 1px solid var(--game-line); border-radius: 999px;
@@ -92,4 +95,5 @@
 }
 .game-flag-toggle[aria-checked="true"] .game-flag-track { background: var(--accent, #069); border-color: var(--accent, #069); }
 .game-flag-toggle[aria-checked="true"] .game-flag-track::before { transform: translateX(.91rem); }
+.game-flag-toggle[aria-checked="true"] .game-flag-icon { filter: drop-shadow(0 0 1px currentColor); }
 @media (prefers-reduced-motion: reduce) { .game-flag-track::before { transition: none; } }

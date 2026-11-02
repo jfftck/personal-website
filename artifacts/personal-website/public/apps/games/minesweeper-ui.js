@@ -76,7 +76,7 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
       });
     }, 450);
   }
-  const flag = button('Flag mode', () => {
+  const flag = toolbarButton('Flag mode', 'flag', () => {
     flagMode = !flagMode;
     flag.setAttribute('aria-checked', String(flagMode));
     render(); persist();
@@ -86,9 +86,9 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
   const flagTrack = document.createElement('span');
   flagTrack.className = 'game-flag-track';
   flagTrack.setAttribute('aria-hidden', 'true');
-  flag.prepend(flagTrack);
+  flag.append(flagTrack);
   toolbarLeft.append(flag);
-  toolbarCenter.append(button('New game', restart));
+  toolbarCenter.append(toolbarButton('New game', 'newGame', restart));
   settings.addGameOption(selectControl('Difficulty', [['beginner', 'Beginner'], ['intermediate', 'Intermediate'], ['expert', 'Expert']], level, value => {
       level = value; restart();
     }));
