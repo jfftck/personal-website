@@ -1,19 +1,10 @@
 'use strict';
 
 import { S }               from './desktop-state.js';
-import { buildDocViewer }   from './apps/doc-viewer.js';
-import { buildImgViewer }   from './apps/img-viewer.js';
-import { buildMediaPlayer } from './apps/media-player.js';
-import { buildFileManager } from './apps/file-manager.js';
-import { buildCalendar } from './apps/calendar.js';
-import { buildWorldClock } from './apps/world-clock.js';
-import { buildCalculator } from './apps/calculator.js';
-import { buildStickyNotes, loadStickyNotes } from './apps/sticky-notes.js';
-import { buildWeather } from './apps/weather.js';
-import { buildSettings } from './apps/settings.js';
+import { loadStickyNotes } from './apps/sticky-notes-data.js';
 import { SETTINGS_ICON } from './apps/toolbar.js';
 import { renderMarkdown }   from './shared/markdown.js';
-import { GAMES, buildGame, initGameMenu } from './apps/game-center.js';
+import { GAMES, initGameMenu } from './apps/game-catalog.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -474,6 +465,202 @@ function getAppOrder() {
   return S.columns.flatMap(col => col.appIds);
 }
 
+const loadedAppModules = new Map();
+const loadedAppStyles = new Map();
+
+function loadAppModule(def) {
+  let loading = loadedAppModules.get(def.modulePath);
+  if (!loading) {
+    loading = def.loadModule().catch(error => {
+      loadedAppModules.delete(def.modulePath);
+      throw error;
+    });
+    loadedAppModules.set(def.modulePath, loading);
+  }
+  return loading;
+}
+
+function ensureAppStyles(styles = []) {
+  return Promise.all(styles.map(path => {
+    const href = new URL(path, import.meta.url).href;
+    let loading = loadedAppStyles.get(href);
+    if (!loading) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = href;
+      link.dataset.appStylesheet = 'true';
+      loading = new Promise((resolve, reject) => {
+        link.addEventListener('load', resolve, { once: true });
+        link.addEventListener('error', () => {
+          link.remove();
+          loadedAppStyles.delete(href);
+          reject(new Error(`Could not load app stylesheet: ${path}`));
+        }, { once: true });
+      });
+      loadedAppStyles.set(href, loading);
+      document.head.append(link);
+    }
+    return loading;
+  }));
+}
+
+function createAppLoadSurface(title, mode = 'loading') {
+  const root = document.createElement('section');
+  root.className = 'utility-app app-window app-load-state';
+  root.dataset.loadState = mode;
+  root.setAttribute('aria-live', 'polite');
+  root.setAttribute('aria-busy', String(mode === 'loading'));
+
+  const content = document.createElement('div');
+  content.className = 'app-load-content';
+  if (mode === 'loading') {
+    const spinner = document.createElement('span');
+    spinner.className = 'app-load-spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    const message = document.createElement('p');
+    message.className = 'app-load-title';
+    message.textContent = `Loading ${title}…`;
+    content.append(spinner, message);
+  } else {
+    const heading = document.createElement('p');
+    heading.className = 'app-load-title';
+    heading.textContent = `${title} couldn’t be loaded`;
+    const message = document.createElement('p');
+    message.className = 'app-load-error';
+    message.textContent = 'Check your connection, then try again.';
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'app-load-retry';
+    retry.textContent = 'Retry';
+    content.append(heading, message, retry);
+  }
+  root.append(content);
+  return root;
+}
+
+function scheduleAppAssetPrefetch() {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType)) return;
+
+  const modulePaths = new Set([
+    ...Object.values(APP_DEFS).map(def => def.modulePath),
+    './apps/games/solitaire-ui.js',
+    './apps/games/minesweeper-ui.js',
+    './apps/games/board-ui.js',
+  ]);
+  const stylePaths = new Set(Object.values(APP_DEFS).flatMap(def => def.styles || []));
+  const assets = [
+    ...[...modulePaths].map(path => ({ path, kind: 'module' })),
+    ...[...stylePaths].map(path => ({ path, kind: 'style' })),
+  ];
+  const requested = new Set();
+  let index = 0;
+
+  const addHint = asset => {
+    const href = new URL(asset.path, import.meta.url).href;
+    if (requested.has(href)) return;
+    requested.add(href);
+    const link = document.createElement('link');
+    link.rel = asset.kind === 'module' ? 'modulepreload' : 'prefetch';
+    if (asset.kind === 'style') link.as = 'style';
+    link.href = href;
+    link.fetchPriority = 'low';
+    link.dataset.appAssetPrefetch = asset.kind;
+    document.head.append(link);
+  };
+  const schedule = callback => {
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(callback, { timeout: 2500 });
+    } else {
+      window.setTimeout(() => callback({ timeRemaining: () => 0, didTimeout: true }), 1200);
+    }
+  };
+  const prefetchBatch = deadline => {
+    let added = 0;
+    while (index < assets.length && added < 3 && (deadline.didTimeout || deadline.timeRemaining() > 8)) {
+      addHint(assets[index++]);
+      added += 1;
+    }
+    if (index < assets.length) schedule(prefetchBatch);
+  };
+  schedule(prefetchBatch);
+}
+
+function queueAppAction(id, method, ...args) {
+  const record = S.apps.find(app => app.id === id);
+  if (!record) return;
+  const action = S.appApis[id]?.[method];
+  if (typeof action === 'function') {
+    action(...args);
+    return;
+  }
+  record.pendingActions ||= [];
+  record.pendingActions.push({ method, args });
+}
+
+function flushPendingAppActions(record) {
+  const actions = record.pendingActions || [];
+  record.pendingActions = [];
+  for (const { method, args } of actions) {
+    const action = S.appApis[record.id]?.[method];
+    if (typeof action === 'function') action(...args);
+  }
+}
+
+async function hydrateApp(record, def, initialState) {
+  const loadToken = (record.loadToken || 0) + 1;
+  record.loadToken = loadToken;
+  const isCurrent = () => S.apps.includes(record) && record.loadToken === loadToken;
+  try {
+    const [module] = await Promise.all([
+      loadAppModule(def),
+      ensureAppStyles(def.styles),
+    ]);
+    if (!isCurrent()) return;
+
+    const appEl = await def.build(module, record.id, initialState);
+    if (!isCurrent()) {
+      S.appApis[record.id]?.destroy?.();
+      delete S.appApis[record.id];
+      return;
+    }
+    if (!(appEl instanceof HTMLElement)) {
+      throw new TypeError(`The ${def.title} app did not return an element.`);
+    }
+
+    appEl.classList.add('app-window');
+    appEl.dataset.id = record.id;
+    appEl.dataset.type = record.type;
+    appEl.classList.toggle('focused', S.focusedId === record.id);
+    record.el.replaceWith(appEl);
+    record.el = appEl;
+    flushPendingAppActions(record);
+    updateStripLayout();
+    if (document.body.classList.contains('mod-overview')) positionOverview();
+  } catch (error) {
+    if (!isCurrent()) return;
+    console.error(`Could not load ${def.title}.`, error);
+    S.appApis[record.id]?.destroy?.();
+    delete S.appApis[record.id];
+    const failed = createAppLoadSurface(def.title, 'error');
+    failed.dataset.id = record.id;
+    failed.dataset.type = record.type;
+    failed.classList.toggle('focused', S.focusedId === record.id);
+    const retry = failed.querySelector('.app-load-retry');
+    retry.addEventListener('click', () => {
+      const loading = createAppLoadSurface(def.title);
+      loading.dataset.id = record.id;
+      loading.dataset.type = record.type;
+      loading.classList.toggle('focused', S.focusedId === record.id);
+      record.el.replaceWith(loading);
+      record.el = loading;
+      void hydrateApp(record, def, initialState);
+    });
+    record.el.replaceWith(failed);
+    record.el = failed;
+  }
+}
+
 function createColEl(colId) {
   const el = document.createElement('div');
   el.className = 'app-col';
@@ -488,12 +675,11 @@ function openApp(type, insertIntoColId = null, initialState = null) {
   if (!def) return null;
 
   const id = `app-${S.nextAppId++}`;
-  const el = def.build(id, initialState);
-  el.classList.add('app-window');
-  el.dataset.id   = id;
+  const el = createAppLoadSurface(def.title);
+  el.dataset.id = id;
   el.dataset.type = type;
-
-  S.apps.push({ id, type, el });
+  const record = { id, type, el, pendingActions: [] };
+  S.apps.push(record);
 
   const existingCol = insertIntoColId ? S.columns.find(c => c.id === insertIntoColId) : null;
   if (existingCol) {
@@ -513,6 +699,7 @@ function openApp(type, insertIntoColId = null, initialState = null) {
   updateEmptyState();
   updateStripLayout();
   if (!S._skipSave) { saveSession(); requestAnimationFrame(() => scrollToApp(id)); }
+  void hydrateApp(record, def, initialState);
   return id;
 }
 
@@ -851,7 +1038,7 @@ function openStickyNote(noteId) {
   const id = existing ? existing.id : openApp('sticky-notes');
   if (id) {
     focusApp(id);
-    S.appApis[id]?.openNote?.(noteId);
+    queueAppAction(id, 'openNote', noteId);
   }
 }
 
@@ -913,7 +1100,7 @@ function requestOpenFile(file) {
   const typeToApp = { document: 'doc-viewer', image: 'img-viewer', video: 'media-player' };
   const appType   = typeToApp[file.type] || 'doc-viewer';
   const newId = openApp(appType);
-  if (newId) S.appApis[newId]?.openFile(file.url, file.displayName, file.poster);
+  if (newId) queueAppAction(newId, 'openFile', file.url, file.displayName, file.poster);
 }
 
 // ── App-launcher file listing ─────────────────────────────────
@@ -1800,70 +1987,111 @@ const appCtx = {
 };
 
 // ── App registry ──────────────────────────────────────────────
+function lazyApp(title, iconSvg, modulePath, loadModule, exportName, styles = []) {
+  return {
+    title,
+    iconSvg,
+    modulePath,
+    loadModule,
+    styles,
+    build: (module, id, state) => module[exportName](id, appCtx, state),
+  };
+}
+
+const GAME_MODULE_PATH = './apps/game-center.js';
+const GAME_STYLE_PATHS = [
+  './apps/games/games.css',
+  './apps/games/artwork.css',
+  './apps/games/glass.css',
+];
 const APP_DEFS = {
   ...Object.fromEntries(GAMES.map(game => [game.type, {
     title: game.title,
     iconSvg: game.iconSvg,
-    build: (id, state) => buildGame(game.type, id, appCtx, state),
+    modulePath: GAME_MODULE_PATH,
+    loadModule: () => import('./apps/game-center.js'),
+    styles: GAME_STYLE_PATHS,
+    build: (module, id, state) => module.buildGame(game.type, id, appCtx, state),
   }])),
-  'doc-viewer': {
-    title: 'Document Viewer',
-    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+  'doc-viewer': lazyApp(
+    'Document Viewer',
+    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
     </svg>`,
-    build: (id, state) => buildDocViewer(id, appCtx, state),
-  },
-  'img-viewer': {
-    title: 'Image Viewer',
-    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    './apps/doc-viewer.js',
+    () => import('./apps/doc-viewer.js'),
+    'buildDocViewer',
+  ),
+  'img-viewer': lazyApp(
+    'Image Viewer',
+    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
     </svg>`,
-    build: (id, state) => buildImgViewer(id, appCtx, state),
-  },
-  'file-manager': {
-    title: 'File Manager',
-    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    './apps/img-viewer.js',
+    () => import('./apps/img-viewer.js'),
+    'buildImgViewer',
+  ),
+  'file-manager': lazyApp(
+    'File Manager',
+    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
     </svg>`,
-    build: id => buildFileManager(id, appCtx),
-  },
-  'media-player': {
-    title: 'Media Player',
-    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    './apps/file-manager.js',
+    () => import('./apps/file-manager.js'),
+    'buildFileManager',
+  ),
+  'media-player': lazyApp(
+    'Media Player',
+    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M21 3H3c-1.11 0-2 .89-2 2v14c0 1.11.89 2 2 2h18c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 16H3V5h18v14zM8 15l7-4-7-4v8z"/>
     </svg>`,
-    build: id => buildMediaPlayer(id, appCtx),
-  },
-  calendar: {
-    title: 'Calendar',
-    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 2h2v2h6V2h2v2h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3V2zm13 8H4v10h16V10z"/></svg>`,
-    build: id => buildCalendar(id, appCtx),
-  },
-  'world-clock': {
-    title: 'World Clock',
-    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 10.4 4 2.4-1 1.7-5-3V6h2v6.4z"/></svg>`,
-    build: (id, state) => buildWorldClock(id, appCtx, state),
-  },
-  calculator: {
-    title: 'Calculator',
-    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 2h14a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm1 3v4h12V5H6z"/></svg>`,
-    build: (id, state) => buildCalculator(id, appCtx, state),
-  },
-  'sticky-notes': {
-    title: 'Sticky Notes',
-    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 3h14a2 2 0 0 1 2 2v11l-5 5H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/></svg>`,
-    build: (id) => buildStickyNotes(id, appCtx),
-  },
-  weather: {
-    title: 'Weather',
-    iconSvg: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 18a5 5 0 1 1 .8-9.9A6 6 0 0 1 19 10a4 4 0 0 1 0 8H7z"/></svg>`,
-    build: id => buildWeather(id, appCtx),
-  },
-  settings: {
-    title: 'Settings',
-    iconSvg: SETTINGS_ICON,
-    build: (id, state) => buildSettings(id, appCtx, state),
-  },
+    './apps/media-player.js',
+    () => import('./apps/media-player.js'),
+    'buildMediaPlayer',
+  ),
+  calendar: lazyApp(
+    'Calendar',
+    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 2h2v2h6V2h2v2h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3V2zm13 8H4v10h16V10z"/></svg>`,
+    './apps/calendar.js',
+    () => import('./apps/calendar.js'),
+    'buildCalendar',
+  ),
+  'world-clock': lazyApp(
+    'World Clock',
+    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 10.4 4 2.4-1 1.7-5-3V6h2v6.4z"/></svg>`,
+    './apps/world-clock.js',
+    () => import('./apps/world-clock.js'),
+    'buildWorldClock',
+  ),
+  calculator: lazyApp(
+    'Calculator',
+    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 2h14a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm1 3v4h12V5H6z"/></svg>`,
+    './apps/calculator.js',
+    () => import('./apps/calculator.js'),
+    'buildCalculator',
+  ),
+  'sticky-notes': lazyApp(
+    'Sticky Notes',
+    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 3h14a2 2 0 0 1 2 2v11l-5 5H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/></svg>`,
+    './apps/sticky-notes.js',
+    () => import('./apps/sticky-notes.js'),
+    'buildStickyNotes',
+  ),
+  weather: lazyApp(
+    'Weather',
+    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 18a5 5 0 1 1 .8-9.9A6 6 0 0 1 19 10a4 4 0 0 1 0 8H7z"/></svg>`,
+    './apps/weather.js',
+    () => import('./apps/weather.js'),
+    'buildWeather',
+  ),
+  settings: lazyApp(
+    'Settings',
+    SETTINGS_ICON,
+    './apps/settings.js',
+    () => import('./apps/settings.js'),
+    'buildSettings',
+    ['./apps/settings.css'],
+  ),
 };
 
 // ── Session restore ───────────────────────────────────────────
@@ -2704,3 +2932,4 @@ openWelcomeWindow();   // show on every visit / refresh
 updateTopBar();
 updateEmptyState();
 updateStripLayout();
+scheduleAppAssetPrefetch();

@@ -1,27 +1,19 @@
 'use strict';
 
-const KEY = 'personal-desktop-sticky-notes-v1';
-export const NOTE_COLORS = [
-  { value: 'yellow', label: 'Yellow', hex: '#e5bb22' },
-  { value: 'orange', label: 'Orange', hex: '#e47b27' },
-  { value: 'red', label: 'Red', hex: '#d94a4a' },
-  { value: 'purple', label: 'Purple', hex: '#9a69d4' },
-  { value: 'blue', label: 'Blue', hex: '#3689cf' },
-  { value: 'green', label: 'Green', hex: '#48945a' },
-];
+import { NOTE_COLORS, loadStickyNotes, saveStickyNotes } from './sticky-notes-data.js';
+export { NOTE_COLORS, loadStickyNotes } from './sticky-notes-data.js';
 
-export function buildStickyNotes(id, ctx) {
+export function buildStickyNotes(id, ctx, initialState = null) {
   const root = document.createElement('section');
   root.className = 'utility-app notes-app';
   let notes = loadStickyNotes();
-  let selected = notes[0]?.id || null;
+  let selected = notes.some(note => note.id === initialState?.openNoteId)
+    ? initialState.openNoteId
+    : notes[0]?.id || null;
   root.innerHTML = `<aside class="notes-sidebar"><button type="button" class="util-action note-create">＋ New note</button><div class="notes-list"></div></aside><div class="note-editor"></div>`;
   const list = root.querySelector('.notes-list'), editor = root.querySelector('.note-editor');
   const publishDesktopNotes = () => ctx?.updateDesktopNotes?.(notes);
-  const save = () => {
-    try { localStorage.setItem(KEY, JSON.stringify(notes)); } catch {}
-    publishDesktopNotes();
-  };
+  const save = () => { saveStickyNotes(notes); publishDesktopNotes(); };
   const render = () => {
     list.replaceChildren();
     notes.forEach(note => {
@@ -97,18 +89,4 @@ export function buildStickyNotes(id, ctx) {
   publishDesktopNotes();
   render();
   return root;
-}
-
-export function loadStickyNotes() {
-  try {
-    const data = JSON.parse(localStorage.getItem(KEY));
-    if (Array.isArray(data)) return data.filter(note => note && typeof note.id === 'string').map(note => ({
-      id: note.id,
-      title: String(note.title || ''),
-      body: String(note.body || ''),
-      desktop: note.desktop === true,
-      color: NOTE_COLORS.some(option => option.value === note.color) ? note.color : 'yellow'
-    }));
-  } catch {}
-  return [];
 }

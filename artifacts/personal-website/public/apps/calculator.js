@@ -1,7 +1,7 @@
 'use strict';
 
 import { enhanceSelect, refreshCustomSelect } from './custom-select.js';
-import { NOTE_COLORS } from './sticky-notes.js';
+import { NOTE_COLORS } from './sticky-notes-data.js';
 import '../shared/app-controls.js';
 import { SETTINGS_ICON } from './toolbar.js';
 
