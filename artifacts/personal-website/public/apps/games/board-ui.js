@@ -3,7 +3,8 @@ import { refreshCustomSelect } from '../custom-select.js';
 import { Chess, chessStatus } from './chess.js';
 import { createReversi, reversiMoves, playReversi, reversiScore } from './reversi.js';
 import {
-  gameShell, button, toolbarButton, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt, showNewGameScreen,
+  gameShell, button, toolbarButton, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt,
+  showNewGameScreen, showComputerErrorScreen,
 } from './ui.js';
 import { createGameSession, inspectGameSession, restoreChess } from './game-state.js';
 import { addGameThemeControl, addGameThemeResetControl } from './themes.js';
@@ -44,17 +45,10 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
   }
   let worker = null, timer = null, thinking = false, disposed = false;
   let aiFailures = 0, aiNotice = '', aiAttemptId = 0;
-  let endScreenTimer = null, newGameScreenCleanup = null, endScreenShown = false;
+  let endScreenTimer = null, newGameScreenCleanup = null, computerErrorCleanup = null, endScreenShown = false;
   let celebrationCleanup = null;
   const undo = toolbarButton('Undo', 'undo', undoMove);
-  const retry = toolbarButton('Retry Computer Move', 'retry', () => {
-    if (aiFailures < maxComputerMoveFailures) return;
-    aiFailures = 0;
-    aiNotice = '';
-    maybeComputer();
-  });
-  retry.hidden = true;
-  toolbarLeft.append(undo, retry);
+  toolbarLeft.append(undo);
   toolbarCenter.append(toolbarButton('New game', 'newGame', restart));
   const colorControl = selectControl('Play as', [['white', 'White'], ['black', 'Black']], playerColor, value => {
     playerColor = value; restart();
@@ -97,6 +91,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     settings.close();
     clearEndSequence();
     newGameScreenCleanup?.(); newGameScreenCleanup = null;
+    computerErrorCleanup?.(); computerErrorCleanup = null;
     endScreenShown = false;
     cancelComputer();
     aiFailures = 0;
@@ -264,6 +259,22 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     }
     aiNotice = `The computer couldn't recover after ${maxComputerMoveFailures} attempts: ${message}. You can retry or switch to local two-player.`;
     render();
+    computerErrorCleanup?.();
+    computerErrorCleanup = showComputerErrorScreen(
+      area,
+      id,
+      aiNotice,
+      () => {
+        computerErrorCleanup = null;
+        aiFailures = 0;
+        aiNotice = '';
+        maybeComputer();
+      },
+      () => {
+        computerErrorCleanup = null;
+        restart();
+      },
+    );
   }
   function maybeComputer() {
     if (disposed || thinking || !computerTurn() || aiFailures >= maxComputerMoveFailures) return;
@@ -361,7 +372,6 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
       return;
     }
     undo.disabled = isChess ? !game.history().length : !snapshots.length;
-    retry.hidden = aiFailures < maxComputerMoveFailures;
     if (isChess) status.textContent = chessStatus(game);
     else {
       const score = reversiScore(game.board);
@@ -444,6 +454,7 @@ export function buildBoardGame(kind, id, title, ctx, initialState = null, iconSv
     destroy() {
       disposed = true;
       clearEndSequence();
+      computerErrorCleanup?.(); computerErrorCleanup = null;
       removeBoardTheme();
       removePieceTheme();
       removePieceStyle?.();

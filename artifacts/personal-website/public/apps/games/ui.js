@@ -4,7 +4,6 @@ import { SETTINGS_ICON } from '../toolbar.js';
 const TOOLBAR_ICONS = {
   settings: SETTINGS_ICON,
   undo: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></svg>',
-  retry: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7v5h-5"/><path d="M19 12a7 7 0 1 0 1 4"/></svg>',
   newGame: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   sendHome: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7"/><path d="M5.5 9v11h13V9M12 16V9m-3 3 3-3 3 3"/></svg>',
   flag: '<svg class="game-flag-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="game-flag-stem-shape" d="M5.25 2.5v19M2.5 21.5h9"/><path class="game-flag-pennant-shape" d="M6.5 3.5h13l-5 5.3 5 5.3h-13z"/></svg>',
@@ -376,6 +375,86 @@ export function showNewGameScreen(area, id, headingText, messageText, options, o
   });
   screen.querySelector('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')
     ?.focus({ preventScroll: true });
+  return dismiss;
+}
+
+export function showComputerErrorScreen(area, id, messageText, onRetry, onNewGame) {
+  const game = area.closest('.game-app');
+  const screen = document.createElement('section');
+  const title = document.createElement('h2');
+  const message = document.createElement('p');
+  const actions = document.createElement('div');
+  const savedInert = [];
+  const toolbar = game?.querySelector(':scope > .game-toolbar');
+  const settingsOverlay = game?.querySelector(':scope > .game-settings-overlay');
+  const savedToolbarDisabled = [...(toolbar?.querySelectorAll('button, select, input') || [])]
+    .filter(control => !control.classList.contains('game-settings-toggle'))
+    .map(control => ({ control, disabled: control.disabled }));
+  const screenId = `computer-error-${String(id).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  let active = true;
+  const priorFocus = document.activeElement;
+
+  screen.className = 'game-new-game-screen game-computer-error-screen';
+  screen.setAttribute('role', 'dialog');
+  screen.setAttribute('aria-modal', 'true');
+  screen.setAttribute('aria-labelledby', `${screenId}-title`);
+  screen.setAttribute('aria-describedby', `${screenId}-message`);
+  title.id = `${screenId}-title`;
+  title.textContent = 'Computer Couldn’t Recover';
+  message.id = `${screenId}-message`;
+  message.textContent = messageText;
+  actions.className = 'game-new-game-actions';
+  actions.append(
+    button('Retry Computer Move', () => {
+      dismiss(false);
+      onRetry();
+    }, 'game-new-game-primary'),
+    button('New Game', () => {
+      dismiss(false);
+      onNewGame();
+    }, 'game-computer-error-secondary'),
+  );
+  screen.append(title, message, actions);
+
+  const siblings = [...(game?.children || [])].filter(child =>
+    !child.contains(area) && child !== toolbar && child !== settingsOverlay
+  );
+  for (const node of [...siblings, ...area.children]) {
+    savedInert.push({ node, inert: node.inert });
+    node.inert = true;
+  }
+  savedToolbarDisabled.forEach(({ control }) => { control.disabled = true; });
+  area.style.position = 'relative';
+  area.append(screen);
+
+  function dismiss(restoreFocus = true) {
+    if (!active) return;
+    active = false;
+    screen.remove();
+    savedInert.forEach(({ node, inert }) => { node.inert = inert; });
+    savedToolbarDisabled.forEach(({ control, disabled }) => { control.disabled = disabled; });
+    if (restoreFocus && priorFocus?.isConnected) priorFocus.focus({ preventScroll: true });
+  }
+
+  screen.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = [...screen.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter(node => !node.closest('[hidden]'));
+    if (!focusable.length) return;
+    if (event.shiftKey && document.activeElement === focusable[0]) {
+      event.preventDefault();
+      focusable.at(-1).focus();
+    } else if (!event.shiftKey && document.activeElement === focusable.at(-1)) {
+      event.preventDefault();
+      focusable[0].focus();
+    }
+  });
+  screen.querySelector('button:not([disabled])')?.focus({ preventScroll: true });
   return dismiss;
 }
 

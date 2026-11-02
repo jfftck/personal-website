@@ -995,6 +995,19 @@
   cursor: pointer;
 }
 .game-new-game-primary:hover { filter: brightness(1.08); }
+.game-computer-error-secondary {
+  min-height: 2.6rem;
+  padding: .55rem 1rem;
+  border: 1px solid var(--game-line);
+  border-radius: .7rem;
+  background: color-mix(in srgb, var(--app-bg) 72%, var(--app-text) 5%);
+  color: var(--game-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.game-computer-error-secondary:hover { background: var(--btn-hover); }
+.game-computer-error-secondary:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 .game-restore-actions button:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 
 .game-stage {
