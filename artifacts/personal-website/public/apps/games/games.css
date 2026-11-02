@@ -391,6 +391,8 @@
   font: inherit;
 }
 
+.game-toolbar button[hidden] { display: none !important; }
+
 .game-toolbar button,
 .game-settings-dialog button,
 .game-promotion button { cursor: pointer; }
