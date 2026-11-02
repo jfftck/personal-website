@@ -1784,8 +1784,13 @@
 }
 
 @container game-window (width >= 620px) {
-  .game-toolbar .game-instructions-toggle { padding-inline: 0.72rem; }
-  .game-instructions-label { display: inline; }
+  .game-toolbar .game-instructions-toggle {
+    display: inline-flex;
+    width: auto;
+    height: auto;
+    padding-inline: 0.72rem;
+  }
+  .game-instructions-label { display: inline; white-space: nowrap; }
 }
 
 @media (prefers-reduced-motion: reduce) {
