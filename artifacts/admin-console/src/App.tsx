@@ -1127,7 +1127,7 @@ function LoadingAuth() {
 }
 
 function NotFound() {
-  return <main className="auth-screen"><section className="auth-card"><div className="eyebrow">Archive / 404</div><h1>That page isn’t here.</h1><p>Return to the admin console to continue managing your library.</p><a href="/" className="button button-primary" data-testid="link-return-home">Return to library</a></section></main>;
+  return <main className="auth-screen"><section className="auth-card"><div className="eyebrow">Archive / 404</div><h1>That page isn’t here.</h1><p>Return to the admin console to continue managing your library.</p><a href={import.meta.env.BASE_URL} className="button button-primary" data-testid="link-return-home">Return to admin console</a></section></main>;
 }
 
 function errorMessage(error: unknown) {
