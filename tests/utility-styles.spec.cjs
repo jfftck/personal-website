@@ -14,6 +14,7 @@ async function openUtility(page, type) {
 test('Settings mobile sections and pages use the full app width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const settings = await openUtility(page, 'settings');
+  await expect(settings.locator('.settings-layout')).toBeVisible();
   const categoryGeometry = await settings.evaluate(root => {
     const layout = root.querySelector('.settings-layout').getBoundingClientRect();
     const list = root.querySelector('.settings-page-list').getBoundingClientRect();
@@ -92,11 +93,57 @@ test('Wallpaper settings apply changes immediately without save or cancel action
   await expect(wallpaperPage.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
   await expect(wallpaperPage.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
 
+  await expect(wallpaperPage.getByRole('group', { name: 'Wallpaper transition' })
+    .getByRole('button', { name: /Random/ })).toBeVisible();
+  await wallpaperPage.getByRole('group', { name: 'Wallpaper transition' })
+    .getByRole('button', { name: /Zoom/ }).evaluate(button => button.click());
+  await expect.poll(() => page.evaluate(() => window.__wallpaperTestCalls.length)).toBe(1);
+  expect(await page.evaluate(() => window.__wallpaperTestCalls[0].transition)).toBe('zoom');
+
   await wallpaperPage.getByRole('group', { name: 'Wallpaper transition' })
     .getByRole('button', { name: /None/ }).evaluate(button => button.click());
-  await expect.poll(() => page.evaluate(() => window.__wallpaperTestCalls.length)).toBe(1);
-  expect(await page.evaluate(() => window.__wallpaperTestCalls[0].transition)).toBe('none');
+  await expect.poll(() => page.evaluate(() => window.__wallpaperTestCalls.length)).toBe(2);
+  expect(await page.evaluate(() => window.__wallpaperTestCalls[1].transition)).toBe('none');
   await expect(wallpaperPage.getByRole('status')).toContainText('applied');
+});
+
+test('Appearance settings apply window animation choices including random', async ({ page }) => {
+  await page.evaluate(async () => {
+    const { buildSettings } = await import('/apps/settings.js');
+    window.__windowAnimationValue = 'fade';
+    const ctx = {
+      settings: {
+        getSnapshot: () => ({ theme: 'dark', windowAnimation: window.__windowAnimationValue }),
+        setWindowAnimation: value => { window.__windowAnimationValue = value; },
+      },
+    };
+    const app = buildSettings('window-animation-test', ctx, {});
+    document.body.append(app);
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  const settings = page.locator('.settings-app').last();
+  const animationGroup = settings.getByRole('group', { name: 'Window animation' });
+  await expect(animationGroup.getByRole('button', { name: /Random/ })).toBeVisible();
+  await animationGroup.getByRole('button', { name: /Flip/ }).evaluate(button => button.click());
+  await expect.poll(() => page.evaluate(() => window.__windowAnimationValue)).toBe('flip');
+  await expect(animationGroup.getByRole('button', { name: /Flip/ })).toHaveAttribute('aria-pressed', 'true');
+  await animationGroup.getByRole('button', { name: /Random/ }).evaluate(button => button.click());
+  await expect.poll(() => page.evaluate(() => window.__windowAnimationValue)).toBe('random');
+});
+
+test('Window appearance setting animates window lifecycle and respects reduced motion', async ({ page }) => {
+  const settings = await openUtility(page, 'settings');
+  await settings.getByRole('group', { name: 'Window animation' })
+    .getByRole('button', { name: /Slide Up/ }).evaluate(button => button.click());
+  await page.locator('#close-btn').click();
+  await expect(settings).toHaveClass(/window-closing/);
+  await expect(settings).toHaveCount(0);
+
+  const calculator = await openUtility(page, 'calculator');
+  await expect(calculator).toHaveAttribute('data-window-animation', 'slide-up');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.locator('#close-btn').click();
+  await expect(calculator).toHaveCount(0);
 });
 
 async function chooseCalculatorMode(calculator, mode) {

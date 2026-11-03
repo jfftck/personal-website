@@ -144,10 +144,14 @@ body {
   background-position: center center;
   background-size: cover;
   background-attachment: fixed;
-  transition-property: opacity;
-  transition-timing-function: ease;
+  transition-property: opacity, transform, clip-path;
+  transition-timing-function: cubic-bezier(0.2, 0.75, 0.25, 1);
 }
-.desktop-wallpaper-transition.is-visible { opacity: 1; }
+.desktop-wallpaper-transition[data-transition="zoom"] { transform: scale(1.08); }
+.desktop-wallpaper-transition[data-transition="slide-left"] { transform: translateX(100%); opacity: 1; }
+.desktop-wallpaper-transition[data-transition="slide-right"] { transform: translateX(-100%); opacity: 1; }
+.desktop-wallpaper-transition[data-transition="wipe"] { clip-path: inset(0 100% 0 0); opacity: 1; }
+.desktop-wallpaper-transition.is-visible { opacity: 1; transform: none; clip-path: inset(0); }
 @media (prefers-reduced-motion: reduce) {
   .desktop-wallpaper-transition { transition-duration: 0ms !important; }
   .app-loading-skeleton i,.welcome-skeleton i,.doc-loading-skeleton i { animation:none; }
@@ -1619,6 +1623,28 @@ body.mod-overview .app-window.focused {
   container-type: inline-size;
 }
 
+.app-window.window-opening[data-window-animation="fade"] { animation: window-fade-in 280ms ease-out both; }
+.app-window.window-opening[data-window-animation="zoom"] { animation: window-zoom-in 320ms cubic-bezier(.2,.8,.2,1) both; }
+.app-window.window-opening[data-window-animation="slide-up"] { animation: window-slide-up-in 320ms cubic-bezier(.2,.8,.2,1) both; }
+.app-window.window-opening[data-window-animation="slide-left"] { animation: window-slide-left-in 320ms cubic-bezier(.2,.8,.2,1) both; }
+.app-window.window-opening[data-window-animation="flip"] { animation: window-flip-in 360ms cubic-bezier(.2,.8,.2,1) both; transform-origin: center center; }
+.app-window.window-closing { pointer-events: none; }
+.app-window.window-closing[data-window-animation="fade"] { animation: window-fade-out 220ms ease-in both; }
+.app-window.window-closing[data-window-animation="zoom"] { animation: window-zoom-out 240ms ease-in both; }
+.app-window.window-closing[data-window-animation="slide-up"] { animation: window-slide-up-out 240ms ease-in both; }
+.app-window.window-closing[data-window-animation="slide-left"] { animation: window-slide-left-out 240ms ease-in both; }
+.app-window.window-closing[data-window-animation="flip"] { animation: window-flip-out 260ms ease-in both; transform-origin: center center; }
+@keyframes window-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes window-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes window-zoom-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+@keyframes window-zoom-out { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(1.035); } }
+@keyframes window-slide-up-in { from { opacity: 0; transform: translateY(.8rem); } to { opacity: 1; transform: translateY(0); } }
+@keyframes window-slide-up-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-.55rem); } }
+@keyframes window-slide-left-in { from { opacity: 0; transform: translateX(1rem); } to { opacity: 1; transform: translateX(0); } }
+@keyframes window-slide-left-out { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-.8rem); } }
+@keyframes window-flip-in { from { opacity: 0; transform: perspective(65rem) rotateX(-7deg) scale(.98); } to { opacity: 1; transform: perspective(65rem) rotateX(0) scale(1); } }
+@keyframes window-flip-out { from { opacity: 1; transform: perspective(65rem) rotateX(0) scale(1); } to { opacity: 0; transform: perspective(65rem) rotateX(7deg) scale(.98); } }
+
 .app-window.focused {
   outline-color: var(--focus-color);
   box-shadow: 0 0.5rem 2.5rem rgba(0, 170, 255, 0.22);
@@ -1629,6 +1655,10 @@ body.mod-overview .app-window.focused {
   #app-strip-wrapper,
   .app-window {
     transition: none !important;
+  }
+  .app-window.window-opening,
+  .app-window.window-closing {
+    animation: none !important;
   }
 }
 

@@ -40,6 +40,9 @@ const themeMedia  = matchMedia('(prefers-color-scheme: dark)');
 const THEME_KEY   = 'desktop-theme';
 const TIME_KEY    = 'desktop-time-24h';
 const WALLPAPER_KEY = 'desktop-wallpaper-settings-v1';
+const WINDOW_ANIMATION_KEY = 'desktop-window-animation';
+const WINDOW_ANIMATION_EFFECTS = ['fade', 'zoom', 'slide-up', 'slide-left', 'flip'];
+const WALLPAPER_TRANSITION_EFFECTS = ['fade', 'zoom', 'slide-left', 'slide-right', 'wipe'];
 const REMINDER_KEY = 'desktop-reminders';
 const REMINDER_BACKGROUND_KEY = 'desktop-reminder-background';
 let calendarDate  = new Date();
@@ -59,6 +62,22 @@ function effectiveTheme() {
 
 function notifyDesktopSettingsChanged() {
   window.dispatchEvent(new Event('desktop-settings-change'));
+}
+
+function getWindowAnimationPreference() {
+  const value = localStorage.getItem(WINDOW_ANIMATION_KEY);
+  return ['none', ...WINDOW_ANIMATION_EFFECTS, 'random'].includes(value) ? value : 'fade';
+}
+
+function chooseWindowAnimation(preference = getWindowAnimationPreference()) {
+  if (preference !== 'random') return preference;
+  return WINDOW_ANIMATION_EFFECTS[Math.floor(Math.random() * WINDOW_ANIMATION_EFFECTS.length)];
+}
+
+function setWindowAnimationPreference(value) {
+  const next = ['none', ...WINDOW_ANIMATION_EFFECTS, 'random'].includes(value) ? value : 'fade';
+  localStorage.setItem(WINDOW_ANIMATION_KEY, next);
+  notifyDesktopSettingsChanged();
 }
 
 function applyTheme(theme = localStorage.getItem(THEME_KEY)) {
@@ -646,7 +665,7 @@ function flushPendingAppActions(record) {
 async function hydrateApp(record, def, initialState) {
   const loadToken = (record.loadToken || 0) + 1;
   record.loadToken = loadToken;
-  const isCurrent = () => S.apps.includes(record) && record.loadToken === loadToken;
+  const isCurrent = () => S.apps.includes(record) && record.loadToken === loadToken && !record.closing;
   const onRetry = retry => reportAppLoadRetry(record, retry);
   try {
     const [module] = await Promise.all([
@@ -670,6 +689,7 @@ async function hydrateApp(record, def, initialState) {
     appEl.classList.add('app-window');
     appEl.dataset.id = record.id;
     appEl.dataset.type = record.type;
+    transferWindowAnimation(record.el, appEl);
     appEl.classList.toggle('focused', S.focusedId === record.id);
     record.el.replaceWith(appEl);
     record.el = appEl;
@@ -684,12 +704,14 @@ async function hydrateApp(record, def, initialState) {
     const failed = createAppLoadSurface(def.title, 'error');
     failed.dataset.id = record.id;
     failed.dataset.type = record.type;
+    transferWindowAnimation(record.el, failed);
     failed.classList.toggle('focused', S.focusedId === record.id);
     const retry = failed.querySelector('.app-load-retry');
     retry.addEventListener('click', () => {
       const loading = createAppLoadSurface(def.title);
       loading.dataset.id = record.id;
       loading.dataset.type = record.type;
+      transferWindowAnimation(record.el, loading);
       loading.classList.toggle('focused', S.focusedId === record.id);
       record.el.replaceWith(loading);
       record.el = loading;
@@ -708,6 +730,23 @@ function createColEl(colId) {
   return el;
 }
 
+function startWindowOpening(el, animation) {
+  el.dataset.windowAnimation = animation;
+  el.classList.add('window-opening');
+  const onEnd = event => {
+    if (event.target !== el || !event.animationName?.startsWith('window-')) return;
+    el.classList.remove('window-opening');
+    el.removeEventListener('animationend', onEnd);
+  };
+  el.addEventListener('animationend', onEnd);
+}
+
+function transferWindowAnimation(previous, next) {
+  const animation = previous.dataset.windowAnimation || 'none';
+  next.dataset.windowAnimation = animation;
+  if (previous.classList.contains('window-opening')) startWindowOpening(next, animation);
+}
+
 // ── App lifecycle ─────────────────────────────────────────────
 function openApp(type, insertIntoColId = null, initialState = null) {
   const def = APP_DEFS[type];
@@ -717,7 +756,14 @@ function openApp(type, insertIntoColId = null, initialState = null) {
   const el = createAppLoadSurface(def.title);
   el.dataset.id = id;
   el.dataset.type = type;
-  const record = { id, type, el, pendingActions: [] };
+  const windowAnimation = chooseWindowAnimation();
+  el.dataset.windowAnimation = windowAnimation;
+  if (
+    !S._skipSave &&
+    windowAnimation !== 'none' &&
+    !matchMedia('(prefers-reduced-motion: reduce)').matches
+  ) startWindowOpening(el, windowAnimation);
+  const record = { id, type, el, pendingActions: [], windowAnimation, closing: false };
   S.apps.push(record);
 
   const existingCol = insertIntoColId ? S.columns.find(c => c.id === insertIntoColId) : null;
@@ -743,6 +789,38 @@ function openApp(type, insertIntoColId = null, initialState = null) {
 }
 
 function closeApp(id) {
+  const record = S.apps.find(app => app.id === id);
+  if (!record || record.closing) return;
+  const animation = chooseWindowAnimation();
+  if (
+    animation !== 'none' &&
+    !document.body.classList.contains('mod-overview') &&
+    !matchMedia('(prefers-reduced-motion: reduce)').matches
+  ) {
+    record.closing = true;
+    record.el.dataset.windowAnimation = animation;
+    record.el.classList.remove('window-opening');
+    record.el.classList.add('window-closing');
+    record.el.inert = true;
+    record.el.setAttribute('aria-hidden', 'true');
+    let finished = false;
+    let fallbackTimer = 0;
+    const finish = event => {
+      if (event && (event.target !== record.el || !event.animationName?.startsWith('window-'))) return;
+      if (finished) return;
+      finished = true;
+      clearTimeout(fallbackTimer);
+      record.el.removeEventListener('animationend', finish);
+      removeAppImmediately(id);
+    };
+    record.el.addEventListener('animationend', finish);
+    fallbackTimer = window.setTimeout(() => finish(), 360);
+    return;
+  }
+  removeAppImmediately(id);
+}
+
+function removeAppImmediately(id) {
   const appIdx = S.apps.findIndex(a => a.id === id);
   if (appIdx === -1) return;
 
@@ -1272,6 +1350,7 @@ const wallpaperPreloads = new Map();
 function readWallpaperSettings() {
   try {
     const stored = JSON.parse(localStorage.getItem(WALLPAPER_KEY) || '{}');
+    const transition = stored.transition;
     return {
       selected: Array.isArray(stored.selected) ? stored.selected.filter(url => typeof url === 'string') : [],
       mode: stored.mode === 'cycle' ? 'cycle' : 'random',
@@ -1279,7 +1358,7 @@ function readWallpaperSettings() {
       intervalMinutes: WALLPAPER_INTERVALS.includes(Number(stored.intervalMinutes))
         ? Number(stored.intervalMinutes)
         : 60,
-      transition: stored.transition === 'none' ? 'none' : 'fade',
+      transition: ['none', ...WALLPAPER_TRANSITION_EFFECTS, 'random'].includes(transition) ? transition : 'fade',
       currentUrl: typeof stored.currentUrl === 'string' ? stored.currentUrl : '',
       nextUrl: typeof stored.nextUrl === 'string' ? stored.nextUrl : '',
       nextChangeAt: Number.isFinite(stored.nextChangeAt) ? stored.nextChangeAt : 0,
@@ -1350,9 +1429,17 @@ async function setDesktopWallpaper(url, transition = 'none') {
   if (token !== wallpaperTransitionToken) return;
   if (appliedWallpaperUrl === absoluteUrl) return;
 
-  if (transition === 'fade') {
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const validTransition = ['none', ...WALLPAPER_TRANSITION_EFFECTS, 'random'].includes(transition)
+    ? transition
+    : 'fade';
+  const effect = validTransition === 'random'
+    ? WALLPAPER_TRANSITION_EFFECTS[Math.floor(Math.random() * WALLPAPER_TRANSITION_EFFECTS.length)]
+    : validTransition;
+  if (effect !== 'none' && !reduceMotion) {
     const layer = document.createElement('div');
     layer.className = 'desktop-wallpaper-transition';
+    layer.dataset.transition = effect;
     layer.style.backgroundImage = backgroundLayersFor(absoluteUrl);
     layer.style.transitionDuration = `${WALLPAPER_FADE_MS}ms`;
     wallpaperTransitionLayer = layer;
@@ -1560,7 +1647,9 @@ async function saveWallpaperPreferences(draft) {
   const intervalMinutes = WALLPAPER_INTERVALS.includes(Number(draft?.intervalMinutes))
     ? Number(draft.intervalMinutes)
     : 60;
-  const transition = draft?.transition === 'none' ? 'none' : 'fade';
+  const transition = ['none', ...WALLPAPER_TRANSITION_EFFECTS, 'random'].includes(draft?.transition)
+    ? draft.transition
+    : 'fade';
   const currentUrl = selected.includes(wallpaperSettings.currentUrl)
     ? wallpaperSettings.currentUrl
     : mode === 'cycle'
@@ -2008,10 +2097,12 @@ const appCtx = {
     getSnapshot: () => ({
       theme: effectiveTheme(),
       themeOverride: localStorage.getItem(THEME_KEY) || 'system',
+      windowAnimation: getWindowAnimationPreference(),
       use24HourTime,
       notificationsEnabled: systemNotificationsEnabled,
     }),
     setTheme: value => applyTheme(value === 'system' ? null : value),
+    setWindowAnimation: setWindowAnimationPreference,
     set24HourTime: setTimeFormat,
     setNotificationsEnabled: setSystemNotificationsEnabled,
     loadWallpaper: loadWallpaperForSettings,

@@ -16,6 +16,9 @@ const ICONS = {
   wallpaper: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2ZM5 5h14v9l-3.5-3.5-3 3L9 10l-4 5V5zm3 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>',
 };
 
+const WALLPAPER_TRANSITIONS = new Set(['none', 'fade', 'zoom', 'slide-left', 'slide-right', 'wipe', 'random']);
+const WINDOW_ANIMATIONS = new Set(['none', 'fade', 'zoom', 'slide-up', 'slide-left', 'flip', 'random']);
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -29,7 +32,7 @@ function copyWallpaper(settings) {
     mode: settings?.mode === 'cycle' ? 'cycle' : 'random',
     rotation: settings?.rotation === 'interval' ? 'interval' : 'visit',
     intervalMinutes: Number(settings?.intervalMinutes) || 60,
-    transition: settings?.transition === 'none' ? 'none' : 'fade',
+    transition: WALLPAPER_TRANSITIONS.has(settings?.transition) ? settings.transition : 'fade',
   };
 }
 
@@ -198,6 +201,37 @@ export function buildSettings(id, ctx, initialState) {
     note.append(el('span', 'settings-note-dot', 'NOW'), el('span', '', `Currently using ${current.theme === 'dark' ? 'dark' : 'light'} appearance.`));
     card.append(note);
     body.append(card);
+
+    const animationCard = el('section', 'settings-card settings-control-card settings-animation-card');
+    animationCard.append(
+      el('span', 'settings-card-eyebrow', 'MOTION'),
+      el('h2', '', 'Window animations'),
+      el('p', 'settings-description', 'Choose how windows appear and close. Random picks an animation each time.')
+    );
+    animationCard.append(makeChoiceGroup('Window animation', [
+      ['fade', 'Fade', 'Fade in and out'],
+      ['zoom', 'Zoom', 'Scale into and out of view'],
+      ['slide-up', 'Slide Up', 'Move gently from below'],
+      ['slide-left', 'Slide', 'Move horizontally'],
+      ['flip', 'Flip', 'Turn into and out of view'],
+      ['none', 'None', 'Open and close without animation'],
+      ['random', 'Random', 'Choose a different style each time'],
+    ], WINDOW_ANIMATIONS.has(current.windowAnimation) ? current.windowAnimation : 'fade', value => {
+      try {
+        settings?.setWindowAnimation?.(value);
+        current = snapshot();
+        if (!WINDOW_ANIMATIONS.has(current.windowAnimation)) current.windowAnimation = value;
+        renderPage();
+      } catch (error) {
+        const status = animationCard.querySelector('.settings-inline-status');
+        setMessage(status, error?.message || 'The window animation could not be changed.', 'error');
+      }
+    }));
+    const animationStatus = el('p', 'settings-inline-status');
+    animationStatus.setAttribute('role', 'status');
+    animationStatus.hidden = true;
+    animationCard.append(animationStatus);
+    body.append(animationCard);
   }
 
   function renderTime(body) {
@@ -431,6 +465,11 @@ export function buildSettings(id, ctx, initialState) {
     scheduleCard.append(makeChoiceGroup('Wallpaper transition', [
       ['fade', 'Fade', 'Blend between images'],
       ['none', 'None', 'Wait for the image, then switch'],
+      ['zoom', 'Zoom', 'Scale the new image into view'],
+      ['slide-left', 'Slide from right', 'Move the new image in from the right'],
+      ['slide-right', 'Slide from left', 'Move the new image in from the left'],
+      ['wipe', 'Wipe', 'Reveal the new image across the screen'],
+      ['random', 'Random', 'Choose a different transition each time'],
     ], wallpaperDraft.transition, value => { wallpaperDraft.transition = value; queueWallpaperUpdate(); }));
     controlGrid.append(modeCard, scheduleCard);
     body.append(controlGrid);
