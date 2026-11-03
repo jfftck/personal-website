@@ -113,6 +113,27 @@ export function buildDocViewer(id, ctx, initialState = null) {
     });
   }
 
+  function showDocumentLoading(messageText) {
+    docBody.setAttribute('aria-busy', 'true');
+    docBody.replaceChildren();
+    const status = document.createElement('p');
+    status.className = 'doc-status doc-loading-status';
+    status.setAttribute('role', 'status');
+    status.textContent = messageText;
+    const skeleton = document.createElement('div');
+    skeleton.className = 'doc-loading-skeleton';
+    skeleton.setAttribute('aria-hidden', 'true');
+    skeleton.innerHTML = `
+      <i class="doc-skeleton-heading"></i>
+      <i class="doc-skeleton-subheading"></i>
+      <i class="doc-skeleton-line"></i><i class="doc-skeleton-line"></i>
+      <i class="doc-skeleton-line"></i><i class="doc-skeleton-line doc-skeleton-line-short"></i>
+      <i class="doc-skeleton-gap"></i>
+      <i class="doc-skeleton-line"></i><i class="doc-skeleton-line"></i>
+      <i class="doc-skeleton-line doc-skeleton-line-medium"></i>`;
+    docBody.append(status, skeleton);
+  }
+
   let fileLoadGeneration = 0;
   function loadFile(url, name) {
     const generation = ++fileLoadGeneration;
@@ -131,8 +152,7 @@ export function buildDocViewer(id, ctx, initialState = null) {
 
     pdfFrame.style.display = 'none';
     docBody.style.display  = '';
-    docBody.setAttribute('aria-busy', 'true');
-    docBody.innerHTML = '<p class="doc-status" role="status">Loading…</p>';
+    showDocumentLoading('Loading document…');
 
     retryWithBackoff(async () => {
       const response = await fetch(url, { cache: 'no-cache' });
@@ -141,7 +161,7 @@ export function buildDocViewer(id, ctx, initialState = null) {
     }, {
       onRetry: ({ attempt, maxRetries, delayMs }) => {
         if (generation === fileLoadGeneration) {
-          docBody.innerHTML = `<p class="doc-status" role="status">Connection issue. Retrying ${attempt} of ${maxRetries} in ${(delayMs / 1000).toFixed(1)}s…</p>`;
+          showDocumentLoading(`Connection issue. Retrying ${attempt} of ${maxRetries} in ${(delayMs / 1000).toFixed(1)}s…`);
         }
       },
     }).then(text => {

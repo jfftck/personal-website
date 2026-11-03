@@ -520,16 +520,34 @@ function createAppLoadSurface(title, mode = 'loading') {
   const content = document.createElement('div');
   content.className = 'app-load-content';
   if (mode === 'loading') {
-    const spinner = document.createElement('span');
-    spinner.className = 'app-load-spinner';
-    spinner.setAttribute('aria-hidden', 'true');
     const message = document.createElement('p');
     message.className = 'app-load-title';
     message.textContent = `Loading ${title}…`;
     const detail = document.createElement('p');
     detail.className = 'app-load-detail';
     detail.textContent = 'Preparing app resources…';
-    content.append(spinner, message, detail);
+    const skeleton = document.createElement('div');
+    skeleton.className = 'app-loading-skeleton';
+    skeleton.setAttribute('aria-hidden', 'true');
+    skeleton.innerHTML = `
+      <div class="app-skeleton-toolbar">
+        <i class="app-skeleton-chip"></i><i class="app-skeleton-chip"></i>
+        <i class="app-skeleton-chip"></i><i class="app-skeleton-chip app-skeleton-chip-short"></i>
+      </div>
+      <div class="app-skeleton-layout">
+        <div class="app-skeleton-sidebar">
+          <i class="app-skeleton-bar app-skeleton-bar-medium"></i>
+          <i class="app-skeleton-bar"></i><i class="app-skeleton-bar"></i>
+          <i class="app-skeleton-bar app-skeleton-bar-short"></i>
+        </div>
+        <div class="app-skeleton-main">
+          <i class="app-skeleton-bar app-skeleton-bar-heading"></i>
+          <i class="app-skeleton-bar"></i><i class="app-skeleton-bar"></i>
+          <i class="app-skeleton-bar app-skeleton-bar-medium"></i>
+          <i class="app-skeleton-panel"></i>
+        </div>
+      </div>`;
+    content.append(message, detail, skeleton);
   } else {
     const heading = document.createElement('p');
     heading.className = 'app-load-title';
@@ -2845,10 +2863,27 @@ function showWelcomeStatus(body, message, busy = true) {
   body.replaceChildren();
   body.setAttribute('aria-busy', String(busy));
   const status = document.createElement('p');
-  status.className = 'doc-status';
+  status.className = 'welcome-load-status';
   status.setAttribute('role', 'status');
   status.textContent = message;
   body.append(status);
+  if (busy) {
+    const skeleton = document.createElement('div');
+    skeleton.className = 'welcome-skeleton';
+    skeleton.setAttribute('aria-hidden', 'true');
+    skeleton.innerHTML = `
+      <i class="welcome-skeleton-heading"></i>
+      <i class="welcome-skeleton-subheading"></i>
+      <i class="welcome-skeleton-line"></i>
+      <i class="welcome-skeleton-line"></i>
+      <i class="welcome-skeleton-line"></i>
+      <i class="welcome-skeleton-line welcome-skeleton-line-short"></i>
+      <i class="welcome-skeleton-gap"></i>
+      <i class="welcome-skeleton-line"></i>
+      <i class="welcome-skeleton-line"></i>
+      <i class="welcome-skeleton-line welcome-skeleton-line-medium"></i>`;
+    body.append(skeleton);
+  }
 }
 
 function showWelcomeFailure(body, name) {
