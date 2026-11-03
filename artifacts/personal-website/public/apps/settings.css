@@ -217,10 +217,8 @@
 .settings-subheading { margin: .9rem 0 .25rem; color: var(--util-detail); font-size: .67rem; font-weight: 700; }
 .settings-wallpaper-footer { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; padding-top: .15rem; }
 .settings-wallpaper-footer .settings-inline-status { flex: 1 1 100%; }
-.settings-form-actions { display: flex; gap: .5rem; margin-left: auto; }
 .settings-default-button { margin-right: auto; }
-.settings-save-button { border-color: var(--util-teal); background: var(--util-teal); color: #172b29 !important; font-weight: 700; }
-.settings-save-button:hover { filter: brightness(1.08); }
+.settings-wallpaper-retry { margin-left: auto; }
 .settings-app .util-action { font-size: .72rem; }
 .settings-app button:focus-visible, .settings-app select:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 .settings-mobile-heading, .settings-page-list { display: none; }
@@ -273,8 +271,7 @@
   .settings-card { padding: .95rem; }
   .settings-wallpaper-footer { align-items: stretch; }
   .settings-default-button { width: 100%; }
-  .settings-form-actions { width: 100%; margin: 0; }
-  .settings-form-actions .util-action { flex: 1; }
+  .settings-wallpaper-retry { width: 100%; margin: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .settings-app *, .settings-app *::before, .settings-app *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }

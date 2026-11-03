@@ -64,14 +64,15 @@ export function buildSettings(id, ctx, initialState) {
   let destroyed = false;
   let wallpaperFiles = [];
   let wallpaperDraft = null;
-  let wallpaperSaved = null;
   let wallpaperLoading = false;
   let wallpaperError = '';
   let wallpaperStatus = '';
   let notificationError = '';
   let notificationBusy = false;
-  let wallpaperSaving = false;
-  let wallpaperDefaulting = false;
+  let wallpaperPendingAction = null;
+  let wallpaperFailedAction = null;
+  let wallpaperRevision = 0;
+  let wallpaperActionRunner = null;
   let firstResize = true;
   let resizeObserver;
   let unsubscribe = () => {};
@@ -296,9 +297,8 @@ export function buildSettings(id, ctx, initialState) {
       const data = await settings.loadWallpaper();
       if (destroyed) return;
       wallpaperFiles = Array.isArray(data?.files) ? data.files.filter(file => file && typeof file.url === 'string') : [];
-      wallpaperSaved = copyWallpaper(data?.settings);
-      wallpaperSaved.selected = wallpaperSaved.selected.filter(url => wallpaperFiles.some(file => file.url === url));
-      wallpaperDraft = copyWallpaper(wallpaperSaved);
+      wallpaperDraft = copyWallpaper(data?.settings);
+      wallpaperDraft.selected = wallpaperDraft.selected.filter(url => wallpaperFiles.some(file => file.url === url));
       wallpaperLoading = false;
       renderPage();
     } catch (error) {
@@ -361,8 +361,7 @@ export function buildSettings(id, ctx, initialState) {
           if (input.checked) {
             if (!wallpaperDraft.selected.includes(file.url)) wallpaperDraft.selected.push(file.url);
           } else wallpaperDraft.selected = wallpaperDraft.selected.filter(url => url !== file.url);
-          wallpaperStatus = '';
-          renderPage();
+          queueWallpaperUpdate();
         });
         grid.append(label);
       });
@@ -377,7 +376,7 @@ export function buildSettings(id, ctx, initialState) {
     const modeOptions = makeChoiceGroup('Wallpaper order', [
       ['random', 'Random', 'Pick from your selected images'],
       ['cycle', 'Cycle', 'Follow your ordered list'],
-    ], wallpaperDraft.mode, value => { wallpaperDraft.mode = value; wallpaperStatus = ''; renderPage(); }, !canRotate);
+    ], wallpaperDraft.mode, value => { wallpaperDraft.mode = value; queueWallpaperUpdate(); }, !canRotate);
     modeCard.append(modeOptions);
     if (!canRotate) modeCard.append(el('p', 'settings-description settings-rotation-hint', 'Select at least two wallpapers to enable automatic rotation.'));
     if (wallpaperDraft.mode === 'cycle') {
@@ -409,7 +408,7 @@ export function buildSettings(id, ctx, initialState) {
     scheduleCard.append(makeChoiceGroup('Wallpaper schedule', [
       ['visit', 'On each visit', 'Choose when you return'],
       ['interval', 'On a timer', 'Rotate while you are here'],
-    ], wallpaperDraft.rotation, value => { wallpaperDraft.rotation = value; wallpaperStatus = ''; renderPage(); }, !canRotate));
+    ], wallpaperDraft.rotation, value => { wallpaperDraft.rotation = value; queueWallpaperUpdate(); }, !canRotate));
     if (wallpaperDraft.rotation === 'interval') {
       const field = el('label', 'settings-select-label');
       field.append(el('span', '', 'Change every'));
@@ -423,7 +422,7 @@ export function buildSettings(id, ctx, initialState) {
         option.selected = Number(wallpaperDraft.intervalMinutes) === minutes;
         select.append(option);
       }
-      select.addEventListener('change', () => { wallpaperDraft.intervalMinutes = Number(select.value); wallpaperStatus = ''; });
+      select.addEventListener('change', () => { wallpaperDraft.intervalMinutes = Number(select.value); queueWallpaperUpdate(); });
       field.append(select);
       scheduleCard.append(field);
       enhanceSelect(select);
@@ -432,7 +431,7 @@ export function buildSettings(id, ctx, initialState) {
     scheduleCard.append(makeChoiceGroup('Wallpaper transition', [
       ['fade', 'Fade', 'Blend between images'],
       ['none', 'None', 'Wait for the image, then switch'],
-    ], wallpaperDraft.transition, value => { wallpaperDraft.transition = value; wallpaperStatus = ''; renderPage(); }));
+    ], wallpaperDraft.transition, value => { wallpaperDraft.transition = value; queueWallpaperUpdate(); }));
     controlGrid.append(modeCard, scheduleCard);
     body.append(controlGrid);
 
@@ -443,23 +442,18 @@ export function buildSettings(id, ctx, initialState) {
     footerStatus.hidden = !wallpaperStatus;
     if (wallpaperStatus) {
       footerStatus.textContent = wallpaperStatus;
-      footerStatus.dataset.kind = wallpaperStatus.toLowerCase().includes('could not') ? 'error' : 'success';
+      footerStatus.dataset.kind = wallpaperFailedAction ? 'error' : 'success';
     }
     const defaultButton = el('button', 'util-action settings-default-button', 'Use Default Random Wallpaper');
     defaultButton.type = 'button';
-    defaultButton.disabled = wallpaperDefaulting;
     defaultButton.addEventListener('click', useDefaultWallpaper);
-    const actions = el('div', 'settings-form-actions');
-    const cancel = el('button', 'util-action', 'Cancel');
-    cancel.type = 'button';
-    cancel.disabled = !hasWallpaperChanges() || wallpaperSaving || wallpaperDefaulting;
-    cancel.addEventListener('click', () => { wallpaperDraft = copyWallpaper(wallpaperSaved); wallpaperStatus = 'Changes discarded.'; renderPage(); });
-    const save = el('button', 'util-action settings-save-button', 'Save changes');
-    save.type = 'button';
-    save.disabled = !hasWallpaperChanges() || wallpaperDraft.selected.length === 0 || wallpaperSaving || wallpaperDefaulting;
-    save.addEventListener('click', saveWallpaper);
-    actions.append(cancel, save);
-    footer.append(defaultButton, footerStatus, actions);
+    footer.append(defaultButton, footerStatus);
+    if (wallpaperFailedAction) {
+      const retry = el('button', 'util-action settings-wallpaper-retry', 'Retry');
+      retry.type = 'button';
+      retry.addEventListener('click', () => queueWallpaperAction(wallpaperFailedAction));
+      footer.append(retry);
+    }
     body.append(footer);
   }
 
@@ -480,56 +474,78 @@ export function buildSettings(id, ctx, initialState) {
     return group;
   }
 
-  function hasWallpaperChanges() {
-    return JSON.stringify(wallpaperDraft) !== JSON.stringify(wallpaperSaved);
-  }
-
   function moveSelected(index, delta) {
     const nextIndex = index + delta;
     if (nextIndex < 0 || nextIndex >= wallpaperDraft.selected.length) return;
     const [item] = wallpaperDraft.selected.splice(index, 1);
     wallpaperDraft.selected.splice(nextIndex, 0, item);
-    wallpaperStatus = '';
-    renderPage();
+    queueWallpaperUpdate();
   }
 
-  async function saveWallpaper() {
-    if (!wallpaperDraft || !settings?.saveWallpaper || wallpaperDraft.selected.length === 0 || wallpaperSaving || wallpaperDefaulting) return;
-    const payload = copyWallpaper(wallpaperDraft);
-    wallpaperSaving = true;
-    wallpaperStatus = 'Saving wallpaper preferences…';
-    renderPage();
-    try {
-      await settings.saveWallpaper(payload);
-      if (destroyed) return;
-      wallpaperSaved = payload;
-      wallpaperStatus = 'Wallpaper preferences saved.';
-    } catch (error) {
-      if (destroyed) return;
-      wallpaperStatus = error?.message || 'Wallpaper preferences could not be saved.';
-    } finally {
-      wallpaperSaving = false;
-    }
-    renderPage();
+  function queueWallpaperUpdate() {
+    if (!wallpaperDraft) return;
+    const action = wallpaperDraft.selected.length
+      ? { type: 'save', payload: copyWallpaper(wallpaperDraft) }
+      : { type: 'default' };
+    queueWallpaperAction(action);
   }
 
-  async function useDefaultWallpaper() {
-    if (wallpaperDefaulting || wallpaperSaving) return;
-    wallpaperDefaulting = true;
-    wallpaperStatus = 'Restoring the default wallpaper…';
+  function queueWallpaperAction(action) {
+    wallpaperPendingAction = action ? {
+      type: action.type,
+      payload: action.payload ? copyWallpaper(action.payload) : undefined,
+    } : null;
+    wallpaperFailedAction = null;
+    wallpaperRevision += 1;
+    wallpaperStatus = action?.type === 'default'
+      ? 'Applying the default random wallpaper…'
+      : 'Applying wallpaper changes…';
     renderPage();
-    try {
-      await settings?.useDefaultWallpaper?.();
-      if (destroyed) return;
-      await loadWallpapers();
-      wallpaperStatus = 'Default random wallpaper restored.';
-    } catch (error) {
-      if (destroyed) return;
-      wallpaperStatus = error?.message || 'The default wallpaper could not be restored.';
-    } finally {
-      wallpaperDefaulting = false;
+    startWallpaperActionRunner();
+  }
+
+  function startWallpaperActionRunner() {
+    if (wallpaperActionRunner || !wallpaperPendingAction || destroyed) return;
+    wallpaperActionRunner = drainWallpaperActions().finally(() => {
+      wallpaperActionRunner = null;
+      startWallpaperActionRunner();
+    });
+  }
+
+  async function drainWallpaperActions() {
+    while (wallpaperPendingAction && !destroyed) {
+      const action = wallpaperPendingAction;
+      wallpaperPendingAction = null;
+      const revision = wallpaperRevision;
+      try {
+        if (action.type === 'default') {
+          if (!settings?.useDefaultWallpaper) throw new Error('Wallpaper settings are not available right now.');
+          await settings.useDefaultWallpaper();
+          if (revision === wallpaperRevision) wallpaperDraft = copyWallpaper(null);
+        } else {
+          if (!settings?.saveWallpaper) throw new Error('Wallpaper settings are not available right now.');
+          await settings.saveWallpaper(copyWallpaper(action.payload));
+        }
+        wallpaperFailedAction = null;
+        if (revision === wallpaperRevision) {
+          wallpaperStatus = action.type === 'default'
+            ? 'Default random wallpaper applied.'
+            : 'Wallpaper preferences applied.';
+        }
+      } catch (error) {
+        if (revision === wallpaperRevision) {
+          wallpaperFailedAction = action;
+          wallpaperStatus = error?.message || 'Wallpaper preferences could not be applied.';
+        }
+      }
+      if (!destroyed) renderPage();
     }
-    renderPage();
+    if (!destroyed) renderPage();
+  }
+
+  function useDefaultWallpaper() {
+    wallpaperDraft = copyWallpaper(null);
+    queueWallpaperAction({ type: 'default' });
   }
 
   function updateFromHost() {

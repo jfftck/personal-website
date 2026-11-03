@@ -57,6 +57,48 @@ test('Settings mobile sections and pages use the full app width', async ({ page 
   expect(desktopGeometry.mainStartsAfterSidebar).toBe(true);
 });
 
+test('Wallpaper settings apply changes immediately without save or cancel actions', async ({ page }) => {
+  await page.evaluate(async () => {
+    const { buildSettings } = await import('/apps/settings.js');
+    window.__wallpaperTestCalls = [];
+    const ctx = {
+      settings: {
+        getSnapshot: () => ({ theme: 'dark' }),
+        loadWallpaper: async () => ({
+          files: [
+            { url: '/wallpaper-one.jpg', title: 'Wallpaper One' },
+            { url: '/wallpaper-two.jpg', title: 'Wallpaper Two' },
+          ],
+          settings: {
+            selected: ['/wallpaper-one.jpg'],
+            mode: 'random',
+            rotation: 'visit',
+            intervalMinutes: 60,
+            transition: 'fade',
+          },
+        }),
+        saveWallpaper: async value => { window.__wallpaperTestCalls.push(value); },
+        useDefaultWallpaper: async () => { window.__wallpaperTestCalls.push({ default: true }); },
+      },
+    };
+    const app = buildSettings('wallpaper-test', ctx, {});
+    document.body.append(app);
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    app.querySelector('.settings-nav-item[data-page="wallpaper"]').click();
+  });
+
+  const wallpaperPage = page.locator('.settings-app').last();
+  await expect(wallpaperPage.getByText('Eligible wallpapers')).toBeVisible();
+  await expect(wallpaperPage.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
+  await expect(wallpaperPage.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
+
+  await wallpaperPage.getByRole('group', { name: 'Wallpaper transition' })
+    .getByRole('button', { name: /None/ }).evaluate(button => button.click());
+  await expect.poll(() => page.evaluate(() => window.__wallpaperTestCalls.length)).toBe(1);
+  expect(await page.evaluate(() => window.__wallpaperTestCalls[0].transition)).toBe('none');
+  await expect(wallpaperPage.getByRole('status')).toContainText('applied');
+});
+
 async function chooseCalculatorMode(calculator, mode) {
   const select = calculator.locator('.calc-mode-select-field');
   if (await select.inputValue() === mode.toLowerCase()) return;
