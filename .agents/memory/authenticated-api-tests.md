@@ -1,10 +1,10 @@
 ---
 name: Authenticated API integration tests
-description: How to exercise protected API routes in local integration tests without weakening authentication.
+description: How to exercise the Replit-authenticated admin API without weakening its authorization boundary.
 ---
 
-Protected API integration tests should send real signed bearer JWTs and let the production Clerk middleware verify them. For local tests, generate a short-lived signing keypair, pass only the public PEM as `CLERK_JWT_KEY` to the test server, and sign a temporary token with the private key held in test memory.
+Exercise Replit Auth through a mock OIDC issuer that signs test ID tokens, including PKCE/state/nonce validation. For route guard tests, insert temporary database-backed sessions and send the same `sid` cookie as the browser. Assert anonymous requests receive 401, non-owner sessions receive 403, owner sessions succeed, and `/files/` stays public.
 
-**Why:** A test-only auth bypass would stop exercising the security boundary that protects admin mutations.
+**Why:** A test-only authentication bypass would stop exercising the session and owner checks that protect admin mutations.
 
-**How to apply:** Use the same HTTP routes as the admin client and avoid adding alternate test authentication branches or persisting test keys.
+**How to apply:** Use real HTTP routes and signed OIDC claims; keep the local HTTP issuer allowance gated to test mode and never add an alternate production authentication path.

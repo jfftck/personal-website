@@ -7,7 +7,7 @@ Store uploaded posts, documents, pictures, and videos in App Storage. Keep file 
 
 **Why:** the user wants one storage design for every content type, server-generated manifests, and a public site that does not appear to use an API for file delivery.
 
-**How to apply:** keep write operations behind Clerk-protected admin endpoints, and have public clients consume only `/files` routes.
+**How to apply:** keep write operations behind the owner-only Replit Auth boundary in [Admin authentication](admin-authentication.md), and have public clients consume only `/files` routes.
 
 When changing the shape of a server-cached manifest, version its cache key or invalidate the cached record as part of the change. A deployment alone does not advance the content generation, so an older JSON shape can otherwise remain cached until a file mutation happens.
 

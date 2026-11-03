@@ -99,7 +99,7 @@ function RoutedBoundary({ children }: { children: ReactNode }) {
 
 function Console() {
   const {
-    isLoading: authReady,
+    isLoading: authLoading,
     isAuthenticated: signedIn,
     isOwner,
     login,
@@ -545,7 +545,7 @@ function Console() {
     setModal('upload');
   };
 
-  if (!authReady) return <LoadingAuth />;
+  if (authLoading) return <LoadingAuth />;
   if (!signedIn) {
     const accessDenied = new URLSearchParams(window.location.search).get('access') === 'denied';
     return (

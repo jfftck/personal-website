@@ -22,14 +22,25 @@ export async function getOidcConfig(): Promise<oidc.Configuration> {
   if (!oidcConfig) {
     const clientId = process.env.REPL_ID;
     if (!clientId) throw new Error("Replit Auth requires the REPL_ID environment variable.");
-    oidcConfig = await oidc.discovery(new URL(ISSUER_URL), clientId);
+    const issuer = new URL(ISSUER_URL);
+    const testOnlyHttpDiscovery =
+      process.env.NODE_ENV === "test" && issuer.protocol === "http:"
+        ? { execute: [oidc.allowInsecureRequests] }
+        : undefined;
+    oidcConfig = await oidc.discovery(
+      issuer,
+      clientId,
+      undefined,
+      undefined,
+      testOnlyHttpDiscovery,
+    );
   }
   return oidcConfig;
 }
 
 export function isWorkspaceOwner(username: string | null | undefined): boolean {
-  const owner = process.env.REPL_OWNER?.trim().toLocaleLowerCase();
-  return Boolean(owner && username?.trim().toLocaleLowerCase() === owner);
+  const owner = process.env.REPL_OWNER?.trim().toLowerCase();
+  return Boolean(owner && username?.trim().toLowerCase() === owner);
 }
 
 export async function createSession(data: SessionData): Promise<string> {

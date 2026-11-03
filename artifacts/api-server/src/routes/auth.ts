@@ -8,7 +8,6 @@ import {
   getOidcConfig,
   getSessionId,
   isWorkspaceOwner,
-  ISSUER_URL,
   SESSION_COOKIE,
   SESSION_TTL,
   type SessionData,
@@ -121,6 +120,7 @@ function clearOidcCookies(res: Response) {
 }
 
 router.get("/auth/user", (req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "no-store");
   res.json(
     GetCurrentAuthUserResponse.parse({
       user: req.isAuthenticated() ? req.user : null,

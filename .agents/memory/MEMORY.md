@@ -4,6 +4,6 @@
 - [Calculator keyboard shortcuts](calculator-keyboard-shortcuts.md) — global shortcuts must leave native controls’ Enter and Space activation to the browser.
 - [Calculator compact layout](calculator-compact-layout.md) — explicit compact button line heights prevent keypad rows overflowing their grid tracks.
 - [Content storage architecture](content-storage.md) — App Storage holds file bytes, `/files` serves generated public manifests, and private Git stores revision snapshots and object references.
-- [Clerk plan constraint](clerk-auth-plan-constraint.md) — do not require a plan change just to keep production authentication working on this personal page.
+- [Admin authentication](admin-authentication.md) — private admin access uses Replit Auth with an owner check; `/files/` remains public.
 - [Authenticated API integration tests](authenticated-api-tests.md) — test protected endpoints with signed Clerk tokens and an ephemeral JWT verification key, never an auth bypass.
 - [Folder conflict handling](folder-conflict-handling.md) — check the composed folder path before insertion so duplicate-name conflicts return a useful 409.

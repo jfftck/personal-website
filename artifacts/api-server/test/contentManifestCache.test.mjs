@@ -193,33 +193,6 @@ test(
                updated_at = now()`,
         );
         await client.query("DELETE FROM content_manifest_cache");
-        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-        const accessExpiresAt = Math.floor(Date.now() / 1000) + 3600;
-        for (const [sid, username] of [
-          [ownerSessionId, ownerUsername],
-          [nonOwnerSessionId, `other-${suffix}`],
-        ]) {
-          await client.query(
-            `INSERT INTO sessions (sid, sess, expire)
-             VALUES ($1, $2::jsonb, $3)`,
-            [
-              sid,
-              JSON.stringify({
-                user: {
-                  id: username,
-                  username,
-                  email: `${username}@example.test`,
-                  firstName: "Test",
-                  lastName: null,
-                  profileImageUrl: null,
-                },
-                access_token: "test-session",
-                expires_at: accessExpiresAt,
-              }),
-              expiresAt,
-            ],
-          );
-        }
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");
@@ -372,6 +345,33 @@ test(
                updated_at = now()`,
         );
         await client.query("DELETE FROM content_manifest_cache");
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        const accessExpiresAt = Math.floor(Date.now() / 1000) + 3600;
+        for (const [sid, username] of [
+          [ownerSessionId, ownerUsername],
+          [nonOwnerSessionId, `other-${suffix}`],
+        ]) {
+          await client.query(
+            `INSERT INTO sessions (sid, sess, expire)
+             VALUES ($1, $2::jsonb, $3)`,
+            [
+              sid,
+              JSON.stringify({
+                user: {
+                  id: username,
+                  username,
+                  email: `${username}@example.test`,
+                  firstName: "Test",
+                  lastName: null,
+                  profileImageUrl: null,
+                },
+                access_token: "test-session",
+                expires_at: accessExpiresAt,
+              }),
+              expiresAt,
+            ],
+          );
+        }
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");
@@ -385,12 +385,17 @@ test(
         sessionId: null,
       });
       assert.equal(anonymousTree.status, 401);
+      const anonymousAuthStatus = await adminRequest(firstServer, "/auth/user", {
+        sessionId: null,
+      });
+      assert.deepEqual(await anonymousAuthStatus.json(), { user: null, isOwner: false });
       const otherAccountTree = await adminRequest(firstServer, "/content/tree", {
         sessionId: nonOwnerSessionId,
       });
       assert.equal(otherAccountTree.status, 403);
       const authStatusResponse = await adminRequest(firstServer, "/auth/user");
       assert.equal(authStatusResponse.status, 200);
+      assert.equal(authStatusResponse.headers.get("cache-control"), "no-store");
       assert.equal((await authStatusResponse.json()).isOwner, true);
       const baseline = await readManifest(firstServer.manifestUrl);
       assert.equal(baseline.response.status, 200);
@@ -413,6 +418,8 @@ test(
       );
 
       secondServer = await startServer();
+      const persistedOwnerAccess = await adminRequest(secondServer, "/content/tree");
+      assert.equal(persistedOwnerAccess.status, 200);
       const unchanged = await readManifest(
         secondServer.manifestUrl,
         baseline.response.headers.get("etag"),
@@ -884,6 +891,9 @@ test(
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
+        await client.query("DELETE FROM sessions WHERE sid = ANY($1::varchar[])", [
+          [ownerSessionId, nonOwnerSessionId],
+        ]);
         if (initialFileId) {
           await client.query(
             "DELETE FROM content_file_versions WHERE file_id = $1",

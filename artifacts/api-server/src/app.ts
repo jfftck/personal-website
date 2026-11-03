@@ -48,13 +48,6 @@ app.use((req, res, next) => {
     return;
   }
   if (
-    /^\/(clerk-js|clerk-proxy)(\/|$)/.test(req.path) ||
-    req.path === "/api/clerk-config"
-  ) {
-    res.status(410).json({ error: "Clerk authentication endpoints have been retired." });
-    return;
-  }
-  if (
     /^\/(posts|documents|pictures|videos|welcome)(\/|$)/.test(req.path) &&
     (req.method === "GET" || req.method === "HEAD")
   ) {
