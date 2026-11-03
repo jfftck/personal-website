@@ -2,14 +2,25 @@
   --settings-accent: var(--util-teal, #9bd4cf);
   --settings-accent-wash: color-mix(in srgb, var(--settings-accent) 14%, transparent);
   --settings-rule: color-mix(in srgb, var(--app-text) 13%, transparent);
-  display: grid;
-  grid-template-columns: minmax(12.5rem, 16rem) minmax(0, 1fr);
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  box-sizing: border-box;
   background:
     radial-gradient(ellipse at 88% 0%, color-mix(in srgb, var(--util-teal) 8%, transparent), transparent 45%),
     var(--app-bg);
   container-type: inline-size;
   overflow: hidden;
   position: relative;
+}
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(12.5rem, 16rem) minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 .settings-app[hidden], .settings-app [hidden] { display: none !important; }
 .settings-sidebar {
@@ -229,21 +240,27 @@
 .settings-back span:first-child { font-size: 1.1rem; line-height: .8; }
 .settings-back:hover { background: var(--util-surface-strong); }
 @container (max-width: 619px) {
-  .settings-app { display: block; }
+  .settings-layout {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
   .settings-sidebar { display: none; }
-  .settings-main { height: 100%; overflow: hidden; }
-  .settings-page-list { display: block; height: 100%; overflow: auto; padding: 1.4rem 1rem 1rem; }
+  .settings-main { width: 100%; min-width: 0; height: 100%; overflow: hidden; }
+  .settings-page-list { display: block; width: 100%; min-width: 0; height: 100%; overflow: auto; padding: 1.4rem 1rem 1rem; }
   .settings-mobile-heading { display: block; margin: .2rem .25rem 1.4rem; }
   .settings-mobile-heading h1 { font-size: 2rem; }
-  .settings-mobile-nav { gap: .45rem; }
-  .settings-mobile-item { min-height: 4.5rem; padding: .8rem; border-color: var(--settings-rule); background: var(--util-surface); }
+  .settings-mobile-nav { width: 100%; min-width: 0; gap: .45rem; }
+  .settings-mobile-item { width: 100%; min-width: 0; min-height: 4.5rem; box-sizing: border-box; padding: .8rem; border-color: var(--settings-rule); background: var(--util-surface); }
   .settings-mobile-item .settings-nav-icon { width: 2.35rem; height: 2.35rem; flex-basis: 2.35rem; }
   .settings-mobile-item .settings-nav-copy strong { font-size: .83rem; }
   .settings-mobile-item .settings-nav-copy small { font-size: .68rem; }
-  .settings-page { position: absolute; inset: 0; overflow: auto; background: var(--app-bg); }
+  .settings-page { position: absolute; inset: 0; width: auto; min-width: 0; box-sizing: border-box; overflow: auto; background: var(--app-bg); }
   .settings-page-header { display: grid; gap: .85rem; padding: 1rem 1rem .85rem; }
   .settings-page-header .settings-title-block h1 { font-size: 1.65rem; }
   .settings-page-body { gap: .75rem; padding: 0 1rem 1.4rem; }
+  .settings-page-header, .settings-page-body { width: 100%; min-width: 0; box-sizing: border-box; }
+  .settings-card { width: 100%; min-width: 0; box-sizing: border-box; }
   .settings-theme-options { gap: .4rem; }
   .settings-theme-choice { padding: .35rem; gap: .5rem; }
   .settings-theme-preview { height: 3.5rem; }

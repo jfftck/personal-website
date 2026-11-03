@@ -38,17 +38,19 @@ export function buildSettings(id, ctx, initialState) {
   const root = el('section', 'utility-app settings-app');
   root.setAttribute('aria-label', 'Settings');
   root.innerHTML = `
-    <aside class="settings-sidebar" aria-label="Settings sections">
-      <div class="settings-brand"><span class="settings-brand-mark" aria-hidden="true">S</span><div><strong>Settings</strong><small>Desktop preferences</small></div></div>
-      <nav class="settings-nav" aria-label="Settings pages"></nav>
-    </aside>
-    <main class="settings-main">
-      <div class="settings-page-list" hidden>
-        <div class="settings-mobile-heading"><span class="settings-kicker">PERSONAL DESKTOP</span><h1>Settings</h1><p>Make this space feel like yours.</p></div>
-        <nav class="settings-mobile-nav" aria-label="Settings pages"></nav>
-      </div>
-      <section class="settings-page" aria-live="polite"></section>
-    </main>`;
+    <div class="settings-layout">
+      <aside class="settings-sidebar" aria-label="Settings sections">
+        <div class="settings-brand"><span class="settings-brand-mark" aria-hidden="true">S</span><div><strong>Settings</strong><small>Desktop preferences</small></div></div>
+        <nav class="settings-nav" aria-label="Settings pages"></nav>
+      </aside>
+      <main class="settings-main">
+        <div class="settings-page-list" hidden>
+          <div class="settings-mobile-heading"><span class="settings-kicker">PERSONAL DESKTOP</span><h1>Settings</h1><p>Make this space feel like yours.</p></div>
+          <nav class="settings-mobile-nav" aria-label="Settings pages"></nav>
+        </div>
+        <section class="settings-page" aria-live="polite"></section>
+      </main>
+    </div>`;
   const sidebarNav = root.querySelector('.settings-nav');
   const mobileList = root.querySelector('.settings-page-list');
   const mobileNav = root.querySelector('.settings-mobile-nav');

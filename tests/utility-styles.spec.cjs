@@ -11,6 +11,52 @@ async function openUtility(page, type) {
   return page.locator(`.app-window[data-type="${type}"]`).last();
 }
 
+test('Settings mobile sections and pages use the full app width', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const settings = await openUtility(page, 'settings');
+  const categoryGeometry = await settings.evaluate(root => {
+    const layout = root.querySelector('.settings-layout').getBoundingClientRect();
+    const list = root.querySelector('.settings-page-list').getBoundingClientRect();
+    const nav = root.querySelector('.settings-mobile-nav').getBoundingClientRect();
+    const item = root.querySelector('.settings-mobile-item').getBoundingClientRect();
+    return { root: root.getBoundingClientRect().width, layout: layout.width, list: list.width, nav: nav.width, item: item.width, navLeft: nav.left, rootLeft: root.getBoundingClientRect().left };
+  });
+  expect(categoryGeometry.layout).toBeGreaterThan(categoryGeometry.root * 0.95);
+  expect(categoryGeometry.list).toBeGreaterThan(categoryGeometry.root * 0.95);
+  expect(categoryGeometry.item).toBeGreaterThan(categoryGeometry.nav * 0.95);
+  expect(Math.abs(categoryGeometry.navLeft - categoryGeometry.rootLeft)).toBeLessThan(24);
+
+  await settings.getByRole('button', { name: 'Appearance' }).click();
+  const pageGeometry = await settings.evaluate(root => {
+    const main = root.querySelector('.settings-main').getBoundingClientRect();
+    const page = root.querySelector('.settings-page').getBoundingClientRect();
+    const card = root.querySelector('.settings-card').getBoundingClientRect();
+    return { main: main.width, page: page.width, card: card.width, pageLeft: page.left, mainLeft: main.left };
+  });
+  expect(pageGeometry.page).toBeGreaterThan(pageGeometry.main * 0.95);
+  expect(pageGeometry.card).toBeGreaterThan(pageGeometry.page * 0.8);
+  expect(Math.abs(pageGeometry.pageLeft - pageGeometry.mainLeft)).toBeLessThan(1);
+  await expect(settings.getByRole('button', { name: 'All settings' })).toBeVisible();
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(settings.locator('.settings-sidebar')).toBeVisible();
+  const desktopGeometry = await settings.evaluate(root => {
+    const layout = root.querySelector('.settings-layout');
+    const sidebar = root.querySelector('.settings-sidebar').getBoundingClientRect();
+    const main = root.querySelector('.settings-main').getBoundingClientRect();
+    return {
+      layoutDisplay: getComputedStyle(layout).display,
+      sidebarWidth: sidebar.width,
+      mainWidth: main.width,
+      mainStartsAfterSidebar: main.left >= sidebar.right,
+    };
+  });
+  expect(desktopGeometry.layoutDisplay).toBe('grid');
+  expect(desktopGeometry.sidebarWidth).toBeGreaterThan(0);
+  expect(desktopGeometry.mainWidth).toBeGreaterThan(desktopGeometry.sidebarWidth);
+  expect(desktopGeometry.mainStartsAfterSidebar).toBe(true);
+});
+
 async function chooseCalculatorMode(calculator, mode) {
   const select = calculator.locator('.calc-mode-select-field');
   if (await select.inputValue() === mode.toLowerCase()) return;
