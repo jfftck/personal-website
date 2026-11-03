@@ -264,7 +264,11 @@ function Console() {
     const clerk = window.Clerk;
     const target = clerkSignInRef.current;
     if (!authReady || signedIn || !clerk || !target) return;
-    clerk.mountSignIn(target);
+    const adminConsoleUrl = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
+    clerk.mountSignIn(target, {
+      forceRedirectUrl: adminConsoleUrl,
+      fallbackRedirectUrl: adminConsoleUrl,
+    });
     return () => { try { clerk.unmountSignIn(target); } catch { /* Clerk may already have unmounted. */ } };
   }, [authReady, signedIn]);
 
