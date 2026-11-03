@@ -243,7 +243,6 @@
 .auth-card { width:min(100%,460px); padding:32px; border:1px solid hsl(var(--border)); border-radius:16px; background:hsl(var(--card)); box-shadow:0 20px 70px hsl(190 22% 20% / .08); }
 .auth-card h1 { font:500 28px 'Newsreader',serif; margin:20px 0 8px; }
 .auth-card p { font-size:13px; line-height:1.6; color:hsl(var(--muted-foreground)); }
-.clerk-slot { margin-top:20px; }
 .auth-error { padding:11px; border-radius:8px; background:hsl(var(--destructive) / .1); color:hsl(var(--destructive)); font-size:12px; }
 .trash-list { display:grid; }
 .trash-row { display:grid; grid-template-columns:minmax(0,1fr) 120px 100px auto; align-items:center; gap:12px; padding:14px 18px; border-bottom:1px solid hsl(var(--border)); }

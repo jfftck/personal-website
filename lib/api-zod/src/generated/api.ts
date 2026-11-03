@@ -18,6 +18,48 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Get the current signed-in user
+ */
+export const GetCurrentAuthUserResponse = zod.object({
+  "user": zod.union([zod.object({
+  "id": zod.string(),
+  "username": zod.string().nullable(),
+  "email": zod.string().email().nullable(),
+  "firstName": zod.string().nullable(),
+  "lastName": zod.string().nullable(),
+  "profileImageUrl": zod.string().url().nullable()
+}),zod.null()]),
+  "isOwner": zod.boolean()
+})
+
+
+/**
+ * @summary Start the Replit sign-in flow
+ */
+export const StartLoginQueryParams = zod.object({
+  "returnTo": zod.coerce.string().optional()
+})
+
+export const StartLoginResponse = zod.void()
+
+
+/**
+ * @summary Complete the Replit sign-in flow
+ */
+export const FinishLoginResponse = zod.void()
+
+
+/**
+ * @summary End the current session
+ */
+export const LogOutQueryParams = zod.object({
+  "returnTo": zod.coerce.string().optional()
+})
+
+export const LogOutResponse = zod.void()
+
+
+/**
  * @summary Get the content folders and files
  */
 export const getContentTreeResponseFilesItemDescriptionMax = 2000;

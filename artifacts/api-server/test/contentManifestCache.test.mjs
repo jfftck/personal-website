@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
-import { generateKeyPairSync, randomUUID, sign } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
@@ -77,30 +77,9 @@ test(
     const { Pool } = requireFromDatabasePackage("pg");
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
     const suffix = randomUUID();
-    const { privateKey, publicKey } = generateKeyPairSync("rsa", {
-      modulusLength: 2048,
-    });
-    const clerkJwtKey = publicKey.export({ type: "spki", format: "pem" });
-    const now = Math.floor(Date.now() / 1000);
-    const encodedHeader = Buffer.from(
-      JSON.stringify({ alg: "RS256", typ: "JWT" }),
-    ).toString("base64url");
-    const encodedClaims = Buffer.from(
-      JSON.stringify({
-        sub: `user_test_${suffix}`,
-        sid: `sess_test_${suffix}`,
-        iss: "https://test.clerk.accounts.dev",
-        iat: now,
-        nbf: now,
-        exp: now + 300,
-      }),
-    ).toString("base64url");
-    const unsignedToken = `${encodedHeader}.${encodedClaims}`;
-    const adminToken = `${unsignedToken}.${sign(
-      "RSA-SHA256",
-      Buffer.from(unsignedToken),
-      privateKey,
-    ).toString("base64url")}`;
+    const ownerUsername = `owner-${suffix}`;
+    const ownerSessionId = `owner-session-${suffix}`;
+    const nonOwnerSessionId = `other-session-${suffix}`;
     const destinationPath = `manifest-test-${suffix}`;
     const initialName = `manifest-current-${suffix}.txt`;
     const restoredName = `manifest-restored-${suffix}.txt`;
@@ -147,7 +126,7 @@ test(
         cwd: artifactDir,
         env: {
           ...process.env,
-          CLERK_JWT_KEY: clerkJwtKey,
+          REPL_OWNER: ownerUsername,
           PORT: String(port),
         },
         stdio: "ignore",
@@ -183,15 +162,17 @@ test(
       };
     };
 
-    const adminRequest = async (server, route, options = {}) =>
-      fetch(`${server.baseUrl}/api${route}`, {
-        ...options,
+    const adminRequest = async (server, route, options = {}) => {
+      const { sessionId = ownerSessionId, ...requestOptions } = options;
+      return fetch(`${server.baseUrl}/api${route}`, {
+        ...requestOptions,
         headers: {
-          Authorization: `Bearer ${adminToken}`,
-          ...(options.body ? { "Content-Type": "application/json" } : {}),
-          ...options.headers,
+          ...(sessionId ? { Cookie: `sid=${sessionId}` } : {}),
+          ...(requestOptions.body ? { "Content-Type": "application/json" } : {}),
+          ...requestOptions.headers,
         },
       });
+    };
 
     const readAdminTree = async (server) => {
       const response = await adminRequest(server, "/content/tree");
@@ -212,6 +193,33 @@ test(
                updated_at = now()`,
         );
         await client.query("DELETE FROM content_manifest_cache");
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        const accessExpiresAt = Math.floor(Date.now() / 1000) + 3600;
+        for (const [sid, username] of [
+          [ownerSessionId, ownerUsername],
+          [nonOwnerSessionId, `other-${suffix}`],
+        ]) {
+          await client.query(
+            `INSERT INTO sessions (sid, sess, expire)
+             VALUES ($1, $2::jsonb, $3)`,
+            [
+              sid,
+              JSON.stringify({
+                user: {
+                  id: username,
+                  username,
+                  email: `${username}@example.test`,
+                  firstName: "Test",
+                  lastName: null,
+                  profileImageUrl: null,
+                },
+                access_token: "test-session",
+                expires_at: accessExpiresAt,
+              }),
+              expiresAt,
+            ],
+          );
+        }
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");
@@ -373,6 +381,17 @@ test(
       }
 
       firstServer = await startServer();
+      const anonymousTree = await adminRequest(firstServer, "/content/tree", {
+        sessionId: null,
+      });
+      assert.equal(anonymousTree.status, 401);
+      const otherAccountTree = await adminRequest(firstServer, "/content/tree", {
+        sessionId: nonOwnerSessionId,
+      });
+      assert.equal(otherAccountTree.status, 403);
+      const authStatusResponse = await adminRequest(firstServer, "/auth/user");
+      assert.equal(authStatusResponse.status, 200);
+      assert.equal((await authStatusResponse.json()).isOwner, true);
       const baseline = await readManifest(firstServer.manifestUrl);
       assert.equal(baseline.response.status, 200);
       assert.deepEqual(Object.keys(baseline.manifest).sort(), [

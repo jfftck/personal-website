@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import {
   getContentFileContent,
-  getGetContentFileVersionsQueryKey, getGetContentTrashQueryKey, getGetContentTreeQueryKey, setAuthTokenGetter,
+  getGetContentFileVersionsQueryKey, getGetContentTrashQueryKey, getGetContentTreeQueryKey,
   useCreateContentFile, useCreateContentFolder, useCreateContentUpload,
   useDeleteContentFile, useDeleteContentFolder, useGetContentTrash,
   useGetContentFileVersions, useGetContentTree, useRestoreContentFile,
@@ -27,20 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
-
-declare global {
-  interface Window {
-    Clerk?: {
-      load(options: { publishableKey: string }): Promise<void>;
-      user?: { id: string };
-      session?: { getToken(): Promise<string | null> };
-      mountSignIn(element: HTMLDivElement, options?: Record<string, unknown>): void;
-      unmountSignIn(element: HTMLDivElement): void;
-      addListener?(listener: (resources: { user?: { id: string }; session?: { getToken(): Promise<string | null> } | null }) => void): () => void;
-      signOut?(): Promise<void>;
-    };
-  }
-}
+import { useAuth } from '@workspace/replit-auth-web';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 20_000, retry: 1, refetchOnWindowFocus: true } },
@@ -111,9 +98,13 @@ function RoutedBoundary({ children }: { children: ReactNode }) {
 }
 
 function Console() {
-  const [authReady, setAuthReady] = useState(false);
-  const [authError, setAuthError] = useState('');
-  const [signedIn, setSignedIn] = useState(false);
+  const {
+    isLoading: authReady,
+    isAuthenticated: signedIn,
+    isOwner,
+    login,
+    logout,
+  } = useAuth();
   const [systemDark, setSystemDark] = useState(systemPrefersDark);
   const [themeOverride, setThemeOverride] = useState<ThemeOverride>(savedThemeOverride);
   const dark = themeOverride ? themeOverride === 'dark' : systemDark;
@@ -134,19 +125,18 @@ function Console() {
   const [editorBusy, setEditorBusy] = useState(false);
   const [editorLoading, setEditorLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const clerkSignInRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const queryClient = useQueryClient();
 
   const treeQuery = useGetContentTree({
-    query: { enabled: signedIn, queryKey: getGetContentTreeQueryKey() },
+    query: { enabled: isOwner, queryKey: getGetContentTreeQueryKey() },
   });
   const fileVersionsQuery = useGetContentFileVersions(selectedFile?.id ?? '', {
-    query: { enabled: signedIn && Boolean(selectedFile) },
+    query: { enabled: isOwner && Boolean(selectedFile) },
   });
   const trashQuery = useGetContentTrash({
-    query: { enabled: signedIn, queryKey: getGetContentTrashQueryKey() },
+    query: { enabled: isOwner, queryKey: getGetContentTrashQueryKey() },
   });
   const createFolder = useCreateContentFolder();
   const updateFolder = useUpdateContentFolder();
@@ -215,62 +205,8 @@ function Console() {
   }, [dark, themeOverride]);
 
   useEffect(() => {
-    if (!signedIn) queryClient.clear();
-  }, [signedIn, queryClient]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const syncAuth = () => setSignedIn(Boolean(window.Clerk?.user && window.Clerk?.session));
-    const initialize = async () => {
-      try {
-        const response = await fetch('/api/clerk-config');
-        if (!response.ok) throw new Error('Could not load sign-in configuration.');
-        const config = await response.json() as { publishableKey?: string };
-        if (!config.publishableKey) throw new Error('The sign-in key is not configured.');
-        if (!window.Clerk) {
-          await new Promise<void>((resolve, reject) => {
-            const existing = document.getElementById('clerk-js') as HTMLScriptElement | null;
-            if (existing) {
-              if (window.Clerk) { resolve(); return; }
-              existing.addEventListener('load', () => resolve(), { once: true });
-              existing.addEventListener('error', () => reject(new Error('Clerk could not be loaded.')), { once: true });
-              return;
-            }
-            const script = document.createElement('script');
-            script.id = 'clerk-js';
-            script.src = '/clerk-js/clerk.browser.js';
-            script.setAttribute('data-clerk-publishable-key', config.publishableKey!);
-            script.onload = () => resolve();
-            script.onerror = () => reject(new Error('Clerk could not be loaded.'));
-            document.head.appendChild(script);
-          });
-        }
-        if (cancelled || !window.Clerk) return;
-        await window.Clerk.load({ publishableKey: config.publishableKey });
-        setAuthTokenGetter(async () => window.Clerk?.session?.getToken() ?? null);
-        syncAuth();
-        window.Clerk.addListener?.((resources) => setSignedIn(Boolean(resources.user && resources.session)));
-      } catch (error) {
-        if (!cancelled) setAuthError(error instanceof Error ? error.message : 'Sign-in could not be initialized.');
-      } finally {
-        if (!cancelled) setAuthReady(true);
-      }
-    };
-    void initialize();
-    return () => { cancelled = true; setAuthTokenGetter(null); };
-  }, []);
-
-  useEffect(() => {
-    const clerk = window.Clerk;
-    const target = clerkSignInRef.current;
-    if (!authReady || signedIn || !clerk || !target) return;
-    const adminConsoleUrl = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
-    clerk.mountSignIn(target, {
-      forceRedirectUrl: adminConsoleUrl,
-      fallbackRedirectUrl: adminConsoleUrl,
-    });
-    return () => { try { clerk.unmountSignIn(target); } catch { /* Clerk may already have unmounted. */ } };
-  }, [authReady, signedIn]);
+    if (!isOwner) queryClient.clear();
+  }, [isOwner, queryClient]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -611,6 +547,7 @@ function Console() {
 
   if (!authReady) return <LoadingAuth />;
   if (!signedIn) {
+    const accessDenied = new URLSearchParams(window.location.search).get('access') === 'denied';
     return (
       <main className="auth-screen">
         <section className="auth-card">
@@ -620,8 +557,23 @@ function Console() {
           </div>
           <h1>Your library, securely yours.</h1>
           <p>Sign in to manage the files and folders published on your personal website.</p>
-          {authError ? <div className="auth-error" role="alert" data-testid="status-auth-error">{authError}</div> : null}
-          <div className="clerk-slot" ref={clerkSignInRef} data-testid="clerk-sign-in" />
+          {accessDenied ? <div className="auth-error" role="alert" data-testid="status-auth-error">This account does not have access to the content library.</div> : null}
+          <button className="button button-primary" type="button" onClick={login} data-testid="sign-in">Sign In</button>
+        </section>
+      </main>
+    );
+  }
+  if (!isOwner) {
+    return (
+      <main className="auth-screen">
+        <section className="auth-card">
+          <div className="brand" style={{ padding: 0 }}>
+            <div className="brand-mark">J</div>
+            <div><div className="brand-title">JMT Archive</div><div className="brand-caption">Private publishing</div></div>
+          </div>
+          <h1>This account cannot access the library.</h1>
+          <p>Sign out and use the account that owns this workspace.</p>
+          <button className="button button-primary" type="button" onClick={logout} data-testid="sign-out-denied">Sign Out</button>
         </section>
       </main>
     );
@@ -681,7 +633,7 @@ function Console() {
           >
             {dark ? <Sun /> : <Moon />} {dark ? 'Light Appearance' : 'Dark Appearance'}
           </button>
-          <button className="side-button" type="button" onClick={() => void window.Clerk?.signOut?.()} data-testid="sign-out">
+          <button className="side-button" type="button" onClick={logout} data-testid="sign-out">
             <ArrowDownToLine style={{ transform: 'rotate(180deg)' }} /> Sign Out
           </button>
         </div>

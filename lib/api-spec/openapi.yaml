@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: content
     description: Admin content and folder management
+  - name: auth
+    description: Replit sign-in and session status
 paths:
   /healthz:
     get:
@@ -26,13 +28,59 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /auth/user:
+    get:
+      operationId: getCurrentAuthUser
+      tags: [auth]
+      summary: Get the current signed-in user
+      responses:
+        "200":
+          description: Current session and owner authorization status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthStatus"
+  /login:
+    get:
+      operationId: startLogin
+      tags: [auth]
+      summary: Start the Replit sign-in flow
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "302":
+          description: Redirects to the identity provider
+  /callback:
+    get:
+      operationId: finishLogin
+      tags: [auth]
+      summary: Complete the Replit sign-in flow
+      responses:
+        "302":
+          description: Redirects to the admin console
+  /logout:
+    get:
+      operationId: logOut
+      tags: [auth]
+      summary: End the current session
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "302":
+          description: Redirects after ending the session
   /content/tree:
     get:
       operationId: getContentTree
       tags: [content]
       summary: Get the content folders and files
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Content tree
@@ -46,7 +94,7 @@ paths:
       tags: [content]
       summary: Get removed files
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Removed files
@@ -61,7 +109,7 @@ paths:
       tags: [content]
       summary: Create a content folder
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -81,7 +129,7 @@ paths:
       tags: [content]
       summary: Rename or move a folder
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: folderId
           in: path
@@ -107,7 +155,7 @@ paths:
       tags: [content]
       summary: Delete an empty folder
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: folderId
           in: path
@@ -124,7 +172,7 @@ paths:
       tags: [content]
       summary: Create a temporary App Storage upload target
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -144,7 +192,7 @@ paths:
       tags: [content]
       summary: Add an uploaded file to the content tree
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -164,7 +212,7 @@ paths:
       tags: [content]
       summary: Rename, move, retitle, or replace a file
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: fileId
           in: path
@@ -190,7 +238,7 @@ paths:
       tags: [content]
       summary: Remove a file from the published tree
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: fileId
           in: path
@@ -207,7 +255,7 @@ paths:
       tags: [content]
       summary: Read the text content of a stored file
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: fileId
           in: path
@@ -230,7 +278,7 @@ paths:
       tags: [content]
       summary: Get the revision history for a file
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: fileId
           in: path
@@ -253,7 +301,7 @@ paths:
       tags: [content]
       summary: Restore a previous file revision
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: fileId
           in: path
@@ -280,7 +328,7 @@ paths:
       tags: [content]
       summary: Restore a removed file
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: fileId
           in: path
@@ -297,9 +345,10 @@ paths:
                 $ref: "#/components/schemas/ContentFile"
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sid
   schemas:
     HealthStatus:
       type: object
@@ -308,6 +357,25 @@ components:
           type: string
       required:
         - status
+    AuthUser:
+      type: object
+      required: [id, username, email, firstName, lastName, profileImageUrl]
+      properties:
+        id: { type: string }
+        username: { type: ["string", "null"] }
+        email: { type: ["string", "null"], format: email }
+        firstName: { type: ["string", "null"] }
+        lastName: { type: ["string", "null"] }
+        profileImageUrl: { type: ["string", "null"], format: uri }
+    AuthStatus:
+      type: object
+      required: [user, isOwner]
+      properties:
+        user:
+          oneOf:
+            - $ref: "#/components/schemas/AuthUser"
+            - type: "null"
+        isOwner: { type: boolean }
     ContentFolder:
       type: object
       required: [id, name, path, parentPath, createdAt]

@@ -750,12 +750,6 @@ html, body {
 
 #auth-screen[hidden] { display: none; }
 
-#clerk-signin-root {
-  width: 100%;
-  max-width: 420px;
-  padding: 1rem;
-}
-
 /* ── Welcome editor pane ─────────────────────────────────── */
 #welcome-pane {
   flex: 1;

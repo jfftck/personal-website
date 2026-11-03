@@ -24,7 +24,7 @@ import {
   PUBLIC_MANIFEST_CACHE_KEY,
 } from "../lib/contentManifestCache";
 import { invalidatePublicManifestCache } from "../lib/contentManifestInvalidation";
-import { requireClerkUser } from "../lib/clerkAuth";
+import { requireOwner } from "../middlewares/requireOwner";
 import {
   ContentHistoryError,
   getFileHistory,
@@ -357,7 +357,7 @@ function apiHandler(
 }
 
 export const contentApiRouter = Router();
-contentApiRouter.use(requireClerkUser);
+contentApiRouter.use(requireOwner);
 
 contentApiRouter.get(
   "/content/tree",

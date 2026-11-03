@@ -4,12 +4,8 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { publicContentRouter } from "./routes/content";
-import { createRequire } from "node:module";
-
-// Keep the legacy streaming/upload handler outside the bundle and before body
-// parsers: it reads the original request stream itself.
-const require = createRequire(import.meta.url);
-const legacyHandle = require("../legacy/admin/server.js");
+import cookieParser from "cookie-parser";
+import { authMiddleware } from "./middlewares/authMiddleware";
 
 const app: Express = express();
 
@@ -32,15 +28,16 @@ app.use(
     },
   }),
 );
+app.use(cors());
+app.use(cookieParser());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Public file delivery stays unauthenticated and keeps the static-looking URL.
+app.use("/files", publicContentRouter);
+app.use("/api", authMiddleware, router);
+
 app.use((req, res, next) => {
-  if (
-    req.path === "/api/healthz" ||
-    req.path.startsWith("/api/content") ||
-    req.path === "/files" ||
-    req.path.startsWith("/files/")
-  ) {
-    return next();
-  }
   if (
     (req.path === "/admin" ||
       req.path === "/admin/" ||
@@ -51,29 +48,28 @@ app.use((req, res, next) => {
     return;
   }
   if (
+    /^\/(clerk-js|clerk-proxy)(\/|$)/.test(req.path) ||
+    req.path === "/api/clerk-config"
+  ) {
+    res.status(410).json({ error: "Clerk authentication endpoints have been retired." });
+    return;
+  }
+  if (
     /^\/(posts|documents|pictures|videos|welcome)(\/|$)/.test(req.path) &&
     (req.method === "GET" || req.method === "HEAD")
   ) {
     res.redirect(302, `/files${req.path}`);
     return;
   }
-  if (
-    req.path.startsWith("/api/manifest/") ||
-    req.path.startsWith("/api/file/") ||
-    req.path.startsWith("/api/upload/") ||
-    req.path === "/api/welcome"
-  ) {
+  if (/^\/api\/(manifest|file|upload)(\/|$)/.test(req.path) || /^\/api\/welcome\/?$/.test(req.path)) {
     res.status(410).json({ error: "This content endpoint has been retired." });
     return;
   }
-  Promise.resolve(legacyHandle(req, res)).catch(next);
+  next();
 });
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-app.use("/files", publicContentRouter);
-app.use("/api", router);
+app.use((_req, res) => {
+  res.status(404).json({ error: "Not found." });
+});
 app.use(
   (
     error: unknown,

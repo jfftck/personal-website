@@ -9,6 +9,25 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface AuthUser {
+  id: string;
+  /** @nullable */
+  username: string | null;
+  /** @nullable */
+  email: string | null;
+  /** @nullable */
+  firstName: string | null;
+  /** @nullable */
+  lastName: string | null;
+  /** @nullable */
+  profileImageUrl: string | null;
+}
+
+export interface AuthStatus {
+  user: AuthUser | null;
+  isOwner: boolean;
+}
+
 export interface ContentFolder {
   id: string;
   name: string;
@@ -165,4 +184,12 @@ export interface ContentFileUpdate {
   isWallpaper?: boolean;
   isPublished?: boolean;
 }
+
+export type StartLoginParams = {
+returnTo?: string;
+};
+
+export type LogOutParams = {
+returnTo?: string;
+};
 
