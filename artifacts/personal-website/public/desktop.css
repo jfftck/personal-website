@@ -1787,7 +1787,7 @@ body.mod-overview .app-window.focused {
 }
 .app-load-content { display:grid; justify-items:center; gap:.7rem; max-width:24rem; text-align:center; }
 .app-load-title { margin:0; color:var(--app-text); font-size:.95rem; font-weight:650; }
-.app-load-error { margin:0; color:var(--util-detail); font-size:.82rem; }
+.app-load-error,.app-load-detail { margin:0; color:var(--util-detail); font-size:.82rem; }
 .app-load-spinner {
   width:1.7rem;
   height:1.7rem;
@@ -2339,6 +2339,17 @@ body.mod-overview .app-window.focused {
 }
 
 .doc-error { color: #f87171; opacity: 1; }
+.welcome-retry-button {
+  display:block;
+  margin:.75rem auto 1rem;
+  padding:.45rem .9rem;
+  border:1px solid currentColor;
+  border-radius:999px;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+}
 
 /* ── Image counter ── */
 .img-counter {

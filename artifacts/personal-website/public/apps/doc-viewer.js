@@ -2,6 +2,7 @@
 
 import { toolBtn, initResponsiveToolbar } from './toolbar.js';
 import { renderMarkdown, esc } from '../shared/markdown.js';
+import { retryWithBackoff, responseLoadError } from '../shared/retry.js';
 
 const MANIFEST_SOURCES = [
   { folder: 'documents', label: 'Documents' },
@@ -112,7 +113,9 @@ export function buildDocViewer(id, ctx, initialState = null) {
     });
   }
 
+  let fileLoadGeneration = 0;
   function loadFile(url, name) {
+    const generation = ++fileLoadGeneration;
     pendingState = null;
     currentFile = { url, name };
     ctx.setAppTitle(id, name);
@@ -128,17 +131,39 @@ export function buildDocViewer(id, ctx, initialState = null) {
 
     pdfFrame.style.display = 'none';
     docBody.style.display  = '';
-    docBody.innerHTML = '<p class="doc-status">Loading\u2026</p>';
+    docBody.setAttribute('aria-busy', 'true');
+    docBody.innerHTML = '<p class="doc-status" role="status">Loading…</p>';
 
-    fetch(url)
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
-      .then(text => {
+    retryWithBackoff(async () => {
+      const response = await fetch(url, { cache: 'no-cache' });
+      if (!response.ok) throw responseLoadError(response, name || 'document');
+      return response.text();
+    }, {
+      onRetry: ({ attempt, maxRetries, delayMs }) => {
+        if (generation === fileLoadGeneration) {
+          docBody.innerHTML = `<p class="doc-status" role="status">Connection issue. Retrying ${attempt} of ${maxRetries} in ${(delayMs / 1000).toFixed(1)}s…</p>`;
+        }
+      },
+    }).then(text => {
+        if (generation !== fileLoadGeneration) return;
+        docBody.setAttribute('aria-busy', 'false');
         docBody.innerHTML = renderMarkdown(text);
         docScroll.scrollTop = 0;
       })
       .catch(err => {
-        docBody.innerHTML =
-          `<p class="doc-status doc-error">\u26a0\ufe0f Could not load: ${esc(err.message)}</p>`;
+        if (generation !== fileLoadGeneration) return;
+        docBody.setAttribute('aria-busy', 'false');
+        docBody.replaceChildren();
+        const message = document.createElement('p');
+        message.className = 'doc-status doc-error';
+        message.setAttribute('role', 'alert');
+        message.textContent = `Could not load “${name}”.`;
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'welcome-retry-button';
+        retry.textContent = 'Try Again';
+        retry.addEventListener('click', () => loadFile(url, name));
+        docBody.append(message, retry);
       });
   }
 

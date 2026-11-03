@@ -3,7 +3,7 @@
 import { S }               from './desktop-state.js';
 import { loadStickyNotes } from './apps/sticky-notes-data.js';
 import { SETTINGS_ICON } from './apps/toolbar.js';
-import { renderMarkdown }   from './shared/markdown.js';
+import { retryWithBackoff, responseLoadError } from './shared/retry.js';
 import { GAMES, initGameMenu } from './apps/game-catalog.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
@@ -468,20 +468,20 @@ function getAppOrder() {
 const loadedAppModules = new Map();
 const loadedAppStyles = new Map();
 
-function loadAppModule(def) {
+function loadAppModule(def, onRetry) {
   let loading = loadedAppModules.get(def.modulePath);
   if (!loading) {
-    loading = def.loadModule().catch(error => {
-      loadedAppModules.delete(def.modulePath);
-      throw error;
-    });
+    loading = retryWithBackoff(() => def.loadModule(), { onRetry })
+      .catch(error => {
+        loadedAppModules.delete(def.modulePath);
+        throw error;
+      });
     loadedAppModules.set(def.modulePath, loading);
   }
   return loading;
 }
 
-function ensureAppStyles(styles = []) {
-  return Promise.all(styles.map(path => {
+function loadAppStylesheet(path) {
     const href = new URL(path, import.meta.url).href;
     let loading = loadedAppStyles.get(href);
     if (!loading) {
@@ -501,7 +501,13 @@ function ensureAppStyles(styles = []) {
       document.head.append(link);
     }
     return loading;
-  }));
+}
+
+function ensureAppStyles(styles = [], onRetry) {
+  return Promise.all(styles.map(path => retryWithBackoff(
+    () => loadAppStylesheet(path),
+    { onRetry },
+  )));
 }
 
 function createAppLoadSurface(title, mode = 'loading') {
@@ -520,7 +526,10 @@ function createAppLoadSurface(title, mode = 'loading') {
     const message = document.createElement('p');
     message.className = 'app-load-title';
     message.textContent = `Loading ${title}…`;
-    content.append(spinner, message);
+    const detail = document.createElement('p');
+    detail.className = 'app-load-detail';
+    detail.textContent = 'Preparing app resources…';
+    content.append(spinner, message, detail);
   } else {
     const heading = document.createElement('p');
     heading.className = 'app-load-title';
@@ -538,12 +547,21 @@ function createAppLoadSurface(title, mode = 'loading') {
   return root;
 }
 
+function reportAppLoadRetry(record, { attempt, maxRetries, delayMs }) {
+  if (!S.apps.includes(record) || record.el.dataset.loadState !== 'loading') return;
+  const detail = record.el.querySelector('.app-load-detail');
+  if (detail) {
+    detail.textContent = `Temporary load issue. Retrying ${attempt} of ${maxRetries} in ${(delayMs / 1000).toFixed(1)}s…`;
+  }
+}
+
 function scheduleAppAssetPrefetch() {
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
   if (connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType)) return;
 
   const modulePaths = new Set([
     ...Object.values(APP_DEFS).map(def => def.modulePath),
+    './shared/markdown.js',
     './apps/games/solitaire-ui.js',
     './apps/games/minesweeper-ui.js',
     './apps/games/board-ui.js',
@@ -611,14 +629,17 @@ async function hydrateApp(record, def, initialState) {
   const loadToken = (record.loadToken || 0) + 1;
   record.loadToken = loadToken;
   const isCurrent = () => S.apps.includes(record) && record.loadToken === loadToken;
+  const onRetry = retry => reportAppLoadRetry(record, retry);
   try {
     const [module] = await Promise.all([
-      loadAppModule(def),
-      ensureAppStyles(def.styles),
+      loadAppModule(def, onRetry),
+      ensureAppStyles(def.styles, onRetry),
     ]);
     if (!isCurrent()) return;
 
-    const appEl = await def.build(module, record.id, initialState);
+    const loadCtx = Object.create(appCtx);
+    loadCtx.reportLoadingRetry = onRetry;
+    const appEl = await def.build(module, record.id, initialState, loadCtx);
     if (!isCurrent()) {
       S.appApis[record.id]?.destroy?.();
       delete S.appApis[record.id];
@@ -1994,7 +2015,7 @@ function lazyApp(title, iconSvg, modulePath, loadModule, exportName, styles = []
     modulePath,
     loadModule,
     styles,
-    build: (module, id, state) => module[exportName](id, appCtx, state),
+    build: (module, id, state, ctx) => module[exportName](id, ctx, state),
   };
 }
 
@@ -2011,7 +2032,7 @@ const APP_DEFS = {
     modulePath: GAME_MODULE_PATH,
     loadModule: () => import('./apps/game-center.js'),
     styles: GAME_STYLE_PATHS,
-    build: (module, id, state) => module.buildGame(game.type, id, appCtx, state),
+    build: (module, id, state, ctx) => module.buildGame(game.type, id, ctx, state),
   }])),
   'doc-viewer': lazyApp(
     'Document Viewer',
@@ -2814,11 +2835,81 @@ function closeWinMenu() {
 
 // ── Welcome floating window ───────────────────────────────────
 const _welcomeTabs = {
-  welcome: { url: '/files/posts/20240101_Welcome.md',  html: null },
-  about:   { url: '/files/posts/20240115_About_Me.md', html: null },
-  links:   { url: '/files/posts/20240201_My_Sites.md', html: null },
+  welcome: { url: '/files/posts/20240101_Welcome.md',  html: null, promise: null, message: '' },
+  about:   { url: '/files/posts/20240115_About_Me.md', html: null, promise: null, message: '' },
+  links:   { url: '/files/posts/20240201_My_Sites.md', html: null, promise: null, message: '' },
 };
 let _welcomeActiveTab = 'welcome';
+
+function showWelcomeStatus(body, message, busy = true) {
+  body.replaceChildren();
+  body.setAttribute('aria-busy', String(busy));
+  const status = document.createElement('p');
+  status.className = 'doc-status';
+  status.setAttribute('role', 'status');
+  status.textContent = message;
+  body.append(status);
+}
+
+function showWelcomeFailure(body, name) {
+  body.replaceChildren();
+  body.setAttribute('aria-busy', 'false');
+  const message = document.createElement('p');
+  message.className = 'doc-status doc-error';
+  message.setAttribute('role', 'alert');
+  message.textContent = 'This section couldn’t be loaded.';
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'welcome-retry-button';
+  retry.textContent = 'Try Again';
+  retry.addEventListener('click', () => loadWelcomeTab(name));
+  body.append(message, retry);
+}
+
+function loadWelcomeTab(name) {
+  const tab = _welcomeTabs[name];
+  const body = document.getElementById('welcome-win-body');
+  if (!tab || !body) return;
+  if (tab.html !== null) {
+    body.setAttribute('aria-busy', 'false');
+    body.innerHTML = tab.html;
+    body.scrollTop = 0;
+    return;
+  }
+  if (tab.promise) {
+    showWelcomeStatus(body, tab.message || 'Loading…');
+    return;
+  }
+
+  tab.message = 'Loading welcome content…';
+  showWelcomeStatus(body, tab.message);
+  const updateRetryMessage = ({ attempt, maxRetries, delayMs }) => {
+    tab.message = `Connection issue. Retrying ${attempt} of ${maxRetries} in ${(delayMs / 1000).toFixed(1)}s…`;
+    if (_welcomeActiveTab === name) showWelcomeStatus(body, tab.message);
+  };
+  tab.promise = Promise.all([
+    retryWithBackoff(async () => {
+      const response = await fetch(tab.url, { cache: 'no-cache' });
+      if (!response.ok) throw responseLoadError(response, 'welcome content');
+      return response.text();
+    }, { onRetry: updateRetryMessage }),
+    retryWithBackoff(() => import('./shared/markdown.js'), { onRetry: updateRetryMessage }),
+  ]).then(([text, { renderMarkdown }]) => {
+    tab.html = renderMarkdown(text);
+    tab.message = '';
+    if (_welcomeActiveTab === name) {
+      body.setAttribute('aria-busy', 'false');
+      body.innerHTML = tab.html;
+      body.scrollTop = 0;
+    }
+  }).catch(error => {
+    tab.message = '';
+    console.error(`Could not load welcome tab "${name}".`, error);
+    if (_welcomeActiveTab === name) showWelcomeFailure(body, name);
+  }).finally(() => {
+    tab.promise = null;
+  });
+}
 
 function _selectWelcomeTab(name) {
   _welcomeActiveTab = name;
@@ -2835,22 +2926,13 @@ function _selectWelcomeTab(name) {
   if (!tab) return;
 
   if (tab.html !== null) {
+    body.setAttribute('aria-busy', 'false');
     body.innerHTML = tab.html;
     body.scrollTop = 0;
     return;
   }
 
-  body.innerHTML = '<p class="doc-status">Loading\u2026</p>';
-  fetch(tab.url)
-    .then(r => r.ok ? r.text() : Promise.reject(r.status))
-    .then(text => {
-      tab.html = renderMarkdown(text);
-      if (_welcomeActiveTab === name) { body.innerHTML = tab.html; body.scrollTop = 0; }
-    })
-    .catch(() => {
-      tab.html = '';
-      if (_welcomeActiveTab === name) body.innerHTML = '';
-    });
+  loadWelcomeTab(name);
 }
 
 function openWelcomeWindow() {
