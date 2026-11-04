@@ -89,6 +89,121 @@ test('the selected window remains focused after a page refresh', async ({ page }
   await expect(restoredImage).not.toHaveClass(/focused/);
 });
 
+test('window width presets persist on desktop and phone layouts', async ({ page }) => {
+  await seed(page, [{ type: 'doc-viewer' }]);
+  const column = page.locator('.app-col');
+
+  for (const scenario of [
+    { viewport: { width: 1280, height: 800 }, preset: 'third', label: '⅓ Width' },
+    { viewport: { width: 390, height: 844 }, preset: 'half', label: '½ Width' },
+    { viewport: { width: 1280, height: 800 }, preset: 'full', label: 'Full Width' },
+  ]) {
+    await page.setViewportSize(scenario.viewport);
+    await page.getByRole('button', { name: 'Window options' }).click();
+    await page.locator('#win-menu-open').getByRole('button', { name: scenario.label }).click();
+
+    await expect(column).toHaveAttribute('data-width', scenario.preset);
+    await expect.poll(async () => (
+      await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY)
+    )?.columns?.[0]?.widthPreset).toBe(scenario.preset);
+
+    const geometry = await column.evaluate(element => ({
+      width: element.getBoundingClientRect().width,
+      viewportWidth: window.innerWidth,
+    }));
+    if (scenario.viewport.width < 640) {
+      expect(geometry.width).toBeGreaterThan(scenario.viewport.width - 16);
+      expect(geometry.width).toBeLessThanOrEqual(geometry.viewportWidth + 1);
+    } else {
+      expect(geometry.width).toBeGreaterThan(160);
+      expect(geometry.width).toBeLessThan(geometry.viewportWidth);
+    }
+  }
+});
+
+test('splitting and merging windows between columns persists the same order at desktop and phone widths', async ({ page }) => {
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const session = {
+      v: 2,
+      focused: { columnIndex: 0, appIndex: 0 },
+      columns: [{
+        widthPreset: 'half',
+        apps: [{ type: 'doc-viewer' }, { type: 'img-viewer' }],
+      }],
+    };
+    await page.evaluate(({ key, value }) => {
+      localStorage.removeItem('desktop-session-v1');
+      localStorage.setItem(key, JSON.stringify(value));
+    }, { key: KEY, value: session });
+    await page.reload();
+    await page.locator('#welcome-win-close').click();
+    await expect(page.locator('.app-window[data-type="doc-viewer"] .doc-body')).toContainText('First document');
+    await expect(page.locator('.app-window[data-type="img-viewer"] .img-viewport img')).toHaveAttribute('src', pictures[0].url);
+    await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveClass(/focused/);
+
+    await page.keyboard.press(']');
+    await expect.poll(async () => (
+      await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY)
+    )?.columns?.map(column => column.apps.map(app => app.type))).toEqual([
+      ['img-viewer'],
+      ['doc-viewer'],
+    ]);
+
+    await page.keyboard.press('[');
+    await expect.poll(async () => (
+      await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY)
+    )?.columns?.map(column => column.apps.map(app => app.type))).toEqual([
+      ['doc-viewer', 'img-viewer'],
+    ]);
+    const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+    expect(saved.columns[0].widthPreset).toBe('half');
+    expect(saved.focused).toEqual({ columnIndex: 0, appIndex: 0 });
+    await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveClass(/focused/);
+  }
+});
+
+test('directional window focus follows geometry and Vim keys at desktop and phone widths', async ({ page }) => {
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const session = {
+      v: 2,
+      focused: { columnIndex: 0, appIndex: 0 },
+      columns: [
+        { widthPreset: 'full', apps: [{ type: 'doc-viewer' }] },
+        { widthPreset: 'full', apps: [{ type: 'img-viewer' }] },
+      ],
+    };
+    await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+      key: KEY,
+      value: session,
+    });
+    await page.reload();
+    await page.locator('#welcome-win-close').click();
+    await expect(page.locator('.app-window[data-type="doc-viewer"] .doc-body')).toContainText('First document');
+    await expect(page.locator('.app-window[data-type="img-viewer"] .img-viewport img')).toHaveAttribute('src', pictures[0].url);
+    await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveClass(/focused/);
+
+    await page.locator('.app-window[data-type="doc-viewer"] .doc-body').click();
+    await page.keyboard.press('Control+ArrowRight');
+    const image = page.locator('.app-window[data-type="img-viewer"]');
+    await expect(image).toHaveClass(/focused/);
+    await expect.poll(() => page.evaluate(() => Boolean(
+      document.activeElement.closest('.app-window.focused'),
+    ))).toBe(true);
+
+    await page.keyboard.press('Control+h');
+    await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveClass(/focused/);
+    await expect(page.locator('.app-window[data-type="img-viewer"]')).not.toHaveClass(/focused/);
+  }
+});
+
 test('refreshing restores saved app state without rewriting the session before user input', async ({ page }) => {
   const session = {
     v: 2,
