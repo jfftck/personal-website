@@ -180,7 +180,7 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
   const supports = await page.evaluate(() =>
     CSS.supports('color', 'oklch(from #006699 calc(l + 0.1) c h)'),
   );
-  const tintKey = 'desktop-window-tints-v2';
+  const tintKey = 'desktop-window-tints-v3';
 
   if (!supports) {
     await expect(settings.getByText(/window tint choices require a browser/i)).toBeVisible();
@@ -189,7 +189,28 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
   }
 
   expect(await page.evaluate(key => localStorage.getItem(key), tintKey)).toBeNull();
-  await expect(settings.getByRole('group', { name: 'Dark window tint' }).getByRole('button')).toHaveCount(6);
+  const darkTintGroup = settings.getByRole('group', { name: 'Dark window tint' });
+  await expect(darkTintGroup.getByRole('button')).toHaveCount(7);
+  await expect(darkTintGroup.getByRole('button', { name: 'None dark tint' })).toHaveAttribute('aria-pressed', 'false');
+  let darkLightness = settings.getByRole('slider', { name: 'Dark tint lightness' });
+  await expect(darkLightness).toHaveValue('25');
+  await expect(darkLightness).toHaveAttribute('min', '5');
+  await expect(darkLightness).toHaveAttribute('max', '25');
+  await darkTintGroup.getByRole('button', { name: 'None dark tint' }).click();
+  darkLightness = settings.getByRole('slider', { name: 'Dark tint lightness' });
+  await expect(darkLightness).toHaveValue('0');
+  await expect(darkLightness).toHaveAttribute('min', '0');
+  await expect(darkLightness).toHaveAttribute('max', '25');
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--window-dark-tint-color').trim())).toBe('oklch(0% 0 0)');
+  await darkTintGroup.getByRole('button', { name: 'Teal dark tint' }).click();
+  darkLightness = settings.getByRole('slider', { name: 'Dark tint lightness' });
+  await expect(darkLightness).toHaveValue('5');
+  await expect(darkLightness).toHaveAttribute('min', '5');
+  await darkLightness.focus();
+  await page.keyboard.press('ArrowRight');
+  darkLightness = settings.getByRole('slider', { name: 'Dark tint lightness' });
+  await expect(darkLightness).toHaveValue('6');
+
   const lightTintGroup = settings.getByRole('group', { name: 'Light window tint' });
   await expect(lightTintGroup.getByRole('button')).toHaveCount(7);
   await expect(lightTintGroup.getByRole('button', { name: 'None light tint' })).toHaveAttribute('aria-pressed', 'true');
@@ -197,7 +218,6 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
   await expect(lightness).toHaveValue('100');
   await expect(lightness).toHaveAttribute('max', '100');
 
-  await settings.getByRole('group', { name: 'Dark window tint' }).getByRole('button', { name: 'Teal dark tint' }).click();
   await lightTintGroup.getByRole('button', { name: 'Purple light tint' }).click();
   lightness = settings.getByRole('slider', { name: 'Light tint lightness' });
   await expect(lightness).toHaveValue('95');
@@ -208,8 +228,9 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
   await expect(lightness).toHaveValue('75');
   await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), tintKey)).toEqual({
     darkTint: 'teal',
+    darkLightness: 6,
     lightTint: 'purple',
-    lightness: 75,
+    lightLightness: 75,
   });
   await expect.poll(() => lightness.evaluate(input => document.activeElement === input)).toBe(true);
   await lightness.scrollIntoViewIfNeeded();
@@ -245,16 +266,19 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
       background: style.getPropertyValue('--window-background-tint').trim(),
       dark: style.getPropertyValue('--window-dark-tint-color').trim(),
       foreground: style.getPropertyValue('--window-foreground-tint').trim(),
+      appText: style.getPropertyValue('--app-text').trim(),
       light: style.getPropertyValue('--window-light-tint-color').trim(),
     };
   });
   expect(lightMapping.background).toBe(lightMapping.light);
   expect(lightMapping.foreground).toBe(lightMapping.dark);
+  expect(lightMapping.appText).toBe(lightMapping.dark);
 
   const minimumContrast = await page.evaluate(() => {
     const root = document.documentElement;
     const context = document.createElement('canvas').getContext('2d');
     const names = ['blue', 'teal', 'green', 'gold', 'coral', 'purple'];
+    const darkNames = ['none', ...names];
     const lightNames = ['none', ...names];
     const luminance = (color, backdrop) => {
       context.clearRect(0, 0, 1, 1);
@@ -267,24 +291,28 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
       return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
     };
     let minimum = Infinity;
-    for (const darkTint of names) {
+    for (const darkTint of darkNames) {
       root.dataset.theme = 'dark';
       root.dataset.windowTints = 'custom';
       root.dataset.windowDarkTint = darkTint;
+      const darkLightnessValues = darkTint === 'none' ? [0, 25] : [5, 25];
       for (const lightTint of lightNames) {
         root.dataset.windowLightTint = lightTint;
         for (const lightness of lightTint === 'none' ? [75, 100] : [75, 95]) {
           root.style.setProperty('--window-lightness', `${lightness}%`);
-          const style = getComputedStyle(root);
-          const darkBackground = luminance(style.getPropertyValue('--app-bg'), 1);
-          const lightForeground = luminance(style.getPropertyValue('--app-text'), 0);
-          minimum = Math.min(minimum, (lightForeground + 0.05) / (darkBackground + 0.05));
+          for (const darkLightness of darkLightnessValues) {
+            root.style.setProperty('--window-dark-lightness', `${darkLightness}%`);
+            const style = getComputedStyle(root);
+            const darkBackground = luminance(style.getPropertyValue('--app-bg'), 1);
+            const lightForeground = luminance(style.getPropertyValue('--app-text'), 0);
+            minimum = Math.min(minimum, (lightForeground + 0.05) / (darkBackground + 0.05));
 
-          root.dataset.theme = 'light';
-          const lightBackground = luminance(getComputedStyle(root).getPropertyValue('--app-bg'), 0);
-          const darkForeground = luminance(getComputedStyle(root).getPropertyValue('--app-text'), 1);
-          minimum = Math.min(minimum, (lightBackground + 0.05) / (darkForeground + 0.05));
-          root.dataset.theme = 'dark';
+            root.dataset.theme = 'light';
+            const lightBackground = luminance(getComputedStyle(root).getPropertyValue('--app-bg'), 0);
+            const darkForeground = luminance(getComputedStyle(root).getPropertyValue('--app-text'), 1);
+            minimum = Math.min(minimum, (lightBackground + 0.05) / (darkForeground + 0.05));
+            root.dataset.theme = 'dark';
+          }
         }
       }
     }
@@ -297,11 +325,21 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
   const restoredSettings = await openUtility(page, 'settings');
   await expect(restoredSettings.getByRole('group', { name: 'Dark window tint' }).getByRole('button', { name: 'Teal dark tint' })).toHaveAttribute('aria-pressed', 'true');
   await expect(restoredSettings.getByRole('group', { name: 'Light window tint' }).getByRole('button', { name: 'Purple light tint' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(restoredSettings.getByRole('slider', { name: 'Dark tint lightness' })).toHaveValue('6');
   await expect(restoredSettings.getByRole('slider', { name: 'Light tint lightness' })).toHaveValue('76');
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe('light');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await restoredSettings.getByRole('button', { name: 'Appearance' }).click();
+  await restoredSettings.getByRole('group', { name: 'Dark window tint' }).getByRole('button', { name: 'None dark tint' }).click();
+  darkLightness = restoredSettings.getByRole('slider', { name: 'Dark tint lightness' });
+  await expect(darkLightness).toHaveValue('0');
+  await expect(darkLightness).toHaveAttribute('min', '0');
+  await darkLightness.focus();
+  await page.keyboard.press('End');
+  darkLightness = restoredSettings.getByRole('slider', { name: 'Dark tint lightness' });
+  await expect(darkLightness).toHaveValue('25');
+  await expect(darkLightness).toHaveAttribute('max', '25');
   const noneOption = restoredSettings.getByRole('group', { name: 'Light window tint' }).getByRole('button', { name: 'None light tint' });
   await noneOption.click();
   lightness = restoredSettings.getByRole('slider', { name: 'Light tint lightness' });
@@ -323,15 +361,45 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
   const scrollAfterDrag = await mobilePage.evaluate(element => element.scrollTop);
   expect(Math.abs(scrollAfterDrag - scrollBeforeDrag)).toBeLessThanOrEqual(1);
   await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), tintKey)).toEqual({
-    darkTint: 'teal',
+    darkTint: 'none',
+    darkLightness: 25,
     lightTint: 'none',
-    lightness: 75,
+    lightLightness: 75,
   });
+  const resetTints = restoredSettings.getByRole('button', { name: 'Reset to defaults' });
+  await expect(resetTints).toBeEnabled();
+  await resetTints.click();
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), tintKey)).toEqual({
+    darkTint: 'blue',
+    darkLightness: 25,
+    lightTint: 'none',
+    lightLightness: 100,
+  });
+  await expect(restoredSettings.getByRole('button', { name: 'Reset to defaults' })).toBeDisabled();
+});
+
+test('version-two tint settings keep their light tint and use the new dark default', async ({ page }) => {
+  const oldKey = 'desktop-window-tints-v2';
+  const currentKey = 'desktop-window-tints-v3';
+  await page.evaluate(key => localStorage.setItem(key, JSON.stringify({
+    darkTint: 'purple',
+    lightTint: 'teal',
+    lightness: 88,
+  })), oldKey);
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  const settings = await openUtility(page, 'settings');
+  await expect(settings.getByRole('group', { name: 'Dark window tint' }).getByRole('button', { name: 'Purple dark tint' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(settings.getByRole('group', { name: 'Light window tint' }).getByRole('button', { name: 'Teal light tint' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(settings.getByRole('slider', { name: 'Dark tint lightness' })).toHaveValue('25');
+  await expect(settings.getByRole('slider', { name: 'Light tint lightness' })).toHaveValue('88');
+  expect(await page.evaluate(key => localStorage.getItem(key), oldKey)).toContain('"lightness":88');
+  expect(await page.evaluate(key => localStorage.getItem(key), currentKey)).toBeNull();
 });
 
 test('older white tint preferences stay white until changed by the user', async ({ page }) => {
   const legacyKey = 'desktop-window-tints-v1';
-  const currentKey = 'desktop-window-tints-v2';
+  const currentKey = 'desktop-window-tints-v3';
   await page.evaluate(key => localStorage.setItem(key, JSON.stringify({
     darkTint: 'blue',
     lightTint: 'none',

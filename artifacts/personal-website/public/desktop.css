@@ -132,6 +132,8 @@
     --accent-glow: oklch(from var(--accent-base) calc(l + 0.18) c h);
     --accent-light: oklch(from var(--accent-base) calc(l + 0.30) c h);
     --focus-color: oklch(from var(--accent-base) calc(l + 0.25) c h);
+    --btn-hover: color-mix(in srgb, var(--accent) 12%, transparent);
+    --btn-active: color-mix(in srgb, var(--accent) 22%, transparent);
   }
   :root[data-theme="light"][data-accent-color] { --focus-color: var(--accent-base); }
   @media (prefers-color-scheme: light) {
@@ -144,6 +146,7 @@
   :root[data-window-dark-tint="gold"] { --window-dark-source: var(--palette-gold); }
   :root[data-window-dark-tint="coral"] { --window-dark-source: var(--palette-coral); }
   :root[data-window-dark-tint="purple"] { --window-dark-source: var(--palette-purple); }
+  :root[data-window-dark-tint="none"] { --window-dark-tint-color: oklch(var(--window-dark-lightness, 0%) 0 0); }
   :root[data-window-light-tint="blue"] { --window-light-source: var(--palette-blue); }
   :root[data-window-light-tint="teal"] { --window-light-source: var(--palette-teal); }
   :root[data-window-light-tint="green"] { --window-light-source: var(--palette-green); }
@@ -154,9 +157,11 @@
   :root[data-window-light-tint]:not([data-window-light-tint="none"]) {
     --window-light-tint-color: oklch(from var(--window-light-source) var(--window-lightness, 95%) calc(c * 0.55) h);
   }
+  :root[data-window-dark-tint]:not([data-window-dark-tint="none"]) {
+    --window-dark-tint-color: oklch(from var(--window-dark-source, var(--palette-blue)) var(--window-dark-lightness, 25%) calc(c * 0.57) h);
+  }
 
   :root[data-window-tints="custom"] {
-    --window-dark-tint-color: oklch(from var(--window-dark-source, var(--palette-blue)) 28.32% calc(c * 0.57) h);
     --window-background-tint: var(--window-dark-tint-color);
     --window-foreground-tint: var(--window-light-tint-color, #fff);
     --app-bg: oklch(from var(--window-background-tint) l c h / 0.92);
@@ -174,6 +179,7 @@
     --window-background-tint: var(--window-light-tint-color, #fff);
     --window-foreground-tint: var(--window-dark-tint-color);
     --app-bg: oklch(from var(--window-background-tint) l c h / 0.94);
+    --app-text: var(--window-foreground-tint);
     --app-border: oklch(from var(--window-foreground-tint) l c h / 0.18);
     --toolbar-bg: oklch(from var(--window-background-tint) l c h / 0.86);
     --toolbar-sep: oklch(from var(--window-foreground-tint) l c h / 0.12);
@@ -953,27 +959,15 @@ body {
   width: 3.25rem;
   height: 3.25rem;
   border-radius: 0.875rem;
-  background: rgba(0, 102, 153, 0.28);
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
   color: var(--accent-light);
 }
 
 .app-launcher-icon svg { width: 32px; height: 32px; }
 
 .game-launcher-icon {
-  background: #123c52;
-  color: #6bf;
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) .game-launcher-icon {
-    background: #e4f0f5;
-    color: #00516f;
-  }
-}
-
-:root[data-theme="light"] .game-launcher-icon {
-  background: #e4f0f5;
-  color: #00516f;
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--accent-light);
 }
 
 .app-launcher-name {
@@ -1919,8 +1913,8 @@ body.mod-overview .app-window.focused {
   --util-amber: #f3b25e;
   --util-emphasis: #fff0d8;
   --util-teal: #9bd4cf;
-  --util-surface: rgba(255,255,255,.045);
-  --util-surface-strong: rgba(255,255,255,.1);
+  --util-surface: color-mix(in srgb,var(--window-foreground-tint,var(--app-text)) 5%,transparent);
+  --util-surface-strong: color-mix(in srgb,var(--accent) 12%,transparent);
   --util-detail: color-mix(in srgb,var(--app-text) 68%,transparent);
   --util-danger: #ffc6a4;
   height:100%;
@@ -1932,8 +1926,6 @@ body.mod-overview .app-window.focused {
   --util-amber: #875000;
   --util-emphasis: #4e310d;
   --util-teal: #176764;
-  --util-surface: rgba(0,45,70,.045);
-  --util-surface-strong: rgba(0,45,70,.1);
   --util-detail: color-mix(in srgb,var(--app-text) 76%,transparent);
   --util-danger: #963a1a;
 }
@@ -1942,8 +1934,6 @@ body.mod-overview .app-window.focused {
     --util-amber: #875000;
     --util-emphasis: #4e310d;
     --util-teal: #176764;
-    --util-surface: rgba(0,45,70,.045);
-    --util-surface-strong: rgba(0,45,70,.1);
     --util-detail: color-mix(in srgb,var(--app-text) 76%,transparent);
     --util-danger: #963a1a;
   }
@@ -2343,7 +2333,7 @@ body.mod-overview .app-window.focused {
 .doc-body hr  { border: none; border-top: 1px solid var(--app-border); margin: 1.5em 0; }
 
 .doc-body code {
-  background: rgba(0, 102, 153, 0.18);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   padding: 0.1em 0.35em;
   border-radius: 0.25em;
   font-size: 0.9em;
@@ -2365,14 +2355,10 @@ body.mod-overview .app-window.focused {
   font-size: 0.875em;
 }
 
-@media (prefers-color-scheme: light) {
-  .doc-body pre { background: rgba(0, 80, 130, 0.06); }
-}
-
 .doc-body a {
   color: var(--accent-light);
   text-decoration: underline;
-  text-decoration-color: rgba(102, 187, 255, 0.4);
+  text-decoration-color: color-mix(in srgb, var(--accent-light) 40%, transparent);
 }
 
 @media (prefers-color-scheme: light) {
@@ -2395,7 +2381,7 @@ body.mod-overview .app-window.focused {
 }
 
 .doc-body .md-table th {
-  background: rgba(0, 102, 153, 0.18);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   font-weight: 600;
 }
 
@@ -2403,9 +2389,8 @@ body.mod-overview .app-window.focused {
   background: rgba(0, 0, 0, 0.08);
 }
 
-@media (prefers-color-scheme: light) {
-  .doc-body .md-table th { background: rgba(0, 80, 130, 0.1); }
-  .doc-body .md-table tr:nth-child(even) td { background: rgba(0, 80, 130, 0.04); }
+.doc-body .md-table tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
 }
 
 /* ── Doc layout with sidebar ── */
@@ -2854,11 +2839,9 @@ body.mod-overview .app-window.focused {
   white-space: nowrap;
 }
 
-@media (prefers-color-scheme: light) {
-  .gesture-key {
-    border-color: rgba(0,80,130,0.3);
-    background: rgba(0,80,130,0.07);
-  }
+.gesture-key {
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
 }
 
 .shortcut-list {
@@ -2910,12 +2893,10 @@ kbd {
   white-space: nowrap;
 }
 
-@media (prefers-color-scheme: light) {
-  kbd {
-    border-color: rgba(0, 80, 130, 0.3);
-    border-bottom-color: rgba(0, 80, 130, 0.5);
-    background: rgba(0, 80, 130, 0.07);
-  }
+kbd {
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
 }
 
 .help-note {
@@ -3605,7 +3586,7 @@ kbd {
   padding: 0.5625rem 1.125rem;
   border: 1px solid var(--topbar-border);
   border-radius: 0.625rem;
-  background: rgba(0, 102, 153, 0.22);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--accent-light);
   font-size: 0.875rem;
   font-family: inherit;
@@ -3614,22 +3595,16 @@ kbd {
   transition: background 150ms ease, border-color 150ms ease;
 }
 .welcome-open-btn:hover {
-  background: rgba(0, 102, 153, 0.38);
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
   border-color: var(--accent-glow);
 }
-.welcome-open-btn:active { background: rgba(0, 102, 153, 0.5); }
+.welcome-open-btn:active { background: color-mix(in srgb, var(--accent) 50%, transparent); }
 .welcome-open-btn:focus-visible {
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
 }
 
-@media (prefers-color-scheme: light) {
-  .welcome-open-btn {
-    background: rgba(0, 102, 153, 0.09);
-    color: var(--accent);
-  }
-  .welcome-open-btn:hover { background: rgba(0, 102, 153, 0.16); }
-}
+.welcome-open-btn { color: var(--accent); }
 
 /* ── Welcome floating window ─────────────────────────────────── */
 #welcome-overlay {

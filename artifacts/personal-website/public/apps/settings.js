@@ -32,7 +32,16 @@ const ACCENT_COLORS = [
   { value: 'coral', label: 'Coral', hue: 25, color: 'oklch(48.74% 0.1131 25)' },
   { value: 'purple', label: 'Purple', hue: 300, color: 'oklch(48.74% 0.1131 300)' },
 ];
-const DEFAULT_WINDOW_TINTS = { darkTint: 'blue', lightTint: 'none', lightness: 100 };
+const DEFAULT_WINDOW_TINTS = {
+  darkTint: 'blue',
+  darkLightness: 25,
+  lightTint: 'none',
+  lightLightness: 100,
+};
+const WINDOW_DARK_TINT_OPTIONS = [
+  { value: 'none', label: 'None', color: '#000' },
+  ...ACCENT_COLORS,
+];
 const WINDOW_LIGHT_TINT_OPTIONS = [
   { value: 'none', label: 'None', color: '#fff' },
   ...ACCENT_COLORS,
@@ -84,18 +93,26 @@ function supportsRelativeColors() {
 }
 
 function normalizeWindowTints(value) {
+  const darkTint = WINDOW_DARK_TINT_OPTIONS.some(option => option.value === value?.darkTint)
+    ? value.darkTint
+    : DEFAULT_WINDOW_TINTS.darkTint;
   const lightTint = WINDOW_LIGHT_TINT_OPTIONS.some(option => option.value === value?.lightTint)
     ? value.lightTint
     : DEFAULT_WINDOW_TINTS.lightTint;
-  const maxLightness = lightTint === 'none' ? 100 : 95;
+  const minimumDarkLightness = darkTint === 'none' ? 0 : 5;
+  const darkLightness = Number.isFinite(Number(value?.darkLightness))
+    ? Math.max(minimumDarkLightness, Math.min(25, Math.round(Number(value.darkLightness))))
+    : DEFAULT_WINDOW_TINTS.darkLightness;
+  const maximumLightLightness = lightTint === 'none' ? 100 : 95;
+  const legacyLightLightness = value?.lightLightness ?? value?.lightness;
+  const lightLightness = Number.isFinite(Number(legacyLightLightness))
+    ? Math.max(75, Math.min(maximumLightLightness, Math.round(Number(legacyLightLightness))))
+    : DEFAULT_WINDOW_TINTS.lightLightness;
   return {
-    darkTint: ACCENT_COLORS.some(option => option.value === value?.darkTint)
-      ? value.darkTint
-      : DEFAULT_WINDOW_TINTS.darkTint,
+    darkTint,
+    darkLightness,
     lightTint,
-    lightness: Number.isFinite(Number(value?.lightness))
-      ? Math.max(75, Math.min(maxLightness, Math.round(Number(value.lightness))))
-      : DEFAULT_WINDOW_TINTS.lightness,
+    lightLightness,
   };
 }
 
@@ -336,6 +353,7 @@ export function buildSettings(id, ctx, initialState) {
     );
     if (supportsRelativeColors()) {
       const windowTints = normalizeWindowTints(current.windowTints || DEFAULT_WINDOW_TINTS);
+      let tintPreviewTimer = 0;
       const darkGroup = el('div', 'settings-tint-group');
       darkGroup.append(el('h4', '', 'Dark tint'));
       const darkOptions = el('div', 'settings-tint-options');
@@ -347,88 +365,152 @@ export function buildSettings(id, ctx, initialState) {
       lightOptions.setAttribute('role', 'group');
       lightOptions.setAttribute('aria-label', 'Light window tint');
 
-      const buildTintChoices = (group, choices, type) => {
-        const property = type === 'dark' ? 'darkTint' : 'lightTint';
-        for (const option of choices) {
+      const tintGroups = {
+        dark: {
+          group: darkGroup,
+          options: darkOptions,
+          choices: WINDOW_DARK_TINT_OPTIONS,
+          property: 'darkTint',
+          levelProperty: 'darkLightness',
+          levelLabel: 'Dark tint lightness',
+          min: tint => tint === 'none' ? 0 : 5,
+          max: 25,
+          noneLevel: 0,
+          help: 'Neutral black ranges from 0% to 25%. Colored tints range from 5% to 25%.',
+          color: option => option.value === 'none'
+            ? `oklch(${windowTints.darkLightness}% 0 0)`
+            : `oklch(${windowTints.darkLightness}% 0.0645 ${option.hue})`,
+        },
+        light: {
+          group: lightGroup,
+          options: lightOptions,
+          choices: WINDOW_LIGHT_TINT_OPTIONS,
+          property: 'lightTint',
+          levelProperty: 'lightLightness',
+          levelLabel: 'Light tint lightness',
+          min: () => 75,
+          max: tint => tint === 'none' ? 100 : 95,
+          noneLevel: 100,
+          help: 'None stays neutral; use the slider from 75% to 100%. Colored tints range from 75% to 95%.',
+          color: option => option.value === 'none'
+            ? `oklch(${windowTints.lightLightness}% 0 0)`
+            : `oklch(${windowTints.lightLightness}% 0.0622 ${option.hue})`,
+        },
+      };
+
+      const previewTints = () => {
+        window.clearTimeout(tintPreviewTimer);
+        tintPreviewTimer = window.setTimeout(() => {
+          tintPreviewTimer = 0;
+          settings?.previewWindowTints?.(windowTints);
+        }, 70);
+      };
+      const cancelTintPreview = () => {
+        if (tintPreviewTimer) {
+          window.clearTimeout(tintPreviewTimer);
+          tintPreviewTimer = 0;
+        }
+      };
+
+      const buildTintChoices = type => {
+        const config = tintGroups[type];
+        for (const option of config.choices) {
           const button = el('button', 'settings-tint-choice');
           button.type = 'button';
           button.setAttribute('aria-label', `${option.label} ${type} tint`);
-          button.setAttribute('aria-pressed', String(windowTints[property] === option.value));
+          button.setAttribute('aria-pressed', String(windowTints[config.property] === option.value));
           button.dataset.tintValue = option.value;
           const swatch = el('span', `settings-tint-swatch settings-tint-swatch-${type}`);
-          swatch.style.backgroundColor = option.value === 'none'
-            ? `oklch(${windowTints.lightness}% 0 0)`
-            : type === 'dark'
-              ? `oklch(28.32% 0.0645 ${option.hue})`
-              : `oklch(${windowTints.lightness}% 0.0622 ${option.hue})`;
+          swatch.style.backgroundColor = config.color(option);
           swatch.setAttribute('aria-hidden', 'true');
           button.append(swatch, el('span', 'settings-tint-label', option.label));
           button.addEventListener('click', () => {
-            const next = { ...windowTints, [property]: option.value };
-            if (property === 'lightTint') {
-              next.lightness = option.value === 'none' ? 100 : Math.min(95, next.lightness);
-            }
+            const next = { ...windowTints, [config.property]: option.value };
+            const minimum = typeof config.min === 'function' ? config.min(option.value) : config.min;
+            const maximum = typeof config.max === 'function' ? config.max(option.value) : config.max;
+            next[config.levelProperty] = option.value === 'none'
+              ? config.noneLevel
+              : Math.max(minimum, Math.min(maximum, windowTints[config.levelProperty]));
             try {
+              cancelTintPreview();
               settings?.setWindowTints?.(next);
               current = snapshot();
             } catch (error) {
               setMessage(page.querySelector('.settings-inline-status'), error?.message || 'The window tint could not be changed.', 'error');
             }
           });
-          group.append(button);
+          config.options.append(button);
         }
       };
 
-      buildTintChoices(darkOptions, ACCENT_COLORS, 'dark');
-      buildTintChoices(lightOptions, WINDOW_LIGHT_TINT_OPTIONS, 'light');
+      buildTintChoices('dark');
+      buildTintChoices('light');
       darkGroup.append(darkOptions);
       lightGroup.append(lightOptions);
-      lightGroup.append(el('p', 'settings-description settings-light-tint-help',
-        'None stays neutral; use the slider from 75% to 100%. Colored tints range from 75% to 95%.'));
-      const lightness = document.createElement('input');
-      lightness.className = 'settings-tint-lightness';
-      lightness.type = 'range';
-      lightness.min = '75';
-      lightness.max = String(windowTints.lightTint === 'none' ? 100 : 95);
-      lightness.step = '1';
-      lightness.value = String(windowTints.lightness);
-      lightness.id = `settings-window-tint-lightness-${id}`;
-      lightness.setAttribute('aria-label', 'Light tint lightness');
-      const lightnessHeading = el('div', 'settings-tint-lightness-heading');
-      const lightnessLabel = el('label', '', 'Light tint lightness');
-      lightnessLabel.htmlFor = lightness.id;
-      const lightnessValue = el('output', 'settings-tint-lightness-value', `${windowTints.lightness}%`);
-      lightnessValue.htmlFor = lightness.id;
-      lightnessHeading.append(lightnessLabel, lightnessValue);
-      const lightnessControl = el('div', 'settings-tint-lightness-control');
-      lightnessControl.append(lightnessHeading, lightness);
-      const updateTintLightness = () => {
-        const value = Number(lightness.value);
-        windowTints.lightness = value;
-        lightnessValue.textContent = `${value}%`;
-        const swatches = lightOptions.querySelectorAll('.settings-tint-swatch');
-        if (swatches[0]) swatches[0].style.backgroundColor = `oklch(${value}% 0 0)`;
-        for (const [index, option] of ACCENT_COLORS.entries()) {
-          const swatch = swatches[index + 1];
-          if (swatch) swatch.style.backgroundColor = `oklch(${value}% 0.0622 ${option.hue})`;
-        }
-        settings?.previewWindowTints?.(windowTints);
-      };
-      lightness.addEventListener('input', updateTintLightness);
-      lightness.addEventListener('change', () => {
-        const restoreFocus = document.activeElement === lightness;
+      for (const type of ['dark', 'light']) {
+        const config = tintGroups[type];
+        config.group.append(el('p', 'settings-description settings-tint-help', config.help));
+        const slider = document.createElement('input');
+        slider.className = 'settings-tint-slider';
+        slider.type = 'range';
+        slider.min = String(typeof config.min === 'function' ? config.min(windowTints[config.property]) : config.min);
+        slider.max = String(typeof config.max === 'function' ? config.max(windowTints[config.property]) : config.max);
+        slider.step = '1';
+        slider.value = String(windowTints[config.levelProperty]);
+        slider.id = `settings-window-tint-${type}-lightness-${id}`;
+        slider.setAttribute('aria-label', config.levelLabel);
+        slider.dataset.tintType = type;
+        const heading = el('div', 'settings-tint-lightness-heading');
+        const label = el('label', '', config.levelLabel);
+        label.htmlFor = slider.id;
+        const value = el('output', 'settings-tint-lightness-value', `${windowTints[config.levelProperty]}%`);
+        value.htmlFor = slider.id;
+        heading.append(label, value);
+        const control = el('div', 'settings-tint-lightness-control');
+        control.append(heading, slider);
+        slider.addEventListener('input', () => {
+          windowTints[config.levelProperty] = Number(slider.value);
+          value.textContent = `${slider.value}%`;
+          for (const option of config.choices) {
+            const swatch = config.options.querySelector(`[data-tint-value="${option.value}"] .settings-tint-swatch`);
+            if (swatch) swatch.style.backgroundColor = config.color(option);
+          }
+          previewTints();
+        });
+        slider.addEventListener('change', () => {
+          const restoreFocus = document.activeElement === slider;
+          cancelTintPreview();
+          try {
+            if (settings?.setWindowTints) settings.setWindowTints(windowTints);
+            else settings?.previewWindowTints?.(windowTints);
+            current = snapshot();
+            if (restoreFocus) requestAnimationFrame(() => {
+              page.querySelector(`.settings-tint-slider[data-tint-type="${type}"]`)?.focus({ preventScroll: true });
+            });
+          } catch (error) {
+            setMessage(page.querySelector('.settings-inline-status'), error?.message || 'The window tint could not be changed.', 'error');
+          }
+        });
+        config.group.append(control);
+      }
+
+      const resetTints = el('button', 'settings-tint-reset');
+      resetTints.type = 'button';
+      resetTints.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.2 9a6.9 6.9 0 1 1 .8 4.6M3 3.8v4.7h4.7"/></svg><span>Reset to defaults</span>';
+      resetTints.disabled = windowTints.darkTint === DEFAULT_WINDOW_TINTS.darkTint
+        && windowTints.darkLightness === DEFAULT_WINDOW_TINTS.darkLightness
+        && windowTints.lightTint === DEFAULT_WINDOW_TINTS.lightTint
+        && windowTints.lightLightness === DEFAULT_WINDOW_TINTS.lightLightness;
+      resetTints.addEventListener('click', () => {
         try {
-          settings?.setWindowTints?.(windowTints);
+          cancelTintPreview();
+          settings?.setWindowTints?.(DEFAULT_WINDOW_TINTS);
           current = snapshot();
-          if (restoreFocus) requestAnimationFrame(() =>
-            page.querySelector('.settings-tint-lightness')?.focus({ preventScroll: true }),
-          );
         } catch (error) {
-          setMessage(page.querySelector('.settings-inline-status'), error?.message || 'The window tint could not be changed.', 'error');
+          setMessage(page.querySelector('.settings-inline-status'), error?.message || 'The window tints could not be reset.', 'error');
         }
       });
-      lightGroup.append(lightnessControl);
-      windowTintSection.append(darkGroup, lightGroup);
+      windowTintSection.append(darkGroup, lightGroup, resetTints);
     } else {
       windowTintSection.append(el('p', 'settings-description', 'Window tint choices require a browser that supports CSS relative colors.'));
     }
