@@ -1838,6 +1838,46 @@ test('card win animation uses a right-side panel with none, single, and random m
     .toEqual(['tornado', 'fireworks', 'bounce', 'spiral', 'rain', 'wave', 'kitchen-sink']);
 });
 
+test('win animation settings remain usable while the victory new game screen is open', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const app = await restoreGame(page, savedKlondike({
+    columns: [[[13, 0]]],
+    foundations: { 0: Array.from({ length: 12 }, (_, index) => index + 1),
+      1: Array.from({ length: 13 }, (_, index) => index + 1),
+      2: Array.from({ length: 13 }, (_, index) => index + 1),
+      3: Array.from({ length: 13 }, (_, index) => index + 1) },
+  }));
+  await app.locator('[data-key="card-12"]').dblclick();
+  const screen = app.locator('.game-new-game-screen');
+  await expect(screen).toBeVisible();
+
+  const settings = await openSettings(app);
+  await expect(screen).toHaveAttribute('aria-modal', 'false');
+  await expect(settings).toHaveAttribute('aria-modal', 'true');
+  await expect(settings.getByRole('button', { name: 'Close settings' })).toBeFocused();
+  const animationTrigger = settings.getByRole('button', { name: /^Win animation:/ });
+  await animationTrigger.click();
+  const animationOptions = app.getByRole('dialog', { name: 'Win animation options' });
+  await expect(settings).toHaveAttribute('aria-modal', 'false');
+  await expect(animationOptions).toHaveAttribute('aria-modal', 'true');
+  await expect(animationOptions.getByRole('checkbox', { name: 'No animation' })).toBeFocused();
+  await animationOptions.getByRole('checkbox', { name: 'No animation' }).click();
+  await animationOptions.getByRole('checkbox', { name: 'Bounce' }).click();
+  await animationOptions.getByRole('button', { name: 'Done' }).click();
+  await expect(settings).toHaveAttribute('aria-modal', 'true');
+  await expect(animationTrigger).toBeFocused();
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).solitaire))
+    .toEqual(['bounce']);
+
+  await settings.getByRole('button', { name: 'Close settings' }).click();
+  await expect(screen).toBeVisible();
+  await expect(screen).toHaveAttribute('aria-modal', 'true');
+  await expect(screen.getByRole('combobox', { name: 'Draw' })).toBeFocused();
+  await screen.getByRole('button', { name: 'Start new game' }).click();
+  await expect(screen).toHaveCount(0);
+});
+
 test('Chess and Reversi can use a fixed win animation or random selection', async ({ page }) => {
   const chess = await openGame(page, 'chess');
   const chessSettings = await openSettings(chess);
@@ -2360,6 +2400,14 @@ test('Chess moves animate, and checkmate opens the opponent options for a new ga
   const screen = app.locator('.game-new-game-screen');
   await expect(screen).toBeVisible({ timeout: 5000 });
   await expect(screen).toContainText('Checkmate');
+  const settings = await openSettings(app);
+  await expect(screen).toHaveAttribute('aria-modal', 'false');
+  await setAnimationPickerValue(page, settings, 'knock');
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).chess))
+    .toEqual(['knock']);
+  await settings.getByRole('button', { name: 'Close settings' }).click();
+  await expect(screen).toHaveAttribute('aria-modal', 'true');
   await setDropdownValue(page, screen, 'Opponent', 'computer');
   await expect(screen.getByLabel('Play as', { exact: true })).toBeVisible();
   await setDropdownValue(page, screen, 'Play as', 'black');

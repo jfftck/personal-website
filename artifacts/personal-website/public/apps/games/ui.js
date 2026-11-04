@@ -104,11 +104,20 @@ function createGameSettings(root, toolbar, title, id) {
   let isOpen = false;
   let priorFocus = null;
   let inertStates = [];
+  let suspendedEndScreen = null;
+  let suspendedEndScreenFocus = null;
 
   function open() {
     if (isOpen) return;
     isOpen = true;
     priorFocus = document.activeElement;
+    suspendedEndScreen = root.querySelector(
+      '.game-new-game-screen[aria-modal="true"], .game-computer-error-screen[aria-modal="true"]',
+    );
+    suspendedEndScreenFocus = suspendedEndScreen?.querySelector(
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) || null;
+    suspendedEndScreen?.setAttribute('aria-modal', 'false');
     inertStates = [...root.children]
       .filter(child => child !== overlay && child !== animationPicker.element)
       .map(node => ({ node, inert: node.inert }));
@@ -125,8 +134,12 @@ function createGameSettings(root, toolbar, title, id) {
     overlay.hidden = true;
     inertStates.forEach(({ node, inert }) => { node.inert = inert; });
     inertStates = [];
+    if (suspendedEndScreen?.isConnected) suspendedEndScreen.setAttribute('aria-modal', 'true');
+    const focusTarget = suspendedEndScreen?.isConnected ? suspendedEndScreenFocus : priorFocus;
+    suspendedEndScreen = null;
+    suspendedEndScreenFocus = null;
     toggle.setAttribute('aria-expanded', 'false');
-    if (restoreFocus && priorFocus?.isConnected) priorFocus.focus({ preventScroll: true });
+    if (restoreFocus && focusTarget?.isConnected) focusTarget.focus({ preventScroll: true });
     priorFocus = null;
   }
 
@@ -290,6 +303,7 @@ export function showNewGameScreen(area, id, headingText, messageText, options, o
   const savedInert = [];
   const toolbar = game?.querySelector(':scope > .game-toolbar');
   const settingsOverlay = game?.querySelector(':scope > .game-settings-overlay');
+  const animationPickerLayer = game?.querySelector(':scope > .animation-picker-layer');
   const savedToolbarDisabled = [...(toolbar?.querySelectorAll('button, select, input') || [])]
     .filter(control => !control.classList.contains('game-settings-toggle'))
     .map(control => ({ control, disabled: control.disabled }));
@@ -349,7 +363,7 @@ export function showNewGameScreen(area, id, headingText, messageText, options, o
   screen.append(actions);
 
   const siblings = [...(game?.children || [])].filter(child =>
-    !child.contains(area) && child !== toolbar && child !== settingsOverlay
+    !child.contains(area) && child !== toolbar && child !== settingsOverlay && child !== animationPickerLayer
   );
   for (const node of [...siblings, ...area.children]) {
     savedInert.push({ node, inert: node.inert });
@@ -400,6 +414,7 @@ export function showComputerErrorScreen(area, id, messageText, onRetry, onNewGam
   const savedInert = [];
   const toolbar = game?.querySelector(':scope > .game-toolbar');
   const settingsOverlay = game?.querySelector(':scope > .game-settings-overlay');
+  const animationPickerLayer = game?.querySelector(':scope > .animation-picker-layer');
   const savedToolbarDisabled = [...(toolbar?.querySelectorAll('button, select, input') || [])]
     .filter(control => !control.classList.contains('game-settings-toggle'))
     .map(control => ({ control, disabled: control.disabled }));
@@ -430,7 +445,7 @@ export function showComputerErrorScreen(area, id, messageText, onRetry, onNewGam
   screen.append(title, message, actions);
 
   const siblings = [...(game?.children || [])].filter(child =>
-    !child.contains(area) && child !== toolbar && child !== settingsOverlay
+    !child.contains(area) && child !== toolbar && child !== settingsOverlay && child !== animationPickerLayer
   );
   for (const node of [...siblings, ...area.children]) {
     savedInert.push({ node, inert: node.inert });
