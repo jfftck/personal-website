@@ -93,7 +93,13 @@ function createGameSettings(root, toolbar, title, id) {
   dialog.append(header, gameOptions, appearanceOptions);
   overlay.append(dialog);
   root.append(overlay);
-  const animationPicker = createAnimationPickerController(dialog, { label: 'Game animation selection' });
+  const animationPicker = createAnimationPickerController(root, {
+    label: 'Game animation selection',
+    onOpen: () => dialog.setAttribute('aria-modal', 'false'),
+    onClose: () => {
+      if (isOpen) dialog.setAttribute('aria-modal', 'true');
+    },
+  });
 
   let isOpen = false;
   let priorFocus = null;
@@ -104,7 +110,7 @@ function createGameSettings(root, toolbar, title, id) {
     isOpen = true;
     priorFocus = document.activeElement;
     inertStates = [...root.children]
-      .filter(child => child !== overlay)
+      .filter(child => child !== overlay && child !== animationPicker.element)
       .map(node => ({ node, inert: node.inert }));
     inertStates.forEach(({ node }) => { node.inert = true; });
     overlay.hidden = false;

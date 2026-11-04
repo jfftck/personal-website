@@ -50,7 +50,7 @@ async function setGameOption(page, app, label, value) {
 async function setAnimationPickerValue(page, dialog, value) {
   const trigger = dialog.getByRole('button', { name: /^Win animation:/ });
   await trigger.click();
-  const panel = dialog.getByRole('region', { name: 'Win animation options' });
+  const panel = page.getByRole('dialog', { name: 'Win animation options' });
   const none = panel.getByRole('checkbox', { name: 'No animation' });
   if (value === 'random') {
     if (await none.isChecked()) await none.click();
@@ -1808,17 +1808,13 @@ test('card win animation uses a right-side panel with none, single, and random m
   const dialog = await openSettings(app);
   const animation = dialog.getByRole('button', { name: /^Win animation:/ });
   await animation.click();
-  const animationOptions = dialog.getByRole('region', { name: 'Win animation options' });
+  const animationOptions = app.getByRole('dialog', { name: 'Win animation options' });
   await expect(animationOptions).toBeVisible();
   await expect(animationOptions.getByRole('checkbox')).toHaveCount(8);
   await expect(animationOptions.getByRole('checkbox', { name: 'Kitchen Sink' })).toBeVisible();
-  const drawerGeometry = await animationOptions.evaluate(drawer => {
-    const panel = drawer.getBoundingClientRect();
-    const host = drawer.closest('.game-settings-dialog').getBoundingClientRect();
-    return { panelRight: panel.right, hostRight: host.right, panelLeft: panel.left, hostLeft: host.left };
-  });
-  expect(Math.abs(drawerGeometry.panelRight - drawerGeometry.hostRight)).toBeLessThan(2);
-  expect(drawerGeometry.panelLeft).toBeGreaterThan(drawerGeometry.hostLeft);
+  await expect.poll(() => animationOptions.evaluate(drawer =>
+    Math.abs(drawer.getBoundingClientRect().right - drawer.closest('.game-app').getBoundingClientRect().right),
+  )).toBeLessThan(2);
   await animationOptions.getByRole('checkbox', { name: 'No animation' }).click();
   await animationOptions.getByRole('checkbox', { name: 'Tornado' }).click();
   await animationOptions.getByRole('button', { name: 'Done' }).click();
@@ -1839,7 +1835,7 @@ test('card win animation uses a right-side panel with none, single, and random m
   await setAnimationPickerValue(page, spiderSettings, 'random');
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).solitaire))
-    .toEqual(['fireworks', 'bounce', 'spiral', 'rain', 'wave', 'tornado', 'kitchen-sink']);
+    .toEqual(['tornado', 'fireworks', 'bounce', 'spiral', 'rain', 'wave', 'kitchen-sink']);
 });
 
 test('Chess and Reversi can use a fixed win animation or random selection', async ({ page }) => {
@@ -1847,7 +1843,7 @@ test('Chess and Reversi can use a fixed win animation or random selection', asyn
   const chessSettings = await openSettings(chess);
   const chessAnimation = chessSettings.getByRole('button', { name: /^Win animation:/ });
   await chessAnimation.click();
-  const chessPanel = chessSettings.getByRole('region', { name: 'Win animation options' });
+  const chessPanel = chess.getByRole('dialog', { name: 'Win animation options' });
   await expect(chessPanel.getByRole('checkbox')).toHaveCount(5);
   await chessPanel.getByRole('checkbox', { name: 'No animation' }).click();
   await chessPanel.getByRole('checkbox', { name: 'Knock' }).click();

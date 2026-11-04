@@ -20,6 +20,7 @@ function normalizeSelection(value, choices) {
 
 export function createAnimationPickerController(host, {
   label = 'Animation options',
+  onOpen = () => {},
   onClose = () => {},
 } = {}) {
   const layer = element('div', 'animation-picker-layer');
@@ -28,7 +29,8 @@ export function createAnimationPickerController(host, {
   scrim.type = 'button';
   scrim.setAttribute('aria-label', `Close ${label.toLowerCase()}`);
   const drawer = element('section', 'animation-picker-drawer');
-  drawer.setAttribute('role', 'region');
+  drawer.setAttribute('role', 'dialog');
+  drawer.setAttribute('aria-modal', 'true');
   const heading = element('h2', 'animation-picker-heading');
   const description = element('p', 'animation-picker-description');
   const closeButton = element('button', 'animation-picker-close', 'Done');
@@ -138,6 +140,7 @@ export function createAnimationPickerController(host, {
       .filter(node => node !== layer)
       .map(node => ({ node, inert: node.inert }));
     savedInert.forEach(({ node }) => { node.inert = true; });
+    onOpen(picker.id);
     layer.hidden = false;
     picker.trigger.setAttribute('aria-expanded', 'true');
     refreshOptions();
@@ -206,8 +209,8 @@ export function createAnimationPickerController(host, {
     return root;
   }
 
-  closeButton.setAttribute('aria-label', `Close ${label.toLowerCase()}`);
   return {
+    element: layer,
     createPicker,
     close,
     get isOpen() { return active !== null; },

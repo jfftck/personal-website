@@ -2,6 +2,7 @@
    The inherited desktop tokens keep the chrome in step with the active theme;
    game surfaces use their own tactile, high-contrast table colors. */
 .game-app {
+  position: relative;
   --game-ink: var(--app-text);
   --game-muted: color-mix(in srgb, var(--app-text) 62%, transparent);
   --game-line: var(--app-border);
