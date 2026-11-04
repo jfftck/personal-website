@@ -981,13 +981,25 @@ body.mod-show-desktop #desktop-search {
 body.mod-show-desktop #app-strip-wrapper {
   visibility: hidden;
   pointer-events: none;
-  transition: visibility 0s linear 300ms;
+  transition: visibility 0s linear 560ms;
 }
 
 body.mod-show-desktop #app-strip-wrapper .app-window {
   opacity: 0;
   transform: scale(1.06);
 }
+
+.app-window.desktop-transitioning[data-desktop-direction="out"][data-desktop-animation="zoom"] { animation: desktop-window-zoom-out 440ms cubic-bezier(.2,.8,.2,1) both; }
+.app-window.desktop-transitioning[data-desktop-direction="in"][data-desktop-animation="zoom"] { animation: desktop-window-zoom-in 440ms cubic-bezier(.2,.8,.2,1) both; }
+.app-window.desktop-transitioning[data-desktop-direction="out"][data-desktop-animation="fade"] { animation: desktop-window-fade-out 360ms ease both; }
+.app-window.desktop-transitioning[data-desktop-direction="in"][data-desktop-animation="fade"] { animation: desktop-window-fade-in 360ms ease both; }
+.app-window.desktop-transitioning[data-desktop-direction="out"][data-desktop-animation="slide-up"] { animation: desktop-window-slide-out 420ms cubic-bezier(.2,.8,.2,1) both; }
+.app-window.desktop-transitioning[data-desktop-direction="in"][data-desktop-animation="slide-up"] { animation: desktop-window-slide-in 420ms cubic-bezier(.2,.8,.2,1) both; }
+.app-window.desktop-transitioning[data-desktop-direction="out"][data-desktop-animation="tilt-up"] { animation: desktop-window-tilt-out 500ms cubic-bezier(.2,.8,.2,1) both; transform-origin: center bottom; }
+.app-window.desktop-transitioning[data-desktop-direction="in"][data-desktop-animation="tilt-up"] { animation: desktop-window-tilt-in 500ms cubic-bezier(.2,.8,.2,1) both; transform-origin: center bottom; }
+.app-window.desktop-transitioning[data-desktop-direction="out"][data-desktop-animation="flip"] { animation: desktop-window-flip-out 440ms ease both; }
+.app-window.desktop-transitioning[data-desktop-direction="in"][data-desktop-animation="flip"] { animation: desktop-window-flip-in 440ms ease both; }
+.desktop-returning #app-strip-wrapper { visibility: visible; pointer-events: auto; }
 
 body.mod-show-desktop #empty-state {
   visibility: hidden;
@@ -1589,6 +1601,10 @@ body.mod-overview #app-strip {
   transition: transform 260ms cubic-bezier(0.4, 0, 0.2, 1);
   will-change: transform;
 }
+body.overview-exiting #app-strip {
+  transition: transform 260ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
 body.mod-overview #app-strip.ov-notransition {
   transition: none !important;
 }
@@ -1599,6 +1615,15 @@ body.mod-overview .app-window {
 body.mod-overview .app-window.focused {
   cursor: zoom-out;
 }
+
+.app-window.overview-window-entering[data-overview-animation="zoom"] { animation: overview-window-zoom-in 360ms cubic-bezier(.2,.8,.2,1) var(--overview-stagger, 0ms) both; }
+.app-window.overview-window-entering[data-overview-animation="fade"] { animation: overview-window-fade-in 320ms ease var(--overview-stagger, 0ms) both; }
+.app-window.overview-window-entering[data-overview-animation="slide-up"] { animation: overview-window-slide-in 360ms cubic-bezier(.2,.8,.2,1) var(--overview-stagger, 0ms) both; }
+.app-window.overview-window-entering[data-overview-animation="rubber-band"] { animation: overview-rubber-band-in 440ms cubic-bezier(.2,.8,.2,1) var(--overview-stagger, 0ms) both; }
+.app-window.overview-window-exiting[data-overview-animation="zoom"] { animation: overview-window-zoom-out 300ms ease-in var(--overview-stagger, 0ms) both; }
+.app-window.overview-window-exiting[data-overview-animation="fade"] { animation: overview-window-fade-out 300ms ease-in var(--overview-stagger, 0ms) both; }
+.app-window.overview-window-exiting[data-overview-animation="slide-up"] { animation: overview-window-slide-out 320ms ease-in var(--overview-stagger, 0ms) both; }
+.app-window.overview-window-exiting[data-overview-animation="rubber-band"] { animation: overview-rubber-band-out 380ms cubic-bezier(.2,.8,.2,1) var(--overview-stagger, 0ms) both; }
 
 /* ------------------------------------------------------------
    APP WINDOWS
@@ -1644,6 +1669,24 @@ body.mod-overview .app-window.focused {
 @keyframes window-slide-left-out { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-.8rem); } }
 @keyframes window-flip-in { from { opacity: 0; transform: perspective(65rem) rotateX(-7deg) scale(.98); } to { opacity: 1; transform: perspective(65rem) rotateX(0) scale(1); } }
 @keyframes window-flip-out { from { opacity: 1; transform: perspective(65rem) rotateX(0) scale(1); } to { opacity: 0; transform: perspective(65rem) rotateX(7deg) scale(.98); } }
+@keyframes desktop-window-zoom-out { to { opacity: 0; transform: scale(.88); } }
+@keyframes desktop-window-zoom-in { from { opacity: 0; transform: scale(.88); } to { opacity: 1; transform: scale(1); } }
+@keyframes desktop-window-fade-out { to { opacity: 0; } }
+@keyframes desktop-window-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes desktop-window-slide-out { to { opacity: 0; transform: translateY(-1.4rem) scale(.96); } }
+@keyframes desktop-window-slide-in { from { opacity: 0; transform: translateY(-1.4rem) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes desktop-window-tilt-out { to { opacity: 0; transform: perspective(55rem) rotateX(-11deg) translateY(-18%) scale(.94); } }
+@keyframes desktop-window-tilt-in { from { opacity: 0; transform: perspective(55rem) rotateX(-11deg) translateY(-18%) scale(.94); } to { opacity: 1; transform: perspective(55rem) rotateX(0) translateY(0) scale(1); } }
+@keyframes desktop-window-flip-out { to { opacity: 0; transform: perspective(60rem) rotateY(10deg) scale(.94); } }
+@keyframes desktop-window-flip-in { from { opacity: 0; transform: perspective(60rem) rotateY(10deg) scale(.94); } to { opacity: 1; transform: perspective(60rem) rotateY(0) scale(1); } }
+@keyframes overview-window-zoom-in { from { opacity: .4; transform: scale(1.12); } to { opacity: 1; transform: scale(1); } }
+@keyframes overview-window-zoom-out { to { opacity: .45; transform: scale(.9); } }
+@keyframes overview-window-fade-in { from { opacity: .2; } to { opacity: 1; } }
+@keyframes overview-window-fade-out { to { opacity: .2; } }
+@keyframes overview-window-slide-in { from { opacity: .3; transform: translateY(.8rem); } to { opacity: 1; transform: translateY(0); } }
+@keyframes overview-window-slide-out { to { opacity: .3; transform: translateY(.8rem); } }
+@keyframes overview-rubber-band-in { 0% { opacity: .4; transform: scale(1.28); } 58% { transform: scale(.94); } 76% { transform: scale(1.045); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes overview-rubber-band-out { 0% { opacity: 1; transform: scale(1); } 45% { transform: scale(1.07); } 100% { opacity: .45; transform: scale(.88); } }
 
 .app-window.focused {
   outline-color: var(--focus-color);
@@ -1657,7 +1700,10 @@ body.mod-overview .app-window.focused {
     transition: none !important;
   }
   .app-window.window-opening,
-  .app-window.window-closing {
+  .app-window.window-closing,
+  .app-window.desktop-transitioning,
+  .app-window.overview-window-entering,
+  .app-window.overview-window-exiting {
     animation: none !important;
   }
 }

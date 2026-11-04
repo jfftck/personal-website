@@ -16,8 +16,47 @@ const ICONS = {
   wallpaper: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2ZM5 5h14v9l-3.5-3.5-3 3L9 10l-4 5V5zm3 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>',
 };
 
-const WALLPAPER_TRANSITIONS = new Set(['none', 'fade', 'zoom', 'slide-left', 'slide-right', 'wipe', 'random']);
-const WINDOW_ANIMATIONS = new Set(['none', 'fade', 'zoom', 'slide-up', 'slide-left', 'flip', 'random']);
+const WALLPAPER_TRANSITIONS = [
+  ['fade', 'Fade', 'Blend between images'],
+  ['zoom', 'Zoom', 'Scale the new image into view'],
+  ['slide-left', 'Slide from right', 'Move the new image in from the right'],
+  ['slide-right', 'Slide from left', 'Move the new image in from the left'],
+  ['wipe', 'Wipe', 'Reveal the new image across the screen'],
+];
+const WINDOW_OPEN_CLOSE_ANIMATIONS = [
+  ['fade', 'Fade', 'Fade in and out'],
+  ['zoom', 'Zoom', 'Scale into and out of view'],
+  ['slide-up', 'Slide Up', 'Move gently from below'],
+  ['slide-left', 'Slide', 'Move horizontally'],
+  ['flip', 'Flip', 'Turn into and out of view'],
+];
+const SHOW_DESKTOP_ANIMATIONS = [
+  ['zoom', 'Zoom', 'Scale windows away and back'],
+  ['fade', 'Fade', 'Fade windows out and back'],
+  ['tilt-up', 'Tilt Up', 'Tilt and slide windows up off the desktop'],
+  ['slide-up', 'Slide Up', 'Move windows up and back'],
+  ['flip', 'Flip', 'Turn windows away and back'],
+];
+const OVERVIEW_ANIMATIONS = [
+  ['zoom', 'Zoom', 'Zoom the windows into the overview'],
+  ['rubber-band', 'Rubber Band', 'Zoom windows out from the center toward both sides'],
+  ['fade', 'Fade', 'Fade windows into and out of the overview'],
+  ['slide-up', 'Slide Up', 'Move windows up into and out of the overview'],
+];
+const ANIMATION_OPTIONS = {
+  windowOpen: { label: 'Opening windows', choices: WINDOW_OPEN_CLOSE_ANIMATIONS },
+  windowClose: { label: 'Closing windows', choices: WINDOW_OPEN_CLOSE_ANIMATIONS },
+  showDesktop: { label: 'Show desktop', choices: SHOW_DESKTOP_ANIMATIONS },
+  overview: { label: 'Show overview', choices: OVERVIEW_ANIMATIONS },
+};
+
+function normalizeChoices(value, choices, fallback = ['fade']) {
+  const allowed = new Set(choices.map(([choice]) => choice));
+  if (Array.isArray(value)) return [...new Set(value.filter(choice => allowed.has(choice)))];
+  if (value === 'none') return [];
+  if (value === 'random') return choices.map(([choice]) => choice);
+  return allowed.has(value) ? [value] : [...fallback];
+}
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -32,7 +71,7 @@ function copyWallpaper(settings) {
     mode: settings?.mode === 'cycle' ? 'cycle' : 'random',
     rotation: settings?.rotation === 'interval' ? 'interval' : 'visit',
     intervalMinutes: Number(settings?.intervalMinutes) || 60,
-    transition: WALLPAPER_TRANSITIONS.has(settings?.transition) ? settings.transition : 'fade',
+    transition: normalizeChoices(settings?.transition, WALLPAPER_TRANSITIONS),
   };
 }
 
@@ -76,6 +115,7 @@ export function buildSettings(id, ctx, initialState) {
   let wallpaperFailedAction = null;
   let wallpaperRevision = 0;
   let wallpaperActionRunner = null;
+  let openAnimationPanel = null;
   let firstResize = true;
   let resizeObserver;
   let unsubscribe = () => {};
@@ -206,27 +246,30 @@ export function buildSettings(id, ctx, initialState) {
     animationCard.append(
       el('span', 'settings-card-eyebrow', 'MOTION'),
       el('h2', '', 'Window animations'),
-      el('p', 'settings-description', 'Choose how windows appear and close. Random picks an animation each time.')
+      el('p', 'settings-description', 'Choose animations for each desktop action. When several are selected, one is chosen at random.')
     );
-    animationCard.append(makeChoiceGroup('Window animation', [
-      ['fade', 'Fade', 'Fade in and out'],
-      ['zoom', 'Zoom', 'Scale into and out of view'],
-      ['slide-up', 'Slide Up', 'Move gently from below'],
-      ['slide-left', 'Slide', 'Move horizontally'],
-      ['flip', 'Flip', 'Turn into and out of view'],
-      ['none', 'None', 'Open and close without animation'],
-      ['random', 'Random', 'Choose a different style each time'],
-    ], WINDOW_ANIMATIONS.has(current.windowAnimation) ? current.windowAnimation : 'fade', value => {
-      try {
-        settings?.setWindowAnimation?.(value);
-        current = snapshot();
-        if (!WINDOW_ANIMATIONS.has(current.windowAnimation)) current.windowAnimation = value;
-        renderPage();
-      } catch (error) {
-        const status = animationCard.querySelector('.settings-inline-status');
-        setMessage(status, error?.message || 'The window animation could not be changed.', 'error');
-      }
-    }));
+    const animationPreferences = current.animationPreferences || {};
+    const animationRows = el('div', 'settings-animation-rows');
+    for (const [event, config] of Object.entries(ANIMATION_OPTIONS)) {
+      const row = el('section', 'settings-animation-row');
+      row.append(el('h3', '', config.label));
+      row.append(makeAnimationPicker({
+        id: `animation-${event}`,
+        label: config.label,
+        choices: config.choices,
+        selected: normalizeChoices(animationPreferences[event], config.choices, event === 'showDesktop' || event === 'overview' ? ['zoom'] : ['fade']),
+        onChange: selected => {
+          try {
+            settings?.setAnimationPreferences?.(event, selected);
+            current = snapshot();
+          } catch (error) {
+            setMessage(animationStatus, error?.message || 'The animation preference could not be changed.', 'error');
+          }
+        },
+      }));
+      animationRows.append(row);
+    }
+    animationCard.append(animationRows);
     const animationStatus = el('p', 'settings-inline-status');
     animationStatus.setAttribute('role', 'status');
     animationStatus.hidden = true;
@@ -462,15 +505,13 @@ export function buildSettings(id, ctx, initialState) {
       enhanceSelect(select);
     }
     scheduleCard.append(el('div', 'settings-subheading', 'Transition'));
-    scheduleCard.append(makeChoiceGroup('Wallpaper transition', [
-      ['fade', 'Fade', 'Blend between images'],
-      ['none', 'None', 'Wait for the image, then switch'],
-      ['zoom', 'Zoom', 'Scale the new image into view'],
-      ['slide-left', 'Slide from right', 'Move the new image in from the right'],
-      ['slide-right', 'Slide from left', 'Move the new image in from the left'],
-      ['wipe', 'Wipe', 'Reveal the new image across the screen'],
-      ['random', 'Random', 'Choose a different transition each time'],
-    ], wallpaperDraft.transition, value => { wallpaperDraft.transition = value; queueWallpaperUpdate(); }));
+    scheduleCard.append(makeAnimationPicker({
+      id: 'wallpaper-transition',
+      label: 'Wallpaper transition',
+      choices: WALLPAPER_TRANSITIONS,
+      selected: wallpaperDraft.transition,
+      onChange: selected => { wallpaperDraft.transition = selected; queueWallpaperUpdate(); },
+    }));
     controlGrid.append(modeCard, scheduleCard);
     body.append(controlGrid);
 
@@ -511,6 +552,81 @@ export function buildSettings(id, ctx, initialState) {
       group.append(button);
     }
     return group;
+  }
+
+  function makeAnimationPicker({ id, label, choices, selected, onChange }) {
+    let currentSelection = normalizeChoices(selected, choices);
+    const picker = el('div', 'settings-animation-picker');
+    const trigger = el('button', 'settings-animation-trigger');
+    trigger.type = 'button';
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-controls', `${id}-panel`);
+    const triggerTitle = el('span', 'settings-animation-trigger-title', label);
+    const triggerSummary = el('span', 'settings-animation-trigger-summary');
+    const chevron = el('span', 'settings-animation-chevron', '⌄');
+    chevron.setAttribute('aria-hidden', 'true');
+    trigger.append(triggerTitle, triggerSummary, chevron);
+    const panel = el('div', 'settings-animation-panel');
+    panel.id = `${id}-panel`;
+    panel.setAttribute('role', 'region');
+    panel.setAttribute('aria-label', `${label} options`);
+    const optionList = el('div', 'settings-animation-options');
+    panel.append(optionList);
+
+    const updateSummaryAndChoices = () => {
+      triggerSummary.textContent = currentSelection.length === 0
+        ? 'None'
+        : currentSelection.length === 1
+          ? choices.find(([value]) => value === currentSelection[0])?.[1] || '1 selected'
+          : `${currentSelection.length} selected`;
+      optionList.replaceChildren();
+      const noneLabel = document.createElement('label');
+      noneLabel.className = 'settings-animation-option settings-animation-none';
+      const noneInput = document.createElement('input');
+      noneInput.type = 'checkbox';
+      noneInput.checked = currentSelection.length === 0;
+      noneInput.setAttribute('aria-label', `No ${label.toLowerCase()} animation`);
+      noneLabel.append(noneInput, el('span', '', 'None'));
+      noneInput.addEventListener('change', () => {
+        currentSelection = noneInput.checked ? [] : choices.map(([value]) => value);
+        updateSummaryAndChoices();
+        onChange([...currentSelection]);
+      });
+      optionList.append(noneLabel);
+
+      for (const [value, title, description] of choices) {
+        const option = document.createElement('label');
+        option.className = 'settings-animation-option';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = currentSelection.includes(value);
+        input.setAttribute('aria-label', title);
+        option.append(input, el('span', 'settings-animation-copy'));
+        option.querySelector('.settings-animation-copy').append(el('strong', '', title), el('small', '', description));
+        input.addEventListener('change', () => {
+          currentSelection = input.checked
+            ? [...currentSelection, value]
+            : currentSelection.filter(item => item !== value);
+          currentSelection = normalizeChoices(currentSelection, choices);
+          updateSummaryAndChoices();
+          onChange([...currentSelection]);
+        });
+        optionList.append(option);
+      }
+    };
+
+    const setOpen = open => {
+      openAnimationPanel = open ? id : null;
+      picker.classList.toggle('is-open', open);
+      trigger.setAttribute('aria-expanded', String(open));
+      panel.setAttribute('aria-hidden', String(!open));
+      panel.inert = !open;
+    };
+    trigger.addEventListener('click', () => setOpen(openAnimationPanel !== id));
+    updateSummaryAndChoices();
+    setOpen(openAnimationPanel === id);
+    picker.append(trigger, panel);
+    return picker;
   }
 
   function moveSelected(index, delta) {

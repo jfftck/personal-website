@@ -41,8 +41,17 @@ const THEME_KEY   = 'desktop-theme';
 const TIME_KEY    = 'desktop-time-24h';
 const WALLPAPER_KEY = 'desktop-wallpaper-settings-v1';
 const WINDOW_ANIMATION_KEY = 'desktop-window-animation';
+const ANIMATION_PREFERENCES_KEY = 'desktop-animation-preferences-v1';
 const WINDOW_ANIMATION_EFFECTS = ['fade', 'zoom', 'slide-up', 'slide-left', 'flip'];
+const SHOW_DESKTOP_ANIMATION_EFFECTS = ['fade', 'zoom', 'slide-up', 'tilt-up', 'flip'];
+const OVERVIEW_ANIMATION_EFFECTS = ['fade', 'zoom', 'slide-up', 'rubber-band'];
 const WALLPAPER_TRANSITION_EFFECTS = ['fade', 'zoom', 'slide-left', 'slide-right', 'wipe'];
+const ANIMATION_EVENT_EFFECTS = {
+  windowOpen: WINDOW_ANIMATION_EFFECTS,
+  windowClose: WINDOW_ANIMATION_EFFECTS,
+  showDesktop: SHOW_DESKTOP_ANIMATION_EFFECTS,
+  overview: OVERVIEW_ANIMATION_EFFECTS,
+};
 const REMINDER_KEY = 'desktop-reminders';
 const REMINDER_BACKGROUND_KEY = 'desktop-reminder-background';
 let calendarDate  = new Date();
@@ -64,19 +73,63 @@ function notifyDesktopSettingsChanged() {
   window.dispatchEvent(new Event('desktop-settings-change'));
 }
 
-function getWindowAnimationPreference() {
-  const value = localStorage.getItem(WINDOW_ANIMATION_KEY);
-  return ['none', ...WINDOW_ANIMATION_EFFECTS, 'random'].includes(value) ? value : 'fade';
+function normalizeAnimationChoices(value, effects, fallback) {
+  if (Array.isArray(value)) return [...new Set(value.filter(effect => effects.includes(effect)))];
+  if (value === 'none') return [];
+  if (value === 'random') return [...effects];
+  return effects.includes(value) ? [value] : [...fallback];
 }
 
-function chooseWindowAnimation(preference = getWindowAnimationPreference()) {
-  if (preference !== 'random') return preference;
-  return WINDOW_ANIMATION_EFFECTS[Math.floor(Math.random() * WINDOW_ANIMATION_EFFECTS.length)];
+function getAnimationPreferences() {
+  const defaults = {
+    windowOpen: ['fade'],
+    windowClose: ['fade'],
+    showDesktop: ['zoom'],
+    overview: ['zoom'],
+  };
+  try {
+    const stored = JSON.parse(localStorage.getItem(ANIMATION_PREFERENCES_KEY) || 'null');
+    if (stored && typeof stored === 'object') {
+      return Object.fromEntries(Object.entries(ANIMATION_EVENT_EFFECTS).map(([event, effects]) => [
+        event,
+        normalizeAnimationChoices(stored[event], effects, defaults[event]),
+      ]));
+    }
+  } catch { /* Fall through to the previous preference or defaults. */ }
+
+  const legacy = localStorage.getItem(WINDOW_ANIMATION_KEY);
+  if (legacy !== null) {
+    const windowChoices = normalizeAnimationChoices(legacy, WINDOW_ANIMATION_EFFECTS, ['fade']);
+    defaults.windowOpen = windowChoices;
+    defaults.windowClose = [...windowChoices];
+  }
+  return defaults;
 }
 
-function setWindowAnimationPreference(value) {
-  const next = ['none', ...WINDOW_ANIMATION_EFFECTS, 'random'].includes(value) ? value : 'fade';
-  localStorage.setItem(WINDOW_ANIMATION_KEY, next);
+function chooseAnimation(preferences) {
+  if (!preferences?.length) return 'none';
+  return preferences[Math.floor(Math.random() * preferences.length)];
+}
+
+function chooseAnimationForEvent(event) {
+  const effects = ANIMATION_EVENT_EFFECTS[event] || [];
+  return chooseAnimation(normalizeAnimationChoices(getAnimationPreferences()[event], effects, []));
+}
+
+function setAnimationPreference(event, value) {
+  const effects = ANIMATION_EVENT_EFFECTS[event];
+  if (!effects) throw new Error('Unknown animation setting.');
+  const preferences = getAnimationPreferences();
+  preferences[event] = normalizeAnimationChoices(value, effects, []);
+  localStorage.setItem(ANIMATION_PREFERENCES_KEY, JSON.stringify(preferences));
+  const openClose = preferences.windowOpen.length === preferences.windowClose.length &&
+    preferences.windowOpen.every(effect => preferences.windowClose.includes(effect));
+  if (openClose) {
+    localStorage.setItem(
+      WINDOW_ANIMATION_KEY,
+      preferences.windowOpen.length === 0 ? 'none' : preferences.windowOpen.length === 1 ? preferences.windowOpen[0] : 'random',
+    );
+  }
   notifyDesktopSettingsChanged();
 }
 
@@ -756,7 +809,7 @@ function openApp(type, insertIntoColId = null, initialState = null) {
   const el = createAppLoadSurface(def.title);
   el.dataset.id = id;
   el.dataset.type = type;
-  const windowAnimation = chooseWindowAnimation();
+  const windowAnimation = chooseAnimationForEvent('windowOpen');
   el.dataset.windowAnimation = windowAnimation;
   if (
     !S._skipSave &&
@@ -791,7 +844,7 @@ function openApp(type, insertIntoColId = null, initialState = null) {
 function closeApp(id) {
   const record = S.apps.find(app => app.id === id);
   if (!record || record.closing) return;
-  const animation = chooseWindowAnimation();
+  const animation = chooseAnimationForEvent('windowClose');
   if (
     animation !== 'none' &&
     !document.body.classList.contains('mod-overview') &&
@@ -1120,13 +1173,37 @@ function updateStripLayout() {
 let desktopWidgetNotes = [];
 
 function setShowDesktop(show) {
-  if (show && document.body.classList.contains('mod-overview')) exitOverview();
+  if (show && document.body.classList.contains('mod-overview')) exitOverview({ animate: false });
+  window.clearTimeout(desktopReturnAnimationTimer);
+  document.body.classList.remove('desktop-returning');
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    for (const record of S.apps) {
+      const animation = chooseAnimationForEvent('showDesktop');
+      record.el.dataset.desktopAnimation = animation;
+      record.el.dataset.desktopDirection = show ? 'out' : 'in';
+      record.el.classList.remove('desktop-transitioning');
+      void record.el.offsetWidth;
+      if (animation !== 'none') record.el.classList.add('desktop-transitioning');
+    }
+  } else {
+    for (const record of S.apps) record.el.classList.remove('desktop-transitioning');
+  }
   appStripWrapper.inert = show;
   document.body.classList.toggle('mod-show-desktop', show);
+  if (!show && S.apps.some(record => record.el.classList.contains('desktop-transitioning'))) {
+    document.body.classList.add('desktop-returning');
+    desktopReturnAnimationTimer = window.setTimeout(() => {
+      document.body.classList.remove('desktop-returning');
+      for (const record of S.apps) record.el.classList.remove('desktop-transitioning');
+    }, 560);
+  }
   showDesktopBtn.setAttribute('aria-pressed', String(show));
   showDesktopBtn.setAttribute('aria-label', show ? 'Return to apps' : 'Show desktop');
   showDesktopBtn.title = show ? 'Return to apps' : 'Show desktop';
 }
+
+let desktopReturnAnimationTimer = 0;
+let overviewAnimationTimer = 0;
 
 function updateDesktopNotes(notes) {
   desktopWidgetNotes = notes.filter(note => note.desktop);
@@ -1350,7 +1427,7 @@ const wallpaperPreloads = new Map();
 function readWallpaperSettings() {
   try {
     const stored = JSON.parse(localStorage.getItem(WALLPAPER_KEY) || '{}');
-    const transition = stored.transition;
+    const transition = normalizeAnimationChoices(stored.transition, WALLPAPER_TRANSITION_EFFECTS, ['fade']);
     return {
       selected: Array.isArray(stored.selected) ? stored.selected.filter(url => typeof url === 'string') : [],
       mode: stored.mode === 'cycle' ? 'cycle' : 'random',
@@ -1358,13 +1435,13 @@ function readWallpaperSettings() {
       intervalMinutes: WALLPAPER_INTERVALS.includes(Number(stored.intervalMinutes))
         ? Number(stored.intervalMinutes)
         : 60,
-      transition: ['none', ...WALLPAPER_TRANSITION_EFFECTS, 'random'].includes(transition) ? transition : 'fade',
+      transition,
       currentUrl: typeof stored.currentUrl === 'string' ? stored.currentUrl : '',
       nextUrl: typeof stored.nextUrl === 'string' ? stored.nextUrl : '',
       nextChangeAt: Number.isFinite(stored.nextChangeAt) ? stored.nextChangeAt : 0,
     };
   } catch {
-    return { selected: [], mode: 'random', rotation: 'visit', intervalMinutes: 60, transition: 'fade', currentUrl: '', nextUrl: '', nextChangeAt: 0 };
+    return { selected: [], mode: 'random', rotation: 'visit', intervalMinutes: 60, transition: ['fade'], currentUrl: '', nextUrl: '', nextChangeAt: 0 };
   }
 }
 
@@ -1430,12 +1507,8 @@ async function setDesktopWallpaper(url, transition = 'none') {
   if (appliedWallpaperUrl === absoluteUrl) return;
 
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const validTransition = ['none', ...WALLPAPER_TRANSITION_EFFECTS, 'random'].includes(transition)
-    ? transition
-    : 'fade';
-  const effect = validTransition === 'random'
-    ? WALLPAPER_TRANSITION_EFFECTS[Math.floor(Math.random() * WALLPAPER_TRANSITION_EFFECTS.length)]
-    : validTransition;
+  const effects = normalizeAnimationChoices(transition, WALLPAPER_TRANSITION_EFFECTS, ['fade']);
+  const effect = chooseAnimation(effects);
   if (effect !== 'none' && !reduceMotion) {
     const layer = document.createElement('div');
     layer.className = 'desktop-wallpaper-transition';
@@ -1647,9 +1720,7 @@ async function saveWallpaperPreferences(draft) {
   const intervalMinutes = WALLPAPER_INTERVALS.includes(Number(draft?.intervalMinutes))
     ? Number(draft.intervalMinutes)
     : 60;
-  const transition = ['none', ...WALLPAPER_TRANSITION_EFFECTS, 'random'].includes(draft?.transition)
-    ? draft.transition
-    : 'fade';
+  const transition = normalizeAnimationChoices(draft?.transition, WALLPAPER_TRANSITION_EFFECTS, ['fade']);
   const currentUrl = selected.includes(wallpaperSettings.currentUrl)
     ? wallpaperSettings.currentUrl
     : mode === 'cycle'
@@ -2097,12 +2168,12 @@ const appCtx = {
     getSnapshot: () => ({
       theme: effectiveTheme(),
       themeOverride: localStorage.getItem(THEME_KEY) || 'system',
-      windowAnimation: getWindowAnimationPreference(),
+      animationPreferences: getAnimationPreferences(),
       use24HourTime,
       notificationsEnabled: systemNotificationsEnabled,
     }),
     setTheme: value => applyTheme(value === 'system' ? null : value),
-    setWindowAnimation: setWindowAnimationPreference,
+    setAnimationPreferences: setAnimationPreference,
     set24HourTime: setTimeFormat,
     setNotificationsEnabled: setSystemNotificationsEnabled,
     loadWallpaper: loadWallpaperForSettings,
@@ -2483,13 +2554,51 @@ function _ovWheelHandler(e) {
 }
 
 function enterOverview() {
+  window.clearTimeout(overviewAnimationTimer);
+  document.body.classList.remove('overview-exiting');
   document.body.classList.add('mod-overview');
   overviewBtn.setAttribute('aria-pressed', 'true');
   window.addEventListener('wheel', _ovWheelHandler, { passive: false });
-  requestAnimationFrame(() => positionOverview());
+  requestAnimationFrame(() => {
+    positionOverview();
+    animateOverviewWindows('entering');
+  });
 }
 
-function exitOverview() {
+function animateOverviewWindows(direction) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const windows = [...appStrip.querySelectorAll('.app-window')];
+  const center = window.innerWidth / 2;
+  const centerFirst = windows
+    .map((el, index) => ({ el, index, distance: Math.abs(el.getBoundingClientRect().left + el.getBoundingClientRect().width / 2 - center) }))
+    .sort((a, b) => a.distance - b.distance);
+  const rank = new Map(centerFirst.map((entry, index) => [entry.el, index]));
+  windows.forEach(el => {
+    const animation = chooseAnimationForEvent('overview');
+    el.dataset.overviewAnimation = animation;
+    el.style.setProperty('--overview-stagger', `${(rank.get(el) || 0) * 72}ms`);
+    el.classList.remove('overview-window-entering', 'overview-window-exiting');
+    if (animation !== 'none') el.classList.add(`overview-window-${direction}`);
+  });
+  overviewAnimationTimer = window.setTimeout(() => {
+    for (const el of windows) {
+      el.classList.remove('overview-window-entering', 'overview-window-exiting');
+      el.style.removeProperty('--overview-stagger');
+    }
+    document.body.classList.remove('overview-exiting');
+  }, 720);
+}
+
+function exitOverview({ animate = true } = {}) {
+  window.clearTimeout(overviewAnimationTimer);
+  if (animate) animateOverviewWindows('exiting');
+  else {
+    for (const el of appStrip.querySelectorAll('.app-window')) {
+      el.classList.remove('overview-window-entering', 'overview-window-exiting');
+      el.style.removeProperty('--overview-stagger');
+    }
+  }
+  document.body.classList.toggle('overview-exiting', animate);
   document.body.classList.remove('mod-overview');
   overviewBtn.setAttribute('aria-pressed', 'false');
   window.removeEventListener('wheel', _ovWheelHandler);
