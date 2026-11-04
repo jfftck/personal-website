@@ -164,7 +164,7 @@
   :root[data-window-tints="custom"] {
     --window-background-tint: var(--window-dark-tint-color);
     --window-foreground-tint: var(--window-light-tint-color, #fff);
-    --app-bg: oklch(from var(--window-background-tint) l c h / 0.92);
+    --app-bg: oklch(from var(--window-background-tint) l c h / var(--window-background-opacity, 92%));
     --app-text: var(--window-foreground-tint);
     --app-border: oklch(from var(--window-foreground-tint) l c h / 0.18);
     --toolbar-bg: oklch(from var(--window-background-tint) l c h / 0.78);
@@ -178,7 +178,7 @@
   :root[data-window-tints="custom"][data-theme="light"] {
     --window-background-tint: var(--window-light-tint-color, #fff);
     --window-foreground-tint: var(--window-dark-tint-color);
-    --app-bg: oklch(from var(--window-background-tint) l c h / 0.94);
+    --app-bg: oklch(from var(--window-background-tint) l c h / var(--window-background-opacity, 92%));
     --app-text: var(--window-foreground-tint);
     --app-border: oklch(from var(--window-foreground-tint) l c h / 0.18);
     --toolbar-bg: oklch(from var(--window-background-tint) l c h / 0.86);
@@ -193,7 +193,7 @@
     :root:not([data-theme])[data-window-tints="custom"] {
       --window-background-tint: var(--window-light-tint-color, #fff);
       --window-foreground-tint: var(--window-dark-tint-color);
-      --app-bg: oklch(from var(--window-background-tint) l c h / 0.94);
+      --app-bg: oklch(from var(--window-background-tint) l c h / var(--window-background-opacity, 92%));
       --app-text: var(--window-foreground-tint);
       --app-border: oklch(from var(--window-foreground-tint) l c h / 0.18);
       --toolbar-bg: oklch(from var(--window-background-tint) l c h / 0.86);

@@ -93,6 +93,9 @@ test('Wallpaper settings apply changes immediately without save or cancel action
 
   const wallpaperPage = page.locator('.settings-app').last();
   await expect(wallpaperPage.getByText('Eligible wallpapers')).toBeVisible();
+  await expect(wallpaperPage.getByText('Selected', { exact: true })).toHaveCount(0);
+  const selectedWallpaper = wallpaperPage.locator('.settings-wallpaper-tile:has(input:checked)');
+  await expect(selectedWallpaper.locator('input')).toBeChecked();
   await expect(wallpaperPage.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
   await expect(wallpaperPage.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
   await expect(wallpaperPage.locator('.settings-subheading')).toHaveCount(0);
@@ -143,6 +146,50 @@ test('accent color choices are browser-gated, persist, and retain readable contr
   await expect(settings.getByRole('button', { name: 'Blue, default' })).toHaveAttribute('aria-pressed', 'true');
   await settings.getByRole('button', { name: 'Purple', exact: true }).click();
   await expect(settings.getByRole('button', { name: 'Purple', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await settings.locator('.settings-theme-choice[data-theme="dark"]').click();
+  await expect(settings.getByText('Selected', { exact: true })).toHaveCount(0);
+  const focusColor = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.borderColor = 'var(--focus-color)';
+    document.body.append(probe);
+    const color = getComputedStyle(probe).borderTopColor;
+    probe.remove();
+    return color;
+  });
+  expect(await settings.locator('.settings-nav-item.is-active').evaluate(element => getComputedStyle(element).borderTopColor)).toBe(focusColor);
+  const selectionStyles = await settings.evaluate(root => {
+    const wallpaper = document.createElement('label');
+    wallpaper.className = 'settings-wallpaper-tile';
+    const checked = document.createElement('input');
+    checked.type = 'checkbox';
+    checked.checked = true;
+    wallpaper.append(checked);
+    root.querySelector('.settings-main').append(wallpaper);
+    const selections = [
+      ...root.querySelectorAll('.settings-theme-choice[aria-pressed="true"], .settings-accent-choice[aria-pressed="true"], .settings-tint-choice[aria-pressed="true"]'),
+      wallpaper,
+    ];
+    return selections.map(element => {
+      const style = getComputedStyle(element);
+      return { borderColor: style.borderTopColor, outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth };
+    });
+  });
+  expect(selectionStyles.length).toBeGreaterThan(4);
+  for (const selectionStyle of selectionStyles) {
+    expect(selectionStyle.borderColor).toBe(focusColor);
+    expect(selectionStyle.outlineStyle).toBe('none');
+    expect(selectionStyle.outlineWidth).toBe('0px');
+  }
+  const selectedAccent = settings.locator('.settings-accent-choice[aria-pressed="true"]');
+  await selectedAccent.focus();
+  await page.keyboard.press('ArrowDown');
+  const keyboardFocusStyle = await selectedAccent.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { matches: element.matches(':focus-visible'), color: style.outlineColor, width: style.outlineWidth };
+  });
+  expect(keyboardFocusStyle.matches).toBe(true);
+  expect(keyboardFocusStyle.color).toBe(focusColor);
+  expect(keyboardFocusStyle.width).toBe('2px');
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.accentColor)).toBe('purple');
   expect(await page.evaluate(() => localStorage.getItem('desktop-accent-color'))).toBe('purple');
   const purpleSurface = await settings.evaluate(element =>
@@ -178,7 +225,7 @@ test('accent color choices are browser-gated, persist, and retain readable contr
   for (const color of contrasts) expect(color.ratio, `${color.name} with white text`).toBeGreaterThanOrEqual(4.5);
 
   await page.reload();
-  await page.locator('#welcome-win-close').click();
+  await page.locator('#welcome-win-close').evaluate(button => button.click());
   const restoredSettings = await openUtility(page, 'settings');
   await expect(restoredSettings.getByRole('button', { name: 'Purple', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.accentColor)).toBe('purple');
@@ -240,6 +287,7 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
     darkLightness: 6,
     lightTint: 'purple',
     lightLightness: 75,
+    backgroundOpacity: 92,
   });
   await expect.poll(() => lightness.evaluate(input => document.activeElement === input)).toBe(true);
   await lightness.scrollIntoViewIfNeeded();
@@ -370,6 +418,7 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
     darkLightness: 25,
     lightTint: 'none',
     lightLightness: 75,
+    backgroundOpacity: 92,
   });
   const resetTints = restoredSettings.getByRole('button', { name: 'Reset to defaults' });
   await expect(resetTints).toBeEnabled();
@@ -379,6 +428,7 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
     darkLightness: 25,
     lightTint: 'none',
     lightLightness: 100,
+    backgroundOpacity: 92,
   });
   await expect(restoredSettings.getByRole('button', { name: 'Reset to defaults' })).toBeDisabled();
 });
@@ -412,11 +462,113 @@ test('tint sliders debounce live previews and save the settled value', async ({ 
     darkLightness: 25,
     lightTint: 'none',
     lightLightness: 84,
+    backgroundOpacity: 92,
   });
   await expect.poll(() => page.evaluate(() => window.tintStyleWrites)).toBe(2);
   await page.evaluate(() => {
     Object.getPrototypeOf(window.tintSetPropertyTarget).setProperty = window.tintSetPropertyOriginal;
   });
+});
+
+test('window background opacity previews, persists after interaction, and resets', async ({ page }) => {
+  const settings = await openUtility(page, 'settings');
+  const supports = await page.evaluate(() =>
+    CSS.supports('color', 'oklch(from #006699 calc(l + 0.1) c h)'),
+  );
+  if (!supports) return;
+
+  const key = 'desktop-window-tints-v3';
+  const opacity = settings.getByRole('slider', { name: 'Window background opacity' });
+  await expect(opacity).toHaveValue('92');
+  expect(await page.evaluate(storageKey => localStorage.getItem(storageKey), key)).toBeNull();
+
+  await opacity.focus();
+  await page.keyboard.press('Home');
+  await expect(opacity).toHaveValue('0');
+  await expect.poll(() => page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--window-background-opacity').trim(),
+  )).toBe('0%');
+  await expect.poll(() => page.evaluate(storageKey => JSON.parse(localStorage.getItem(storageKey)), key))
+    .toMatchObject({ backgroundOpacity: 0 });
+
+  await settings.getByRole('button', { name: 'Reset to defaults' }).click();
+  await expect(settings.getByRole('slider', { name: 'Window background opacity' })).toHaveValue('92');
+  await expect.poll(() => page.evaluate(storageKey => JSON.parse(localStorage.getItem(storageKey)), key))
+    .toEqual({
+      darkTint: 'blue',
+      darkLightness: 25,
+      lightTint: 'none',
+      lightLightness: 100,
+      backgroundOpacity: 92,
+    });
+});
+
+test('Tab wraps through the focused window and Ctrl arrows or Vim keys move between windows', async ({ page }) => {
+  const settings = await openUtility(page, 'settings');
+  await expect(settings.locator('.settings-layout')).toBeVisible();
+  const calculator = await openUtility(page, 'calculator');
+  await expect(calculator.locator('.calc')).toBeVisible();
+
+  const targetDirection = await page.evaluate(() => {
+    const current = document.querySelector('.app-window.focused');
+    const target = [...document.querySelectorAll('.app-window')].find(window => window !== current);
+    if (!current || !target) return null;
+    const currentRect = current.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const dx = targetRect.left + targetRect.width / 2 - currentRect.left - currentRect.width / 2;
+    const dy = targetRect.top + targetRect.height / 2 - currentRect.top - currentRect.height / 2;
+    const direction = Math.abs(dx) >= Math.abs(dy)
+      ? (dx < 0 ? 'left' : 'right')
+      : (dy < 0 ? 'up' : 'down');
+    return { direction, target: target.dataset.type };
+  });
+  expect(targetDirection).not.toBeNull();
+  const arrowKey = {
+    left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown',
+  }[targetDirection.direction];
+  const reverseVimKey = {
+    left: 'l', right: 'h', up: 'j', down: 'k',
+  }[targetDirection.direction];
+  await page.keyboard.press(`Control+${arrowKey}`);
+  await expect(page.locator('.app-window.focused')).toHaveAttribute('data-type', targetDirection.target);
+  await expect.poll(() => page.evaluate(() =>
+    Boolean(document.activeElement.closest('.app-window.focused')),
+  )).toBe(true);
+
+  await page.keyboard.press(`Control+${reverseVimKey}`);
+  await expect(page.locator('.app-window.focused')).toHaveAttribute('data-type', 'calculator');
+
+  await page.evaluate(() => {
+    const app = document.querySelector('.app-window.focused');
+    const controls = [...app.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]',
+    )].filter(element => !element.closest('[hidden], [inert], [aria-hidden="true"]')
+      && getComputedStyle(element).visibility !== 'hidden'
+      && element.getClientRects().length > 0);
+    controls.at(-1)?.focus();
+  });
+  await page.keyboard.press('Tab');
+  const tabForwardResult = await page.evaluate(() => {
+    const app = document.querySelector('.app-window.focused');
+    const controls = [...app.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]',
+    )].filter(element => !element.closest('[hidden], [inert], [aria-hidden="true"]')
+      && getComputedStyle(element).visibility !== 'hidden'
+      && element.getClientRects().length > 0);
+    return { inApp: app.contains(document.activeElement), first: controls[0] === document.activeElement };
+  });
+  expect(tabForwardResult).toEqual({ inApp: true, first: true });
+  await page.keyboard.press('Shift+Tab');
+  await expect.poll(() => page.evaluate(() => {
+    const app = document.querySelector('.app-window.focused');
+    const controls = [...app.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]',
+    )].filter(element => !element.closest('[hidden], [inert], [aria-hidden="true"]')
+      && getComputedStyle(element).visibility !== 'hidden'
+      && element.getClientRects().length > 0);
+    return controls.at(-1) === document.activeElement;
+  })).toBe(true);
+  await expect(page.locator('.app-window.focused')).toHaveAttribute('data-type', 'calculator');
 });
 
 test('version-two tint settings keep their light tint and use the new dark default', async ({ page }) => {

@@ -51,6 +51,7 @@ const DEFAULT_WINDOW_TINTS = Object.freeze({
   darkLightness: 25,
   lightTint: 'none',
   lightLightness: 100,
+  backgroundOpacity: 92,
 });
 const TIME_KEY    = 'desktop-time-24h';
 const WALLPAPER_KEY = 'desktop-wallpaper-settings-v1';
@@ -193,7 +194,11 @@ function normalizeWindowTints(value = {}) {
   const lightLightness = Number.isFinite(Number(savedLightLightness))
     ? Math.max(75, Math.min(lightMaximum, Math.round(Number(savedLightLightness))))
     : DEFAULT_WINDOW_TINTS.lightLightness;
-  return { darkTint, darkLightness, lightTint, lightLightness };
+  const savedBackgroundOpacity = value?.backgroundOpacity ?? DEFAULT_WINDOW_TINTS.backgroundOpacity;
+  const backgroundOpacity = Number.isFinite(Number(savedBackgroundOpacity))
+    ? Math.max(0, Math.min(100, Math.round(Number(savedBackgroundOpacity))))
+    : DEFAULT_WINDOW_TINTS.backgroundOpacity;
+  return { darkTint, darkLightness, lightTint, lightLightness, backgroundOpacity };
 }
 
 function readSavedWindowTints() {
@@ -226,6 +231,7 @@ function applyWindowTintAttributes(value) {
   root.dataset.windowLightTint = tints.lightTint;
   root.style.setProperty('--window-dark-lightness', `${tints.darkLightness}%`);
   root.style.setProperty('--window-lightness', `${tints.lightLightness}%`);
+  root.style.setProperty('--window-background-opacity', `${tints.backgroundOpacity}%`);
 }
 
 function setWindowTints(value) {
@@ -1079,6 +1085,57 @@ function focusApp(id) {
     requestAnimationFrame(() => positionOverview());
   }
   if (!S._skipSave) saveSession();
+}
+
+function getFocusableControls(container) {
+  if (!container) return [];
+  return [...container.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]',
+  )].filter(element => (
+    !element.disabled
+    && !element.closest('[hidden], [inert], [aria-hidden="true"]')
+    && getComputedStyle(element).visibility !== 'hidden'
+    && element.getClientRects().length > 0
+  ));
+}
+
+function focusWindowInDirection(direction) {
+  const current = S.apps.find(app => app.id === S.focusedId);
+  if (!current?.el?.isConnected) return;
+  const origin = current.el.getBoundingClientRect();
+  const originX = origin.left + origin.width / 2;
+  const originY = origin.top + origin.height / 2;
+  let nearest = null;
+  let nearestScore = Infinity;
+
+  for (const candidate of S.apps) {
+    if (candidate.id === current.id || !candidate.el?.isConnected) continue;
+    const rect = candidate.el.getBoundingClientRect();
+    const dx = rect.left + rect.width / 2 - originX;
+    const dy = rect.top + rect.height / 2 - originY;
+    const primary = direction === 'left' ? -dx
+      : direction === 'right' ? dx
+        : direction === 'up' ? -dy : dy;
+    if (primary <= 0) continue;
+    const perpendicular = direction === 'left' || direction === 'right' ? Math.abs(dy) : Math.abs(dx);
+    const score = primary + perpendicular * 1.5;
+    if (score < nearestScore) {
+      nearest = candidate;
+      nearestScore = score;
+    }
+  }
+
+  if (!nearest) return;
+  focusApp(nearest.id);
+  requestAnimationFrame(() => {
+    if (S.focusedId !== nearest.id || !nearest.el?.isConnected) return;
+    const controls = getFocusableControls(nearest.el);
+    if (controls.length) controls[0].focus({ preventScroll: true });
+    else {
+      nearest.el.tabIndex = -1;
+      nearest.el.focus({ preventScroll: true });
+    }
+  });
 }
 
 function scrollToApp(id) {
@@ -2613,6 +2670,30 @@ document.addEventListener('keydown', e => {
   const helpOpen  = !helpOverlay.hasAttribute('hidden');
   const inContent = e.target.closest('.app-content');
   const isTyping  = ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName) || e.target.isContentEditable;
+  const inputType = e.target.tagName === 'INPUT' ? e.target.type : '';
+  const isTextEntry = e.target.isContentEditable
+    || e.target.tagName === 'TEXTAREA'
+    || e.target.tagName === 'SELECT'
+    || (e.target.tagName === 'INPUT' && !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(inputType));
+
+  if (e.key === 'Tab') {
+    const appWindow = e.target.closest('.app-window');
+    const focusScope = e.target.closest('dialog[open], [role="dialog"]')
+      || (appWindow?.dataset.id === S.focusedId ? appWindow : null);
+    const controls = getFocusableControls(focusScope);
+    if (controls.length) {
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === focusScope)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    return;
+  }
 
   if (e.key === 'Escape') {
     if (!systemPanel.hidden) { closeSystemPanel(); systemTimeBtn.focus(); return; }
@@ -2624,6 +2705,25 @@ document.addEventListener('keydown', e => {
   }
 
   if (e.key === '?' && !isTyping && !menuOpen) { e.preventDefault(); toggleHelp(); return; }
+
+  const directionByKey = {
+    arrowleft: 'left',
+    arrowright: 'right',
+    arrowup: 'up',
+    arrowdown: 'down',
+    h: 'left',
+    l: 'right',
+    k: 'up',
+    j: 'down',
+  };
+  const windowDirection = directionByKey[e.key.toLowerCase()];
+  if (e.ctrlKey && windowDirection && !isTextEntry && !helpOpen && !menuOpen
+    && systemPanel.hidden && !document.getElementById('win-menu-open')
+    && !e.target.closest('[role="dialog"], dialog[open]')) {
+    e.preventDefault();
+    focusWindowInDirection(windowDirection);
+    return;
+  }
 
   if ((e.key === '[' || e.key === ']') && !isTyping && !helpOpen && !menuOpen) {
     e.preventDefault();
@@ -2652,10 +2752,6 @@ document.addEventListener('keydown', e => {
     if (inSharedCol && e.key === 'ArrowDown') { e.preventDefault(); moveWindowDown(); return; }
   }
 
-  if (e.key === 'Tab' && !inContent) {
-    e.preventDefault();
-    e.shiftKey ? focusPrevApp() : focusNextApp();
-  }
 });
 
 helpCloseBtn.addEventListener('click', () => closeHelp());

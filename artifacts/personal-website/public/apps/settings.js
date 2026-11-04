@@ -37,6 +37,7 @@ const DEFAULT_WINDOW_TINTS = {
   darkLightness: 25,
   lightTint: 'none',
   lightLightness: 100,
+  backgroundOpacity: 92,
 };
 const WINDOW_DARK_TINT_OPTIONS = [
   { value: 'none', label: 'None', color: '#000' },
@@ -108,11 +109,16 @@ function normalizeWindowTints(value) {
   const lightLightness = Number.isFinite(Number(legacyLightLightness))
     ? Math.max(75, Math.min(maximumLightLightness, Math.round(Number(legacyLightLightness))))
     : DEFAULT_WINDOW_TINTS.lightLightness;
+  const savedBackgroundOpacity = value?.backgroundOpacity ?? DEFAULT_WINDOW_TINTS.backgroundOpacity;
+  const backgroundOpacity = Number.isFinite(Number(savedBackgroundOpacity))
+    ? Math.max(0, Math.min(100, Math.round(Number(savedBackgroundOpacity))))
+    : DEFAULT_WINDOW_TINTS.backgroundOpacity;
   return {
     darkTint,
     darkLightness,
     lightTint,
     lightLightness,
+    backgroundOpacity,
   };
 }
 
@@ -291,8 +297,7 @@ export function buildSettings(id, ctx, initialState) {
       preview.append(el('i'), el('i'), el('i'));
       const detail = el('span', 'settings-theme-label');
       detail.append(el('strong', '', option.title), el('small', '', option.caption));
-      const check = el('span', 'settings-theme-check', 'Selected');
-      button.append(preview, detail, check);
+      button.append(preview, detail);
       button.addEventListener('click', () => {
         try {
           settings?.setTheme?.(option.value);
@@ -497,10 +502,53 @@ export function buildSettings(id, ctx, initialState) {
       const resetTints = el('button', 'settings-tint-reset');
       resetTints.type = 'button';
       resetTints.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.2 9a6.9 6.9 0 1 1 .8 4.6M3 3.8v4.7h4.7"/></svg><span>Reset to defaults</span>';
+      const opacitySlider = document.createElement('input');
+      opacitySlider.className = 'settings-tint-slider';
+      opacitySlider.type = 'range';
+      opacitySlider.min = '0';
+      opacitySlider.max = '100';
+      opacitySlider.step = '1';
+      opacitySlider.value = String(windowTints.backgroundOpacity);
+      opacitySlider.id = `settings-window-background-opacity-${id}`;
+      opacitySlider.setAttribute('aria-label', 'Window background opacity');
+      const opacityHeading = el('div', 'settings-tint-lightness-heading');
+      const opacityLabel = el('label', '', 'Window background opacity');
+      opacityLabel.htmlFor = opacitySlider.id;
+      const opacityValue = el('output', 'settings-tint-lightness-value', `${windowTints.backgroundOpacity}%`);
+      opacityValue.htmlFor = opacitySlider.id;
+      opacityHeading.append(opacityLabel, opacityValue);
+      const opacityControl = el('div', 'settings-tint-lightness-control');
+      opacityControl.append(opacityHeading, opacitySlider);
+      const opacityDescription = el(
+        'p',
+        'settings-description settings-tint-help',
+        'Adjust how much of the desktop shows through the window background.',
+      );
+      opacitySlider.addEventListener('input', () => {
+        windowTints.backgroundOpacity = Number(opacitySlider.value);
+        opacityValue.textContent = `${opacitySlider.value}%`;
+        previewTints();
+      });
+      opacitySlider.addEventListener('change', () => {
+        const restoreFocus = document.activeElement === opacitySlider;
+        cancelTintPreview();
+        try {
+          if (settings?.setWindowTints) settings.setWindowTints(windowTints);
+          else settings?.previewWindowTints?.(windowTints);
+          current = snapshot();
+          if (restoreFocus) requestAnimationFrame(() => {
+            page.querySelector('.settings-tint-slider[aria-label="Window background opacity"]')?.focus({ preventScroll: true });
+          });
+        } catch (error) {
+          setMessage(page.querySelector('.settings-inline-status'), error?.message || 'The window opacity could not be changed.', 'error');
+        }
+      });
+
       resetTints.disabled = windowTints.darkTint === DEFAULT_WINDOW_TINTS.darkTint
         && windowTints.darkLightness === DEFAULT_WINDOW_TINTS.darkLightness
         && windowTints.lightTint === DEFAULT_WINDOW_TINTS.lightTint
-        && windowTints.lightLightness === DEFAULT_WINDOW_TINTS.lightLightness;
+        && windowTints.lightLightness === DEFAULT_WINDOW_TINTS.lightLightness
+        && windowTints.backgroundOpacity === DEFAULT_WINDOW_TINTS.backgroundOpacity;
       resetTints.addEventListener('click', () => {
         try {
           cancelTintPreview();
@@ -510,7 +558,7 @@ export function buildSettings(id, ctx, initialState) {
           setMessage(page.querySelector('.settings-inline-status'), error?.message || 'The window tints could not be reset.', 'error');
         }
       });
-      windowTintSection.append(darkGroup, lightGroup, resetTints);
+      windowTintSection.append(darkGroup, lightGroup, opacityDescription, opacityControl, resetTints);
     } else {
       windowTintSection.append(el('p', 'settings-description', 'Window tint choices require a browser that supports CSS relative colors.'));
     }
@@ -712,9 +760,8 @@ export function buildSettings(id, ctx, initialState) {
         image.src = file.url;
         image.alt = '';
         image.loading = 'lazy';
-        const overlay = el('span', 'settings-wallpaper-check', 'Selected');
         const name = el('span', 'settings-wallpaper-name', file.displayName || file.title || `Wallpaper ${index + 1}`);
-        label.append(input, image, overlay, name);
+        label.append(input, image, name);
         input.addEventListener('change', () => {
           if (input.checked) {
             if (!wallpaperDraft.selected.includes(file.url)) wallpaperDraft.selected.push(file.url);
