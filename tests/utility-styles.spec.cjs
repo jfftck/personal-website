@@ -126,6 +126,55 @@ test('animation settings use the picker labels without duplicate card headings',
   await expect(settings.locator('.settings-animation-row h3')).toHaveCount(0);
 });
 
+test('accent color choices are browser-gated, persist, and retain readable contrast', async ({ page }) => {
+  const settings = await openUtility(page, 'settings');
+  const supports = await page.evaluate(() =>
+    CSS.supports('color', 'oklch(from #006699 calc(l + 0.1) c h)'),
+  );
+
+  if (!supports) {
+    await expect(settings.getByText(/require a browser that supports CSS relative colors/i)).toBeVisible();
+    await expect(settings.locator('.settings-accent-choice')).toHaveCount(0);
+    return;
+  }
+
+  const colors = settings.locator('.settings-accent-choice');
+  await expect(colors).toHaveCount(6);
+  await expect(settings.getByRole('button', { name: 'Blue, default' })).toHaveAttribute('aria-pressed', 'true');
+  await settings.getByRole('button', { name: 'Purple' }).click();
+  await expect(settings.getByRole('button', { name: 'Purple' })).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.accentColor)).toBe('purple');
+  expect(await page.evaluate(() => localStorage.getItem('desktop-accent-color'))).toBe('purple');
+
+  const contrasts = await page.evaluate(() => {
+    const root = document.documentElement;
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    const names = ['blue', 'teal', 'green', 'gold', 'coral', 'purple'];
+    const luminance = color => {
+      context.fillStyle = color;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b] = context.getImageData(0, 0, 1, 1).data.slice(0, 3).map(channel => {
+        const value = channel / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    return names.map(name => {
+      root.dataset.accentColor = name;
+      const ratio = 1.05 / (luminance(getComputedStyle(root).getPropertyValue('--accent')) + 0.05);
+      return { name, ratio };
+    });
+  });
+  for (const color of contrasts) expect(color.ratio, `${color.name} with white text`).toBeGreaterThanOrEqual(4.5);
+
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  const restoredSettings = await openUtility(page, 'settings');
+  await expect(restoredSettings.getByRole('button', { name: 'Purple' })).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.accentColor)).toBe('purple');
+});
+
 test('wallpaper startup does not overwrite saved preferences when the manifest has no matches', async ({ page }) => {
   const key = 'desktop-wallpaper-settings-v1';
   const saved = {

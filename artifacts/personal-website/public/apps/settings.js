@@ -24,6 +24,14 @@ const WALLPAPER_TRANSITIONS = [
   ['slide-right', 'Slide from left', 'Move the new image in from the left'],
   ['wipe', 'Wipe', 'Reveal the new image across the screen'],
 ];
+const ACCENT_COLORS = [
+  { value: 'blue', label: 'Blue', color: '#006699' },
+  { value: 'teal', label: 'Teal', color: 'oklch(48.74% 0.1131 190)' },
+  { value: 'green', label: 'Green', color: 'oklch(48.74% 0.1131 145)' },
+  { value: 'gold', label: 'Gold', color: 'oklch(48.74% 0.1131 85)' },
+  { value: 'coral', label: 'Coral', color: 'oklch(48.74% 0.1131 25)' },
+  { value: 'purple', label: 'Purple', color: 'oklch(48.74% 0.1131 300)' },
+];
 const WINDOW_OPEN_CLOSE_ANIMATIONS = [
   ['fade', 'Fade', 'Fade in and out'],
   ['zoom', 'Zoom', 'Scale into and out of view'],
@@ -64,6 +72,10 @@ function el(tag, className, text) {
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+function supportsRelativeColors() {
+  return Boolean(globalThis.CSS?.supports?.('color', 'oklch(from #006699 calc(l + 0.1) c h)'));
 }
 
 function copyWallpaper(settings) {
@@ -252,6 +264,43 @@ export function buildSettings(id, ctx, initialState) {
       options.append(button);
     }
     card.append(options);
+    const accentSection = el('div', 'settings-accent-section');
+    const accentHeading = el('h3', '', 'Accent color');
+    accentSection.append(accentHeading);
+    if (supportsRelativeColors()) {
+      const accentOptions = el('div', 'settings-accent-options');
+      accentOptions.setAttribute('role', 'group');
+      accentOptions.setAttribute('aria-labelledby', 'settings-accent-heading');
+      accentHeading.id = 'settings-accent-heading';
+      for (const option of ACCENT_COLORS) {
+        const button = el('button', 'settings-accent-choice');
+        button.type = 'button';
+        button.dataset.accentColor = option.value;
+        button.setAttribute('aria-label', `${option.label}${option.value === 'blue' ? ', default' : ''}`);
+        button.setAttribute('aria-pressed', String((current.accentColor || 'blue') === option.value));
+        const swatch = el('span', 'settings-accent-swatch');
+        swatch.style.backgroundColor = option.color;
+        swatch.setAttribute('aria-hidden', 'true');
+        const label = el('span', 'settings-accent-label', option.label);
+        button.append(swatch, label);
+        button.addEventListener('click', () => {
+          try {
+            settings?.setAccentColor?.(option.value);
+            current = snapshot();
+            for (const choice of accentOptions.querySelectorAll('.settings-accent-choice')) {
+              choice.setAttribute('aria-pressed', String(choice.dataset.accentColor === option.value));
+            }
+          } catch (error) {
+            setMessage(page.querySelector('.settings-inline-status'), error?.message || 'The accent color could not be changed.', 'error');
+          }
+        });
+        accentOptions.append(button);
+      }
+      accentSection.append(accentOptions, el('p', 'settings-description settings-accent-description', 'Blue is the default. Accent shades are generated to keep text and controls readable.'));
+    } else {
+      accentSection.append(el('p', 'settings-description', 'Accent color choices require a browser that supports CSS relative colors.'));
+    }
+    card.append(accentSection);
     const status = el('p', 'settings-inline-status');
     status.setAttribute('role', 'status');
     status.hidden = true;

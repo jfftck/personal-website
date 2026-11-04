@@ -9,6 +9,7 @@
   --accent:        #069;
   --accent-glow:   #0af;
   --accent-light:  #6bf;
+  --accent-base:   #069;
 
   --topbar-bg:     rgba(0, 30, 50, 0.78);
   --topbar-border: rgba(255, 255, 255, 0.10);
@@ -106,6 +107,26 @@
 
     --scrollbar-thumb: rgba(0, 80, 130, 0.40);
     --scrollbar-track: rgba(0, 0, 0, 0.06);
+  }
+}
+
+/* Accent palettes derive every shade from one equal-lightness base color.
+   Browsers without relative-color support keep the original dark blue. */
+@supports (color: oklch(from #006699 calc(l + 0.1) c h)) {
+  :root[data-accent-color="teal"] { --accent-base: oklch(48.74% 0.1131 190); }
+  :root[data-accent-color="green"] { --accent-base: oklch(48.74% 0.1131 145); }
+  :root[data-accent-color="gold"] { --accent-base: oklch(48.74% 0.1131 85); }
+  :root[data-accent-color="coral"] { --accent-base: oklch(48.74% 0.1131 25); }
+  :root[data-accent-color="purple"] { --accent-base: oklch(48.74% 0.1131 300); }
+  :root[data-accent-color] {
+    --accent: var(--accent-base);
+    --accent-glow: oklch(from var(--accent-base) calc(l + 0.18) c h);
+    --accent-light: oklch(from var(--accent-base) calc(l + 0.30) c h);
+    --focus-color: oklch(from var(--accent-base) calc(l + 0.25) c h);
+  }
+  :root[data-theme="light"][data-accent-color] { --focus-color: var(--accent-base); }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme])[data-accent-color] { --focus-color: var(--accent-base); }
   }
 }
 

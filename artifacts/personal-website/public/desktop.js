@@ -41,6 +41,8 @@ const themeReset  = $('theme-reset');
 const themeSplit  = themeToggle.closest('.theme-split');
 const themeMedia  = matchMedia('(prefers-color-scheme: dark)');
 const THEME_KEY   = 'desktop-theme';
+const ACCENT_COLOR_KEY = 'desktop-accent-color';
+const ACCENT_COLORS = ['blue', 'teal', 'green', 'gold', 'coral', 'purple'];
 const TIME_KEY    = 'desktop-time-24h';
 const WALLPAPER_KEY = 'desktop-wallpaper-settings-v1';
 const WINDOW_ANIMATION_KEY = 'desktop-window-animation';
@@ -149,6 +151,19 @@ function applyTheme(theme = readRaw(THEME_KEY), { persist = true } = {}) {
   themeSplit.classList.toggle('has-override', hasOverride);
   themeReset.setAttribute('aria-hidden', String(!hasOverride));
   themeReset.tabIndex = hasOverride ? 0 : -1;
+  notifyDesktopSettingsChanged();
+}
+
+function applyAccentColor(color = readRaw(ACCENT_COLOR_KEY), { persist = true } = {}) {
+  const selected = ACCENT_COLORS.includes(color) ? color : 'blue';
+  if (persist) {
+    const saved = selected === 'blue'
+      ? removeData(ACCENT_COLOR_KEY)
+      : writeRaw(ACCENT_COLOR_KEY, selected);
+    if (!saved) throw new Error('The accent color could not be saved in browser storage.');
+  }
+  if (selected === 'blue') delete document.documentElement.dataset.accentColor;
+  else document.documentElement.dataset.accentColor = selected;
   notifyDesktopSettingsChanged();
 }
 
@@ -522,6 +537,7 @@ $('reminder-notification-toggle').addEventListener('click', async event => {
   }
 });
 applyTheme(readRaw(THEME_KEY), { persist: false });
+applyAccentColor(readRaw(ACCENT_COLOR_KEY), { persist: false });
 updateClock();
 renderReminders();
 updateNotificationSetting();
@@ -2217,11 +2233,13 @@ const appCtx = {
     getSnapshot: () => ({
       theme: effectiveTheme(),
       themeOverride: readRaw(THEME_KEY) || 'system',
+      accentColor: ACCENT_COLORS.includes(readRaw(ACCENT_COLOR_KEY)) ? readRaw(ACCENT_COLOR_KEY) : 'blue',
       animationPreferences: getAnimationPreferences(),
       use24HourTime,
       notificationsEnabled: systemNotificationsEnabled,
     }),
     setTheme: value => applyTheme(value === 'system' ? null : value),
+    setAccentColor: value => applyAccentColor(value),
     setAnimationPreferences: setAnimationPreference,
     set24HourTime: setTimeFormat,
     setNotificationsEnabled: setSystemNotificationsEnabled,
