@@ -2070,11 +2070,51 @@ test('rain, wave, and tornado celebrations animate changing cards on the fixed l
       const before = await cards.first().textContent();
       await page.waitForTimeout(120);
       await expect.poll(() => cards.first().textContent()).not.toBe(before);
+      const rainTiming = await cards.evaluateAll(elements => elements.map(card => {
+        const animations = card.getAnimations();
+        const fall = animations.find(animation =>
+          animation.effect.getKeyframes().some(frame => 'transform' in frame));
+        const fade = animations.find(animation => animation !== fall);
+        const fallTiming = fall.effect.getTiming();
+        const fadeTiming = fade.effect.getTiming();
+        const fadeFrames = fade.effect.getKeyframes();
+        return {
+          fallDuration: Number(fallTiming.duration),
+          fallIterations: Number(fallTiming.iterations),
+          fadeDuration: Number(fadeTiming.duration),
+          fadeStart: Number(fadeFrames[1].offset),
+          fadeStartOpacity: Number(fadeFrames[1].opacity),
+          fadeEndOpacity: Number(fadeFrames.at(-1).opacity),
+        };
+      }));
+      const fallDurations = rainTiming.map(card => card.fallDuration);
+      expect(Math.min(...fallDurations)).toBeGreaterThanOrEqual(1800);
+      expect(Math.max(...fallDurations)).toBeLessThanOrEqual(4600);
+      expect(Math.max(...fallDurations) - Math.min(...fallDurations)).toBeGreaterThan(2000);
+      expect(rainTiming.every(card => card.fallIterations === 2)).toBe(true);
+      expect(rainTiming.every(card => card.fadeDuration === card.fallDuration * 2)).toBe(true);
+      expect(rainTiming.every(card => card.fadeStart > 0.5 && card.fadeStart < 1)).toBe(true);
+      expect(rainTiming.every(card => card.fadeStartOpacity === 0.92 && card.fadeEndOpacity === 0)).toBe(true);
+
+      const firstPassRemaining = await cards.first().evaluate(card => {
+        const fall = card.getAnimations().find(animation =>
+          animation.effect.getKeyframes().some(frame => 'transform' in frame));
+        const timing = fall.effect.getTiming();
+        return Number(timing.delay || 0) + Number(timing.duration) - Number(fall.currentTime || 0) + 50;
+      });
+      await page.waitForTimeout(Math.max(0, firstPassRemaining));
+      const secondPassFace = await cards.first().textContent();
+      await page.waitForTimeout(120);
+      await expect.poll(() => cards.first().textContent()).not.toBe(secondPassFace);
+
       const latestAnimationEnd = await cards.evaluateAll(elements =>
         Math.max(...elements.map(card => {
-          const animation = card.getAnimations()[0];
+          const animation = card.getAnimations().find(candidate =>
+            candidate.effect.getKeyframes().some(frame => 'transform' in frame));
           const schedule = animation.effect.getTiming();
-          return Number(schedule.delay || 0) + Number(schedule.duration) - Number(animation.currentTime || 0);
+          return Number(schedule.delay || 0)
+            + Number(schedule.duration) * Number(schedule.iterations || 1)
+            - Number(animation.currentTime || 0);
         })));
       await page.waitForTimeout(latestAnimationEnd + 50);
       await expect(layer).toHaveCount(1);

@@ -345,6 +345,7 @@ function animateRain(sprites, bounds) {
   const cardWidth = sprites[0]?.width || 60;
   const lanes = Math.max(4, Math.min(12, Math.floor(bounds.width / (cardWidth * 0.9))));
   const cards = [];
+  const animations = [];
   let animationEnd = 0;
   sprites.forEach((sprite, index) => {
     const lane = index % lanes;
@@ -352,24 +353,38 @@ function animateRain(sprites, bounds) {
     const x = (lane + 0.5) * bounds.width / lanes - sprite.width / 2;
     const y = -(depth + 1 + unit(index, 6) * 2) * sprite.height;
     const delay = lane * 55 + depth * 55;
-    const duration = 3000 + unit(index, 11) * 500;
-    animationEnd = Math.max(animationEnd, delay + duration);
+    const duration = 1800 + unit(index, 11) * 2800;
+    const totalDuration = duration * 2;
+    const exitY = bounds.height + sprite.height * 2 - y;
+    const fadeStartOffset = 0.5 + 0.5 * Math.min(1, (bounds.height - y) / exitY);
+    animationEnd = Math.max(animationEnd, delay + totalDuration);
     sprite.element.classList.add('card-rain');
     sprite.element.style.left = `${x}px`;
     sprite.element.style.top = `${y}px`;
-    sprite.element.animate([
+    animations.push(sprite.element.animate([
       { transform: transform(0, 0, 0.58 + unit(index, 7) * 0.32), opacity: 0.92 },
       {
-        transform: transform((unit(index, 8) - 0.5) * 14, bounds.height + sprite.height * 2 - y,
+        transform: transform((unit(index, 8) - 0.5) * 14, exitY,
           0.75 + unit(index, 9) * 0.5, (unit(index, 10) - 0.5) * 24),
         opacity: 0.92,
       },
     ], {
       duration,
       delay,
+      iterations: 2,
       easing: 'linear',
       fill: 'both',
-    });
+    }));
+    animations.push(sprite.element.animate([
+      { opacity: 0.92, offset: 0 },
+      { opacity: 0.92, offset: fadeStartOffset },
+      { opacity: 0, offset: 1 },
+    ], {
+      duration: totalDuration,
+      delay,
+      easing: 'linear',
+      fill: 'both',
+    }));
     cards.push(sprite.element);
   });
 
@@ -383,7 +398,14 @@ function animateRain(sprites, bounds) {
       card.classList.toggle('red', isRed({ suit }));
     });
   }, 80);
-  return { interval, duration: animationEnd };
+  return {
+    interval,
+    duration: animationEnd,
+    cleanup() {
+      clearInterval(interval);
+      animations.forEach(animation => animation.cancel());
+    },
+  };
 }
 
 function animateWave(sprites, bounds, layer) {
@@ -540,6 +562,7 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
 
   let interval = null;
   let rainDuration = 0;
+  let rainAnimation = null;
   let particleAnimation = null;
   let bounceAnimation = null;
   switch (effect) {
@@ -551,6 +574,7 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
       const rain = animateRain(sprites, bounds);
       interval = rain.interval;
       rainDuration = rain.duration;
+      rainAnimation = rain;
       break;
     }
     case 'wave': particleAnimation = animateWave(sprites, bounds, layer); break;
@@ -585,6 +609,7 @@ export function createWinCelebration(effect, kind, state, table, gameElement, on
     cleaned = true;
     clearTimeout(timer);
     clearInterval(interval);
+    rainAnimation?.cleanup();
     bounceAnimation?.cleanup();
     particleAnimation?.cleanup();
     layer.remove();
