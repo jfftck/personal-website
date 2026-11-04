@@ -73,6 +73,28 @@ function fileTileName(fileManager, name) {
   return fileManager.locator('.fm-tile-name').filter({ hasText: name });
 }
 
+test('toolbar actions use borderless shared buttons and retain view selection', async ({ page }) => {
+  const fileManager = page.locator('.app-window[data-type="file-manager"]');
+  const tileView = fileManager.getByRole('button', { name: 'Tile view' });
+  const listView = fileManager.getByRole('button', { name: 'List view' });
+  const refresh = fileManager.getByRole('button', { name: 'Refresh current folder' });
+
+  for (const button of [tileView, listView, refresh]) {
+    await expect(button).toHaveClass(/util-action/);
+    await expect(button).toHaveAttribute('data-app-button-variant', 'quiet');
+    const borderColor = await button.evaluate(element => getComputedStyle(element).borderTopColor);
+    expect(borderColor).toBe('rgba(0, 0, 0, 0)');
+  }
+
+  await expect(tileView).toHaveAttribute('aria-pressed', 'true');
+  await expect(listView).toHaveAttribute('aria-pressed', 'false');
+  await listView.click();
+  await expect(tileView).toHaveAttribute('aria-pressed', 'false');
+  await expect(listView).toHaveAttribute('aria-pressed', 'true');
+  const activeBackground = await listView.evaluate(element => getComputedStyle(element).backgroundColor);
+  expect(activeBackground).not.toBe('rgba(0, 0, 0, 0)');
+});
+
 test('refresh revalidates after the initial folder request settles', async ({ page }) => {
   const fileManager = page.locator('.app-window[data-type="file-manager"]');
   const refresh = fileManager.getByRole('button', { name: 'Refresh current folder' });

@@ -1860,6 +1860,11 @@ body.mod-overview .app-window.focused {
   .fm-toolbar .tool-btn .lbl { display: inline; }
 }
 
+.fm-toolbar .tool-btn:hover { background: var(--btn-hover); }
+.fm-toolbar .tool-btn:active { background: var(--btn-active); }
+.fm-toolbar .fm-view-btn[aria-pressed="true"] { background: var(--btn-active); }
+.fm-toolbar .fm-view-btn[aria-pressed="true"]:hover { background: var(--btn-active); }
+
 /* Exact overflow fallback for browsers without container queries. */
 .no-container-queries .app-toolbar:not(.toolbar-icons-only) .tool-btn .lbl {
   display: inline;

@@ -1003,8 +1003,7 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   });
   const basicBackspace = await backspaceGeometry();
   expect(basicBackspace.buttonInsideInputRow).toBe(true);
-  expect(basicBackspace.rightGap).toBeGreaterThanOrEqual(2);
-  expect(basicBackspace.rightGap).toBeLessThanOrEqual(8);
+  expect(basicBackspace.rightGap).toBe(0);
   expect(basicBackspace.verticalCenterOffset).toBeLessThanOrEqual(2);
   expect(basicBackspace.rightPadding).toBeGreaterThanOrEqual(32);
 
@@ -2477,7 +2476,7 @@ test('calculator mode persists and editor fields include caret-aware backspace b
   await settings.getByRole('button', { name: 'Apply settings' }).click();
   await restored.getByRole('button', { name: 'Edit functions' }).click();
   const editor = restored.getByRole('dialog', { name: 'Edit functions' });
-  const editorBackspaceStyle = await editor.getByRole('button', { name: 'Backspace expression' }).evaluate(button => {
+  const editorBackspaceStyle = await editor.getByRole('button', { name: 'Backspace first coordinate' }).evaluate(button => {
     const style = getComputedStyle(button);
     return {
       width: style.width,

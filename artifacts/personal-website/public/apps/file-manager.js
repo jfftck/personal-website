@@ -122,19 +122,25 @@ export function buildFileManager(id, ctx) {
   toolbar.className = 'app-toolbar fm-toolbar';
   toolbar.innerHTML = `
     <div class="fm-view-toggle" role="group" aria-label="View mode">
-      <button class="tool-btn fm-view-btn" data-view="tile" aria-pressed="true"  title="Tile view"  aria-label="Tile view">
-        <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></svg>
-        <span class="lbl">Tile</span>
-      </button>
-      <button class="tool-btn fm-view-btn" data-view="list" aria-pressed="false" title="List view"  aria-label="List view">
-        <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
-        <span class="lbl">List</span>
-      </button>
+      <app-button variant="quiet">
+        <button class="tool-btn fm-view-btn" data-view="tile" aria-pressed="true" title="Tile view" aria-label="Tile view">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></svg>
+          <span class="lbl">Tile</span>
+        </button>
+      </app-button>
+      <app-button variant="quiet">
+        <button class="tool-btn fm-view-btn" data-view="list" aria-pressed="false" title="List view" aria-label="List view">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+          <span class="lbl">List</span>
+        </button>
+      </app-button>
     </div>
-    <button class="tool-btn fm-refresh-btn" type="button" title="Refresh current folder" aria-label="Refresh current folder">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M19 12a7 7 0 1 1-2-4.9L20 12"/></svg>
-      <span class="lbl">Refresh</span>
-    </button>
+    <app-button variant="quiet">
+      <button class="tool-btn fm-refresh-btn" type="button" title="Refresh current folder" aria-label="Refresh current folder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M19 12a7 7 0 1 1-2-4.9L20 12"/></svg>
+        <span class="lbl">Refresh</span>
+      </button>
+    </app-button>
   `;
   initResponsiveToolbar(toolbar);
   const refreshStatus = document.createElement('span');
