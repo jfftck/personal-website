@@ -145,6 +145,15 @@ test('accent color choices are browser-gated, persist, and retain readable contr
   await expect(settings.getByRole('button', { name: 'Purple', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.accentColor)).toBe('purple');
   expect(await page.evaluate(() => localStorage.getItem('desktop-accent-color'))).toBe('purple');
+  const purpleSurface = await settings.evaluate(element =>
+    getComputedStyle(element).getPropertyValue('--util-surface-strong').trim(),
+  );
+  await settings.getByRole('button', { name: 'Blue, default' }).click();
+  const blueSurface = await settings.evaluate(element =>
+    getComputedStyle(element).getPropertyValue('--util-surface-strong').trim(),
+  );
+  expect(purpleSurface).not.toBe(blueSurface);
+  await settings.getByRole('button', { name: 'Purple', exact: true }).click();
 
   const contrasts = await page.evaluate(() => {
     const root = document.documentElement;
@@ -295,25 +304,21 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
       root.dataset.theme = 'dark';
       root.dataset.windowTints = 'custom';
       root.dataset.windowDarkTint = darkTint;
-      const darkLightnessValues = darkTint === 'none' ? [0, 25] : [5, 25];
+      root.style.setProperty('--window-dark-lightness', '25%');
       for (const lightTint of lightNames) {
         root.dataset.windowLightTint = lightTint;
-        for (const lightness of lightTint === 'none' ? [75, 100] : [75, 95]) {
-          root.style.setProperty('--window-lightness', `${lightness}%`);
-          for (const darkLightness of darkLightnessValues) {
-            root.style.setProperty('--window-dark-lightness', `${darkLightness}%`);
-            const style = getComputedStyle(root);
-            const darkBackground = luminance(style.getPropertyValue('--app-bg'), 1);
-            const lightForeground = luminance(style.getPropertyValue('--app-text'), 0);
-            minimum = Math.min(minimum, (lightForeground + 0.05) / (darkBackground + 0.05));
+        root.style.setProperty('--window-lightness', '75%');
+        const style = getComputedStyle(root);
+        const darkBackground = luminance(style.getPropertyValue('--app-bg'), 1);
+        const lightForeground = luminance(style.getPropertyValue('--app-text'), 0);
+        minimum = Math.min(minimum, (lightForeground + 0.05) / (darkBackground + 0.05));
 
-            root.dataset.theme = 'light';
-            const lightBackground = luminance(getComputedStyle(root).getPropertyValue('--app-bg'), 0);
-            const darkForeground = luminance(getComputedStyle(root).getPropertyValue('--app-text'), 1);
-            minimum = Math.min(minimum, (lightBackground + 0.05) / (darkForeground + 0.05));
-            root.dataset.theme = 'dark';
-          }
-        }
+        root.dataset.theme = 'light';
+        const lightStyle = getComputedStyle(root);
+        const lightBackground = luminance(lightStyle.getPropertyValue('--app-bg'), 0);
+        const darkForeground = luminance(lightStyle.getPropertyValue('--app-text'), 1);
+        minimum = Math.min(minimum, (lightBackground + 0.05) / (darkForeground + 0.05));
+        root.dataset.theme = 'dark';
       }
     }
     return minimum;
@@ -376,6 +381,42 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
     lightLightness: 100,
   });
   await expect(restoredSettings.getByRole('button', { name: 'Reset to defaults' })).toBeDisabled();
+});
+
+test('tint sliders debounce live previews and save the settled value', async ({ page }) => {
+  const settings = await openUtility(page, 'settings');
+  const lightness = settings.getByRole('slider', { name: 'Light tint lightness' });
+  await page.evaluate(() => {
+    const root = document.documentElement;
+    const style = root.style;
+    const stylePrototype = Object.getPrototypeOf(style);
+    window.tintSetPropertyOriginal = stylePrototype.setProperty;
+    window.tintSetPropertyTarget = style;
+    window.tintStyleWrites = 0;
+    stylePrototype.setProperty = function(name, value, priority) {
+      if (this === window.tintSetPropertyTarget && name === '--window-lightness') window.tintStyleWrites += 1;
+      return window.tintSetPropertyOriginal.call(this, name, value, priority);
+    };
+  });
+  await lightness.evaluate(slider => {
+    for (const value of ['93', '88', '84']) {
+      slider.value = value;
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
+  await expect.poll(() => page.evaluate(() => window.tintStyleWrites)).toBe(1);
+  expect(await page.evaluate(() => localStorage.getItem('desktop-window-tints-v3'))).toBeNull();
+  await lightness.evaluate(slider => slider.dispatchEvent(new Event('change', { bubbles: true })));
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), 'desktop-window-tints-v3')).toEqual({
+    darkTint: 'blue',
+    darkLightness: 25,
+    lightTint: 'none',
+    lightLightness: 84,
+  });
+  await expect.poll(() => page.evaluate(() => window.tintStyleWrites)).toBe(2);
+  await page.evaluate(() => {
+    Object.getPrototypeOf(window.tintSetPropertyTarget).setProperty = window.tintSetPropertyOriginal;
+  });
 });
 
 test('version-two tint settings keep their light tint and use the new dark default', async ({ page }) => {

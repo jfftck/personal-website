@@ -610,7 +610,7 @@ $('reminder-notification-toggle').addEventListener('click', async event => {
 applyTheme(readRaw(THEME_KEY), { persist: false });
 applyAccentColor(readRaw(ACCENT_COLOR_KEY), { persist: false });
 const storedWindowTints = readSavedWindowTints();
-if (storedWindowTints) applyWindowTintAttributes(storedWindowTints);
+applyWindowTintAttributes(storedWindowTints || DEFAULT_WINDOW_TINTS);
 updateClock();
 renderReminders();
 updateNotificationSetting();
