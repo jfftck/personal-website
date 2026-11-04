@@ -212,6 +212,18 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
     lightness: 75,
   });
   await expect.poll(() => lightness.evaluate(input => document.activeElement === input)).toBe(true);
+  await lightness.scrollIntoViewIfNeeded();
+  await lightness.focus();
+  const desktopScroller = settings.locator('.settings-main');
+  await desktopScroller.evaluate(element => {
+    element.scrollTop = Math.min(element.scrollHeight - element.clientHeight, Math.max(element.scrollTop, 160));
+  });
+  const desktopScrollBefore = await desktopScroller.evaluate(element => element.scrollTop);
+  expect(desktopScrollBefore).toBeGreaterThan(0);
+  await page.keyboard.press('ArrowRight');
+  await expect(lightness).toHaveValue('76');
+  const desktopScrollAfter = await desktopScroller.evaluate(element => element.scrollTop);
+  expect(Math.abs(desktopScrollAfter - desktopScrollBefore)).toBeLessThanOrEqual(1);
 
   await settings.locator('.settings-theme-choice[data-theme="dark"]').click();
   const darkMapping = await page.evaluate(() => {
@@ -285,10 +297,11 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
   const restoredSettings = await openUtility(page, 'settings');
   await expect(restoredSettings.getByRole('group', { name: 'Dark window tint' }).getByRole('button', { name: 'Teal dark tint' })).toHaveAttribute('aria-pressed', 'true');
   await expect(restoredSettings.getByRole('group', { name: 'Light window tint' }).getByRole('button', { name: 'Purple light tint' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(restoredSettings.getByRole('slider', { name: 'Light tint lightness' })).toHaveValue('75');
+  await expect(restoredSettings.getByRole('slider', { name: 'Light tint lightness' })).toHaveValue('76');
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe('light');
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await restoredSettings.getByRole('button', { name: 'Appearance' }).click();
   const noneOption = restoredSettings.getByRole('group', { name: 'Light window tint' }).getByRole('button', { name: 'None light tint' });
   await noneOption.click();
   lightness = restoredSettings.getByRole('slider', { name: 'Light tint lightness' });

@@ -12,3 +12,4 @@
 - [Settings responsive layout](settings-container-queries.md) — container queries cannot restyle their own container; keep responsive grid rules on a child layout wrapper.
 - [Nested settings drawers](animation-drawer-accessibility.md) — a game settings modal must not inert the animation drawer that opens alongside it.
 - [Settings color choice groups](settings-color-choice-groups.md) — when color selectors repeat names, include the tint role in each accessible name and scope interactions by group.
+- [Settings scroll restoration](settings-scroll-restoration.md) — preserve the active scroll container when shared settings updates redraw the current page.
