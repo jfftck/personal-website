@@ -26,6 +26,8 @@ const appStripWrapper  = $('app-strip-wrapper');
 const emptyState       = $('empty-state');
 const desktopWidgets   = $('desktop-widgets');
 const showDesktopBtn   = $('show-desktop-btn');
+window.addEventListener('desktop-data-error', showDataHandlerNotification);
+window.addEventListener('desktop-data-recovered', showDataHandlerNotification);
 
 // ── Width helpers ─────────────────────────────────────────────
 function rem() { return parseFloat(getComputedStyle(document.documentElement).fontSize); }
@@ -219,6 +221,51 @@ function showInAppReminderNotification(reminder) {
 
   notice.append(icon, copy, dismiss);
   container.appendChild(notice);
+}
+
+function showDataHandlerNotification(event) {
+  const container = $('in-app-notifications');
+  const recovered = event.type === 'desktop-data-recovered';
+  const operation = event.detail?.operation;
+  const titleText = recovered ? 'Saved data recovered'
+    : operation === 'read' ? 'Could not read saved data'
+      : operation === 'remove' ? 'Could not remove saved data'
+        : 'Could not save data';
+  const messageText = recovered
+    ? 'A previous saved copy was restored. The original data was left untouched.'
+    : operation === 'read'
+      ? 'A saved item could not be read. Check the page before making more changes.'
+      : operation === 'remove'
+        ? 'A saved item could not be removed from this browser.'
+        : 'A change could not be saved in this browser. Try again before leaving this page.';
+  let notice = container.querySelector('[data-data-handler-notice]');
+  if (!notice) {
+    notice = document.createElement('article');
+    notice.className = 'in-app-notification';
+    notice.dataset.dataHandlerNotice = 'true';
+    notice.setAttribute('role', recovered ? 'status' : 'alert');
+    const icon = document.createElement('span');
+    icon.className = 'in-app-notification-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = recovered ? '↺' : '!';
+    const copy = document.createElement('div');
+    copy.className = 'in-app-notification-copy';
+    const title = document.createElement('strong');
+    title.className = 'data-handler-notice-title';
+    const message = document.createElement('span');
+    message.className = 'data-handler-notice-message';
+    copy.append(title, message);
+    const dismiss = document.createElement('button');
+    dismiss.className = 'in-app-notification-dismiss';
+    dismiss.type = 'button';
+    dismiss.setAttribute('aria-label', 'Dismiss saved data notice');
+    dismiss.textContent = '×';
+    dismiss.addEventListener('click', () => notice.remove());
+    notice.append(icon, copy, dismiss);
+    container.appendChild(notice);
+  }
+  notice.querySelector('.data-handler-notice-title').textContent = titleText;
+  notice.querySelector('.data-handler-notice-message').textContent = messageText;
 }
 
 function scheduleReminderNotification(reminder) {

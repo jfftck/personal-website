@@ -117,7 +117,9 @@ test('Wallpaper settings apply changes immediately without save or cancel action
 
 test('animation settings use the picker labels without duplicate card headings', async ({ page }) => {
   const settings = await openUtility(page, 'settings');
-  await expect(settings.getByRole('heading', { name: 'Window animations' })).toHaveCount(0);
+  const animationCard = settings.locator('.settings-animations-card');
+  await expect(animationCard.locator('.settings-card-eyebrow')).toHaveText('WINDOW');
+  await expect(animationCard.getByRole('heading', { name: 'Animations', exact: true })).toBeVisible();
   await expect(settings.getByRole('button', { name: /Opening windows/ })).toBeVisible();
   await expect(settings.getByRole('button', { name: /Closing windows/ })).toBeVisible();
   await expect(settings.locator('.settings-animation-row h3')).toHaveCount(0);
@@ -166,14 +168,31 @@ test('shared data handler keeps a last-good copy without repairing data during r
     const preservedInvalidPrimary = localStorage.getItem(key);
     removeData(key);
     const afterExplicitRemove = readJSON(key, { revision: 0 });
+    const unreadableKey = 'data-handler-test-write-without-read';
+    const originalGetItem = Storage.prototype.getItem;
+    let writeSucceededWithoutRead = false;
+    try {
+      Storage.prototype.getItem = function (requestedKey) {
+        if (requestedKey === unreadableKey) throw new DOMException('Read blocked', 'SecurityError');
+        return originalGetItem.call(this, requestedKey);
+      };
+      writeSucceededWithoutRead = writeJSON(unreadableKey, { saved: true });
+    } finally {
+      Storage.prototype.getItem = originalGetItem;
+    }
+    const savedWithoutRead = localStorage.getItem(unreadableKey);
+    removeData(unreadableKey);
     localStorage.removeItem(backupKey);
-    return { recovered, preservedInvalidPrimary, afterExplicitRemove };
+    return { recovered, preservedInvalidPrimary, afterExplicitRemove, writeSucceededWithoutRead, savedWithoutRead };
   });
   expect(result).toEqual({
     recovered: { revision: 1 },
     preservedInvalidPrimary: '{broken json',
     afterExplicitRemove: { revision: 0 },
+    writeSucceededWithoutRead: true,
+    savedWithoutRead: JSON.stringify({ saved: true }),
   });
+  await expect(page.locator('[data-data-handler-notice]')).toContainText('Saved data recovered');
 });
 
 test('Appearance settings support independent multi-select animation preferences', async ({ page }) => {

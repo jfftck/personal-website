@@ -131,7 +131,7 @@ function readSavedGraphSettings(rawOverride) {
   if (arguments.length) raw = rawOverride;
   else {
     const result = readRawResult(GRAPH_SETTINGS_KEY);
-    if (!result.ok) return { status: 'unavailable' };
+    if (!result.ok && result.value === null) return { status: 'unavailable' };
     raw = result.value;
   }
   if (raw === null) return { status: 'empty' };

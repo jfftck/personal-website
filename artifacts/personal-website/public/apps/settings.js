@@ -262,7 +262,11 @@ export function buildSettings(id, ctx, initialState) {
     body.append(card);
 
     const animationPreferences = current.animationPreferences || {};
-    body.append(el('h2', 'settings-animation-heading', 'Window animations'));
+    const animationCard = el('section', 'settings-card settings-animations-card');
+    animationCard.append(
+      el('span', 'settings-card-eyebrow', 'WINDOW'),
+      el('h2', '', 'Animations'),
+    );
     const animationRows = el('div', 'settings-animation-rows');
     for (const [event, config] of Object.entries(ANIMATION_OPTIONS)) {
       const row = el('div', 'settings-animation-row');
@@ -283,11 +287,12 @@ export function buildSettings(id, ctx, initialState) {
       }));
       animationRows.append(row);
     }
-    body.append(animationRows);
+    animationCard.append(animationRows);
     const animationStatus = el('p', 'settings-inline-status');
     animationStatus.setAttribute('role', 'status');
     animationStatus.hidden = true;
-    body.append(animationStatus);
+    animationCard.append(animationStatus);
+    body.append(animationCard);
   }
 
   function renderTime(body) {

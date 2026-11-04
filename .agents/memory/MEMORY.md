@@ -4,6 +4,7 @@
 - [Calculator keyboard shortcuts](calculator-keyboard-shortcuts.md) — global shortcuts must leave native controls’ Enter and Space activation to the browser.
 - [Calculator compact layout](calculator-compact-layout.md) — explicit compact button line heights prevent keypad rows overflowing their grid tracks.
 - [Content storage architecture](content-storage.md) — App Storage holds file bytes, `/files` serves generated public manifests, and private Git stores revision snapshots and object references.
+- [Desktop browser-data persistence](desktop-browser-data.md) — route app-local browser state through one handler; reads must not rewrite malformed data or resurrect explicitly removed values.
 - [Admin authentication](admin-authentication.md) — private admin access uses Replit Auth with an owner check; `/files/` remains public.
 - [Authenticated API integration tests](authenticated-api-tests.md) — test protected endpoints with signed Clerk tokens and an ephemeral JWT verification key, never an auth bypass.
 - [Session restore persistence](session-restore-persistence.md) — don't rewrite saved sessions immediately after opening lazy apps; hydration can still be pending.

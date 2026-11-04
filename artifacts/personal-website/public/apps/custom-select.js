@@ -40,7 +40,8 @@ function ensureGlobalListeners() {
 
   lifecycleObserver = new MutationObserver(() => {
     for (const control of managedControls) {
-      if (!control.select.isConnected) control.dispose();
+      if (control.select.isConnected) control.connectedOnce = true;
+      else if (control.connectedOnce) control.dispose();
     }
   });
   lifecycleObserver.observe(document.body, { childList: true, subtree: true });
@@ -346,6 +347,7 @@ export function enhanceSelect(select) {
     trigger,
     popup,
     anchorSupported,
+    connectedOnce: select.isConnected,
     open,
     close,
     updatePosition,

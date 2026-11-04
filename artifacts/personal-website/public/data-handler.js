@@ -62,9 +62,9 @@ export function readRawResult(key) {
   if (typeof key !== 'string' || !key) return { ok: false, value: null };
   const storage = getStorage();
   if (!storage) {
-    return memoryValues.has(key)
-      ? { ok: false, value: memoryValues.get(key) }
-      : { ok: false, value: null };
+    if (memoryValues.has(key)) return { ok: false, value: memoryValues.get(key) };
+    notify('desktop-data-error', { key, operation: 'read' });
+    return { ok: false, value: null };
   }
   try {
     const value = storage.getItem(key);
@@ -73,9 +73,9 @@ export function readRawResult(key) {
       ? { ok: true, value: memoryValues.get(key) }
       : { ok: true, value: null };
   } catch {
-    return memoryValues.has(key)
-      ? { ok: false, value: memoryValues.get(key) }
-      : { ok: false, value: null };
+    if (memoryValues.has(key)) return { ok: false, value: memoryValues.get(key) };
+    notify('desktop-data-error', { key, operation: 'read' });
+    return { ok: false, value: null };
   }
 }
 
@@ -86,6 +86,9 @@ export function readRaw(key, fallback = null) {
 
 export function readJSON(key, fallback, { validate } = {}) {
   const result = readRawResult(key);
+  if (!result.ok && result.value === null) {
+    return cloneFallback(fallback);
+  }
   if (result.value !== null) {
     try {
       const value = JSON.parse(result.value);
@@ -94,7 +97,8 @@ export function readJSON(key, fallback, { validate } = {}) {
       // Try the last good snapshot below without altering the stored value.
     }
     const recovered = recoverBackup(key, validate);
-    return recovered.found ? recovered.value : cloneFallback(fallback);
+    if (recovered.found) return recovered.value;
+    notify('desktop-data-error', { key, operation: 'read' });
   }
   return cloneFallback(fallback);
 }
@@ -108,11 +112,18 @@ export function writeRaw(key, value) {
     notify('desktop-data-error', { key, operation: 'write' });
     return false;
   }
+  let previous = null;
+  let previousWasReadable = false;
   try {
-    const previous = storage.getItem(key);
+    previous = storage.getItem(key);
+    previousWasReadable = true;
+  } catch {
+    // A readable old value is useful for recovery, but must not block a new save.
+  }
+  try {
     storage.setItem(key, next);
     memoryValues.delete(key);
-    if (previous !== null && previous !== next) {
+    if (previousWasReadable && previous !== null && previous !== next) {
       try { storage.setItem(backupKey(key), previous); } catch { /* Keep the committed primary value. */ }
     }
     notify('desktop-data-change', { key });
