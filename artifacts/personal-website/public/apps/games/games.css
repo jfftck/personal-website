@@ -362,7 +362,7 @@
   padding-inline: 0.42rem;
 }
 .game-toolbar .game-flag-toggle[aria-checked="true"] {
-  border-color: color-mix(in srgb, var(--focus-color) 68%, var(--game-line));
+  border-color: transparent;
   background: color-mix(in srgb, var(--accent) 25%, var(--app-bg));
 }
 .game-toolbar .game-flag-toggle[aria-checked="true"]:hover {
@@ -405,8 +405,8 @@
 .game-promotion button:active { background: var(--btn-active); }
 .game-toolbar button:not(.util-action):disabled { cursor: not-allowed; opacity: 0.42; }
 .game-toolbar .util-action {
-  border-color: var(--game-line);
-  background: color-mix(in srgb, var(--app-bg) 72%, var(--app-text) 5%);
+  border-color: transparent;
+  background: transparent;
   color: var(--game-ink);
 }
 .game-toolbar .util-action:hover { background: var(--btn-hover); }
@@ -424,11 +424,16 @@
 .game-new-game-option .standard-select-trigger {
   min-height: 2.4rem;
   padding: 0.5rem 0.7rem;
-  border: 1px solid var(--app-border);
+  border: 1px solid transparent;
   border-radius: 0.65rem;
   background: color-mix(in srgb, var(--app-bg) 92%, var(--app-text) 8%);
   color: var(--app-text);
 }
+.game-toolbar button:not(.util-action):not(.standard-select-trigger) {
+  border-color: transparent;
+  background: transparent;
+}
+.game-toolbar .standard-select-trigger { background: transparent; }
 .game-toolbar .standard-select-trigger:hover,
 .game-settings-dialog .standard-select-trigger:hover,
 .game-new-game-option .standard-select-trigger:hover {
@@ -906,7 +911,7 @@
 
 .game-toolbar [aria-pressed="true"],
 .game-toolbar button[aria-current="true"] {
-  border-color: color-mix(in srgb, var(--focus-color) 68%, var(--game-line));
+  border-color: transparent;
   background: color-mix(in srgb, var(--accent) 25%, var(--app-bg));
 }
 

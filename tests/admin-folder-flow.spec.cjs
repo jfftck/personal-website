@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
-const { generateKeyPairSync, randomUUID, sign } = require('node:crypto');
+const { randomUUID } = require('node:crypto');
+const { createRequire } = require('node:module');
 const { spawn, spawnSync } = require('node:child_process');
 const { createServer } = require('node:http');
 const { resolve } = require('node:path');
@@ -44,23 +45,6 @@ async function stop(child) {
   await new Promise(resolveExit => child.once('exit', resolveExit));
 }
 
-function createAdminToken(privateKey, suffix) {
-  const now = Math.floor(Date.now() / 1000);
-  const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
-    .toString('base64url');
-  const claims = Buffer.from(JSON.stringify({
-    sub: `user_test_${suffix}`,
-    sid: `sess_test_${suffix}`,
-    iss: 'https://test.clerk.accounts.dev',
-    iat: now,
-    nbf: now,
-    exp: now + 300,
-  })).toString('base64url');
-  const unsigned = `${header}.${claims}`;
-  return `${unsigned}.${sign('RSA-SHA256', Buffer.from(unsigned), privateKey)
-    .toString('base64url')}`;
-}
-
 async function readManifest(url, etag) {
   const response = await fetch(url, {
     headers: etag ? { 'If-None-Match': etag } : {},
@@ -84,19 +68,42 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
   const createdPath = `admin-folder-created-${suffix}`;
   const correctedPath = `admin-folder-corrected-${suffix}`;
   const renamedPath = `admin-folder-renamed-${suffix}`;
-  const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-  const jwtKey = publicKey.export({ type: 'spki', format: 'pem' });
-  const token = createAdminToken(privateKey, suffix);
+  const ownerUsername = process.env.REPL_OWNER || `owner-${suffix}`;
+  const sessionId = randomUUID();
+  const requireFromDatabasePackage = createRequire(resolve(rootDir, 'lib/db/src/index.ts'));
+  const { Pool } = requireFromDatabasePackage('pg');
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const apiPort = await availablePort();
   const secondApiPort = await availablePort();
   const adminPort = await availablePort();
   const apiBaseUrl = `http://127.0.0.1:${apiPort}`;
   const secondApiBaseUrl = `http://127.0.0.1:${secondApiPort}`;
   const adminBaseUrl = `http://127.0.0.1:${adminPort}`;
-  const apiEnv = { ...process.env, CLERK_JWT_KEY: jwtKey, PORT: String(apiPort) };
+  const apiEnv = { ...process.env, REPL_OWNER: ownerUsername, PORT: String(apiPort) };
   const secondApiEnv = { ...apiEnv, PORT: String(secondApiPort) };
   const adminEnv = { ...process.env, BASE_PATH: '/', PORT: String(adminPort) };
   delete adminEnv.REPL_ID;
+  const now = Math.floor(Date.now() / 1000);
+  const expire = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  await pool.query(
+    `INSERT INTO sessions (sid, sess, expire) VALUES ($1, $2::jsonb, $3)`,
+    [
+      sessionId,
+      JSON.stringify({
+        user: {
+          id: `admin-folder-flow-${suffix}`,
+          username: ownerUsername,
+          email: `${ownerUsername}@example.test`,
+          firstName: 'Test',
+          lastName: null,
+          profileImageUrl: null,
+        },
+        access_token: 'test-session',
+        expires_at: now + 3600,
+      }),
+      expire,
+    ],
+  );
 
   const api = spawn(process.execPath, ['dist/index.mjs'], {
     cwd: apiDir,
@@ -122,35 +129,21 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
     expect(await waitForHttp(secondApi, `${secondApiBaseUrl}/api/healthz`)).toBe(true);
     expect(await waitForHttp(admin, adminBaseUrl)).toBe(true);
 
-    await page.route('**/api/clerk-config', route => route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ publishableKey: 'pk_test_admin-folder-flow' }),
-    }));
-    await page.route('**/clerk-js/clerk.browser.js', route => route.fulfill({
-      contentType: 'application/javascript',
-      body: `window.Clerk = {
-        user: { id: 'user_test_${suffix}' },
-        session: { getToken: async () => '${token}' },
-        load: async () => {},
-        addListener: () => () => {},
-        mountSignIn: () => {},
-        unmountSignIn: () => {},
-        signOut: async () => {},
-      };`,
-    }));
-    await page.route('**/api/content/**', async route => {
+    const proxyApiRequest = async route => {
       const request = route.request();
       const target = `${apiBaseUrl}${new URL(request.url()).pathname}`;
       const upstream = await route.fetch({
         url: target,
         method: request.method(),
-        headers: request.headers(),
+        headers: { ...request.headers(), Cookie: `sid=${sessionId}` },
         ...(request.postDataBuffer()
           ? { postData: request.postDataBuffer() }
           : {}),
       });
       await route.fulfill({ response: upstream });
-    });
+    };
+    await page.route('**/api/auth/user', proxyApiRequest);
+    await page.route('**/api/content/**', proxyApiRequest);
 
     await page.goto(adminBaseUrl);
     await expect(page.getByTestId('create-folder')).toBeVisible();
@@ -309,22 +302,24 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
     if (childFolderId) {
       await fetch(`${apiBaseUrl}/api/content/folders/${childFolderId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Cookie: `sid=${sessionId}` },
       }).catch(() => {});
     }
     if (correctedFolderId) {
       await fetch(`${apiBaseUrl}/api/content/folders/${correctedFolderId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Cookie: `sid=${sessionId}` },
       }).catch(() => {});
     }
     if (folderId) {
       await fetch(`${apiBaseUrl}/api/content/folders/${folderId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Cookie: `sid=${sessionId}` },
       }).catch(() => {});
     }
     await Promise.all([stop(admin), stop(api), stop(secondApi)]);
+    await pool.query('DELETE FROM sessions WHERE sid = $1', [sessionId]).catch(() => {});
+    await pool.end();
   }
 });
 

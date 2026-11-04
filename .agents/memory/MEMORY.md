@@ -15,3 +15,4 @@
 - [Settings color choice groups](settings-color-choice-groups.md) — when color selectors repeat names, include the tint role in each accessible name and scope interactions by group.
 - [Settings scroll restoration](settings-scroll-restoration.md) — preserve the active scroll container when shared settings updates redraw the current page.
 - [Refactor task tracking](refactor-task-tracking.md) — create a project task before planned refactors to reduce complexity or improve maintainability.
+- [Toolbar button style](toolbar-button-style.md) — keep app toolbar actions borderless like File Manager while preserving focus and selected states.

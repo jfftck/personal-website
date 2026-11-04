@@ -31,7 +31,10 @@ export function buildCalendar(id, ctx) {
     <div class="cal-content"></div>`;
 
   for (const button of root.querySelectorAll('.cal-nav-button, .cal-today-button')) {
-    wrapAppButton(button, { size: button.classList.contains('cal-nav-button') ? 'icon' : 'standard' });
+    wrapAppButton(button, {
+      size: button.classList.contains('cal-nav-button') ? 'icon' : 'standard',
+      variant: 'quiet',
+    });
   }
 
   const period = root.querySelector('.cal-period');

@@ -161,11 +161,13 @@ export function buildFileManager(id, ctx) {
   const homeBtn = document.createElement('button');
   homeBtn.className = 'fm-sidebar-btn active';
   homeBtn.dataset.path = '/';
-  homeBtn.setAttribute('aria-current', 'true');
+  homeBtn.setAttribute('aria-current', 'page');
   homeBtn.innerHTML = `
-    <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true">
-      <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-    </svg>
+    <span class="fm-sidebar-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      </svg>
+    </span>
     <span class="fm-sidebar-label">/home</span>
   `;
   sidebar.appendChild(homeBtn);
@@ -176,7 +178,7 @@ export function buildFileManager(id, ctx) {
     btn.dataset.path = fd.id;
     btn.setAttribute('aria-current', 'false');
     btn.innerHTML = `
-      <span style="color:${fd.color}">${FOLDER_ICONS[fd.id]}</span>
+      <span class="fm-sidebar-icon" style="--fm-icon-color:${fd.color}" aria-hidden="true">${FOLDER_ICONS[fd.id]}</span>
       <span class="fm-sidebar-label">${fd.label}</span>
       <span class="fm-sidebar-count" data-folder="${fd.id}"></span>
     `;
@@ -399,7 +401,7 @@ export function buildFileManager(id, ctx) {
     sidebar.querySelectorAll('.fm-sidebar-btn').forEach(btn => {
       const active = btn.dataset.path === currentPath;
       btn.classList.toggle('active', active);
-      btn.setAttribute('aria-current', active ? 'true' : 'false');
+      btn.setAttribute('aria-current', active ? 'page' : 'false');
     });
     const fd = FOLDERS_DEF.find(f => f.id === currentPath);
     ctx.setAppTitle(id, currentPath === '/' ? '/home' : `/home/${fd ? fd.label : currentPath}`);

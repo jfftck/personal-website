@@ -21,7 +21,7 @@ export const ICONS = {
 };
 
 export function toolBtn(action, icon, label) {
-  return `<app-button><button type="button" class="tool-btn" data-action="${action}" title="${label}" aria-label="${label}">
+  return `<app-button variant="quiet"><button type="button" class="tool-btn" data-action="${action}" title="${label}" aria-label="${label}">
     ${ICONS[icon]}<span class="lbl">${label}</span>
   </button></app-button>`;
 }
