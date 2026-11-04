@@ -70,16 +70,8 @@
 }
 .animation-picker-close {
   flex: 0 0 auto;
-  min-height: 2.15rem;
-  padding: .4rem .75rem;
-  border: 1px solid color-mix(in srgb, currentColor 19%, transparent);
-  border-radius: .6rem;
-  background: color-mix(in srgb, var(--app-bg, #171d22) 86%, currentColor 14%);
-  color: inherit;
   font: inherit;
-  cursor: pointer;
 }
-.animation-picker-close:hover { background: color-mix(in srgb, var(--app-bg, #171d22) 74%, currentColor 26%); }
 .animation-picker-options {
   display: grid;
   align-content: start;
@@ -138,16 +130,9 @@
   min-height: 2.6rem;
   align-items: center;
   gap: .55rem;
-  padding: .55rem .7rem;
-  border: 1px solid color-mix(in srgb, var(--app-text, var(--game-ink, #fff)) 17%, transparent);
-  border-radius: .65rem;
-  background: color-mix(in srgb, var(--app-bg, #171d22) 92%, var(--app-text, #fff) 8%);
-  color: var(--app-text, var(--game-ink, #f7f9fa));
   font: inherit;
   text-align: left;
-  cursor: pointer;
 }
-.animation-picker-trigger:hover { background: color-mix(in srgb, var(--app-bg, #171d22) 83%, var(--app-text, #fff) 17%); }
 .animation-picker-trigger-name { flex: 0 1 auto; font-size: .78rem; font-weight: 650; }
 .animation-picker-trigger-summary {
   overflow: hidden;

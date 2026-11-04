@@ -1,4 +1,5 @@
 import './animation-picker.css';
+import { wrapAppButton } from '../shared/app-controls.js';
 
 let activeController = null;
 let nextPanelId = 0;
@@ -36,7 +37,7 @@ export function createAnimationPickerController(host, {
   const closeButton = element('button', 'animation-picker-close', 'Done');
   closeButton.type = 'button';
   const header = element('header', 'animation-picker-header');
-  header.append(heading, closeButton);
+  header.append(heading, wrapAppButton(closeButton));
   const options = element('div', 'animation-picker-options');
   options.id = `animation-picker-options-${++nextPanelId}`;
   drawer.append(header, description, options);
@@ -202,7 +203,7 @@ export function createAnimationPickerController(host, {
         : `${picker.selected.length} selected`;
     summary.textContent = picker.summary();
     trigger.addEventListener('click', () => active === picker ? close() : open(picker));
-    root.append(trigger);
+    root.append(wrapAppButton(trigger));
     root.dataset.animationPicker = id;
     trigger.setAttribute('aria-label', `${pickerLabel}: ${picker.summary()}`);
     trigger.setAttribute('aria-controls', options.id);

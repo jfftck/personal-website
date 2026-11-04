@@ -1,6 +1,7 @@
 'use strict';
 
 import { readJSON, writeJSON } from '../data-handler.js';
+import { wrapAppButton } from '../shared/app-controls.js';
 
 const PREFS_KEY = 'personal-desktop-calendar-view-v1';
 const VIEW_NAMES = ['month', 'week', 'agenda'];
@@ -28,6 +29,10 @@ export function buildCalendar(id, ctx) {
     </header>
     <h2 class="cal-period" aria-live="polite"></h2>
     <div class="cal-content"></div>`;
+
+  for (const button of root.querySelectorAll('.cal-nav-button, .cal-today-button')) {
+    wrapAppButton(button, { size: button.classList.contains('cal-nav-button') ? 'icon' : 'standard' });
+  }
 
   const period = root.querySelector('.cal-period');
   const content = root.querySelector('.cal-content');

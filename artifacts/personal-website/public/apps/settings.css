@@ -255,20 +255,10 @@
   justify-content: center;
   gap: .45rem;
   width: max-content;
-  min-height: 2.4rem;
-  padding: .48rem .75rem;
-  border: 1px solid var(--settings-rule);
-  border-radius: .55rem;
-  background: var(--util-surface);
-  color: var(--app-text);
   font: inherit;
   font-size: .7rem;
-  cursor: pointer;
 }
-.settings-tint-reset:hover:not(:disabled) { background: var(--util-surface-strong); }
-.settings-tint-reset:disabled { opacity: .48; cursor: default; }
 .settings-tint-reset svg { width: .95rem; height: .95rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.settings-tint-reset:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 @media (pointer: coarse) {
   .settings-tint-slider::-webkit-slider-thumb { width: 1.7rem; height: 1.7rem; margin-top: -.7rem; }
   .settings-tint-slider::-moz-range-thumb { width: 1.35rem; height: 1.35rem; }
@@ -343,9 +333,7 @@
 .settings-cycle-item img { width: 2rem; height: 1.55rem; object-fit: cover; border-radius: .25rem; }
 .settings-cycle-title { overflow: hidden; font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
 .settings-cycle-actions { display: flex; gap: .15rem; }
-.settings-icon-button { display: grid; width: 1.65rem; height: 1.65rem; place-items: center; border: 1px solid var(--settings-rule); border-radius: .38rem; background: var(--util-surface); color: var(--app-text); cursor: pointer; }
-.settings-icon-button:hover { background: var(--util-surface-strong); }
-.settings-icon-button:disabled { opacity: .35; cursor: default; }
+.settings-icon-button { display: grid; width: 1.75rem; height: 1.75rem; place-items: center; }
 .settings-cycle-empty { padding: .55rem; color: var(--util-detail); font-size: .68rem; }
 .settings-select-label { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: .7rem 0; color: var(--util-detail); font-size: .7rem; }
 .settings-select-label .standard-select-control { width: min(9rem, 55%); }
@@ -365,16 +353,9 @@
   align-items: center;
   gap: .4rem;
   width: max-content;
-  padding: .4rem .58rem;
-  border: 1px solid var(--settings-rule);
-  border-radius: .55rem;
-  background: var(--util-surface);
-  color: var(--app-text);
   font-size: .7rem;
-  cursor: pointer;
 }
 .settings-back span:first-child { font-size: 1.1rem; line-height: .8; }
-.settings-back:hover { background: var(--util-surface-strong); }
 @container (max-width: 619px) {
   .settings-layout {
     display: block;

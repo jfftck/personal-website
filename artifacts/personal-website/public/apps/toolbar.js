@@ -1,5 +1,7 @@
 'use strict';
 
+import '../shared/app-controls.js';
+
 export const SETTINGS_ICON = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94a7.5 7.5 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.28 7.28 0 0 0-1.63-.94l-.36-2.54a.49.49 0 0 0-.49-.42h-3.84a.49.49 0 0 0-.49.42l-.36 2.54c-.59.23-1.14.55-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.61 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.5 7.5 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.49.39 1.04.71 1.63.94l.36 2.54a.49.49 0 0 0 .49.42h3.84a.49.49 0 0 0 .49-.42l.36-2.54c.59-.23 1.14-.55 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>`;
 
 export const ICONS = {
@@ -19,9 +21,9 @@ export const ICONS = {
 };
 
 export function toolBtn(action, icon, label) {
-  return `<button class="tool-btn" data-action="${action}" title="${label}" aria-label="${label}">
+  return `<app-button><button type="button" class="tool-btn" data-action="${action}" title="${label}" aria-label="${label}">
     ${ICONS[icon]}<span class="lbl">${label}</span>
-  </button>`;
+  </button></app-button>`;
 }
 
 const supportsContainerQueries = CSS.supports('container-type: inline-size');

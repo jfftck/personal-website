@@ -377,7 +377,7 @@
   text-transform: uppercase;
 }
 
-.game-toolbar button,
+.game-toolbar button:not(.util-action):not(.standard-select-trigger),
 .game-toolbar select,
 .game-settings-dialog button,
 .game-settings-dialog select,
@@ -394,16 +394,23 @@
 
 .game-toolbar button[hidden] { display: none !important; }
 
-.game-toolbar button,
+.game-toolbar button:not(.util-action):not(.standard-select-trigger),
 .game-settings-dialog button,
 .game-promotion button { cursor: pointer; }
-.game-toolbar button:hover,
+.game-toolbar button:not(.util-action):not(.standard-select-trigger):hover,
 .game-settings-dialog button:hover,
 .game-promotion button:hover { background: var(--btn-hover); }
-.game-toolbar button:active,
+.game-toolbar button:not(.util-action):not(.standard-select-trigger):active,
 .game-settings-dialog button:active,
 .game-promotion button:active { background: var(--btn-active); }
-.game-toolbar button:disabled { cursor: not-allowed; opacity: 0.42; }
+.game-toolbar button:not(.util-action):disabled { cursor: not-allowed; opacity: 0.42; }
+.game-toolbar .util-action {
+  border-color: var(--game-line);
+  background: color-mix(in srgb, var(--app-bg) 72%, var(--app-text) 5%);
+  color: var(--game-ink);
+}
+.game-toolbar .util-action:hover { background: var(--btn-hover); }
+.game-toolbar .util-action:active { background: var(--btn-active); }
 
 .game-toolbar select,
 .game-settings-dialog select,

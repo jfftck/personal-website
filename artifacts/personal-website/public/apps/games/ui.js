@@ -20,7 +20,7 @@ export function button(text, onClick, className = '') {
 }
 
 export function toolbarButton(text, icon, onClick, className = '') {
-  const el = button(text, onClick, `game-toolbar-icon-button ${className}`.trim());
+  const el = button(text, onClick, `util-action game-toolbar-icon-button ${className}`.trim());
   el.title = text;
   el.setAttribute('aria-label', text);
   el.innerHTML = TOOLBAR_ICONS[icon] || '';
@@ -204,7 +204,7 @@ export function gameShell(id, title, rules, ctx, iconSvg) {
   const instructionsButton = button(
     'Instructions',
     () => setInstructionsOpen(!instructionsOpen),
-    'game-toolbar-icon-button game-instructions-toggle',
+    'util-action game-toolbar-icon-button game-instructions-toggle',
   );
   instructionsButton.title = 'Instructions';
   instructionsButton.setAttribute('aria-label', 'Instructions');

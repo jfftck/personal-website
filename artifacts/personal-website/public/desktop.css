@@ -1838,26 +1838,10 @@ body.mod-overview .app-window.focused {
   align-items: center;
   justify-content: center;
   gap: 0.3rem;
-  padding: 0.3125rem 0.5rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: transparent;
-  color: var(--app-text);
-  cursor: pointer;
   font-size: 0.75rem;
   font-family: inherit;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: background-color 120ms ease, opacity 120ms ease;
-}
-
-.tool-btn:hover  { background-color: var(--btn-hover); }
-.tool-btn:active { background-color: var(--btn-active); }
-.tool-btn:disabled { cursor: wait; opacity: 0.55; }
-
-.tool-btn:focus-visible {
-  outline: 2px solid var(--focus-color);
-  outline-offset: 1px;
 }
 
 .tool-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
@@ -2017,17 +2001,45 @@ body.mod-overview .app-window.focused {
 .util-muted { color:color-mix(in srgb,var(--app-text) 64%,transparent); }
 .util-action {
   min-height:2.4rem;
-  border:1px solid var(--app-border);
-  background:var(--util-surface);
-  color:var(--app-text);
+  border:1px solid var(--app-border, var(--game-line, currentColor));
+  background:var(--util-surface, color-mix(in srgb,var(--app-bg, #171d22) 92%,var(--app-text, var(--game-ink, #fff)) 8%));
+  color:var(--app-text, var(--game-ink, currentColor));
   border-radius:.65rem;
   padding:.5rem .75rem;
   cursor:pointer;
   transition:background-color 140ms ease,border-color 140ms ease;
 }
-.util-action:hover { background:var(--util-surface-strong); }
-.util-action:active { background:var(--util-surface-strong); }
+.util-action:hover { background:var(--util-surface-strong, var(--btn-hover, color-mix(in srgb,var(--app-bg, #171d22) 82%,var(--app-text, #fff) 18%))); }
+.util-action:active { background:var(--util-surface-strong, var(--btn-active, color-mix(in srgb,var(--app-bg, #171d22) 78%,var(--app-text, #fff) 22%))); }
 .util-action:disabled { opacity:.45; cursor:default; pointer-events:none; }
+app-button { display:contents; }
+.util-action[data-app-button-size="icon"] {
+  display:inline-grid;
+  width:2.4rem;
+  min-width:2.4rem;
+  height:2.4rem;
+  min-height:2.4rem;
+  place-items:center;
+  padding:.4rem;
+  line-height:1;
+}
+.util-action[data-app-button-size="compact"] {
+  display:inline-grid;
+  width:1.75rem;
+  min-width:1.75rem;
+  height:1.75rem;
+  min-height:1.75rem;
+  place-items:center;
+  padding:0;
+  border-radius:.48rem;
+  line-height:1;
+}
+.util-action[data-app-button-variant="quiet"] { border-color:transparent; background:transparent; }
+.util-action[data-app-button-variant="primary"] {
+  border-color:color-mix(in srgb,var(--accent) 86%,#000);
+  background:color-mix(in srgb,var(--accent) 86%,#000);
+  color:#fff;
+}
 .util-field {
   min-width:0;
   min-height:2.4rem;
@@ -2044,14 +2056,12 @@ body.mod-overview .app-window.focused {
 .cal-toolbar { flex:none; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:.55rem; padding:.55rem .75rem; border-bottom:1px solid var(--app-border); }
 .cal-toolbar-nav,.cal-toolbar-options { display:flex; align-items:center; gap:.35rem; min-width:0; }
 .cal-toolbar-options { justify-content:flex-end; }
-.cal-nav-button,.cal-today-button { min-width:2.4rem; min-height:2.4rem; display:inline-grid; place-items:center; padding:.35rem .6rem; border:1px solid var(--app-border); border-radius:.65rem; background:var(--util-surface); color:var(--app-text); cursor:pointer; transition:background-color 120ms ease; }
 .cal-nav-button { font-size:1.25rem; line-height:1; }
-.cal-nav-button:hover,.cal-today-button:hover { background:var(--util-surface-strong); }
 .cal-view-switch { justify-self:center; display:flex; align-items:center; gap:.15rem; padding:.2rem; border:1px solid var(--app-border); border-radius:.75rem; background:var(--toolbar-bg); }
 .cal-view-button { min-height:2.4rem; padding:.38rem .68rem; border:0; border-radius:.55rem; background:transparent; color:var(--app-text); font-size:.78rem; font-weight:600; cursor:pointer; transition:background-color 120ms ease,color 120ms ease; }
 .cal-view-button:hover { background:var(--util-surface-strong); }
 .cal-view-button[aria-pressed="true"] { background:var(--accent); color:#fff; box-shadow:0 1px 4px rgba(0,0,0,.18); }
-.cal-view-button:focus-visible,.cal-nav-button:focus-visible,.cal-today-button:focus-visible,.cal-weekend-control:focus-within { outline:2px solid var(--focus-color); outline-offset:2px; }
+.cal-view-button:focus-visible,.cal-weekend-control:focus-within { outline:2px solid var(--focus-color); outline-offset:2px; }
 .cal-weekend-control { display:flex; align-items:center; gap:.35rem; color:var(--util-detail); font-size:.74rem; white-space:nowrap; cursor:pointer; }
 .cal-weekend-control[hidden] { display:none; }
 .cal-weekend-control input { accent-color:var(--accent); }

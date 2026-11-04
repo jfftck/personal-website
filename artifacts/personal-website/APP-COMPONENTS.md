@@ -1,28 +1,76 @@
-# Shared app controls
+# Desktop styles and shared controls
 
-Use the shared controls in `public/shared/` instead of creating one-off dropdowns or dialog action rows.
+Use the shared controls in `public/shared/` and the shared tokens in `public/desktop.css` before adding an app-specific version. Keep app-specific layout and artwork where they communicate a distinct task or game theme.
 
-## Select controls
+## Style families
 
-Use a native `<select>` inside `<app-select>`. The component keeps the native select as the value and form source, and provides the app-wide accessible listbox, popover styling, keyboard navigation, and CSS Anchor/Popover behavior with a positioning fallback.
+| Family | Source | Role and boundaries |
+| --- | --- | --- |
+| Desktop shell and windows | `public/desktop.css` | Light/dark system theme, accent and focus colors, window tint/opacity, toolbar surfaces, popovers, and desktop chrome. Window content should inherit these tokens instead of defining another global palette. |
+| Utility apps | `public/desktop.css` plus app styles | `.utility-app` supplies shared utility colors and controls for apps such as Weather, World Clock, Calendar, Sticky Notes, and Calculator. Keep specialized content layouts (for example, a calendar grid or calculator keypad), but use `.util-action`, `.util-field`, and the shared menu pattern for ordinary controls. |
+| Settings | `public/apps/settings.css` | Uses the desktop theme with a distinct sidebar, section headings, and card hierarchy. Preserve that information architecture; routine buttons and fields should still use shared controls. |
+| Game surfaces and boards | `public/apps/games/games.css` | Game toolbar and board layouts with per-game rules, board colors, and tactile table treatments. Reuse the common toolbar button base, but retain game-specific board geometry, status, and rules. |
+| Game material and artwork | `public/apps/games/glass.css`, `public/apps/games/artwork.css` | Glass is a board/piece material overlay. Artwork selects card faces/backs and chess/reversi piece styles. These are intentionally independent from the app/window color theme. Do not flatten them into utility-app colors. |
+| Animation picker | `public/apps/animation-picker.css` | A shared right-side drawer used by desktop and game animation settings. It inherits the active window/game theme and keeps its own overlay, drawer, and animation behavior. Its trigger and Done action use the shared button base. |
+| Legacy landing page | `public/index-legacy.html`, `public/index.css` | Separate editorial landing-page styling; it is not the desktop app stylesheet. Keep it separate unless the landing page itself is being redesigned. |
 
-```html
-<app-select>
-  <label>
-    Graph mode
-    <select aria-label="Graph mode">
-      <option value="cartesian">Cartesian</option>
-      <option value="polar">Polar</option>
-    </select>
-  </label>
-</app-select>
+### Intentional differences
+
+- The top bar and app launcher are desktop chrome, not utility-app controls.
+- Settings cards, theme swatches, selected categories, and calendar view segments communicate selection; their selected appearance is not a keyboard-focus ring.
+- Calculator math keys and expression inputs need math-specific sizing and typography.
+- Sticky-note colors, game boards, game pieces, and playing-card artwork remain independently themed.
+- Game start/win/error screens and board cells have game-specific interaction and layering. Do not replace them with generic dialogs or tiles.
+
+## Control inventory
+
+| Control | Shared pattern | Current use and allowed variation |
+| --- | --- | --- |
+| Standard action button | `<app-button><button …></button></app-button>` and `.util-action` | Settings navigation/reset/order actions, animation-picker trigger/Done, viewer toolbars, and calendar navigation. Native buttons remain the semantic and event target. Variants: `size="icon"` or `size="compact"`; `variant="primary"` or `variant="quiet"` when needed. A specific app may add layout classes, but should not restyle the common border, surface, focus, or disabled state. |
+| Game toolbar action | Native button with `.util-action` | Game toolbar controls share the action surface and focus behavior while `games.css` supplies the game palette and icon dimensions. Preserve game-specific pressed states such as Minesweeper Flag mode. |
+| Text input | `.util-field` on the native input/textarea | Shared border, surface, text, and placeholder styling. Keep labels and descriptions in the app so the visible and accessible names remain meaningful. Calculator expression/function inputs are an intentional specialized exception. |
+| Select/menu | `<app-select>` around a native `<select>`; `enhanceSelect()` / `enhanceSelects()` | The native select remains the value/form source; the custom component supplies the accessible listbox, keyboard handling, popover/anchor positioning, and fallback. Do not introduce a parallel dropdown for ordinary option lists. |
+| Popover list | `.menu-popover` and the standard select popover styles | Shared tinted/blurred surface and stacking behavior for app menus. Keep menu items and placement app-specific, and ensure the popover overlays nearby content. |
+| Dialog footer | `<app-dialog-actions>` inside a native `<dialog>` | Shared Cancel-before-primary ordering and Cancel behavior. Keep apply/save behavior in the owning app. Game overlays that must coexist with game screens remain a separate, explicitly managed pattern. |
+| Toggle / selected choice | Native checkbox or button with `aria-pressed` / `aria-checked` | Use the state that matches the control semantics. A selected item gets its selected appearance; `:focus-visible` alone gets the keyboard focus ring. |
+| Focus treatment | `--focus-color` and `:focus-visible` | Use the same focus color across apps. Do not add persistent focus rings to selected tiles or swatches. |
+
+## Recommended style boundaries
+
+- Keep one shared base for ordinary button border, surface, focus, and disabled states. App-specific classes should primarily set placement, sizing, and content; game toolbars may additionally use the game palette.
+- Keep text fields and option menus on `.util-field` and `<app-select>`. The calculator’s math editor, segmented views, color swatches, and game-specific choices need their own geometry, not a second general-purpose control style.
+- Keep the selected state separate from keyboard focus. Selected categories and choices can use the focus color for their border, while the visible focus ring only appears on the element currently reached by keyboard.
+- Keep popover stacking and surface treatment shared so menus stay readable above nearby content. Do not copy menu background, blur, or z-index rules into each app.
+- Preserve the game board, piece, card, sticky-note, and window-material themes as distinct visual systems; share their controls without merging their artwork or surfaces.
+
+## Using shared controls
+
+Import `wrapAppButton` from `public/shared/app-controls.js` when creating a standard button in JavaScript. It wraps a native button without moving its event listeners or changing its accessible name:
+
+```js
+import { wrapAppButton } from '../shared/app-controls.js';
+
+const save = document.createElement('button');
+save.type = 'button';
+save.textContent = 'Save';
+container.append(wrapAppButton(save, { variant: 'primary' }));
 ```
 
-When creating controls in JavaScript, call `enhanceSelect(select)` or `enhanceSelects(container)` from `public/apps/custom-select.js`. They wrap native selects in `<app-select>` automatically. After changing a select's value programmatically, call `refreshCustomSelect(select)` so the visible combobox stays in sync.
+For markup strings, use the same custom element directly:
+
+```html
+<app-button size="icon">
+  <button type="button" aria-label="Close" title="Close">…</button>
+</app-button>
+```
+
+The inner native button remains the actual control, so keep `type`, accessible names, `disabled`, `aria-pressed` / `aria-checked`, and event handlers on it. Use icon-only controls only when they have an accessible name and tooltip. Do not wrap board cells, card tiles, segmented-choice cards, or controls whose specialized visual treatment is part of the app.
+
+For fields, keep an explicit `<label>` and use `.util-field` on the native control. For menus, use `<app-select>` for option selection and the shared `.menu-popover` surface for other popovers. Use `<app-dialog-actions>` for native dialog footers rather than creating another footer layout.
 
 ## Dialog actions
 
-Use `<app-dialog-actions>` as the footer of a native dialog. Put Cancel before the primary action and mark it with `data-action="cancel"`; the shared component closes its nearest dialog. Keep the apply button's action in the owning app.
+Put Cancel before the primary action and mark Cancel with `data-action="cancel"`; the shared component closes its nearest native dialog. Keep the apply button's action in the owning app.
 
 ```html
 <app-dialog-actions>
@@ -31,6 +79,6 @@ Use `<app-dialog-actions>` as the footer of a native dialog. Put Cancel before t
 </app-dialog-actions>
 ```
 
-## Button labels
+## Labels and accessibility
 
-App-window buttons use shared title-case styling. Keep math input keys, expressions, and abbreviations in their intended case; the calculator already excludes these from title-casing.
+App-window buttons use title-case styling. Keep math input keys, expressions, and abbreviations in their intended case; the calculator excludes these from title-casing. Keep controls keyboard-operable, retain visible `:focus-visible` styling, and preserve responsive sizing, popover stacking, reduced-motion behavior, and dialog focus management when reusing a control.

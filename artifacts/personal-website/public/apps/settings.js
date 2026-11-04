@@ -2,6 +2,7 @@
 
 import { enhanceSelect } from './custom-select.js';
 import { createAnimationPickerController } from './animation-picker.js';
+import { wrapAppButton } from '../shared/app-controls.js';
 
 const PAGES = [
   { id: 'appearance', title: 'Appearance', detail: 'Choose how your desktop looks.' },
@@ -265,7 +266,7 @@ export function buildSettings(id, ctx, initialState) {
     back.hidden = !narrow;
     const titleBlock = el('div', 'settings-title-block');
     titleBlock.append(el('span', 'settings-kicker', 'PERSONAL DESKTOP'), el('h1', '', item.title), el('p', '', item.detail));
-    header.append(back, titleBlock);
+    header.append(wrapAppButton(back), titleBlock);
     page.append(header);
     const body = el('div', 'settings-page-body');
     page.append(body);
@@ -558,7 +559,7 @@ export function buildSettings(id, ctx, initialState) {
           setMessage(page.querySelector('.settings-inline-status'), error?.message || 'The window tints could not be reset.', 'error');
         }
       });
-      windowTintSection.append(darkGroup, lightGroup, opacityDescription, opacityControl, resetTints);
+      windowTintSection.append(darkGroup, lightGroup, opacityDescription, opacityControl, wrapAppButton(resetTints));
     } else {
       windowTintSection.append(el('p', 'settings-description', 'Window tint choices require a browser that supports CSS relative colors.'));
     }
@@ -801,7 +802,10 @@ export function buildSettings(id, ctx, initialState) {
         const down = el('button', 'settings-icon-button', '↓');
         down.type = 'button'; down.setAttribute('aria-label', `Move ${title.textContent} down`); down.disabled = index === orderedFiles.length - 1;
         down.addEventListener('click', () => moveSelected(index, 1));
-        actions.append(up, down);
+        actions.append(
+          wrapAppButton(up, { size: 'compact' }),
+          wrapAppButton(down, { size: 'compact' }),
+        );
         row.append(number, thumb, title, actions);
         order.append(row);
       });
@@ -855,12 +859,12 @@ export function buildSettings(id, ctx, initialState) {
     const defaultButton = el('button', 'util-action settings-default-button', 'Use Default Random Wallpaper');
     defaultButton.type = 'button';
     defaultButton.addEventListener('click', useDefaultWallpaper);
-    footer.append(defaultButton, footerStatus);
+    footer.append(wrapAppButton(defaultButton), footerStatus);
     if (wallpaperFailedAction) {
       const retry = el('button', 'util-action settings-wallpaper-retry', 'Retry');
       retry.type = 'button';
       retry.addEventListener('click', () => queueWallpaperAction(wallpaperFailedAction));
-      footer.append(retry);
+      footer.append(wrapAppButton(retry));
     }
     body.append(footer);
   }
