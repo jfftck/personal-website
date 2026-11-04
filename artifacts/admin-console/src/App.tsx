@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import {
-  Archive, ArrowDownToLine, Check, ChevronRight, File, FileImage, FileText, Film,
-  Folder, FolderPlus, HardDrive, Menu, Moon, MoreHorizontal, Pencil, Plus, RefreshCw,
-  Search, Sun, Trash2, Upload, X,
+  Archive, Check, ChevronRight, FileText, Folder, FolderPlus, Menu, MoreHorizontal,
+  Plus, RefreshCw, Search, Upload, X,
 } from 'lucide-react';
 import {
   getContentFileContent,
@@ -22,6 +21,8 @@ import {
   titleFromFilename,
 } from '@/lib/content-formatters';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { FileListPanel, FileName, fileIcon, isEditableText } from '@/components/file-list-panel';
+import { FolderNavigation } from '@/components/folder-navigation';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Toaster } from '@/components/ui/toaster';
@@ -64,14 +65,6 @@ function displaySize(bytes: number) {
   let index = 0;
   while (size >= 1024 && index < units.length - 1) { size /= 1024; index += 1; }
   return `${size < 10 ? size.toFixed(1) : Math.round(size)} ${units[index]}`;
-}
-
-function fileIcon(file: ContentFile) {
-  const type = file.contentType.toLowerCase();
-  if (type.startsWith('image/')) return <FileImage aria-hidden="true" />;
-  if (type.startsWith('video/')) return <Film aria-hidden="true" />;
-  if (/\.md$|\.markdown$|\.txt$|\.csv$/i.test(file.name) || type.startsWith('text/')) return <FileText aria-hidden="true" />;
-  return <File aria-hidden="true" />;
 }
 
 function App() {
@@ -260,7 +253,6 @@ function Console() {
     return trash.filter((file) => !query || `${file.title} ${file.name} ${file.folderPath} ${file.contentType}`.toLowerCase().includes(query));
   }, [trash, search]);
 
-  const folderChildren = (path: string) => folders.filter((folder) => folder.parentPath === path);
   const openFolderModal = (parent: string, folder?: ContentFolder) => {
     setFolderModalReturnTo(null);
     setFolderParent(parent);
@@ -525,7 +517,6 @@ function Console() {
     finally { setEditorBusy(false); }
   };
 
-  const isEditableText = (file: ContentFile) => /\.(md|markdown|txt|csv)$/i.test(file.name);
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragging(false);
@@ -543,6 +534,27 @@ function Console() {
     const documentFolder = /^(posts|documents)(\/|$)/.test(selectedFolder) ? selectedFolder : 'documents';
     uploadForm.reset({ title: '', description: '', date: localToday(), folderPath: documentFolder, isWallpaper: false });
     setModal('upload');
+  };
+  const selectAllFiles = () => {
+    setView('library');
+    setSelectedFolder('');
+    setSelectedFile(null);
+    setMobileOpen(false);
+  };
+  const selectTrash = () => {
+    setView('trash');
+    setSelectedFile(null);
+    setMobileOpen(false);
+  };
+  const selectFolder = (folder: ContentFolder) => {
+    setSelectedFolder(folder.path);
+    setView('library');
+    setSelectedFile(null);
+    setMobileOpen(false);
+  };
+  const toggleTheme = () => {
+    const nextDark = !dark;
+    setThemeOverride(nextDark === systemDark ? null : nextDark ? 'dark' : 'light');
   };
 
   if (authLoading) return <LoadingAuth />;
@@ -579,65 +591,26 @@ function Console() {
     );
   }
 
-  const renderFolders = (parent: string, depth: number): ReactNode => folderChildren(parent).map((folder) => (
-    <div key={folder.id}>
-      <div className="folder-row">
-        <button
-          type="button" className={`folder-button ${selectedFolder === folder.path && view === 'library' ? 'active' : ''}`}
-          style={{ paddingLeft: 10 + depth * 15 }} onClick={() => { setSelectedFolder(folder.path); setView('library'); setSelectedFile(null); setMobileOpen(false); }}
-          data-testid={`select-folder-${folder.id}`} aria-label={`Open folder ${folder.name}`}
-        >
-          <Folder aria-hidden="true" /><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{folder.name}</span>
-        </button>
-        <div className="folder-tools">
-          <button className="mini-action" type="button" aria-label={`Add folder inside ${folder.name}`} title="Add subfolder" onClick={() => openFolderModal(folder.path)} data-testid={`add-subfolder-${folder.id}`}><Plus /></button>
-          <button className="mini-action" type="button" aria-label={`Rename ${folder.name}`} title="Rename folder" onClick={() => openFolderModal(folder.parentPath, folder)} data-testid={`rename-folder-${folder.id}`}><Pencil /></button>
-          <button className="mini-action" type="button" aria-label={`Delete ${folder.name}`} title="Delete folder" onClick={() => void handleDeleteFolder(folder)} data-testid={`delete-folder-${folder.id}`}><Trash2 /></button>
-        </div>
-      </div>
-      {renderFolders(folder.path, depth + 1)}
-    </div>
-  ));
-
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`} aria-label="Library navigation">
-        <div className="brand">
-          <div className="brand-mark">J</div>
-          <div><div className="brand-title">JMT Archive</div><div className="brand-caption">Private publishing</div></div>
-        </div>
-        <div className="side-label">Workspace</div>
-        <button className={`side-button ${view === 'library' && !selectedFolder ? 'active' : ''}`} type="button" onClick={() => { setView('library'); setSelectedFolder(''); setSelectedFile(null); setMobileOpen(false); }} data-testid="nav-all-files">
-          <HardDrive /> All files <span className="count-pill" style={{ marginLeft: 'auto' }}>{allFiles.length}</span>
-        </button>
-        <button className={`side-button ${view === 'trash' ? 'active' : ''}`} type="button" onClick={() => { setView('trash'); setSelectedFile(null); setMobileOpen(false); }} data-testid="nav-trash">
-          <Trash2 /> Trash <span className="count-pill" style={{ marginLeft: 'auto' }}>{trash.length}</span>
-        </button>
-        <div className="side-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          Folders
-          <button className="mini-action" type="button" title="Create folder" aria-label="Create folder" onClick={() => openFolderModal(selectedFolder)} data-testid="create-folder"><FolderPlus /></button>
-        </div>
-        <div className="folder-tree">
-          {renderFolders('', 0)}
-          {folders.length === 0 && !treeQuery.isLoading ? <p style={{ padding: '0 10px', color: 'hsl(var(--muted-foreground))', fontSize: 11 }}>No folders yet.</p> : null}
-        </div>
-        <div className="sidebar-bottom">
-          <button
-            className="side-button"
-            type="button"
-            onClick={() => {
-              const nextDark = !dark;
-              setThemeOverride(nextDark === systemDark ? null : nextDark ? 'dark' : 'light');
-            }}
-            data-testid="toggle-theme"
-          >
-            {dark ? <Sun /> : <Moon />} {dark ? 'Light Appearance' : 'Dark Appearance'}
-          </button>
-          <button className="side-button" type="button" onClick={logout} data-testid="sign-out">
-            <ArrowDownToLine style={{ transform: 'rotate(180deg)' }} /> Sign Out
-          </button>
-        </div>
-      </aside>
+      <FolderNavigation
+        folders={folders}
+        selectedFolder={selectedFolder}
+        view={view}
+        mobileOpen={mobileOpen}
+        dark={dark}
+        fileCount={allFiles.length}
+        trashCount={trash.length}
+        isLoadingFolders={treeQuery.isLoading}
+        onSelectAllFiles={selectAllFiles}
+        onSelectTrash={selectTrash}
+        onSelectFolder={selectFolder}
+        onCreateFolder={openFolderModal}
+        onRenameFolder={(folder) => openFolderModal(folder.parentPath, folder)}
+        onDeleteFolder={(folder) => void handleDeleteFolder(folder)}
+        onToggleTheme={toggleTheme}
+        onSignOut={logout}
+      />
 
       {mobileOpen ? <button type="button" aria-label="Close navigation" className="mobile-backdrop" onClick={() => setMobileOpen(false)} data-testid="close-mobile-navigation" /> : null}
       <div className="main-column">
@@ -688,32 +661,27 @@ function Console() {
             </section>
           ) : treeQuery.isLoading ? <div className="panel"><SkeletonRows /></div> : treeQuery.isError ? <ErrorState error={treeQuery.error} onRetry={() => void treeQuery.refetch()} /> : (
             <div className="workspace-grid">
-              <section className="panel list-panel" aria-label="Files">
-                <div className="list-toolbar">
-                  <div className="list-title"><Folder size={16} /> Files <span className="count-pill">{visibleFiles.length}</span></div>
-                  <span className="list-hint" title={search ? 'Search results across the library' : selectedFolder || 'Private library · public delivery enabled'}>{search ? 'Search results across the library' : selectedFolder ? selectedFolder : 'Private library · public delivery enabled'}</span>
-                </div>
-                <div className="file-table-head"><span>Title</span><span>Content date</span><span>Size</span><span /></div>
-                {visibleFiles.length === 0 ? (
-                  <EmptyState title={search ? 'No files found' : 'This folder is ready'} description={search ? 'Try a different name, folder, or file type.' : 'New uploads are stored in App Storage and published from stable /files URLs.'} action={!search ? <button className="button button-primary" type="button" onClick={openUpload} data-testid="empty-upload"><Upload /> Upload a File</button> : undefined} />
-                ) : visibleFiles.map((file) => (
-                  <div
-                    key={file.id}
-                    className={`file-row ${selectedFile?.id === file.id ? 'selected' : ''}`}
-                    role="button" tabIndex={0} onClick={() => setSelectedFile(file)}
-                    onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedFile(file); } }}
-                    aria-label={`Select ${file.title}`} data-testid={`file-row-${file.id}`}
-                  >
-                    <FileName file={file} />
-                    <span className="table-meta table-date">{file.date}</span>
-                    <span className="table-meta table-size">{displaySize(file.sizeBytes)}</span>
-                    <div className="row-actions">
-                      {isEditableText(file) ? <button className="mini-action" type="button" title="Edit Text" aria-label={`Edit ${file.title}`} onClick={(event) => { event.stopPropagation(); void openTextEditor(file); }} data-testid={`edit-text-${file.id}`}><Pencil /></button> : null}
-                      <button className="mini-action" type="button" title="Move to Trash" aria-label={`Move ${file.title} to trash`} onClick={(event) => { event.stopPropagation(); void removeFile(file); }} data-testid={`trash-file-${file.id}`}><Trash2 /></button>
-                    </div>
-                  </div>
-                ))}
-              </section>
+              <FileListPanel
+                files={visibleFiles}
+                selectedFileId={selectedFile?.id ?? null}
+                selectedFolder={selectedFolder}
+                search={search}
+                formatSize={displaySize}
+                onSelectFile={setSelectedFile}
+                onEditText={(file) => void openTextEditor(file)}
+                onMoveToTrash={(file) => void removeFile(file)}
+                emptyState={visibleFiles.length === 0 ? (
+                  <EmptyState
+                    title={search ? 'No files found' : 'This folder is ready'}
+                    description={search ? 'Try a different name, folder, or file type.' : 'New uploads are stored in App Storage and published from stable /files URLs.'}
+                    action={!search ? (
+                      <button className="button button-primary" type="button" onClick={openUpload} data-testid="empty-upload">
+                        <Upload /> Upload a File
+                      </button>
+                    ) : undefined}
+                  />
+                ) : null}
+              />
 
               <button
                 className={`detail-backdrop ${selectedFile ? 'visible' : ''}`}
@@ -1046,18 +1014,6 @@ function Console() {
         </div>
       ) : null}
       {toastMessage ? <div role="status" aria-live="polite" className="toast" data-testid="status-toast">{toastMessage}</div> : null}
-    </div>
-  );
-}
-
-function FileName({ file }: { file: ContentFile }) {
-  return (
-    <div className="file-name-cell">
-      <div className="file-icon">{fileIcon(file)}</div>
-      <div className="file-name-wrap">
-        <span className="file-name" title={file.title} data-testid={`text-file-name-${file.id}`}>{file.title}</span>
-        <span className="file-sub" title={`${file.name} · ${file.folderPath || 'Root'} · ${file.contentType}`}>{file.name} · {file.folderPath || 'Root'} · {file.contentType}</span>
-      </div>
     </div>
   );
 }
