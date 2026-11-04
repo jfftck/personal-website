@@ -2281,6 +2281,9 @@ test('solitaire tableau scrolls independently and reduced motion suppresses cele
 test('Minesweeper supports reveal, touch flag mode, keyboard flags, and all board sizes', async ({ page }) => {
   const app = await openGame(page, 'minesweeper');
   await expect(app.locator('.mine-cell')).toHaveCount(81);
+  const settings = await openSettings(app);
+  await expect(settings).toBeVisible();
+  await settings.getByRole('button', { name: 'Close settings' }).click();
   const boardCentering = await app.evaluate(element => {
     const area = element.querySelector('.game-area').getBoundingClientRect();
     const wrap = element.querySelector('.mine-board-wrap').getBoundingClientRect();

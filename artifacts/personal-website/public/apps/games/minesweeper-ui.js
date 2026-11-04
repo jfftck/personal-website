@@ -1,6 +1,6 @@
 import { createMinesweeper, revealMineCell, flagMineCell } from './minesweeper.js';
 import {
-  gameShell, button, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt, showNewGameScreen,
+  gameShell, button, toolbarButton, selectControl, preserveFocus, wireBoardKeys, showRestorePrompt, showNewGameScreen,
 } from './ui.js';
 import { createGameSession, inspectGameSession } from './game-state.js';
 import { addGameThemeControl, addGameThemeResetControl } from './themes.js';
