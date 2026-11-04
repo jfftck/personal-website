@@ -89,6 +89,35 @@ test('the selected window remains focused after a page refresh', async ({ page }
   await expect(restoredImage).not.toHaveClass(/focused/);
 });
 
+test('refreshing restores saved app state without rewriting the session before user input', async ({ page }) => {
+  const session = {
+    v: 2,
+    focused: { columnIndex: 0, appIndex: 0 },
+    columns: [{
+      widthPreset: 'half',
+      apps: [{ type: 'doc-viewer', state: { url: docs[1].url } }],
+    }],
+  };
+  await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+    key: KEY,
+    value: session,
+  });
+
+  await page.reload();
+
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY)).toEqual(session);
+  await expect(page.locator('.app-window[data-type="doc-viewer"] .doc-body')).toContainText('Second document');
+});
+
+test('refreshing does not delete an unreadable saved session', async ({ page }) => {
+  const malformed = '{"v":2,"columns":';
+  await page.evaluate(({ key, value }) => localStorage.setItem(key, value), { key: KEY, value: malformed });
+
+  await page.reload();
+
+  expect(await page.evaluate(key => localStorage.getItem(key), KEY)).toBe(malformed);
+});
+
 test('each document window restores independently, including PDFs', async ({ page }) => {
   await seed(page, [
     { type: 'doc-viewer', state: { url: docs[1].url } },

@@ -6,6 +6,7 @@
 - [Content storage architecture](content-storage.md) — App Storage holds file bytes, `/files` serves generated public manifests, and private Git stores revision snapshots and object references.
 - [Admin authentication](admin-authentication.md) — private admin access uses Replit Auth with an owner check; `/files/` remains public.
 - [Authenticated API integration tests](authenticated-api-tests.md) — test protected endpoints with signed Clerk tokens and an ephemeral JWT verification key, never an auth bypass.
+- [Session restore persistence](session-restore-persistence.md) — don't rewrite saved sessions immediately after opening lazy apps; hydration can still be pending.
 - [Folder conflict handling](folder-conflict-handling.md) — check the composed folder path before insertion so duplicate-name conflicts return a useful 409.
 - [Settings responsive layout](settings-container-queries.md) — container queries cannot restyle their own container; keep responsive grid rules on a child layout wrapper.
 - [Nested settings drawers](animation-drawer-accessibility.md) — a game settings modal must not inert the animation drawer that opens alongside it.

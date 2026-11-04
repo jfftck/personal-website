@@ -133,14 +133,14 @@ function setAnimationPreference(event, value) {
   notifyDesktopSettingsChanged();
 }
 
-function applyTheme(theme = localStorage.getItem(THEME_KEY)) {
+function applyTheme(theme = localStorage.getItem(THEME_KEY), { persist = true } = {}) {
   const hasOverride = theme === 'light' || theme === 'dark';
   if (theme === 'light' || theme === 'dark') {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem(THEME_KEY, theme);
+    if (persist) localStorage.setItem(THEME_KEY, theme);
   } else {
     delete document.documentElement.dataset.theme;
-    localStorage.removeItem(THEME_KEY);
+    if (persist) localStorage.removeItem(THEME_KEY);
   }
   themeToggle.setAttribute('aria-pressed', String(effectiveTheme() === 'dark'));
   themeSplit.classList.toggle('has-override', hasOverride);
@@ -404,7 +404,9 @@ systemTimeBtn.addEventListener('click', e => {
 systemPanel.addEventListener('click', e => e.stopPropagation());
 themeToggle.addEventListener('click', () => applyTheme(effectiveTheme() === 'dark' ? 'light' : 'dark'));
 themeReset.addEventListener('click', () => applyTheme(null));
-themeMedia.addEventListener('change', () => { if (!localStorage.getItem(THEME_KEY)) applyTheme(null); });
+themeMedia.addEventListener('change', () => {
+  if (!localStorage.getItem(THEME_KEY)) applyTheme(null, { persist: false });
+});
 $('settings-open-btn').addEventListener('click', () => {
   closeSystemPanel();
   openApp('settings');
@@ -471,7 +473,7 @@ $('reminder-notification-toggle').addEventListener('click', async event => {
     event.currentTarget.disabled = false;
   }
 });
-applyTheme();
+applyTheme(localStorage.getItem(THEME_KEY), { persist: false });
 updateClock();
 renderReminders();
 updateNotificationSetting();
@@ -1573,7 +1575,7 @@ function queueNextWallpaper() {
   });
 }
 
-async function applyNextWallpaper({ transition = 'none' } = {}) {
+async function applyNextWallpaper({ transition = 'none', persist = true } = {}) {
   window.clearTimeout(wallpaperTimer);
   wallpaperTimer = 0;
   wallpaperSettings.selected = wallpaperSettings.selected.filter(url =>
@@ -1583,7 +1585,7 @@ async function applyNextWallpaper({ transition = 'none' } = {}) {
     wallpaperSettings.nextUrl = '';
     wallpaperSettings.nextChangeAt = 0;
     await setDesktopWallpaper('');
-    saveWallpaperSettings();
+    if (persist) saveWallpaperSettings();
     return;
   }
   const nextUrl = pickNextWallpaper(wallpaperSettings);
@@ -1599,7 +1601,7 @@ async function applyNextWallpaper({ transition = 'none' } = {}) {
     : 0;
   wallpaperSettings.nextUrl = '';
   queueNextWallpaper();
-  saveWallpaperSettings();
+  if (persist) saveWallpaperSettings();
   scheduleWallpaperChange();
 }
 
@@ -1616,11 +1618,11 @@ function scheduleWallpaperChange() {
   wallpaperTimer = window.setTimeout(rotateWallpaperOnTimer, delay);
 }
 
-async function rotateWallpaperOnTimer() {
+async function rotateWallpaperOnTimer({ persist = true } = {}) {
   const files = await ensureLauncherManifest('wallpapers');
   if (_launcherCacheMeta.wallpapers?.error) {
     wallpaperSettings.nextChangeAt = Date.now() + 60_000;
-    saveWallpaperSettings();
+    if (persist) saveWallpaperSettings();
     scheduleWallpaperChange();
     return;
   }
@@ -1628,7 +1630,7 @@ async function rotateWallpaperOnTimer() {
   wallpaperSettings.selected = wallpaperSettings.selected.filter(url =>
     wallpaperFiles.some(file => file.url === url));
   if (!wallpaperSettings.selected.length) {
-    await applyNextWallpaper();
+    await applyNextWallpaper({ persist });
     return;
   }
   const nextUrl = wallpaperSettings.selected.includes(wallpaperSettings.nextUrl)
@@ -1640,7 +1642,7 @@ async function rotateWallpaperOnTimer() {
     console.warn('[wallpaper] Could not load the next wallpaper.', error);
     wallpaperSettings.nextChangeAt = Date.now() + 60_000;
     wallpaperSettings.nextUrl = '';
-    saveWallpaperSettings();
+    if (persist) saveWallpaperSettings();
     scheduleWallpaperChange();
     return;
   }
@@ -1648,7 +1650,7 @@ async function rotateWallpaperOnTimer() {
   wallpaperSettings.nextUrl = '';
   wallpaperSettings.nextChangeAt = Date.now() + wallpaperSettings.intervalMinutes * 60_000;
   queueNextWallpaper();
-  saveWallpaperSettings();
+  if (persist) saveWallpaperSettings();
   scheduleWallpaperChange();
 }
 
@@ -1672,13 +1674,12 @@ async function initializeDesktopWallpaper() {
       try { await setDesktopWallpaper(wallpaperSettings.currentUrl, 'none'); }
       catch (error) { console.warn('[wallpaper] The saved wallpaper could not be restored.', error); }
       queueNextWallpaper();
-      saveWallpaperSettings();
       scheduleWallpaperChange();
     } else {
-      await rotateWallpaperOnTimer();
+      await rotateWallpaperOnTimer({ persist: false });
     }
   } else {
-    await applyNextWallpaper({ transition: 'none' });
+    await applyNextWallpaper({ transition: 'none', persist: false });
   }
 }
 
@@ -2304,7 +2305,7 @@ function restoreSession() {
     if (!raw) return;
 
     const data = JSON.parse(raw);
-    if (!data) { safeRemoveSession(); return; }
+    if (!data) return;
 
     S._skipSave = true;
 
@@ -2352,11 +2353,9 @@ function restoreSession() {
     }
 
     S._skipSave = false;
-    saveSession();
     if (S.focusedId) requestAnimationFrame(() => scrollToApp(S.focusedId));
   } catch {
     S._skipSave = false;
-    safeRemoveSession();
   }
 }
 

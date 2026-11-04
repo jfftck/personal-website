@@ -261,17 +261,10 @@ export function buildSettings(id, ctx, initialState) {
     card.append(note);
     body.append(card);
 
-    const animationCard = el('section', 'settings-card settings-control-card settings-animation-card');
-    animationCard.append(
-      el('span', 'settings-card-eyebrow', 'MOTION'),
-      el('h2', '', 'Window animations'),
-      el('p', 'settings-description', 'Choose animations for each desktop action. When several are selected, one is chosen at random.')
-    );
     const animationPreferences = current.animationPreferences || {};
     const animationRows = el('div', 'settings-animation-rows');
     for (const [event, config] of Object.entries(ANIMATION_OPTIONS)) {
-      const row = el('section', 'settings-animation-row');
-      row.append(el('h3', '', config.label));
+      const row = el('div', 'settings-animation-row');
       row.append(animationPicker.createPicker({
         id: `animation-${event}`,
         label: config.label,
@@ -289,12 +282,11 @@ export function buildSettings(id, ctx, initialState) {
       }));
       animationRows.append(row);
     }
-    animationCard.append(animationRows);
+    body.append(animationRows);
     const animationStatus = el('p', 'settings-inline-status');
     animationStatus.setAttribute('role', 'status');
     animationStatus.hidden = true;
-    animationCard.append(animationStatus);
-    body.append(animationCard);
+    body.append(animationStatus);
   }
 
   function renderTime(body) {
@@ -524,7 +516,6 @@ export function buildSettings(id, ctx, initialState) {
       scheduleCard.append(field);
       enhanceSelect(select);
     }
-    scheduleCard.append(el('div', 'settings-subheading', 'Transition'));
     scheduleCard.append(animationPicker.createPicker({
       id: 'wallpaper-transition',
       label: 'Wallpaper transition',

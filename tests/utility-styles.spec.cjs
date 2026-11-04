@@ -95,6 +95,7 @@ test('Wallpaper settings apply changes immediately without save or cancel action
   await expect(wallpaperPage.getByText('Eligible wallpapers')).toBeVisible();
   await expect(wallpaperPage.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
   await expect(wallpaperPage.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
+  await expect(wallpaperPage.locator('.settings-subheading')).toHaveCount(0);
 
   const transitionPicker = wallpaperPage.getByRole('button', { name: /Wallpaper transition/ });
   await transitionPicker.evaluate(button => button.click());
@@ -112,6 +113,43 @@ test('Wallpaper settings apply changes immediately without save or cancel action
   expect(await page.evaluate(() => window.__wallpaperTestCalls[1].transition)).toEqual([]);
   await transitionPanel.getByRole('button', { name: 'Done' }).click();
   await expect(wallpaperPage.getByRole('status')).toContainText('applied');
+});
+
+test('animation settings use the picker labels without duplicate card headings', async ({ page }) => {
+  const settings = await openUtility(page, 'settings');
+  await expect(settings.getByRole('heading', { name: 'Window animations' })).toHaveCount(0);
+  await expect(settings.getByRole('button', { name: /Opening windows/ })).toBeVisible();
+  await expect(settings.getByRole('button', { name: /Closing windows/ })).toBeVisible();
+  await expect(settings.locator('.settings-animation-row h3')).toHaveCount(0);
+});
+
+test('wallpaper startup does not overwrite saved preferences when the manifest has no matches', async ({ page }) => {
+  const key = 'desktop-wallpaper-settings-v1';
+  const saved = {
+    selected: ['/pictures/keep-this-wallpaper.jpg'],
+    mode: 'cycle',
+    rotation: 'interval',
+    intervalMinutes: 15,
+    transition: ['zoom'],
+    currentUrl: '/pictures/keep-this-wallpaper.jpg',
+    nextUrl: '',
+    nextChangeAt: 0,
+  };
+  await page.route('**/files/manifest.json', route => route.fulfill({ json: { wallpapers: [] } }));
+  await page.addInitScript(storageKey => {
+    window.__wallpaperPreferenceWrites = 0;
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (name, value) {
+      if (name === storageKey) window.__wallpaperPreferenceWrites += 1;
+      return original.call(this, name, value);
+    };
+  }, key);
+  await page.evaluate(({ key, saved }) => localStorage.setItem(key, JSON.stringify(saved)), { key, saved });
+
+  await page.reload();
+
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)), key)).toEqual(saved);
+  expect(await page.evaluate(() => window.__wallpaperPreferenceWrites)).toBe(0);
 });
 
 test('Appearance settings support independent multi-select animation preferences', async ({ page }) => {
