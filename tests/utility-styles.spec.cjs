@@ -141,8 +141,8 @@ test('accent color choices are browser-gated, persist, and retain readable contr
   const colors = settings.locator('.settings-accent-choice');
   await expect(colors).toHaveCount(6);
   await expect(settings.getByRole('button', { name: 'Blue, default' })).toHaveAttribute('aria-pressed', 'true');
-  await settings.getByRole('button', { name: 'Purple' }).click();
-  await expect(settings.getByRole('button', { name: 'Purple' })).toHaveAttribute('aria-pressed', 'true');
+  await settings.getByRole('button', { name: 'Purple', exact: true }).click();
+  await expect(settings.getByRole('button', { name: 'Purple', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.accentColor)).toBe('purple');
   expect(await page.evaluate(() => localStorage.getItem('desktop-accent-color'))).toBe('purple');
 
@@ -171,8 +171,170 @@ test('accent color choices are browser-gated, persist, and retain readable contr
   await page.reload();
   await page.locator('#welcome-win-close').click();
   const restoredSettings = await openUtility(page, 'settings');
-  await expect(restoredSettings.getByRole('button', { name: 'Purple' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(restoredSettings.getByRole('button', { name: 'Purple', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.accentColor)).toBe('purple');
+});
+
+test('window tints reverse with appearance, support keyboard lightness, and keep contrast', async ({ page }) => {
+  const settings = await openUtility(page, 'settings');
+  const supports = await page.evaluate(() =>
+    CSS.supports('color', 'oklch(from #006699 calc(l + 0.1) c h)'),
+  );
+  const tintKey = 'desktop-window-tints-v2';
+
+  if (!supports) {
+    await expect(settings.getByText(/window tint choices require a browser/i)).toBeVisible();
+    await expect(settings.locator('.settings-tint-choice')).toHaveCount(0);
+    return;
+  }
+
+  expect(await page.evaluate(key => localStorage.getItem(key), tintKey)).toBeNull();
+  await expect(settings.getByRole('group', { name: 'Dark window tint' }).getByRole('button')).toHaveCount(6);
+  const lightTintGroup = settings.getByRole('group', { name: 'Light window tint' });
+  await expect(lightTintGroup.getByRole('button')).toHaveCount(7);
+  await expect(lightTintGroup.getByRole('button', { name: 'None light tint' })).toHaveAttribute('aria-pressed', 'true');
+  let lightness = settings.getByRole('slider', { name: 'Light tint lightness' });
+  await expect(lightness).toHaveValue('100');
+  await expect(lightness).toHaveAttribute('max', '100');
+
+  await settings.getByRole('group', { name: 'Dark window tint' }).getByRole('button', { name: 'Teal dark tint' }).click();
+  await lightTintGroup.getByRole('button', { name: 'Purple light tint' }).click();
+  lightness = settings.getByRole('slider', { name: 'Light tint lightness' });
+  await expect(lightness).toHaveValue('95');
+  await expect(lightness).toHaveAttribute('max', '95');
+  await lightness.focus();
+  await page.keyboard.press('Home');
+  lightness = settings.getByRole('slider', { name: 'Light tint lightness' });
+  await expect(lightness).toHaveValue('75');
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), tintKey)).toEqual({
+    darkTint: 'teal',
+    lightTint: 'purple',
+    lightness: 75,
+  });
+  await expect.poll(() => lightness.evaluate(input => document.activeElement === input)).toBe(true);
+
+  await settings.locator('.settings-theme-choice[data-theme="dark"]').click();
+  const darkMapping = await page.evaluate(() => {
+    const style = getComputedStyle(document.documentElement);
+    return {
+      background: style.getPropertyValue('--window-background-tint').trim(),
+      dark: style.getPropertyValue('--window-dark-tint-color').trim(),
+      foreground: style.getPropertyValue('--window-foreground-tint').trim(),
+      light: style.getPropertyValue('--window-light-tint-color').trim(),
+    };
+  });
+  expect(darkMapping.background).toBe(darkMapping.dark);
+  expect(darkMapping.foreground).toBe(darkMapping.light);
+
+  await settings.locator('.settings-theme-choice[data-theme="light"]').click();
+  const lightMapping = await page.evaluate(() => {
+    const style = getComputedStyle(document.documentElement);
+    return {
+      background: style.getPropertyValue('--window-background-tint').trim(),
+      dark: style.getPropertyValue('--window-dark-tint-color').trim(),
+      foreground: style.getPropertyValue('--window-foreground-tint').trim(),
+      light: style.getPropertyValue('--window-light-tint-color').trim(),
+    };
+  });
+  expect(lightMapping.background).toBe(lightMapping.light);
+  expect(lightMapping.foreground).toBe(lightMapping.dark);
+
+  const minimumContrast = await page.evaluate(() => {
+    const root = document.documentElement;
+    const context = document.createElement('canvas').getContext('2d');
+    const names = ['blue', 'teal', 'green', 'gold', 'coral', 'purple'];
+    const lightNames = ['none', ...names];
+    const luminance = (color, backdrop) => {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = color;
+      context.fillRect(0, 0, 1, 1);
+      const pixels = context.getImageData(0, 0, 1, 1).data;
+      const alpha = pixels[3] / 255;
+      const rgb = [0, 1, 2].map(index => (pixels[index] / 255) * alpha + backdrop * (1 - alpha));
+      const linear = rgb.map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+    };
+    let minimum = Infinity;
+    for (const darkTint of names) {
+      root.dataset.theme = 'dark';
+      root.dataset.windowTints = 'custom';
+      root.dataset.windowDarkTint = darkTint;
+      for (const lightTint of lightNames) {
+        root.dataset.windowLightTint = lightTint;
+        for (const lightness of lightTint === 'none' ? [75, 100] : [75, 95]) {
+          root.style.setProperty('--window-lightness', `${lightness}%`);
+          const style = getComputedStyle(root);
+          const darkBackground = luminance(style.getPropertyValue('--app-bg'), 1);
+          const lightForeground = luminance(style.getPropertyValue('--app-text'), 0);
+          minimum = Math.min(minimum, (lightForeground + 0.05) / (darkBackground + 0.05));
+
+          root.dataset.theme = 'light';
+          const lightBackground = luminance(getComputedStyle(root).getPropertyValue('--app-bg'), 0);
+          const darkForeground = luminance(getComputedStyle(root).getPropertyValue('--app-text'), 1);
+          minimum = Math.min(minimum, (lightBackground + 0.05) / (darkForeground + 0.05));
+          root.dataset.theme = 'dark';
+        }
+      }
+    }
+    return minimum;
+  });
+  expect(minimumContrast).toBeGreaterThanOrEqual(4.5);
+
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  const restoredSettings = await openUtility(page, 'settings');
+  await expect(restoredSettings.getByRole('group', { name: 'Dark window tint' }).getByRole('button', { name: 'Teal dark tint' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(restoredSettings.getByRole('group', { name: 'Light window tint' }).getByRole('button', { name: 'Purple light tint' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(restoredSettings.getByRole('slider', { name: 'Light tint lightness' })).toHaveValue('75');
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe('light');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const noneOption = restoredSettings.getByRole('group', { name: 'Light window tint' }).getByRole('button', { name: 'None light tint' });
+  await noneOption.click();
+  lightness = restoredSettings.getByRole('slider', { name: 'Light tint lightness' });
+  await expect(lightness).toHaveValue('100');
+  await expect(lightness).toHaveAttribute('max', '100');
+  const mobilePage = restoredSettings.locator('.settings-page');
+  await lightness.scrollIntoViewIfNeeded();
+  await mobilePage.evaluate(element => { element.scrollTop = element.scrollHeight; });
+  await lightness.scrollIntoViewIfNeeded();
+  const scrollBeforeDrag = await mobilePage.evaluate(element => element.scrollTop);
+  expect(scrollBeforeDrag).toBeGreaterThan(0);
+  const sliderBox = await lightness.boundingBox();
+  const sliderY = sliderBox.y + sliderBox.height / 2;
+  await page.mouse.move(sliderBox.x + sliderBox.width - 8, sliderY);
+  await page.mouse.down();
+  await page.mouse.move(sliderBox.x + 8, sliderY, { steps: 6 });
+  await page.mouse.up();
+  await expect(lightness).toHaveValue('75');
+  const scrollAfterDrag = await mobilePage.evaluate(element => element.scrollTop);
+  expect(Math.abs(scrollAfterDrag - scrollBeforeDrag)).toBeLessThanOrEqual(1);
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)), tintKey)).toEqual({
+    darkTint: 'teal',
+    lightTint: 'none',
+    lightness: 75,
+  });
+});
+
+test('older white tint preferences stay white until changed by the user', async ({ page }) => {
+  const legacyKey = 'desktop-window-tints-v1';
+  const currentKey = 'desktop-window-tints-v2';
+  await page.evaluate(key => localStorage.setItem(key, JSON.stringify({
+    darkTint: 'blue',
+    lightTint: 'none',
+    lightness: 95,
+  })), legacyKey);
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  const settings = await openUtility(page, 'settings');
+  const lightness = settings.getByRole('slider', { name: 'Light tint lightness' });
+  await expect(lightness).toHaveValue('100');
+  await expect(lightness).toHaveAttribute('max', '100');
+  expect(await page.evaluate(key => localStorage.getItem(key), legacyKey)).toContain('"lightness":95');
+  expect(await page.evaluate(key => localStorage.getItem(key), currentKey)).toBeNull();
+  await expect.poll(() => page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--window-lightness').trim(),
+  )).toBe('100%');
 });
 
 test('wallpaper startup does not overwrite saved preferences when the manifest has no matches', async ({ page }) => {

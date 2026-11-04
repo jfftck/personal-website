@@ -43,6 +43,10 @@ const themeMedia  = matchMedia('(prefers-color-scheme: dark)');
 const THEME_KEY   = 'desktop-theme';
 const ACCENT_COLOR_KEY = 'desktop-accent-color';
 const ACCENT_COLORS = ['blue', 'teal', 'green', 'gold', 'coral', 'purple'];
+const WINDOW_TINTS_KEY = 'desktop-window-tints-v2';
+const LEGACY_WINDOW_TINTS_KEY = 'desktop-window-tints-v1';
+const WINDOW_TINT_COLORS = ACCENT_COLORS;
+const DEFAULT_WINDOW_TINTS = Object.freeze({ darkTint: 'blue', lightTint: 'none', lightness: 100 });
 const TIME_KEY    = 'desktop-time-24h';
 const WALLPAPER_KEY = 'desktop-wallpaper-settings-v1';
 const WINDOW_ANIMATION_KEY = 'desktop-window-animation';
@@ -165,6 +169,55 @@ function applyAccentColor(color = readRaw(ACCENT_COLOR_KEY), { persist = true } 
   if (selected === 'blue') delete document.documentElement.dataset.accentColor;
   else document.documentElement.dataset.accentColor = selected;
   notifyDesktopSettingsChanged();
+}
+
+function normalizeWindowTints(value = {}) {
+  const darkTint = WINDOW_TINT_COLORS.includes(value?.darkTint) ? value.darkTint : DEFAULT_WINDOW_TINTS.darkTint;
+  const lightTint = value?.lightTint === 'none' || WINDOW_TINT_COLORS.includes(value?.lightTint)
+    ? value.lightTint
+    : DEFAULT_WINDOW_TINTS.lightTint;
+  const maxLightness = lightTint === 'none' ? 100 : 95;
+  const lightness = Number.isFinite(Number(value?.lightness))
+    ? Math.max(75, Math.min(maxLightness, Math.round(Number(value.lightness))))
+    : DEFAULT_WINDOW_TINTS.lightness;
+  return { darkTint, lightTint, lightness };
+}
+
+function readSavedWindowTints() {
+  const validate = value => Boolean(value && typeof value === 'object' && !Array.isArray(value));
+  const saved = readJSON(WINDOW_TINTS_KEY, null, { validate });
+  if (saved) return normalizeWindowTints(saved);
+
+  const legacy = readJSON(LEGACY_WINDOW_TINTS_KEY, null, { validate });
+  if (!legacy) return null;
+  return normalizeWindowTints({
+    ...legacy,
+    // The older None option was always pure white; its stored slider value only applied to colored tints.
+    lightness: legacy.lightTint === 'none' ? 100 : legacy.lightness,
+  });
+}
+
+function readWindowTints() {
+  return readSavedWindowTints() || DEFAULT_WINDOW_TINTS;
+}
+
+function applyWindowTintAttributes(value) {
+  const tints = normalizeWindowTints(value);
+  const root = document.documentElement;
+  root.dataset.windowTints = 'custom';
+  root.dataset.windowDarkTint = tints.darkTint;
+  root.dataset.windowLightTint = tints.lightTint;
+  root.style.setProperty('--window-lightness', `${tints.lightness}%`);
+}
+
+function setWindowTints(value) {
+  const tints = normalizeWindowTints(value);
+  if (!writeJSON(WINDOW_TINTS_KEY, tints)) {
+    throw new Error('The window tint settings could not be saved in browser storage.');
+  }
+  applyWindowTintAttributes(tints);
+  notifyDesktopSettingsChanged();
+  return tints;
 }
 
 function updateClock() {
@@ -538,6 +591,8 @@ $('reminder-notification-toggle').addEventListener('click', async event => {
 });
 applyTheme(readRaw(THEME_KEY), { persist: false });
 applyAccentColor(readRaw(ACCENT_COLOR_KEY), { persist: false });
+const storedWindowTints = readSavedWindowTints();
+if (storedWindowTints) applyWindowTintAttributes(storedWindowTints);
 updateClock();
 renderReminders();
 updateNotificationSetting();
@@ -2234,12 +2289,15 @@ const appCtx = {
       theme: effectiveTheme(),
       themeOverride: readRaw(THEME_KEY) || 'system',
       accentColor: ACCENT_COLORS.includes(readRaw(ACCENT_COLOR_KEY)) ? readRaw(ACCENT_COLOR_KEY) : 'blue',
+      windowTints: readWindowTints(),
       animationPreferences: getAnimationPreferences(),
       use24HourTime,
       notificationsEnabled: systemNotificationsEnabled,
     }),
     setTheme: value => applyTheme(value === 'system' ? null : value),
     setAccentColor: value => applyAccentColor(value),
+    setWindowTints,
+    previewWindowTints: applyWindowTintAttributes,
     setAnimationPreferences: setAnimationPreference,
     set24HourTime: setTimeFormat,
     setNotificationsEnabled: setSystemNotificationsEnabled,

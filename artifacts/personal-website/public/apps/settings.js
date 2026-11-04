@@ -25,12 +25,17 @@ const WALLPAPER_TRANSITIONS = [
   ['wipe', 'Wipe', 'Reveal the new image across the screen'],
 ];
 const ACCENT_COLORS = [
-  { value: 'blue', label: 'Blue', color: '#006699' },
-  { value: 'teal', label: 'Teal', color: 'oklch(48.74% 0.1131 190)' },
-  { value: 'green', label: 'Green', color: 'oklch(48.74% 0.1131 145)' },
-  { value: 'gold', label: 'Gold', color: 'oklch(48.74% 0.1131 85)' },
-  { value: 'coral', label: 'Coral', color: 'oklch(48.74% 0.1131 25)' },
-  { value: 'purple', label: 'Purple', color: 'oklch(48.74% 0.1131 300)' },
+  { value: 'blue', label: 'Blue', hue: 240.76, color: '#006699' },
+  { value: 'teal', label: 'Teal', hue: 190, color: 'oklch(48.74% 0.1131 190)' },
+  { value: 'green', label: 'Green', hue: 145, color: 'oklch(48.74% 0.1131 145)' },
+  { value: 'gold', label: 'Gold', hue: 85, color: 'oklch(48.74% 0.1131 85)' },
+  { value: 'coral', label: 'Coral', hue: 25, color: 'oklch(48.74% 0.1131 25)' },
+  { value: 'purple', label: 'Purple', hue: 300, color: 'oklch(48.74% 0.1131 300)' },
+];
+const DEFAULT_WINDOW_TINTS = { darkTint: 'blue', lightTint: 'none', lightness: 100 };
+const WINDOW_LIGHT_TINT_OPTIONS = [
+  { value: 'none', label: 'None', color: '#fff' },
+  ...ACCENT_COLORS,
 ];
 const WINDOW_OPEN_CLOSE_ANIMATIONS = [
   ['fade', 'Fade', 'Fade in and out'],
@@ -76,6 +81,22 @@ function el(tag, className, text) {
 
 function supportsRelativeColors() {
   return Boolean(globalThis.CSS?.supports?.('color', 'oklch(from #006699 calc(l + 0.1) c h)'));
+}
+
+function normalizeWindowTints(value) {
+  const lightTint = WINDOW_LIGHT_TINT_OPTIONS.some(option => option.value === value?.lightTint)
+    ? value.lightTint
+    : DEFAULT_WINDOW_TINTS.lightTint;
+  const maxLightness = lightTint === 'none' ? 100 : 95;
+  return {
+    darkTint: ACCENT_COLORS.some(option => option.value === value?.darkTint)
+      ? value.darkTint
+      : DEFAULT_WINDOW_TINTS.darkTint,
+    lightTint,
+    lightness: Number.isFinite(Number(value?.lightness))
+      ? Math.max(75, Math.min(maxLightness, Math.round(Number(value.lightness))))
+      : DEFAULT_WINDOW_TINTS.lightness,
+  };
 }
 
 function copyWallpaper(settings) {
@@ -199,14 +220,19 @@ export function buildSettings(id, ctx, initialState) {
     page.hidden = narrow && !activePage;
   }
 
-  function renderPage() {
+  function renderPage({ preserveScroll = false } = {}) {
     if (animationPicker.isOpen) {
       pendingPageRender = true;
       return;
     }
     pendingPageRender = false;
+    const scrollContainer = narrow ? page : root.querySelector('.settings-main');
+    const previousScrollTop = preserveScroll ? scrollContainer?.scrollTop || 0 : 0;
     page.replaceChildren();
-    if (!activePage) return;
+    if (!activePage) {
+      if (preserveScroll && scrollContainer) scrollContainer.scrollTop = previousScrollTop;
+      return;
+    }
     const item = PAGES.find(entry => entry.id === activePage);
     const header = el('header', 'settings-page-header');
     const back = el('button', 'settings-back', 'Back to settings');
@@ -225,6 +251,7 @@ export function buildSettings(id, ctx, initialState) {
     else if (activePage === 'time') renderTime(body);
     else if (activePage === 'notifications') renderNotifications(body);
     else if (activePage === 'wallpaper') renderWallpaper(body);
+    if (preserveScroll && scrollContainer) scrollContainer.scrollTop = previousScrollTop;
   }
 
   function renderAppearance(body) {
@@ -301,6 +328,111 @@ export function buildSettings(id, ctx, initialState) {
       accentSection.append(el('p', 'settings-description', 'Accent color choices require a browser that supports CSS relative colors.'));
     }
     card.append(accentSection);
+    const windowTintSection = el('section', 'settings-window-tints');
+    windowTintSection.append(
+      el('h3', '', 'Window tints'),
+      el('p', 'settings-description settings-window-tint-description',
+        'Dark appearance uses the dark tint for backgrounds and the light tint for text. Light appearance reverses them.'),
+    );
+    if (supportsRelativeColors()) {
+      const windowTints = normalizeWindowTints(current.windowTints || DEFAULT_WINDOW_TINTS);
+      const darkGroup = el('div', 'settings-tint-group');
+      darkGroup.append(el('h4', '', 'Dark tint'));
+      const darkOptions = el('div', 'settings-tint-options');
+      darkOptions.setAttribute('role', 'group');
+      darkOptions.setAttribute('aria-label', 'Dark window tint');
+      const lightGroup = el('div', 'settings-tint-group');
+      lightGroup.append(el('h4', '', 'Light tint'));
+      const lightOptions = el('div', 'settings-tint-options settings-light-tint-options');
+      lightOptions.setAttribute('role', 'group');
+      lightOptions.setAttribute('aria-label', 'Light window tint');
+
+      const buildTintChoices = (group, choices, type) => {
+        const property = type === 'dark' ? 'darkTint' : 'lightTint';
+        for (const option of choices) {
+          const button = el('button', 'settings-tint-choice');
+          button.type = 'button';
+          button.setAttribute('aria-label', `${option.label} ${type} tint`);
+          button.setAttribute('aria-pressed', String(windowTints[property] === option.value));
+          button.dataset.tintValue = option.value;
+          const swatch = el('span', `settings-tint-swatch settings-tint-swatch-${type}`);
+          swatch.style.backgroundColor = option.value === 'none'
+            ? `oklch(${windowTints.lightness}% 0 0)`
+            : type === 'dark'
+              ? `oklch(28.32% 0.0645 ${option.hue})`
+              : `oklch(${windowTints.lightness}% 0.0622 ${option.hue})`;
+          swatch.setAttribute('aria-hidden', 'true');
+          button.append(swatch, el('span', 'settings-tint-label', option.label));
+          button.addEventListener('click', () => {
+            const next = { ...windowTints, [property]: option.value };
+            if (property === 'lightTint') {
+              next.lightness = option.value === 'none' ? 100 : Math.min(95, next.lightness);
+            }
+            try {
+              settings?.setWindowTints?.(next);
+              current = snapshot();
+            } catch (error) {
+              setMessage(page.querySelector('.settings-inline-status'), error?.message || 'The window tint could not be changed.', 'error');
+            }
+          });
+          group.append(button);
+        }
+      };
+
+      buildTintChoices(darkOptions, ACCENT_COLORS, 'dark');
+      buildTintChoices(lightOptions, WINDOW_LIGHT_TINT_OPTIONS, 'light');
+      darkGroup.append(darkOptions);
+      lightGroup.append(lightOptions);
+      lightGroup.append(el('p', 'settings-description settings-light-tint-help',
+        'None stays neutral; use the slider from 75% to 100%. Colored tints range from 75% to 95%.'));
+      const lightness = document.createElement('input');
+      lightness.className = 'settings-tint-lightness';
+      lightness.type = 'range';
+      lightness.min = '75';
+      lightness.max = String(windowTints.lightTint === 'none' ? 100 : 95);
+      lightness.step = '1';
+      lightness.value = String(windowTints.lightness);
+      lightness.id = `settings-window-tint-lightness-${id}`;
+      lightness.setAttribute('aria-label', 'Light tint lightness');
+      const lightnessHeading = el('div', 'settings-tint-lightness-heading');
+      const lightnessLabel = el('label', '', 'Light tint lightness');
+      lightnessLabel.htmlFor = lightness.id;
+      const lightnessValue = el('output', 'settings-tint-lightness-value', `${windowTints.lightness}%`);
+      lightnessValue.htmlFor = lightness.id;
+      lightnessHeading.append(lightnessLabel, lightnessValue);
+      const lightnessControl = el('div', 'settings-tint-lightness-control');
+      lightnessControl.append(lightnessHeading, lightness);
+      const updateTintLightness = () => {
+        const value = Number(lightness.value);
+        windowTints.lightness = value;
+        lightnessValue.textContent = `${value}%`;
+        const swatches = lightOptions.querySelectorAll('.settings-tint-swatch');
+        if (swatches[0]) swatches[0].style.backgroundColor = `oklch(${value}% 0 0)`;
+        for (const [index, option] of ACCENT_COLORS.entries()) {
+          const swatch = swatches[index + 1];
+          if (swatch) swatch.style.backgroundColor = `oklch(${value}% 0.0622 ${option.hue})`;
+        }
+        settings?.previewWindowTints?.(windowTints);
+      };
+      lightness.addEventListener('input', updateTintLightness);
+      lightness.addEventListener('change', () => {
+        const restoreFocus = document.activeElement === lightness;
+        try {
+          settings?.setWindowTints?.(windowTints);
+          current = snapshot();
+          if (restoreFocus) requestAnimationFrame(() =>
+            page.querySelector('.settings-tint-lightness')?.focus({ preventScroll: true }),
+          );
+        } catch (error) {
+          setMessage(page.querySelector('.settings-inline-status'), error?.message || 'The window tint could not be changed.', 'error');
+        }
+      });
+      lightGroup.append(lightnessControl);
+      windowTintSection.append(darkGroup, lightGroup);
+    } else {
+      windowTintSection.append(el('p', 'settings-description', 'Window tint choices require a browser that supports CSS relative colors.'));
+    }
+    card.append(windowTintSection);
     const status = el('p', 'settings-inline-status');
     status.setAttribute('role', 'status');
     status.hidden = true;
@@ -698,7 +830,7 @@ export function buildSettings(id, ctx, initialState) {
   function updateFromHost() {
     current = snapshot();
     if (!activePage) return;
-    if (activePage === 'appearance' && !animationPicker.isOpen) renderPage();
+    if (activePage === 'appearance' && !animationPicker.isOpen) renderPage({ preserveScroll: true });
     else if (activePage === 'time') {
       const input = page.querySelector('.settings-switch input');
       if (input) input.checked = current.use24HourTime === true;

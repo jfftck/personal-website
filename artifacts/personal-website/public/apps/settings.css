@@ -164,6 +164,36 @@
 .settings-accent-swatch { width: 1.35rem; height: 1.35rem; border: 1px solid color-mix(in srgb, var(--app-text) 28%, transparent); border-radius: 50%; }
 .settings-accent-label { overflow: hidden; max-width: 100%; color: var(--app-text); font-size: .69rem; text-overflow: ellipsis; white-space: nowrap; }
 .settings-accent-description { margin-top: .55rem; }
+.settings-window-tints { display: grid; gap: .85rem; margin-top: 1.35rem; }
+.settings-window-tints > h3 { margin: 0; color: var(--app-text); font-size: .88rem; }
+.settings-window-tint-description { margin-top: -.55rem; }
+.settings-tint-group { display: grid; gap: .45rem; }
+.settings-tint-group h4 { margin: 0; color: var(--app-text); font-size: .72rem; font-weight: 650; }
+.settings-tint-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(4rem, 1fr)); gap: .35rem; }
+.settings-tint-choice {
+  display: grid;
+  justify-items: center;
+  gap: .3rem;
+  min-width: 0;
+  padding: .42rem .2rem;
+  border: 1px solid var(--settings-rule);
+  border-radius: .62rem;
+  background: var(--util-surface);
+  color: var(--app-text);
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+.settings-tint-choice:hover { background: var(--util-surface-strong); }
+.settings-tint-choice[aria-pressed="true"] { border-color: var(--focus-color); background: var(--settings-accent-wash); }
+.settings-tint-swatch { width: 1.35rem; height: 1.35rem; border: 1px solid color-mix(in srgb, var(--app-text) 32%, transparent); border-radius: 50%; }
+.settings-tint-label { overflow: hidden; max-width: 100%; color: var(--app-text); font-size: .65rem; text-overflow: ellipsis; white-space: nowrap; }
+.settings-light-tint-help { margin-top: -.2rem; }
+.settings-tint-lightness-control { display: grid; gap: .35rem; margin-top: .15rem; }
+.settings-tint-lightness-control[hidden] { display: none; }
+.settings-tint-lightness-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; color: var(--util-detail); font-size: .68rem; }
+.settings-tint-lightness-value { color: var(--app-text); font-variant-numeric: tabular-nums; }
+.settings-tint-lightness { width: 100%; margin: .2rem 0; accent-color: var(--accent); cursor: pointer; }
+.settings-tint-lightness:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; }
 .settings-theme-label strong, .settings-theme-label small { display: block; }
 .settings-theme-label strong { font-size: .78rem; }
 .settings-theme-label small { margin-top: .14rem; color: var(--util-detail); font-size: .64rem; }
