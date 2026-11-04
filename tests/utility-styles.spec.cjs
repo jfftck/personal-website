@@ -120,6 +120,8 @@ test('animation settings use the picker labels without duplicate card headings',
   const animationCard = settings.locator('.settings-animations-card');
   await expect(animationCard.locator('.settings-card-eyebrow')).toHaveText('WINDOW');
   await expect(animationCard.getByRole('heading', { name: 'Animations', exact: true })).toBeVisible();
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: 'generated-artifacts/settings-appearance-check.png' });
   await expect(settings.getByRole('button', { name: /Opening windows/ })).toBeVisible();
   await expect(settings.getByRole('button', { name: /Closing windows/ })).toBeVisible();
   await expect(settings.locator('.settings-animation-row h3')).toHaveCount(0);
