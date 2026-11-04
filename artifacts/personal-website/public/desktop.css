@@ -988,6 +988,8 @@ body.mod-show-desktop #app-strip-wrapper .app-window {
   opacity: 0;
   transform: scale(1.06);
 }
+body.mod-show-desktop #app-strip-wrapper .app-window[data-desktop-animation="none"],
+body.desktop-returning #app-strip-wrapper .app-window[data-desktop-animation="none"] { transition: none !important; }
 
 .app-window.desktop-transitioning[data-desktop-direction="out"][data-desktop-animation="zoom"] { animation: desktop-window-zoom-out 440ms cubic-bezier(.2,.8,.2,1) both; }
 .app-window.desktop-transitioning[data-desktop-direction="in"][data-desktop-animation="zoom"] { animation: desktop-window-zoom-in 440ms cubic-bezier(.2,.8,.2,1) both; }
@@ -1608,6 +1610,8 @@ body.overview-exiting #app-strip {
 body.mod-overview #app-strip.ov-notransition {
   transition: none !important;
 }
+body.mod-overview #app-strip.ov-no-transition,
+body.overview-exiting #app-strip.ov-no-transition { transition: none !important; }
 body.mod-overview .app-window {
   cursor: pointer;
   pointer-events: auto;
@@ -1699,6 +1703,8 @@ body.mod-overview .app-window.focused {
   .app-window {
     transition: none !important;
   }
+  body.mod-overview #app-strip,
+  body.overview-exiting #app-strip { transition: none !important; }
   .app-window.window-opening,
   .app-window.window-closing,
   .app-window.desktop-transitioning,

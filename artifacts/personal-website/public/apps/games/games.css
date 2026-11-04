@@ -452,6 +452,7 @@
 }
 .game-settings-overlay[hidden] { display: none; }
 .game-settings-dialog {
+  position: relative;
   container-type: inline-size;
   container-name: game-settings-panel;
   display: grid;

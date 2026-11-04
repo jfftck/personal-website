@@ -97,13 +97,20 @@ test('Wallpaper settings apply changes immediately without save or cancel action
   await transitionPicker.evaluate(button => button.click());
   const transitionPanel = wallpaperPage.getByRole('region', { name: 'Wallpaper transition options' });
   await expect(transitionPanel).toBeVisible();
+  const drawerGeometry = await transitionPanel.evaluate(drawer => {
+    const panel = drawer.getBoundingClientRect();
+    const host = drawer.closest('.settings-app').getBoundingClientRect();
+    return { panelRight: panel.right, hostRight: host.right };
+  });
+  expect(Math.abs(drawerGeometry.panelRight - drawerGeometry.hostRight)).toBeLessThan(2);
   await transitionPanel.getByRole('checkbox', { name: 'Zoom' }).evaluate(input => input.click());
   await expect.poll(() => page.evaluate(() => window.__wallpaperTestCalls.length)).toBe(1);
   expect(await page.evaluate(() => window.__wallpaperTestCalls[0].transition)).toEqual(['fade', 'zoom']);
 
-  await transitionPanel.getByRole('checkbox', { name: 'No wallpaper transition animation' }).evaluate(input => input.click());
+  await transitionPanel.getByRole('checkbox', { name: 'No animation' }).evaluate(input => input.click());
   await expect.poll(() => page.evaluate(() => window.__wallpaperTestCalls.length)).toBe(2);
   expect(await page.evaluate(() => window.__wallpaperTestCalls[1].transition)).toEqual([]);
+  await transitionPanel.getByRole('button', { name: 'Done' }).click();
   await expect(wallpaperPage.getByRole('status')).toContainText('applied');
 });
 
@@ -133,10 +140,11 @@ test('Appearance settings support independent multi-select animation preferences
   await openPanel.getByRole('checkbox', { name: 'Flip' }).evaluate(input => input.click());
   await expect.poll(() => page.evaluate(() => window.__animationPreferences.windowOpen)).toEqual(['fade', 'flip']);
   await expect(openPicker).toContainText('2 selected');
-  await openPanel.getByRole('checkbox', { name: 'No opening windows animation' }).evaluate(input => input.click());
+  await openPanel.getByRole('checkbox', { name: 'No animation' }).evaluate(input => input.click());
   await expect.poll(() => page.evaluate(() => window.__animationPreferences.windowOpen)).toEqual([]);
-  await openPanel.getByRole('checkbox', { name: 'No opening windows animation' }).evaluate(input => input.click());
+  await openPanel.getByRole('checkbox', { name: 'No animation' }).evaluate(input => input.click());
   await expect.poll(() => page.evaluate(() => window.__animationPreferences.windowOpen.length)).toBe(5);
+  await openPanel.getByRole('button', { name: 'Done' }).click();
 
   const overviewPicker = settings.getByRole('button', { name: /Show overview/ });
   await overviewPicker.evaluate(button => button.click());
@@ -153,14 +161,18 @@ test('Window appearance setting animates window lifecycle and respects reduced m
   await openPicker.click();
   const openPanel = settings.getByRole('region', { name: 'Opening windows options' });
   await expect(openPanel).toHaveAttribute('aria-hidden', 'false');
+  await openPanel.getByRole('checkbox', { name: 'No animation' }).evaluate(input => input.click());
   await openPanel.getByRole('checkbox', { name: 'Slide Up' }).evaluate(input => input.click());
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('desktop-animation-preferences-v1') || '{}').windowOpen)).toEqual(['fade', 'slide-up']);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('desktop-animation-preferences-v1') || '{}').windowOpen)).toEqual(['slide-up']);
+  await openPanel.getByRole('button', { name: 'Done' }).click();
   const closePicker = settings.getByRole('button', { name: /Closing windows/ });
   await closePicker.click();
   const closePanel = settings.getByRole('region', { name: 'Closing windows options' });
   await expect(closePanel).toHaveAttribute('aria-hidden', 'false');
+  await closePanel.getByRole('checkbox', { name: 'No animation' }).evaluate(input => input.click());
   await closePanel.getByRole('checkbox', { name: 'Slide Up' }).evaluate(input => input.click());
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('desktop-animation-preferences-v1') || '{}').windowClose)).toEqual(['fade', 'slide-up']);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('desktop-animation-preferences-v1') || '{}').windowClose)).toEqual(['slide-up']);
+  await closePanel.getByRole('button', { name: 'Done' }).click();
   await page.locator('#close-btn').click();
   await expect(settings).toHaveClass(/window-closing/);
   await expect(settings).toHaveCount(0);
@@ -178,8 +190,9 @@ test('Show desktop and overview use independently selected animations', async ({
   let picker = settings.getByRole('button', { name: /Show desktop/ });
   await picker.click();
   let panel = settings.getByRole('region', { name: 'Show desktop options' });
-  await panel.getByRole('checkbox', { name: 'No show desktop animation' }).evaluate(input => input.click());
+  await panel.getByRole('checkbox', { name: 'No animation' }).evaluate(input => input.click());
   await panel.getByRole('checkbox', { name: 'Tilt Up' }).evaluate(input => input.click());
+  await panel.getByRole('button', { name: 'Done' }).click();
   await page.locator('#close-btn').click();
   await expect(settings).toHaveCount(0);
 
@@ -197,8 +210,9 @@ test('Show desktop and overview use independently selected animations', async ({
   picker = settings.getByRole('button', { name: /Show overview/ });
   await picker.click();
   panel = settings.getByRole('region', { name: 'Show overview options' });
-  await panel.getByRole('checkbox', { name: 'No show overview animation' }).evaluate(input => input.click());
+  await panel.getByRole('checkbox', { name: 'No animation' }).evaluate(input => input.click());
   await panel.getByRole('checkbox', { name: 'Rubber Band' }).evaluate(input => input.click());
+  await panel.getByRole('button', { name: 'Done' }).click();
   await page.locator('#close-btn').click();
   await expect(settings).toHaveCount(0);
 

@@ -1,7 +1,5 @@
 import { createParticleAnimation } from './particle-effects.js';
-import { boardWinAnimationChoices, getWinAnimationPreference } from './win-animation-settings.js';
-
-const effects = boardWinAnimationChoices.slice(1).map(([effect]) => effect);
+import { getWinAnimationPreferences } from './win-animation-settings.js';
 
 const unit = (index, salt = 0) => {
   const value = Math.sin((index + 1) * 127.1 + (salt + 1) * 311.7) * 43758.5453;
@@ -9,9 +7,9 @@ const unit = (index, salt = 0) => {
 };
 
 export function chooseBoardCelebration(kind, random = Math.random) {
-  const preference = getWinAnimationPreference(kind);
-  if (preference !== 'random') return preference;
-  return effects[Math.max(0, Math.min(effects.length - 1, Math.floor(random() * effects.length)))];
+  const selected = getWinAnimationPreferences(kind);
+  if (!selected.length) return null;
+  return selected[Math.max(0, Math.min(selected.length - 1, Math.floor(random() * selected.length)))];
 }
 
 function createLayer(anchor, className, game, effect) {

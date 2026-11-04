@@ -42,8 +42,28 @@ async function expectDropdownValue(container, label, value) {
 
 async function setGameOption(page, app, label, value) {
   const dialog = await openSettings(app);
-  await setDropdownValue(page, dialog, label, value);
+  if (label === 'Win animation') await setAnimationPickerValue(page, dialog, value);
+  else await setDropdownValue(page, dialog, label, value);
   if (await dialog.isVisible()) await dialog.getByRole('button', { name: 'Close settings' }).click();
+}
+
+async function setAnimationPickerValue(page, dialog, value) {
+  const trigger = dialog.getByRole('button', { name: /^Win animation:/ });
+  await trigger.click();
+  const panel = dialog.getByRole('region', { name: 'Win animation options' });
+  const none = panel.getByRole('checkbox', { name: 'No animation' });
+  if (value === 'random') {
+    if (await none.isChecked()) await none.click();
+    for (const checkbox of await panel.getByRole('checkbox').all()) {
+      if (await checkbox.getAttribute('aria-label') === 'No animation') continue;
+      if (!await checkbox.isChecked()) await checkbox.click();
+    }
+  } else {
+    if (!await none.isChecked()) await none.click();
+    const title = value === 'kitchen-sink' ? 'Kitchen Sink' : value[0].toUpperCase() + value.slice(1);
+    await panel.getByRole('checkbox', { name: title }).click();
+  }
+  await panel.getByRole('button', { name: 'Done' }).click();
 }
 
 test('game settings selects use the shared stationary dropdown control', async ({ page }) => {
@@ -1777,7 +1797,7 @@ test('one selected win celebration runs and restarting allows a new celebration'
   await expect(app.locator('.solitaire-table')).not.toHaveAttribute('data-win-celebration', /.+/);
 });
 
-test('solitaire win animation can be fixed or random and is shared across card games', async ({ page }) => {
+test('card win animation uses a right-side panel with none, single, and random multi-select modes', async ({ page }) => {
   const app = await restoreGame(page, savedKlondike({
     columns: [[[13, 0]]],
     foundations: { 0: Array.from({ length: 12 }, (_, index) => index + 1),
@@ -1786,17 +1806,25 @@ test('solitaire win animation can be fixed or random and is shared across card g
       3: Array.from({ length: 13 }, (_, index) => index + 1) },
   }));
   const dialog = await openSettings(app);
-  const animation = dialog.getByLabel('Win animation', { exact: true });
-  await expect(animation).toHaveAttribute('data-value', 'random');
-  const animationPopupId = await animation.getAttribute('aria-controls');
+  const animation = dialog.getByRole('button', { name: /^Win animation:/ });
   await animation.click();
-  const animationOptions = page.locator(`[id="${animationPopupId}"] [role="option"]`);
-  await expect(animationOptions).toHaveCount(8);
-  await expect(animationOptions.filter({ hasText: 'Kitchen Sink' })).toBeVisible();
-  await chooseDropdownValue(page, animation, 'tornado');
+  const animationOptions = dialog.getByRole('region', { name: 'Win animation options' });
+  await expect(animationOptions).toBeVisible();
+  await expect(animationOptions.getByRole('checkbox')).toHaveCount(8);
+  await expect(animationOptions.getByRole('checkbox', { name: 'Kitchen Sink' })).toBeVisible();
+  const drawerGeometry = await animationOptions.evaluate(drawer => {
+    const panel = drawer.getBoundingClientRect();
+    const host = drawer.closest('.game-settings-dialog').getBoundingClientRect();
+    return { panelRight: panel.right, hostRight: host.right, panelLeft: panel.left, hostLeft: host.left };
+  });
+  expect(Math.abs(drawerGeometry.panelRight - drawerGeometry.hostRight)).toBeLessThan(2);
+  expect(drawerGeometry.panelLeft).toBeGreaterThan(drawerGeometry.hostLeft);
+  await animationOptions.getByRole('checkbox', { name: 'No animation' }).click();
+  await animationOptions.getByRole('checkbox', { name: 'Tornado' }).click();
+  await animationOptions.getByRole('button', { name: 'Done' }).click();
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).solitaire))
-    .toBe('tornado');
+    .toEqual(['tornado']);
   await dialog.getByRole('button', { name: 'Close settings' }).click();
 
   await app.locator('[data-key="card-12"]').dblclick();
@@ -1807,35 +1835,34 @@ test('solitaire win animation can be fixed or random and is shared across card g
 
   const spider = await openGame(page, 'spider');
   const spiderSettings = await openSettings(spider);
-  await expectDropdownValue(spiderSettings, 'Win animation', 'tornado');
-  await setDropdownValue(page, spiderSettings, 'Win animation', 'random');
+  await expect(spiderSettings.getByRole('button', { name: /^Win animation: Tornado/ })).toBeVisible();
+  await setAnimationPickerValue(page, spiderSettings, 'random');
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).solitaire))
-    .toBe('random');
+    .toEqual(['fireworks', 'bounce', 'spiral', 'rain', 'wave', 'tornado', 'kitchen-sink']);
 });
 
 test('Chess and Reversi can use a fixed win animation or random selection', async ({ page }) => {
   const chess = await openGame(page, 'chess');
   const chessSettings = await openSettings(chess);
-  const chessAnimation = chessSettings.getByLabel('Win animation', { exact: true });
-  await expect(chessAnimation).toHaveAttribute('data-value', 'random');
-  const chessAnimationPopupId = await chessAnimation.getAttribute('aria-controls');
+  const chessAnimation = chessSettings.getByRole('button', { name: /^Win animation:/ });
   await chessAnimation.click();
-  await expect(page.locator(`[id="${chessAnimationPopupId}"] [role="option"]`)).toHaveCount(5);
-  await chooseDropdownValue(page, chessAnimation, 'knock');
+  const chessPanel = chessSettings.getByRole('region', { name: 'Win animation options' });
+  await expect(chessPanel.getByRole('checkbox')).toHaveCount(5);
+  await chessPanel.getByRole('checkbox', { name: 'No animation' }).click();
+  await chessPanel.getByRole('checkbox', { name: 'Knock' }).click();
+  await chessPanel.getByRole('button', { name: 'Done' }).click();
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).chess))
-    .toBe('knock');
+    .toEqual(['knock']);
   await chessSettings.getByRole('button', { name: 'Close settings' }).click();
 
   const reversi = await openGame(page, 'reversi');
   const reversiSettings = await openSettings(reversi);
-  const reversiAnimation = reversiSettings.getByLabel('Win animation', { exact: true });
-  await expect(reversiAnimation).toHaveAttribute('data-value', 'random');
-  await chooseDropdownValue(page, reversiAnimation, 'fade');
+  await setAnimationPickerValue(page, reversiSettings, 'fade');
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).reversi))
-    .toBe('fade');
+    .toEqual(['fade']);
 });
 
 test('bounce, Kitchen Sink, and spiral win celebrations use floating card layers too', async ({ page }) => {

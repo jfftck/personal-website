@@ -1,7 +1,7 @@
-import { chooseUnseenWinCelebration, chooseWinCelebration, isRed, SUITS } from './cards.js';
+import { isRed, SUITS, WIN_CELEBRATIONS } from './cards.js';
 import { paintCardFace } from './card-artwork.js';
 import { createParticleAnimation } from './particle-effects.js';
-import { getWinAnimationPreference } from './win-animation-settings.js';
+import { getWinAnimationPreferences } from './win-animation-settings.js';
 
 const CELEBRATION_HISTORY_KEY = 'game-center-solitaire-celebrations-v1';
 let trackedCelebrations = null;
@@ -15,20 +15,30 @@ function readCelebrationHistory() {
   }
 }
 
-export function chooseNextWinCelebration(random = Math.random) {
+export function chooseNextWinCelebration(random = Math.random, allowed = WIN_CELEBRATIONS) {
   if (trackedCelebrations === null) trackedCelebrations = readCelebrationHistory();
-  const choice = chooseUnseenWinCelebration(trackedCelebrations, random);
-  trackedCelebrations = choice.seen;
+  const played = new Set(allowed.filter(effect => trackedCelebrations.includes(effect)));
+  let remaining = allowed.filter(effect => !played.has(effect));
+  if (!remaining.length) {
+    played.clear();
+    remaining = [...allowed];
+  }
+  const choice = remaining[Math.max(0, Math.min(remaining.length - 1, Math.floor(random() * remaining.length)))];
+  played.add(choice);
+  const nextHistory = [...played];
+  trackedCelebrations = nextHistory;
   try {
     globalThis.localStorage?.setItem(CELEBRATION_HISTORY_KEY, JSON.stringify(trackedCelebrations));
   } catch {}
-  return choice.celebration;
+  return choice;
 }
 
 export function chooseConfiguredWinCelebration(random = Math.random, avoidRecentRepeats = true) {
-  const preference = getWinAnimationPreference('solitaire');
-  if (preference !== 'random') return preference;
-  return avoidRecentRepeats ? chooseNextWinCelebration(random) : chooseWinCelebration(random);
+  const selected = getWinAnimationPreferences('solitaire');
+  if (!selected.length) return null;
+  if (selected.length === 1) return selected[0];
+  if (avoidRecentRepeats) return chooseNextWinCelebration(random, selected);
+  return selected[Math.max(0, Math.min(selected.length - 1, Math.floor(random() * selected.length)))];
 }
 
 const unit = (index, salt = 0) => {

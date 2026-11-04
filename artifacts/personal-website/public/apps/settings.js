@@ -1,6 +1,7 @@
 'use strict';
 
 import { enhanceSelect } from './custom-select.js';
+import { createAnimationPickerController } from './animation-picker.js';
 
 const PAGES = [
   { id: 'appearance', title: 'Appearance', detail: 'Choose how your desktop looks.' },
@@ -93,6 +94,18 @@ export function buildSettings(id, ctx, initialState) {
         <section class="settings-page" aria-live="polite"></section>
       </main>
     </div>`;
+  let pendingPageRender = false;
+  const animationPicker = createAnimationPickerController(root, {
+    label: 'Animation selection',
+    onClose: pickerId => {
+      if (!pendingPageRender || destroyed) return;
+      pendingPageRender = false;
+      renderPage();
+      requestAnimationFrame(() => root.querySelector(
+        `[data-animation-picker="${CSS.escape(pickerId)}"] .animation-picker-trigger`,
+      )?.focus({ preventScroll: true }));
+    },
+  });
   const sidebarNav = root.querySelector('.settings-nav');
   const mobileList = root.querySelector('.settings-page-list');
   const mobileNav = root.querySelector('.settings-mobile-nav');
@@ -115,7 +128,6 @@ export function buildSettings(id, ctx, initialState) {
   let wallpaperFailedAction = null;
   let wallpaperRevision = 0;
   let wallpaperActionRunner = null;
-  let openAnimationPanel = null;
   let firstResize = true;
   let resizeObserver;
   let unsubscribe = () => {};
@@ -150,6 +162,8 @@ export function buildSettings(id, ctx, initialState) {
 
   function selectPage(pageId) {
     if (!PAGES.some(item => item.id === pageId)) return;
+    animationPicker.close({ restoreFocus: false, notify: false });
+    pendingPageRender = false;
     activePage = pageId;
     if (pageId === 'wallpaper' && !wallpaperDraft && !wallpaperLoading && !wallpaperError) loadWallpapers();
     renderNavigation();
@@ -174,6 +188,11 @@ export function buildSettings(id, ctx, initialState) {
   }
 
   function renderPage() {
+    if (animationPicker.isOpen) {
+      pendingPageRender = true;
+      return;
+    }
+    pendingPageRender = false;
     page.replaceChildren();
     if (!activePage) return;
     const item = PAGES.find(entry => entry.id === activePage);
@@ -253,9 +272,10 @@ export function buildSettings(id, ctx, initialState) {
     for (const [event, config] of Object.entries(ANIMATION_OPTIONS)) {
       const row = el('section', 'settings-animation-row');
       row.append(el('h3', '', config.label));
-      row.append(makeAnimationPicker({
+      row.append(animationPicker.createPicker({
         id: `animation-${event}`,
         label: config.label,
+        description: 'Choose one or more effects. When several are selected, one is chosen at random.',
         choices: config.choices,
         selected: normalizeChoices(animationPreferences[event], config.choices, event === 'showDesktop' || event === 'overview' ? ['zoom'] : ['fade']),
         onChange: selected => {
@@ -505,9 +525,10 @@ export function buildSettings(id, ctx, initialState) {
       enhanceSelect(select);
     }
     scheduleCard.append(el('div', 'settings-subheading', 'Transition'));
-    scheduleCard.append(makeAnimationPicker({
+    scheduleCard.append(animationPicker.createPicker({
       id: 'wallpaper-transition',
       label: 'Wallpaper transition',
+      description: 'Choose one or more transitions. When several are selected, one is chosen at random.',
       choices: WALLPAPER_TRANSITIONS,
       selected: wallpaperDraft.transition,
       onChange: selected => { wallpaperDraft.transition = selected; queueWallpaperUpdate(); },
@@ -552,81 +573,6 @@ export function buildSettings(id, ctx, initialState) {
       group.append(button);
     }
     return group;
-  }
-
-  function makeAnimationPicker({ id, label, choices, selected, onChange }) {
-    let currentSelection = normalizeChoices(selected, choices);
-    const picker = el('div', 'settings-animation-picker');
-    const trigger = el('button', 'settings-animation-trigger');
-    trigger.type = 'button';
-    trigger.setAttribute('aria-expanded', 'false');
-    trigger.setAttribute('aria-controls', `${id}-panel`);
-    const triggerTitle = el('span', 'settings-animation-trigger-title', label);
-    const triggerSummary = el('span', 'settings-animation-trigger-summary');
-    const chevron = el('span', 'settings-animation-chevron', '⌄');
-    chevron.setAttribute('aria-hidden', 'true');
-    trigger.append(triggerTitle, triggerSummary, chevron);
-    const panel = el('div', 'settings-animation-panel');
-    panel.id = `${id}-panel`;
-    panel.setAttribute('role', 'region');
-    panel.setAttribute('aria-label', `${label} options`);
-    const optionList = el('div', 'settings-animation-options');
-    panel.append(optionList);
-
-    const updateSummaryAndChoices = () => {
-      triggerSummary.textContent = currentSelection.length === 0
-        ? 'None'
-        : currentSelection.length === 1
-          ? choices.find(([value]) => value === currentSelection[0])?.[1] || '1 selected'
-          : `${currentSelection.length} selected`;
-      optionList.replaceChildren();
-      const noneLabel = document.createElement('label');
-      noneLabel.className = 'settings-animation-option settings-animation-none';
-      const noneInput = document.createElement('input');
-      noneInput.type = 'checkbox';
-      noneInput.checked = currentSelection.length === 0;
-      noneInput.setAttribute('aria-label', `No ${label.toLowerCase()} animation`);
-      noneLabel.append(noneInput, el('span', '', 'None'));
-      noneInput.addEventListener('change', () => {
-        currentSelection = noneInput.checked ? [] : choices.map(([value]) => value);
-        updateSummaryAndChoices();
-        onChange([...currentSelection]);
-      });
-      optionList.append(noneLabel);
-
-      for (const [value, title, description] of choices) {
-        const option = document.createElement('label');
-        option.className = 'settings-animation-option';
-        const input = document.createElement('input');
-        input.type = 'checkbox';
-        input.checked = currentSelection.includes(value);
-        input.setAttribute('aria-label', title);
-        option.append(input, el('span', 'settings-animation-copy'));
-        option.querySelector('.settings-animation-copy').append(el('strong', '', title), el('small', '', description));
-        input.addEventListener('change', () => {
-          currentSelection = input.checked
-            ? [...currentSelection, value]
-            : currentSelection.filter(item => item !== value);
-          currentSelection = normalizeChoices(currentSelection, choices);
-          updateSummaryAndChoices();
-          onChange([...currentSelection]);
-        });
-        optionList.append(option);
-      }
-    };
-
-    const setOpen = open => {
-      openAnimationPanel = open ? id : null;
-      picker.classList.toggle('is-open', open);
-      trigger.setAttribute('aria-expanded', String(open));
-      panel.setAttribute('aria-hidden', String(!open));
-      panel.inert = !open;
-    };
-    trigger.addEventListener('click', () => setOpen(openAnimationPanel !== id));
-    updateSummaryAndChoices();
-    setOpen(openAnimationPanel === id);
-    picker.append(trigger, panel);
-    return picker;
   }
 
   function moveSelected(index, delta) {
@@ -706,7 +652,7 @@ export function buildSettings(id, ctx, initialState) {
   function updateFromHost() {
     current = snapshot();
     if (!activePage) return;
-    if (activePage === 'appearance') renderPage();
+    if (activePage === 'appearance' && !animationPicker.isOpen) renderPage();
     else if (activePage === 'time') {
       const input = page.querySelector('.settings-switch input');
       if (input) input.checked = current.use24HourTime === true;
@@ -754,6 +700,7 @@ export function buildSettings(id, ctx, initialState) {
       destroy() {
         if (destroyed) return;
         destroyed = true;
+        animationPicker.destroy();
         unsubscribe();
         resizeObserver?.disconnect();
         window.removeEventListener('resize', onResize);

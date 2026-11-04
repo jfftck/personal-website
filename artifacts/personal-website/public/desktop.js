@@ -2556,6 +2556,11 @@ function _ovWheelHandler(e) {
 function enterOverview() {
   window.clearTimeout(overviewAnimationTimer);
   document.body.classList.remove('overview-exiting');
+  const overviewChoices = getAnimationPreferences().overview;
+  appStrip.classList.toggle(
+    'ov-no-transition',
+    overviewChoices.length === 0 || matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
   document.body.classList.add('mod-overview');
   overviewBtn.setAttribute('aria-pressed', 'true');
   window.addEventListener('wheel', _ovWheelHandler, { passive: false });
@@ -2586,6 +2591,7 @@ function animateOverviewWindows(direction) {
       el.style.removeProperty('--overview-stagger');
     }
     document.body.classList.remove('overview-exiting');
+    appStrip.classList.remove('ov-no-transition');
   }, 720);
 }
 
@@ -2598,12 +2604,21 @@ function exitOverview({ animate = true } = {}) {
       el.style.removeProperty('--overview-stagger');
     }
   }
+  const noOverviewMotion = getAnimationPreferences().overview.length === 0 ||
+    matchMedia('(prefers-reduced-motion: reduce)').matches;
+  appStrip.classList.toggle('ov-no-transition', noOverviewMotion);
   document.body.classList.toggle('overview-exiting', animate);
   document.body.classList.remove('mod-overview');
   overviewBtn.setAttribute('aria-pressed', 'false');
   window.removeEventListener('wheel', _ovWheelHandler);
   appStrip.style.transform       = '';
   appStrip.style.transformOrigin = '';
+  if (noOverviewMotion && animate) {
+    window.clearTimeout(overviewAnimationTimer);
+    overviewAnimationTimer = window.setTimeout(() => appStrip.classList.remove('ov-no-transition'), 720);
+  } else if (noOverviewMotion) {
+    requestAnimationFrame(() => appStrip.classList.remove('ov-no-transition'));
+  }
   document.getElementById('overview-controls')?.remove();
   _ovNatColRects = _ovNatWinRects = _ovStripRect = null;
 }

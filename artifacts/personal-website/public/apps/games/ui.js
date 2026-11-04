@@ -1,5 +1,6 @@
 import { enhanceSelect } from '../custom-select.js';
 import { SETTINGS_ICON } from '../toolbar.js';
+import { createAnimationPickerController } from '../animation-picker.js';
 
 const TOOLBAR_ICONS = {
   settings: SETTINGS_ICON,
@@ -92,6 +93,7 @@ function createGameSettings(root, toolbar, title, id) {
   dialog.append(header, gameOptions, appearanceOptions);
   overlay.append(dialog);
   root.append(overlay);
+  const animationPicker = createAnimationPickerController(dialog, { label: 'Game animation selection' });
 
   let isOpen = false;
   let priorFocus = null;
@@ -112,6 +114,7 @@ function createGameSettings(root, toolbar, title, id) {
 
   function close(restoreFocus = true) {
     if (!isOpen) return;
+    animationPicker.close({ restoreFocus: false });
     isOpen = false;
     overlay.hidden = true;
     inertStates.forEach(({ node, inert }) => { node.inert = inert; });
@@ -157,9 +160,13 @@ function createGameSettings(root, toolbar, title, id) {
     gameOptions,
     appearanceOptions,
     addGameOption: control => addOption(gameOptions, control),
+    addGameAnimationOption: config => addOption(gameOptions, animationPicker.createPicker(config)),
     addAppearanceOption: control => addOption(appearanceOptions, control),
     close,
-    destroy: () => close(false),
+    destroy: () => {
+      close(false);
+      animationPicker.destroy();
+    },
   };
 }
 

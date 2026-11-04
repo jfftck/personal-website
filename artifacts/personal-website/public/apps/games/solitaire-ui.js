@@ -11,7 +11,7 @@ import {
 import { createGameSession, inspectGameSession } from './game-state.js';
 import { addGameThemeControl, addGameThemeResetControl } from './themes.js';
 import { refreshCustomSelect } from '../custom-select.js';
-import { getWinAnimationPreference, setWinAnimationPreference, solitaireWinAnimationChoices } from './win-animation-settings.js';
+import { getWinAnimationPreferences, setWinAnimationPreferences, solitaireWinAnimationChoices } from './win-animation-settings.js';
 
 const rules = {
   klondike: 'Build the four foundations from Ace to King by suit. Tableau piles descend in alternating colors; only Kings fill empty columns. Click an exposed card or sequence, then a destination. Use Send home to move an eligible card to a foundation. Click the stock to draw or recycle. Choose draw one or draw three for a new deal.',
@@ -84,12 +84,14 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       options.suits = Number(value); restart();
     }));
   }
-  settings.addGameOption(selectControl(
-    'Win animation',
-    solitaireWinAnimationChoices,
-    getWinAnimationPreference('solitaire'),
-    value => setWinAnimationPreference('solitaire', value),
-  ));
+  settings.addGameAnimationOption({
+    id: `solitaire-win-animation-${id}`,
+    label: 'Win animation',
+    description: 'Choose the effects that can celebrate a win. Multiple choices are randomized.',
+    choices: solitaireWinAnimationChoices,
+    selected: getWinAnimationPreferences('solitaire'),
+    onChange: value => setWinAnimationPreferences('solitaire', value),
+  });
   const removeThemeControl = addGameThemeControl(el, settings.appearanceOptions, 'cards');
   const removeTableThemeControl = addGameThemeControl(el, settings.appearanceOptions, 'cardTable');
   const removeFaceStyle = addGameThemeControl(el, settings.appearanceOptions, 'cardFaces');
@@ -138,8 +140,8 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     clearCelebration();
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const effect = chooseConfiguredWinCelebration(Math.random, !reducedMotion);
-    latestTable.dataset.winCelebration = effect;
-    if (reducedMotion) {
+    if (effect) latestTable.dataset.winCelebration = effect;
+    if (reducedMotion || !effect) {
       showVictoryScreen();
       return;
     }
