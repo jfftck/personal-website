@@ -217,7 +217,7 @@ export function buildSettings(id, ctx, initialState) {
 
   function renderAppearance(body) {
     const card = el('section', 'settings-card settings-appearance-card');
-    card.append(el('span', 'settings-card-eyebrow', 'DISPLAY'), el('h2', '', 'Color theme'), el('p', 'settings-description', 'Your choice follows you across every desktop window.'));
+    card.append(el('span', 'settings-card-eyebrow', 'WINDOW'), el('h2', '', 'Color theme'), el('p', 'settings-description', 'Your choice follows you across every desktop window.'));
     const options = el('div', 'settings-theme-options');
     options.setAttribute('role', 'group');
     options.setAttribute('aria-label', 'Color theme');
