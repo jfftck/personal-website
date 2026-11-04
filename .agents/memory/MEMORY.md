@@ -1,5 +1,6 @@
 - [Preview overlay compatibility](website-preservation.md) — template banners can cover the desktop launcher and intercept clicks.
 - [Preview routing checks](preview-routing.md) — verify the actual development domain before treating localhost:80 errors as broken artifact routes.
+- [Playwright browser runtime](playwright-runtime.md) — browser downloads may succeed while local Chromium remains incompatible with the Nix system libraries.
 - [Reminder behavior](reminder-behavior.md) — keep reminders page-open only; do not rely on background execution or a server.
 - [Calculator keyboard shortcuts](calculator-keyboard-shortcuts.md) — global shortcuts must leave native controls’ Enter and Space activation to the browser.
 - [Calculator compact layout](calculator-compact-layout.md) — explicit compact button line heights prevent keypad rows overflowing their grid tracks.
@@ -13,3 +14,4 @@
 - [Nested settings drawers](animation-drawer-accessibility.md) — a game settings modal must not inert the animation drawer that opens alongside it.
 - [Settings color choice groups](settings-color-choice-groups.md) — when color selectors repeat names, include the tint role in each accessible name and scope interactions by group.
 - [Settings scroll restoration](settings-scroll-restoration.md) — preserve the active scroll container when shared settings updates redraw the current page.
+- [Refactor task tracking](refactor-task-tracking.md) — create a project task before planned refactors to reduce complexity or improve maintainability.

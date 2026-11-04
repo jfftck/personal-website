@@ -21,7 +21,6 @@ timeoutMs = 120000
 
 [nix]
 channel = "stable-25_05"
-packages = ["glib", "nspr", "nss", "atk", "at-spi2-atk", "at-spi2-core", "dbus", "xorg.libX11", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXrandr", "xorg.libxcb", "libxkbcommon", "alsa-lib", "mesa", "pango", "cairo", "fontconfig", "freetype"]
 
 [objectStorage]
 defaultBucketID = "replit-objstore-26ab0a0e-15cf-4dc4-bfde-871fb7c4af05"
