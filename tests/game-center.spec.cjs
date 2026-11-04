@@ -2353,6 +2353,33 @@ test('Minesweeper supports reveal, touch flag mode, keyboard flags, and all boar
   await expect(app.getByRole('switch', { name: 'Flag mode' })).toHaveAttribute('aria-checked', 'true');
 });
 
+test.describe('Minesweeper touch flag mode', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('touch toggles flag mode and returns covered-cell taps to reveal', async ({ page }) => {
+    await page.locator('#app-menu-btn').tap();
+    await page.locator('#game-center-entry').tap();
+    await page.locator('[data-game="minesweeper"]').tap();
+    const app = page.locator('.app-window[data-type="minesweeper"]').last();
+    const flagMode = app.getByRole('switch', { name: 'Flag mode' });
+    await expect(flagMode).toHaveAttribute('aria-checked', 'false');
+
+    await flagMode.tap();
+    await expect(flagMode).toHaveAttribute('aria-checked', 'true');
+    const firstCell = app.locator('[data-key="mine-0"]');
+    await firstCell.tap();
+    await expect(firstCell).toHaveClass(/flagged/);
+
+    await flagMode.tap();
+    await expect(flagMode).toHaveAttribute('aria-checked', 'false');
+    await expect(app.locator('.game-status')).toContainText('Reveal mode');
+    const nextCell = app.locator('[data-key="mine-1"]');
+    await nextCell.tap();
+    await expect(nextCell).toHaveClass(/revealed/);
+    await expect(nextCell).not.toHaveClass(/flagged/);
+  });
+});
+
 test('Minesweeper win screen lets users change the next game difficulty', async ({ page }) => {
   const app = await restoreGame(page, savedMinesweeper(), 'minesweeper');
   await app.locator('[data-key="mine-10"]').click();
