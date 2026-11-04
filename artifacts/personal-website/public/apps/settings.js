@@ -262,6 +262,7 @@ export function buildSettings(id, ctx, initialState) {
     body.append(card);
 
     const animationPreferences = current.animationPreferences || {};
+    body.append(el('h2', 'settings-animation-heading', 'Window animations'));
     const animationRows = el('div', 'settings-animation-rows');
     for (const [event, config] of Object.entries(ANIMATION_OPTIONS)) {
       const row = el('div', 'settings-animation-row');

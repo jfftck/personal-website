@@ -5,6 +5,7 @@ import { loadStickyNotes } from './apps/sticky-notes-data.js';
 import { SETTINGS_ICON } from './apps/toolbar.js';
 import { retryWithBackoff, responseLoadError } from './shared/retry.js';
 import { GAMES, initGameMenu } from './apps/game-catalog.js';
+import { readJSON, readRaw, readRawResult, removeData, writeJSON, writeRaw } from './data-handler.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -56,14 +57,12 @@ const REMINDER_KEY = 'desktop-reminders';
 const REMINDER_BACKGROUND_KEY = 'desktop-reminder-background';
 let calendarDate  = new Date();
 let selectedCalendarDate = new Date();
-let use24HourTime = localStorage.getItem(TIME_KEY) === 'true';
+let use24HourTime = readRaw(TIME_KEY) === 'true';
 let reminders = [];
 const reminderNotificationTimers = new Map();
-let systemNotificationsEnabled = localStorage.getItem(REMINDER_BACKGROUND_KEY) === 'true';
-try {
-  const storedReminders = JSON.parse(localStorage.getItem(REMINDER_KEY) || '[]');
-  if (Array.isArray(storedReminders)) reminders = storedReminders;
-} catch { /* ignore invalid stored reminders */ }
+let systemNotificationsEnabled = readRaw(REMINDER_BACKGROUND_KEY) === 'true';
+const storedReminders = readJSON(REMINDER_KEY, [], { validate: Array.isArray });
+if (Array.isArray(storedReminders)) reminders = storedReminders;
 
 function effectiveTheme() {
   return document.documentElement.dataset.theme || (themeMedia.matches ? 'dark' : 'light');
@@ -87,17 +86,17 @@ function getAnimationPreferences() {
     showDesktop: ['zoom'],
     overview: ['zoom'],
   };
-  try {
-    const stored = JSON.parse(localStorage.getItem(ANIMATION_PREFERENCES_KEY) || 'null');
-    if (stored && typeof stored === 'object') {
-      return Object.fromEntries(Object.entries(ANIMATION_EVENT_EFFECTS).map(([event, effects]) => [
-        event,
-        normalizeAnimationChoices(stored[event], effects, defaults[event]),
-      ]));
-    }
-  } catch { /* Fall through to the previous preference or defaults. */ }
+  const stored = readJSON(ANIMATION_PREFERENCES_KEY, null, {
+    validate: value => Boolean(value && typeof value === 'object' && !Array.isArray(value)),
+  });
+  if (stored) {
+    return Object.fromEntries(Object.entries(ANIMATION_EVENT_EFFECTS).map(([event, effects]) => [
+      event,
+      normalizeAnimationChoices(stored[event], effects, defaults[event]),
+    ]));
+  }
 
-  const legacy = localStorage.getItem(WINDOW_ANIMATION_KEY);
+  const legacy = readRaw(WINDOW_ANIMATION_KEY);
   if (legacy !== null) {
     const windowChoices = normalizeAnimationChoices(legacy, WINDOW_ANIMATION_EFFECTS, ['fade']);
     defaults.windowOpen = windowChoices;
@@ -121,11 +120,13 @@ function setAnimationPreference(event, value) {
   if (!effects) throw new Error('Unknown animation setting.');
   const preferences = getAnimationPreferences();
   preferences[event] = normalizeAnimationChoices(value, effects, []);
-  localStorage.setItem(ANIMATION_PREFERENCES_KEY, JSON.stringify(preferences));
+  if (!writeJSON(ANIMATION_PREFERENCES_KEY, preferences)) {
+    throw new Error('The animation preference could not be saved in browser storage.');
+  }
   const openClose = preferences.windowOpen.length === preferences.windowClose.length &&
     preferences.windowOpen.every(effect => preferences.windowClose.includes(effect));
   if (openClose) {
-    localStorage.setItem(
+    writeRaw(
       WINDOW_ANIMATION_KEY,
       preferences.windowOpen.length === 0 ? 'none' : preferences.windowOpen.length === 1 ? preferences.windowOpen[0] : 'random',
     );
@@ -133,14 +134,14 @@ function setAnimationPreference(event, value) {
   notifyDesktopSettingsChanged();
 }
 
-function applyTheme(theme = localStorage.getItem(THEME_KEY), { persist = true } = {}) {
+function applyTheme(theme = readRaw(THEME_KEY), { persist = true } = {}) {
   const hasOverride = theme === 'light' || theme === 'dark';
   if (theme === 'light' || theme === 'dark') {
     document.documentElement.dataset.theme = theme;
-    if (persist) localStorage.setItem(THEME_KEY, theme);
+    if (persist) writeRaw(THEME_KEY, theme);
   } else {
     delete document.documentElement.dataset.theme;
-    if (persist) localStorage.removeItem(THEME_KEY);
+    if (persist) removeData(THEME_KEY);
   }
   themeToggle.setAttribute('aria-pressed', String(effectiveTheme() === 'dark'));
   themeSplit.classList.toggle('has-override', hasOverride);
@@ -165,7 +166,7 @@ function updateClock() {
 
 function setTimeFormat(enabled) {
   use24HourTime = Boolean(enabled);
-  localStorage.setItem(TIME_KEY, String(use24HourTime));
+  writeRaw(TIME_KEY, String(use24HourTime));
   timeFormatToggle?.setAttribute('aria-pressed', String(use24HourTime));
   updateClock();
   renderReminders();
@@ -280,10 +281,10 @@ async function setSystemNotificationsEnabled(enabled) {
         : 'Notification permission was not granted.');
     }
     systemNotificationsEnabled = true;
-    localStorage.setItem(REMINDER_BACKGROUND_KEY, 'true');
+    writeRaw(REMINDER_BACKGROUND_KEY, 'true');
   } else {
     systemNotificationsEnabled = false;
-    localStorage.removeItem(REMINDER_BACKGROUND_KEY);
+    removeData(REMINDER_BACKGROUND_KEY);
   }
   reminders.forEach(scheduleReminderNotification);
   updateNotificationSetting();
@@ -292,10 +293,10 @@ async function setSystemNotificationsEnabled(enabled) {
 }
 
 async function removeLegacyBackgroundNotifications() {
-  localStorage.removeItem('desktop-reminder-client-id');
-  localStorage.removeItem('desktop-reminder-capability');
-  localStorage.removeItem('desktop-reminder-cleanup-pending');
-  localStorage.removeItem('desktop-reminder-sync-queue');
+  removeData('desktop-reminder-client-id');
+  removeData('desktop-reminder-capability');
+  removeData('desktop-reminder-cleanup-pending');
+  removeData('desktop-reminder-sync-queue');
   if (!('serviceWorker' in navigator)) return;
   const registrations = await navigator.serviceWorker.getRegistrations();
   await Promise.all(registrations
@@ -346,7 +347,7 @@ function renderReminders() {
     remove.addEventListener('click', () => {
       clearReminderNotification(reminder.id);
       reminders = reminders.filter(item => item.id !== reminder.id);
-      localStorage.setItem(REMINDER_KEY, JSON.stringify(reminders));
+      writeJSON(REMINDER_KEY, reminders, { validate: Array.isArray });
       renderReminders();
     });
     item.append(title, time, remove);
@@ -405,7 +406,7 @@ systemPanel.addEventListener('click', e => e.stopPropagation());
 themeToggle.addEventListener('click', () => applyTheme(effectiveTheme() === 'dark' ? 'light' : 'dark'));
 themeReset.addEventListener('click', () => applyTheme(null));
 themeMedia.addEventListener('change', () => {
-  if (!localStorage.getItem(THEME_KEY)) applyTheme(null, { persist: false });
+  if (!readRaw(THEME_KEY)) applyTheme(null, { persist: false });
 });
 $('settings-open-btn').addEventListener('click', () => {
   closeSystemPanel();
@@ -456,7 +457,7 @@ $('reminder-form').addEventListener('submit', event => {
     dueAt: new Date(when).toISOString(),
   };
   reminders.push(reminder);
-  localStorage.setItem(REMINDER_KEY, JSON.stringify(reminders));
+  writeJSON(REMINDER_KEY, reminders, { validate: Array.isArray });
   scheduleReminderNotification(reminder);
   event.currentTarget.reset();
   event.currentTarget.hidden = true;
@@ -473,7 +474,7 @@ $('reminder-notification-toggle').addEventListener('click', async event => {
     event.currentTarget.disabled = false;
   }
 });
-applyTheme(localStorage.getItem(THEME_KEY), { persist: false });
+applyTheme(readRaw(THEME_KEY), { persist: false });
 updateClock();
 renderReminders();
 updateNotificationSetting();
@@ -495,7 +496,7 @@ function saveSession() {
       columnIndex: focusedColumnIndex,
       appIndex: S.columns[focusedColumnIndex].appIds.indexOf(S.focusedId),
     };
-    localStorage.setItem(SESSION_KEY, JSON.stringify({
+    writeJSON(SESSION_KEY, {
       v: 2,
       focused: focusedPosition,
       columns: S.columns.map(col => ({
@@ -506,13 +507,13 @@ function saveSession() {
           return { type: app.type, ...(state ? { state } : {}) };
         }),
       })),
-    }));
+    }, { validate: value => value?.v === 2 && Array.isArray(value.columns) });
   } catch { /* storage unavailable */ }
 }
 
 function safeRemoveSession() {
-  try { localStorage.removeItem(SESSION_KEY); } catch { /* */ }
-  try { localStorage.removeItem(SESSION_KEY_V1); } catch { /* */ }
+  removeData(SESSION_KEY);
+  removeData(SESSION_KEY_V1);
 }
 
 // ── Context-aware title ────────────────────────────────────────
@@ -1427,30 +1428,30 @@ let wallpaperTransitionLayer = null;
 const wallpaperPreloads = new Map();
 
 function readWallpaperSettings() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(WALLPAPER_KEY) || '{}');
-    const transition = normalizeAnimationChoices(stored.transition, WALLPAPER_TRANSITION_EFFECTS, ['fade']);
-    return {
-      selected: Array.isArray(stored.selected) ? stored.selected.filter(url => typeof url === 'string') : [],
-      mode: stored.mode === 'cycle' ? 'cycle' : 'random',
-      rotation: stored.rotation === 'interval' ? 'interval' : 'visit',
-      intervalMinutes: WALLPAPER_INTERVALS.includes(Number(stored.intervalMinutes))
-        ? Number(stored.intervalMinutes)
-        : 60,
-      transition,
-      currentUrl: typeof stored.currentUrl === 'string' ? stored.currentUrl : '',
-      nextUrl: typeof stored.nextUrl === 'string' ? stored.nextUrl : '',
-      nextChangeAt: Number.isFinite(stored.nextChangeAt) ? stored.nextChangeAt : 0,
-    };
-  } catch {
-    return { selected: [], mode: 'random', rotation: 'visit', intervalMinutes: 60, transition: ['fade'], currentUrl: '', nextUrl: '', nextChangeAt: 0 };
-  }
+  const stored = readJSON(WALLPAPER_KEY, {}, {
+    validate: value => Boolean(value && typeof value === 'object' && !Array.isArray(value)),
+  });
+  const transition = normalizeAnimationChoices(stored.transition, WALLPAPER_TRANSITION_EFFECTS, ['fade']);
+  return {
+    selected: Array.isArray(stored.selected) ? stored.selected.filter(url => typeof url === 'string') : [],
+    mode: stored.mode === 'cycle' ? 'cycle' : 'random',
+    rotation: stored.rotation === 'interval' ? 'interval' : 'visit',
+    intervalMinutes: WALLPAPER_INTERVALS.includes(Number(stored.intervalMinutes))
+      ? Number(stored.intervalMinutes)
+      : 60,
+    transition,
+    currentUrl: typeof stored.currentUrl === 'string' ? stored.currentUrl : '',
+    nextUrl: typeof stored.nextUrl === 'string' ? stored.nextUrl : '',
+    nextChangeAt: Number.isFinite(stored.nextChangeAt) ? stored.nextChangeAt : 0,
+  };
 }
 
 let wallpaperSettings = readWallpaperSettings();
 
 function saveWallpaperSettings() {
-  localStorage.setItem(WALLPAPER_KEY, JSON.stringify(wallpaperSettings));
+  writeJSON(WALLPAPER_KEY, wallpaperSettings, {
+    validate: value => Boolean(value && Array.isArray(value.selected) && Array.isArray(value.transition)),
+  });
 }
 
 function wallpaperAbsoluteUrl(url) {
@@ -2168,7 +2169,7 @@ const appCtx = {
   settings: {
     getSnapshot: () => ({
       theme: effectiveTheme(),
-      themeOverride: localStorage.getItem(THEME_KEY) || 'system',
+      themeOverride: readRaw(THEME_KEY) || 'system',
       animationPreferences: getAnimationPreferences(),
       use24HourTime,
       notificationsEnabled: systemNotificationsEnabled,
@@ -2299,12 +2300,14 @@ const APP_DEFS = {
 // ── Session restore ───────────────────────────────────────────
 function restoreSession() {
   try {
-    let raw = localStorage.getItem(SESSION_KEY);
+    const rawV2 = readRawResult(SESSION_KEY).value;
     let isV1 = false;
-    if (!raw) { raw = localStorage.getItem(SESSION_KEY_V1); isV1 = true; }
-    if (!raw) return;
-
-    const data = JSON.parse(raw);
+    const rawV1 = rawV2 === null ? readRawResult(SESSION_KEY_V1).value : null;
+    if (rawV2 === null && rawV1 === null) return;
+    if (rawV2 === null) isV1 = true;
+    const data = readJSON(isV1 ? SESSION_KEY_V1 : SESSION_KEY, null, {
+      validate: value => Boolean(value && (Array.isArray(value) || typeof value === 'object')),
+    });
     if (!data) return;
 
     S._skipSave = true;

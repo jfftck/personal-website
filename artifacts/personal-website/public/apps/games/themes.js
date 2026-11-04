@@ -1,5 +1,6 @@
 import { chessPieceSvg } from './chess-piece-svg.js';
 import { cardFaceMarkup } from './card-artwork.js';
+import { readJSON, writeJSON } from '../../data-handler.js';
 
 const STORAGE_KEY = 'game-center-visual-themes-v1';
 
@@ -79,12 +80,9 @@ const config = {
 };
 
 function readPreferences() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
-  } catch {
-    return {};
-  }
+  return readJSON(STORAGE_KEY, {}, {
+    validate: value => Boolean(value && typeof value === 'object' && !Array.isArray(value)),
+  });
 }
 
 function normalize(key, value) {
@@ -173,9 +171,9 @@ export function addGameThemeControl(root, container, key) {
   const choose = value => {
     const preferences = readPreferences();
     preferences[key] = normalize(key, value);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
-    } catch {
+    if (!writeJSON(STORAGE_KEY, preferences, {
+      validate: value => Boolean(value && typeof value === 'object' && !Array.isArray(value)),
+    })) {
       // Keep the current in-memory choice even if storage is unavailable.
     }
     window.dispatchEvent(new CustomEvent('game-center-theme-change', {
@@ -235,9 +233,9 @@ export function addGameThemeResetControl(container) {
     const preferences = Object.fromEntries(
       Object.entries(config).map(([key, theme]) => [key, theme.choices[0][0]]),
     );
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
-    } catch {
+    if (!writeJSON(STORAGE_KEY, preferences, {
+      validate: value => Boolean(value && typeof value === 'object' && !Array.isArray(value)),
+    })) {
       // Apply the reset to open games even if browser storage is unavailable.
     }
     window.dispatchEvent(new CustomEvent('game-center-theme-change', {

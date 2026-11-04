@@ -2,17 +2,13 @@ import { isRed, SUITS, WIN_CELEBRATIONS } from './cards.js';
 import { paintCardFace } from './card-artwork.js';
 import { createParticleAnimation } from './particle-effects.js';
 import { getWinAnimationPreferences } from './win-animation-settings.js';
+import { readJSON, writeJSON } from '../../data-handler.js';
 
 const CELEBRATION_HISTORY_KEY = 'game-center-solitaire-celebrations-v1';
 let trackedCelebrations = null;
 
 function readCelebrationHistory() {
-  try {
-    const saved = JSON.parse(globalThis.localStorage?.getItem(CELEBRATION_HISTORY_KEY) || '[]');
-    return Array.isArray(saved) ? saved : [];
-  } catch {
-    return [];
-  }
+  return readJSON(CELEBRATION_HISTORY_KEY, [], { validate: Array.isArray });
 }
 
 export function chooseNextWinCelebration(random = Math.random, allowed = WIN_CELEBRATIONS) {
@@ -27,9 +23,7 @@ export function chooseNextWinCelebration(random = Math.random, allowed = WIN_CEL
   played.add(choice);
   const nextHistory = [...played];
   trackedCelebrations = nextHistory;
-  try {
-    globalThis.localStorage?.setItem(CELEBRATION_HISTORY_KEY, JSON.stringify(trackedCelebrations));
-  } catch {}
+  writeJSON(CELEBRATION_HISTORY_KEY, trackedCelebrations, { validate: Array.isArray });
   return choice;
 }
 

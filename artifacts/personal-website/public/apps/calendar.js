@@ -1,5 +1,7 @@
 'use strict';
 
+import { readJSON, writeJSON } from '../data-handler.js';
+
 const PREFS_KEY = 'personal-desktop-calendar-view-v1';
 const VIEW_NAMES = ['month', 'week', 'agenda'];
 const WEEKDAYS = Array.from({ length: 7 }, (_, index) => new Date(2024, 0, 1 + index));
@@ -38,13 +40,11 @@ export function buildCalendar(id, ctx) {
   let includeWeekend = restored.includeWeekend === true;
 
   const persist = () => {
-    try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({
-        view,
-        selectedDate: dateKey(selectedDate),
-        includeWeekend,
-      }));
-    } catch { /* Calendar remains usable when storage is unavailable. */ }
+    writeJSON(PREFS_KEY, {
+      view,
+      selectedDate: dateKey(selectedDate),
+      includeWeekend,
+    });
   };
 
   const setSelectedDate = date => {
@@ -221,12 +221,9 @@ export function buildCalendar(id, ctx) {
 }
 
 function loadPreferences() {
-  try {
-    const value = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
-    return value && typeof value === 'object' ? value : {};
-  } catch {
-    return {};
-  }
+  return readJSON(PREFS_KEY, {}, {
+    validate: value => Boolean(value && typeof value === 'object' && !Array.isArray(value)),
+  });
 }
 
 function parseDate(value) {

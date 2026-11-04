@@ -1,3 +1,5 @@
+import { readJSON, writeJSON } from '../data-handler.js';
+
 const KEY = 'personal-desktop-sticky-notes-v1';
 
 export const NOTE_COLORS = [
@@ -10,19 +12,16 @@ export const NOTE_COLORS = [
 ];
 
 export function loadStickyNotes() {
-  try {
-    const data = JSON.parse(localStorage.getItem(KEY));
-    if (Array.isArray(data)) return data.filter(note => note && typeof note.id === 'string').map(note => ({
-      id: note.id,
-      title: String(note.title || ''),
-      body: String(note.body || ''),
-      desktop: note.desktop === true,
-      color: NOTE_COLORS.some(option => option.value === note.color) ? note.color : 'yellow'
-    }));
-  } catch {}
-  return [];
+  const data = readJSON(KEY, [], { validate: Array.isArray });
+  return data.filter(note => note && typeof note.id === 'string').map(note => ({
+    id: note.id,
+    title: String(note.title || ''),
+    body: String(note.body || ''),
+    desktop: note.desktop === true,
+    color: NOTE_COLORS.some(option => option.value === note.color) ? note.color : 'yellow'
+  }));
 }
 
 export function saveStickyNotes(notes) {
-  try { localStorage.setItem(KEY, JSON.stringify(notes)); } catch {}
+  writeJSON(KEY, notes, { validate: Array.isArray });
 }

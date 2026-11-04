@@ -4,6 +4,7 @@ import { enhanceSelect, refreshCustomSelect } from './custom-select.js';
 import { NOTE_COLORS } from './sticky-notes-data.js';
 import '../shared/app-controls.js';
 import { SETTINGS_ICON } from './toolbar.js';
+import { readRaw, readRawResult, removeData, writeRaw } from '../data-handler.js';
 
 const BASIC_KEYS = [
   ['AC', 'clear'], ['±', 'sign'], ['%', 'percent'], ['÷', 'operator'],
@@ -129,8 +130,9 @@ function readSavedGraphSettings(rawOverride) {
   let raw;
   if (arguments.length) raw = rawOverride;
   else {
-    try { raw = localStorage.getItem(GRAPH_SETTINGS_KEY); }
-    catch { return { status: 'unavailable' }; }
+    const result = readRawResult(GRAPH_SETTINGS_KEY);
+    if (!result.ok) return { status: 'unavailable' };
+    raw = result.value;
   }
   if (raw === null) return { status: 'empty' };
 
@@ -592,7 +594,7 @@ export function buildCalculator(id, ctx) {
   const history = [];
   let mode = (() => {
     try {
-      const saved = localStorage.getItem(CALCULATOR_MODE_KEY);
+      const saved = readRaw(CALCULATOR_MODE_KEY);
       return ['basic', 'scientific', 'graph'].includes(saved) ? saved : 'basic';
     } catch {
       return 'basic';
@@ -739,7 +741,10 @@ export function buildCalculator(id, ctx) {
         functionsByMode: serializeFunctionsByMode(),
         viewRanges,
       });
-      localStorage.setItem(GRAPH_SETTINGS_KEY, serialized);
+      if (!writeRaw(GRAPH_SETTINGS_KEY, serialized)) {
+        showStorageWarning('write');
+        return;
+      }
       const saved = readSavedGraphSettings(serialized);
       if (saved.status === 'valid') {
         storageWarning.hidden = true;
@@ -754,7 +759,7 @@ export function buildCalculator(id, ctx) {
 
   function resetSavedGraph() {
     try {
-      localStorage.removeItem(GRAPH_SETTINGS_KEY);
+      if (!removeData(GRAPH_SETTINGS_KEY)) showStorageWarning('write');
       graphMode = 'cartesian';
       settingsMode = graphMode;
       ranges = { ...DEFAULT_GRAPH_RANGES };
@@ -833,7 +838,7 @@ export function buildCalculator(id, ctx) {
     root.classList.toggle('calc-graph-mode', next === 'graph');
     root.querySelector('.calc-display').hidden = next === 'graph';
     root.querySelector('.calc-history').hidden = next === 'graph';
-    try { localStorage.setItem(CALCULATOR_MODE_KEY, next); } catch {}
+    writeRaw(CALCULATOR_MODE_KEY, next);
     if (next === 'graph') plot();
   };
   const insert = (text, replaceResult = false) => {

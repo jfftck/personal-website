@@ -152,6 +152,30 @@ test('wallpaper startup does not overwrite saved preferences when the manifest h
   expect(await page.evaluate(() => window.__wallpaperPreferenceWrites)).toBe(0);
 });
 
+test('shared data handler keeps a last-good copy without repairing data during reads', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { readJSON, writeJSON, removeData } = await import('/data-handler.js');
+    const key = 'data-handler-test-record';
+    const backupKey = `desktop-data-backup-v1:${encodeURIComponent(key)}`;
+    localStorage.removeItem(key);
+    localStorage.removeItem(backupKey);
+    writeJSON(key, { revision: 1 });
+    writeJSON(key, { revision: 2 });
+    localStorage.setItem(key, '{broken json');
+    const recovered = readJSON(key, { revision: 0 });
+    const preservedInvalidPrimary = localStorage.getItem(key);
+    removeData(key);
+    const afterExplicitRemove = readJSON(key, { revision: 0 });
+    localStorage.removeItem(backupKey);
+    return { recovered, preservedInvalidPrimary, afterExplicitRemove };
+  });
+  expect(result).toEqual({
+    recovered: { revision: 1 },
+    preservedInvalidPrimary: '{broken json',
+    afterExplicitRemove: { revision: 0 },
+  });
+});
+
 test('Appearance settings support independent multi-select animation preferences', async ({ page }) => {
   await page.evaluate(async () => {
     const { buildSettings } = await import('/apps/settings.js');

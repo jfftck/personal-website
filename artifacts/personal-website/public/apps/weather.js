@@ -1,5 +1,6 @@
 import { enhanceSelects, focusCustomSelect, refreshCustomSelect } from './custom-select.js';
 import { SETTINGS_ICON } from './toolbar.js';
+import { readJSON, writeJSON } from '../data-handler.js';
 
 const PREF_KEY = 'personal-desktop-weather-setup-v1';
 const CONDITIONS = {
@@ -574,7 +575,9 @@ function parseLocalTimestamp(value) {
 
 function readPrefs() {
   try {
-    const data = JSON.parse(localStorage.getItem(PREF_KEY));
+    const data = readJSON(PREF_KEY, null, {
+      validate: value => value === null || Boolean(value && typeof value === 'object' && !Array.isArray(value)),
+    });
     const refreshMinutes = Number.isInteger(data?.refreshMinutes) && data.refreshMinutes >= 5 && data.refreshMinutes <= 1440 ? data.refreshMinutes : 60;
     const details = readWeatherDetails(data?.details);
     if (Array.isArray(data?.locations)) {
@@ -598,12 +601,9 @@ function readPrefs() {
 }
 
 function savePrefs(prefs) {
-  try {
-    localStorage.setItem(PREF_KEY, JSON.stringify(prefs));
-    return true;
-  } catch {
-    return false;
-  }
+  return writeJSON(PREF_KEY, prefs, {
+    validate: value => Boolean(value && Array.isArray(value.locations)),
+  });
 }
 
 function escapeHTML(text) {

@@ -1,4 +1,5 @@
 import { WIN_CELEBRATIONS } from './cards.js';
+import { readJSON, writeJSON } from '../../data-handler.js';
 
 const STORAGE_KEY = 'game-center-win-animation-settings-v1';
 const boardEffects = ['pulse', 'fade', 'fireworks', 'knock'];
@@ -19,14 +20,10 @@ export const boardWinAnimationChoices = [
 let inMemoryPreferences = {};
 
 function readPreferences() {
-  try {
-    const saved = JSON.parse(globalThis.localStorage?.getItem(STORAGE_KEY) || '{}');
-    return saved && typeof saved === 'object' && !Array.isArray(saved)
-      ? { ...inMemoryPreferences, ...saved }
-      : inMemoryPreferences;
-  } catch {
-    return inMemoryPreferences;
-  }
+  const saved = readJSON(STORAGE_KEY, {}, {
+    validate: value => Boolean(value && typeof value === 'object' && !Array.isArray(value)),
+  });
+  return { ...inMemoryPreferences, ...saved };
 }
 
 export function getWinAnimationPreference(game) {
@@ -53,12 +50,10 @@ export function setWinAnimationPreferences(game, selected) {
   }
   const value = [...new Set(selected)];
   inMemoryPreferences = { ...inMemoryPreferences, [game]: value };
-  try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify({
-      ...readPreferences(),
-      [game]: value,
-    }));
-  } catch {}
+  writeJSON(STORAGE_KEY, {
+    ...readPreferences(),
+    [game]: value,
+  }, { validate: saved => Boolean(saved && typeof saved === 'object' && !Array.isArray(saved)) });
   return value;
 }
 

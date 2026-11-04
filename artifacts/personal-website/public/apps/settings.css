@@ -215,6 +215,7 @@
 .settings-select-label .standard-select-control { width: min(9rem, 55%); }
 .settings-select-label .standard-select-trigger { width: 100%; min-height: 2rem; padding: .35rem .5rem; font-size: .68rem; }
 .settings-subheading { margin: .9rem 0 .25rem; color: var(--util-detail); font-size: .67rem; font-weight: 700; }
+.settings-animation-heading { margin: .25rem 0 0; color: var(--app-text); font-size: 1rem; font-weight: 650; }
 .settings-animation-rows { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .85rem; }
 .settings-animation-row { min-width: 0; }
 .settings-wallpaper-footer { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; padding-top: .15rem; }

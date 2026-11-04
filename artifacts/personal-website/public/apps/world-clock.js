@@ -1,5 +1,7 @@
 'use strict';
 
+import { readJSON, writeJSON } from '../data-handler.js';
+
 const KEY = 'personal-desktop-world-clock-v1';
 const DEFAULT_ZONES = ['UTC', 'America/New_York', 'Europe/London', 'Asia/Tokyo'];
 export const CITY_OPTIONS = [
@@ -240,7 +242,7 @@ export function buildWorldClock(id, ctx) {
   const placeSuggestions = root.querySelector('.clock-place-suggestions');
   const searchStatus = root.querySelector('.clock-search-status');
   let currentPlaces = [];
-  const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch {} };
+  const persist = () => { writeJSON(KEY, prefs); };
   const closeSuggestions = () => {
     placeSuggestions.hidden = true;
     addInput.setAttribute('aria-expanded', 'false');
@@ -533,17 +535,17 @@ export function normalizeCity(value) {
 }
 
 function readPrefs() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(KEY));
-    if (saved && Array.isArray(saved.zones)) return {
-      zones: saved.zones.filter(zone => { try { new Intl.DateTimeFormat(undefined, { timeZone: zone }); return true; } catch { return false; } }),
-      cityLabels: saved.cityLabels && typeof saved.cityLabels === 'object' && !Array.isArray(saved.cityLabels)
-        ? Object.fromEntries(Object.entries(saved.cityLabels).filter(([, city]) => typeof city === 'string'))
-        : {},
-      layout: saved.layout === 'grid' ? 'grid' : 'list',
-      face: saved.face === 'analog' ? 'analog' : 'digital',
-    };
-  } catch {}
+  const saved = readJSON(KEY, null, {
+    validate: value => Boolean(value && typeof value === 'object' && !Array.isArray(value)),
+  });
+  if (saved && Array.isArray(saved.zones)) return {
+    zones: saved.zones.filter(zone => { try { new Intl.DateTimeFormat(undefined, { timeZone: zone }); return true; } catch { return false; } }),
+    cityLabels: saved.cityLabels && typeof saved.cityLabels === 'object' && !Array.isArray(saved.cityLabels)
+      ? Object.fromEntries(Object.entries(saved.cityLabels).filter(([, city]) => typeof city === 'string'))
+      : {},
+    layout: saved.layout === 'grid' ? 'grid' : 'list',
+    face: saved.face === 'analog' ? 'analog' : 'digital',
+  };
   const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone || DEFAULT_ZONES[0];
   return { zones: [...new Set([localZone, ...DEFAULT_ZONES])], cityLabels: {}, layout: 'list', face: 'digital' };
 }
