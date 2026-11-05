@@ -2545,12 +2545,20 @@ test('calculator Fit curves includes a narrow Polar peak and preserves its angle
   const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
   await editor.getByLabel('Function expression').fill('100/(1000000*(theta-1.2342168125)^2+1)');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  const curvePath = calculator.locator('.calc-graph-line');
+  const ordinaryPointCount = await curvePath.evaluate(element => (element.getAttribute('d').match(/[ML]/g) || []).length);
+  expect(ordinaryPointCount).toBeGreaterThan(0);
+  expect(ordinaryPointCount).toBeLessThanOrEqual(501);
   await clickGraphMenuAction(calculator, 'View', 'Fit curves');
 
   const fitted = await calculator.locator('.calc-plot-area').evaluate(element => JSON.parse(element.dataset.view));
   expect(fitted.thetaMin).toBe(0);
   expect(fitted.thetaMax).toBe(6.283);
   expect(fitted.rMax).toBeGreaterThan(50);
+  const fittedPointCount = await curvePath.evaluate(element => (element.getAttribute('d').match(/[ML]/g) || []).length);
+  expect(fittedPointCount).toBeGreaterThan(7000);
+  const curveBounds = await curvePath.evaluate(element => ({ y: element.getBBox().y }));
+  expect(curveBounds.y).toBeLessThan(120);
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
   await expect(settings.getByLabel('Minimum theta')).toHaveValue('0');
   await expect(settings.getByLabel('Maximum theta')).toHaveValue('6.283');
@@ -2577,15 +2585,38 @@ test('calculator Fit curves includes a narrow Parametric peak and preserves its 
   await editor.getByLabel('x(t)').fill('t');
   await editor.getByLabel('y(t)').fill('100/(1000000*(t-1.2342168125)^2+1)');
   await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  const curvePath = calculator.locator('.calc-graph-line');
+  const ordinaryPointCount = await curvePath.evaluate(element => (element.getAttribute('d').match(/[ML]/g) || []).length);
+  expect(ordinaryPointCount).toBeGreaterThan(0);
+  expect(ordinaryPointCount).toBeLessThanOrEqual(501);
   await clickGraphMenuAction(calculator, 'View', 'Fit curves');
 
   const fitted = await calculator.locator('.calc-plot-area').evaluate(element => JSON.parse(element.dataset.view));
   expect(fitted.tMin).toBe(0);
   expect(fitted.tMax).toBe(6.283);
   expect(fitted.yMax).toBeGreaterThan(50);
+  const fittedPointCount = await curvePath.evaluate(element => (element.getAttribute('d').match(/[ML]/g) || []).length);
+  expect(fittedPointCount).toBeGreaterThan(7000);
+  const curveBounds = await curvePath.evaluate(element => ({ y: element.getBBox().y }));
+  expect(curveBounds.y).toBeLessThan(120);
   await calculator.getByRole('button', { name: 'Graph settings' }).click();
   await expect(settings.getByLabel('Minimum t')).toHaveValue('0');
   await expect(settings.getByLabel('Maximum t')).toHaveValue('6.283');
+  await settings.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+  await page.reload();
+  const welcome = page.getByRole('button', { name: 'Get started', exact: true });
+  if (await welcome.isVisible().catch(() => false)) await welcome.click();
+  const reloadedCalculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(reloadedCalculator, 'Graph');
+  await expect(reloadedCalculator.locator('.calc-mode-label')).toHaveText('PARAMETRIC');
+  const reloadedCurve = reloadedCalculator.locator('.calc-graph-line');
+  const reloadedPointCount = await reloadedCurve.evaluate(element => (element.getAttribute('d').match(/[ML]/g) || []).length);
+  expect(reloadedPointCount).toBeGreaterThan(7000);
+  await expect.poll(() => reloadedCalculator.locator('.calc-plot-area').evaluate(element => JSON.parse(element.dataset.view)))
+    .toEqual(fitted);
+  const reloadedCurveBounds = await reloadedCurve.evaluate(element => ({ y: element.getBBox().y }));
+  expect(reloadedCurveBounds.y).toBeLessThan(120);
 });
 
 test('calculator graph functions, colors, visibility, mode, and ranges persist across reopen and refresh', async ({ page }) => {

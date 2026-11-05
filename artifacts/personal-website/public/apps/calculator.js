@@ -102,6 +102,7 @@ const PLOT_FRAME = Object.freeze({
   left: 48, right: 616, top: 26, bottom: 374,
   width: 568, height: 348, centerX: 332, centerY: 200, polarRadius: 174,
 });
+const FIT_SAMPLE_COUNT = 8000;
 let nextFunctionId = 1;
 const calculatorGraphSubscribers = new Set();
 
@@ -196,11 +197,13 @@ function readSavedGraphSettings(rawOverride) {
         if (view === undefined) continue;
         if (!view || typeof view !== 'object' || Array.isArray(view)) return { status: 'invalid' };
         const validated = {};
+        if (view.fit !== undefined && typeof view.fit !== 'boolean') return { status: 'invalid' };
         for (const key of VIEW_RANGE_KEYS[graphMode]) {
           const value = view[key];
           if (typeof value !== 'number' || !Number.isFinite(value)) return { status: 'invalid' };
           validated[key] = value;
         }
+        if (view.fit) validated.fit = true;
         const pairs = graphMode === 'polar'
           ? [['thetaMin', 'thetaMax'], ['rMin', 'rMax']]
           : graphMode === 'parametric'
@@ -680,9 +683,11 @@ export function buildCalculator(id, ctx) {
     for (const plotMode of GRAPH_MODES) {
       const view = state.viewRanges?.[plotMode];
       if (!view) continue;
-      normalizedViewRanges[plotMode] = Object.fromEntries(
+      const normalizedView = Object.fromEntries(
         VIEW_RANGE_KEYS[plotMode].map(key => [key, view[key]]),
       );
+      if (view.fit) normalizedView.fit = true;
+      normalizedViewRanges[plotMode] = normalizedView;
     }
     return JSON.stringify({
       graphMode: state.graphMode,
@@ -1498,12 +1503,9 @@ export function buildCalculator(id, ctx) {
   function getViewRanges() {
     if (!viewRanges) viewRanges = {};
     if (!viewRanges[graphMode]) {
-      const keys = graphMode === 'cartesian' ? ['xMin', 'xMax', 'yMin', 'yMax']
-        : graphMode === 'polar' ? ['thetaMin', 'thetaMax', 'rMin', 'rMax']
-          : ['tMin', 'tMax', 'xMin', 'xMax', 'yMin', 'yMax'];
-      viewRanges[graphMode] = Object.fromEntries(keys.map(key => [key, Number(ranges[key])]));
+      viewRanges[graphMode] = Object.fromEntries(VIEW_RANGE_KEYS[graphMode].map(key => [key, Number(ranges[key])]));
     }
-    return viewRanges[graphMode];
+    return Object.fromEntries(VIEW_RANGE_KEYS[graphMode].map(key => [key, viewRanges[graphMode][key]]));
   }
   function formatViewRanges(view) {
     return Object.entries(view).map(([key, value]) => `${key}: ${String(value)}`).join(', ');
@@ -1802,7 +1804,7 @@ export function buildCalculator(id, ctx) {
       : { tMin: rawView.tMin, tMax: rawView.tMax, xMin: plotView.xMin, xMax: plotView.xMax, yMin: plotView.yMin, yMax: plotView.yMax };
   }
   function storePlotRanges(plotView) {
-    const current = { ...getViewRanges() };
+    const current = { ...(viewRanges?.[graphMode] || getViewRanges()) };
     if (graphMode === 'polar') {
       current.thetaMin = plotView.xMinCoord;
       current.thetaMax = plotView.xMaxCoord;
@@ -1893,7 +1895,6 @@ export function buildCalculator(id, ctx) {
   function fitView() {
     // Fit more finely than the rendered path so narrow features between plot
     // samples still contribute to the fitted bounds.
-    const sampleCount = 8000;
     const visible = functions.filter(fn => fn.visible);
     if (!visible.length) {
       graphStatus.textContent = 'Show at least one function before fitting the view.';
@@ -1911,8 +1912,8 @@ export function buildCalculator(id, ctx) {
     }
 
     visible.forEach(fn => {
-      for (let index = 0; index <= sampleCount; index++) {
-        const parameter = sourceMin + (sourceMax - sourceMin) * index / sampleCount;
+      for (let index = 0; index <= FIT_SAMPLE_COUNT; index++) {
+        const parameter = sourceMin + (sourceMax - sourceMin) * index / FIT_SAMPLE_COUNT;
         try {
           if (graphMode === 'cartesian') {
             const y = evaluateExpression(fn.expression, { x: parameter });
@@ -1973,6 +1974,7 @@ export function buildCalculator(id, ctx) {
       view.tMax = Number(ranges.tMax);
     }
 
+    view.fit = true;
     if (!viewRanges) viewRanges = {};
     viewRanges[graphMode] = view;
     viewScaleFactor = 1;
@@ -2076,7 +2078,7 @@ export function buildCalculator(id, ctx) {
     };
     const paths = [];
     let plotError = '';
-    const count = 500;
+    const count = viewRanges?.[graphMode]?.fit ? FIT_SAMPLE_COUNT : 500;
     functions.forEach(fn => {
       if (!fn.visible) return;
       let d = '', drawing = false, failed = null;
