@@ -183,7 +183,7 @@ test('representative app toolbars keep selected states, quiet actions, and keybo
   }));
   await page.route('**/videos/manifest.json', route => route.fulfill({ json: [] }));
 
-  const verifyToolbarState = async (selected, quietAction) => {
+  const verifyToolbarState = async (selected, quietAction, focusTarget = quietAction) => {
     for (const viewport of [
       { width: 1280, height: 800 },
       { width: 390, height: 844 },
@@ -208,8 +208,8 @@ test('representative app toolbars keep selected states, quiet actions, and keybo
         .toBe('rgba(0, 0, 0, 0)');
 
       await page.keyboard.press('Tab');
-      await quietAction.focus();
-      const focusStyle = await quietAction.evaluate(element => {
+      await focusTarget.focus();
+      const focusStyle = await focusTarget.evaluate(element => {
         const style = getComputedStyle(element);
         return {
           visible: element.matches(':focus-visible'),
@@ -256,7 +256,7 @@ test('representative app toolbars keep selected states, quiet actions, and keybo
   const calendar = await openUtility(page, 'calendar');
   const weekView = calendar.locator('.cal-view-button[data-view="week"]');
   await weekView.click();
-  await verifyToolbarState(weekView, calendar.locator('.cal-today-button'));
+  await verifyToolbarState(weekView, calendar.locator('.cal-today-button'), weekView);
 });
 
 test('Wallpaper settings apply changes immediately without save or cancel actions', async ({ page }) => {

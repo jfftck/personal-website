@@ -740,7 +740,7 @@ test('all game toolbars place instructions and undo left, new game in the center
     await expect(right.getByRole('button', { name: 'Settings' })).toBeVisible();
     const centerButton = center.locator('button');
     await expect(centerButton).toHaveCount(1);
-    await expect(centerButton).toHaveText(/^(New game|New deal)$/);
+    await expect(centerButton).toHaveAccessibleName(/^(New game|New deal)$/);
     if (game !== 'minesweeper') await expect(left.getByRole('button', { name: 'Undo' })).toBeVisible();
     const positions = await toolbar.evaluate(element => {
       const bounds = selector => {
