@@ -87,6 +87,7 @@ test(
     const publishingName = `manifest-publishing-${suffix}.txt`;
     const wallpaperName = `manifest-wallpaper-${suffix}.jpg`;
     const childFileName = `manifest-child-file-${suffix}.txt`;
+    const childFileSourceUrl = `https://example.test/${suffix}/${childFileName}`;
     const initialTitle = `Current ${suffix}`;
     const restoredTitle = `Restored ${suffix}`;
     const createdTitle = `Created ${suffix}`;
@@ -726,10 +727,10 @@ test(
       await applyMutationAndInvalidate(async (client) => {
         const { rows: [childFile] } = await client.query(
           `INSERT INTO content_files
-             (name, title, folder_path, content_date, content_type, size_bytes, is_published)
-           VALUES ($1, 'Published child file', $2, '2026-10-31', 'text/plain', 1, true)
+             (name, title, folder_path, content_date, content_type, size_bytes, is_published, source_url)
+           VALUES ($1, 'Published child file', $2, '2026-10-31', 'text/plain', 1, true, $3)
            RETURNING id`,
-          [childFileName, createdChildFolderPath],
+          [childFileName, createdChildFolderPath, childFileSourceUrl],
         );
         childFileId = childFile.id;
       });
@@ -830,6 +831,66 @@ test(
         ),
         "the renamed child manifest should contain the published file at its new path",
       );
+      const versionsResponse = await adminRequest(
+        firstServer,
+        `/content/files/${childFileId}/versions`,
+      );
+      assert.equal(versionsResponse.status, 200);
+      const childVersions = await versionsResponse.json();
+      const oldFolderVersion = childVersions.find(
+        (version) => version.folderPath === createdChildFolderPath,
+      );
+      assert.ok(
+        oldFolderVersion,
+        "the folder rename should preserve the old path in history",
+      );
+
+      const restoreResponse = await adminRequest(
+        firstServer,
+        `/content/files/${childFileId}/versions/${oldFolderVersion.id}/restore`,
+        { method: "POST" },
+      );
+      assert.equal(restoreResponse.status, 200);
+      const restoredChildFile = await restoreResponse.json();
+      assert.equal(restoredChildFile.folderPath, renamedChildFolderPath);
+      assert.equal(
+        restoredChildFile.url,
+        `/files/${encodeURIComponent(renamedFolderPath)}/${encodeURIComponent(childFolderName)}/${encodeURIComponent(childFileName)}`,
+      );
+      const restoredChildManifest = await readManifest(
+        secondServer.folderManifestUrl(renamedChildFolderPath),
+      );
+      assert.equal(restoredChildManifest.response.status, 200);
+      assert.ok(
+        restoredChildManifest.manifest.some(
+          (file) => file.filename === childFileName,
+        ),
+        "the restored file should remain in the renamed folder's public manifest",
+      );
+      const publicChildFile = await fetch(
+        `${secondServer.baseUrl}${restoredChildFile.url}`,
+        { redirect: "manual" },
+      );
+      assert.equal(publicChildFile.status, 302);
+      assert.equal(publicChildFile.headers.get("location"), childFileSourceUrl);
+
+      const missingCurrentFolderPath = `missing-current-${suffix}`;
+      await applyMutationAndInvalidate(async (client) => {
+        await client.query(
+          "UPDATE content_files SET folder_path = $1 WHERE id = $2",
+          [missingCurrentFolderPath, childFileId],
+        );
+      });
+      const failedRestoreResponse = await adminRequest(
+        firstServer,
+        `/content/files/${childFileId}/versions/${oldFolderVersion.id}/restore`,
+        { method: "POST" },
+      );
+      assert.equal(failedRestoreResponse.status, 409);
+      assert.deepEqual(await failedRestoreResponse.json(), {
+        error:
+          "Cannot restore this revision because neither its original folder nor the file's current folder exists.",
+      });
 
       await applyMutationAndInvalidate(async (client) => {
         await client.query("DELETE FROM content_files WHERE id = $1", [

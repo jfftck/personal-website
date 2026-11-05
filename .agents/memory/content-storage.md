@@ -50,3 +50,9 @@ For same-folder file creates, treat the partial unique database index as the cro
 **Why:** multiple API instances do not share the in-memory lock, so both can pass a precheck before either commits.
 
 **How to apply:** keep the database constraint, map its specific violation to the same 409 message as the precheck, and verify the losing upload cannot replace the winner's object reference or metadata.
+
+When restoring a revision whose saved folder path was renamed away, restore it to the file's current folder if that folder still exists; if neither location exists, return a clear conflict instead of restoring into a stale path.
+
+**Why:** folder renames update the current file location but preserve earlier revision snapshots, whose folder paths can become invalid.
+
+**How to apply:** resolve the destination inside the restore transaction, prefer the historical folder when it still exists, and explain the fallback location to the admin.

@@ -932,7 +932,30 @@ contentApiRouter.post(
             throw new ContentError(410, "The stored file for this revision is no longer available.");
           }
         }
-        await assertFolderExists(version.snapshot.folderPath);
+        let restoreFolderPath = version.snapshot.folderPath;
+        if (restoreFolderPath) {
+          const [revisionFolder] = await tx
+            .select({ path: contentFoldersTable.path })
+            .from(contentFoldersTable)
+            .where(eq(contentFoldersTable.path, restoreFolderPath))
+            .limit(1);
+          if (!revisionFolder) {
+            restoreFolderPath = current.folderPath;
+            if (restoreFolderPath) {
+              const [currentFolder] = await tx
+                .select({ path: contentFoldersTable.path })
+                .from(contentFoldersTable)
+                .where(eq(contentFoldersTable.path, restoreFolderPath))
+                .limit(1);
+              if (!currentFolder) {
+                throw new ContentError(
+                  409,
+                  "Cannot restore this revision because neither its original folder nor the file's current folder exists.",
+                );
+              }
+            }
+          }
+        }
         const revisionMetadata = restoreContentFileRevisionMetadata(
           version.snapshot,
         );
@@ -948,7 +971,7 @@ contentApiRouter.post(
             ...revisionMetadata,
             title: revisionMetadata.title?.trim() ||
               titleFromLegacyName(revisionMetadata.name),
-            folderPath: version.snapshot.folderPath,
+            folderPath: restoreFolderPath,
             contentType: version.snapshot.contentType,
             sizeBytes: version.snapshot.sizeBytes,
             objectPath: version.snapshot.objectPath,

@@ -511,7 +511,11 @@ function Console() {
         files: tree.files.map((item) => item.id === updated.id ? updated : item),
       }));
       await refreshFileVersions(selectedFile.id);
-      setToastMessage(`Restored version ${version.versionNumber}.`);
+      setToastMessage(
+        version.folderPath !== updated.folderPath
+          ? `Version restored to ${updated.folderPath || 'Root folder'} because its original folder no longer exists.`
+          : `Restored version ${version.versionNumber}.`,
+      );
     } catch (error) { setToastMessage(errorMessage(error)); }
   };
 
