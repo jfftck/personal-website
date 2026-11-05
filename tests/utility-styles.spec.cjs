@@ -11,6 +11,13 @@ async function openUtility(page, type) {
   return page.locator(`.app-window[data-type="${type}"]`).last();
 }
 
+async function openGame(page, type) {
+  await page.locator('#app-menu-btn').click();
+  await page.locator('#game-center-entry').click();
+  await page.locator(`#game-list [data-game="${type}"]`).click();
+  return page.locator(`.app-window[data-type="${type}"]`).last();
+}
+
 test('desktop shell and window frame styles remain stable at desktop and mobile widths', async ({ page }) => {
   const stylesheets = await page.locator('link[rel="stylesheet"]').evaluateAll(links =>
     links.map(link => new URL(link.href).pathname.split('/').pop()),
@@ -68,6 +75,161 @@ test('desktop shell and window frame styles remain stable at desktop and mobile 
   expect(overviewStyles.desktop.overflow).toBe('visible');
   expect(overviewStyles.stripWrapper.overflow).toBe('visible');
   expect(overviewStyles.appWindow.cursor).toBe('zoom-out');
+});
+
+test('light, dark, and custom tints preserve focused window and game artwork styles', async ({ page }) => {
+  const chess = await openGame(page, 'chess');
+  const reversi = await openGame(page, 'reversi');
+  await expect(chess.locator('.chess-board .chess-piece-svg')).toHaveCount(32);
+  await expect(reversi.locator('.reversi-board .disc')).toHaveCount(4);
+  await chess.evaluate(element => {
+    element.dataset.chessBoardTheme = 'slate';
+    element.dataset.chessPiecesTheme = 'modern';
+  });
+  await reversi.evaluate(element => {
+    element.dataset.reversiBoardTheme = 'ocean';
+    element.dataset.reversiPiecesTheme = 'amber';
+  });
+
+  const supportsRelativeColors = await page.evaluate(() =>
+    CSS.supports('color', 'oklch(from #006699 calc(l + 0.1) c h)'),
+  );
+  const palettes = [];
+  const shellSamples = new Map();
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['dark', 'light']) {
+      for (const tintMode of supportsRelativeColors ? ['system', 'custom'] : ['system']) {
+        await page.evaluate(({ theme, tintMode }) => {
+          const root = document.documentElement;
+          root.dataset.theme = theme;
+          root.removeAttribute('data-window-tints');
+          root.removeAttribute('data-window-dark-tint');
+          root.removeAttribute('data-window-light-tint');
+          for (const property of [
+            '--window-dark-lightness',
+            '--window-lightness',
+            '--window-background-opacity',
+            '--topbar-background-opacity',
+            '--topbar-custom-background',
+            '--topbar-custom-foreground',
+          ]) root.style.removeProperty(property);
+
+          if (tintMode === 'system') {
+            root.dataset.topbarTheme = theme;
+            return;
+          }
+          root.dataset.windowTints = 'custom';
+          root.dataset.windowDarkTint = 'teal';
+          root.dataset.windowLightTint = 'gold';
+          root.style.setProperty('--window-dark-lightness', '21%');
+          root.style.setProperty('--window-lightness', '87%');
+          root.style.setProperty('--window-background-opacity', '78%');
+          root.dataset.topbarTheme = theme === 'dark' ? 'custom-dark' : 'custom-light';
+          root.style.setProperty('--topbar-background-opacity', '82%');
+          root.style.setProperty('--topbar-custom-background',
+            theme === 'dark' ? 'oklch(22% 0.08 240)' : 'oklch(92% 0.04 240)');
+          root.style.setProperty('--topbar-custom-foreground',
+            theme === 'dark' ? 'oklch(88% 0.06 90)' : 'oklch(20% 0.06 240)');
+        }, { theme, tintMode });
+
+        const expectedFocus = await page.evaluate(() => {
+          const probe = document.createElement('span');
+          probe.style.outlineColor = 'var(--focus-color)';
+          document.body.append(probe);
+          const value = getComputedStyle(probe).outlineColor;
+          probe.remove();
+          return value;
+        });
+        await expect.poll(() => page.locator('.app-window.focused').evaluate(element =>
+          getComputedStyle(element).outlineColor,
+        )).toBe(expectedFocus);
+
+        for (const overview of [false, true]) {
+          await page.evaluate(value => document.body.classList.toggle('mod-overview', value), overview);
+          const sample = await page.evaluate(() => {
+            const root = document.documentElement;
+            const window = document.querySelector('.app-window.focused');
+            const topbar = document.querySelector('#topbar');
+            const resolve = (property, cssProperty = 'color') => {
+              const probe = document.createElement('span');
+              probe.style[cssProperty] = `var(${property})`;
+              document.body.append(probe);
+              const value = getComputedStyle(probe)[cssProperty];
+              probe.remove();
+              return value;
+            };
+            const chess = document.querySelector('.app-window[data-type="chess"]');
+            const reversi = document.querySelector('.app-window[data-type="reversi"]');
+            return {
+              rootTheme: root.dataset.theme,
+              topbarTheme: root.dataset.topbarTheme,
+              windowBackground: getComputedStyle(window).backgroundColor,
+              expectedWindowBackground: resolve('--app-bg', 'backgroundColor'),
+              windowBorder: getComputedStyle(window).borderTopColor,
+              expectedWindowBorder: resolve('--app-border', 'borderColor'),
+              windowFocus: getComputedStyle(window).outlineColor,
+              expectedFocus: resolve('--focus-color', 'outlineColor'),
+              topbarBackground: getComputedStyle(topbar).backgroundColor,
+              expectedTopbarBackground: resolve('--topbar-bg', 'backgroundColor'),
+              topbarText: getComputedStyle(topbar).color,
+              expectedTopbarText: resolve('--topbar-text'),
+              windowRadius: getComputedStyle(window).borderRadius,
+              overviewCursor: getComputedStyle(window).cursor,
+              gameText: getComputedStyle(chess).color,
+              expectedGameText: resolve('--app-text'),
+              chessLightSquare: getComputedStyle(chess.querySelector('.board-square.light')).backgroundColor,
+              chessWhitePiece: getComputedStyle(chess.querySelector('.piece-white .piece-body')).fill,
+              chessBlackPiece: getComputedStyle(chess.querySelector('.piece-black .piece-body')).fill,
+              reversiSquare: getComputedStyle(reversi.querySelector('.board-square')).backgroundColor,
+              reversiDisc: getComputedStyle(reversi.querySelector('.disc')).backgroundImage,
+            };
+          });
+          expect(sample.windowBackground).toBe(sample.expectedWindowBackground);
+          expect(sample.windowBorder).toBe(sample.expectedWindowBorder);
+          expect(sample.windowFocus).toBe(sample.expectedFocus);
+          expect(sample.topbarBackground).toBe(sample.expectedTopbarBackground);
+          expect(sample.topbarText).toBe(sample.expectedTopbarText);
+          expect(sample.gameText).toBe(sample.expectedGameText);
+          expect(sample.rootTheme).toBe(theme);
+          expect(sample.topbarTheme).toBe(tintMode === 'system'
+            ? theme
+            : (theme === 'dark' ? 'custom-dark' : 'custom-light'));
+          expect(sample.windowRadius).toBe(viewport.width <= 640 ? '0px' : '16px');
+          if (overview) expect(sample.overviewCursor).toBe('zoom-out');
+
+          const key = `${viewport.width}:${theme}:${tintMode}`;
+          if (!shellSamples.has(key)) shellSamples.set(key, sample.windowBackground);
+          if (sample.windowBackground !== shellSamples.get(key)) {
+            throw new Error(`Window theme colors changed with overview state: ${key}`);
+          }
+          palettes.push({
+            theme,
+            tintMode,
+            chessLightSquare: sample.chessLightSquare,
+            chessWhitePiece: sample.chessWhitePiece,
+            chessBlackPiece: sample.chessBlackPiece,
+            reversiSquare: sample.reversiSquare,
+            reversiDisc: sample.reversiDisc,
+          });
+        }
+      }
+    }
+  }
+
+  expect(new Set(palettes.map(palette => palette.chessLightSquare)).size).toBe(1);
+  expect(new Set(palettes.map(palette => palette.chessWhitePiece)).size).toBe(1);
+  expect(new Set(palettes.map(palette => palette.chessBlackPiece)).size).toBe(1);
+  expect(new Set(palettes.map(palette => palette.reversiSquare)).size).toBe(1);
+  expect(new Set(palettes.map(palette => palette.reversiDisc)).size).toBe(1);
+  const darkSystem = shellSamples.get('1280:dark:system');
+  const lightSystem = shellSamples.get('1280:light:system');
+  expect(darkSystem).not.toBe(lightSystem);
+  if (supportsRelativeColors) {
+    expect(shellSamples.get('1280:dark:custom')).not.toBe(darkSystem);
+    expect(shellSamples.get('1280:light:custom')).not.toBe(lightSystem);
+  }
+  await page.evaluate(() => document.body.classList.remove('mod-overview'));
 });
 
 test('scrollbars and form controls use the shared accent and button colors', async ({ page }) => {
