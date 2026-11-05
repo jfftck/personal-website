@@ -740,6 +740,8 @@ test('window background opacity previews, persists after interaction, and resets
 
 test('top bar tinting follows or overrides the window theme and exposes role-specific custom ranges', async ({ page }) => {
   const settings = await openUtility(page, 'settings');
+  await expect(settings.locator('.settings-appearance-card > .settings-card-eyebrow')).toHaveText('SYSTEM');
+  await expect(settings.locator('.settings-animations-card > .settings-card-eyebrow')).toHaveText('WINDOW');
   const supports = await page.evaluate(() =>
     CSS.supports('color', 'oklch(from #006699 calc(l + 0.1) c h)'),
   );
