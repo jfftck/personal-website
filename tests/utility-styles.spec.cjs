@@ -2367,6 +2367,50 @@ test('calculator fits visible curves in every graph mode without changing config
   await expect.poll(view).toEqual({ tMin: 0, tMax: 6.283, xMin: -4, xMax: 4, yMin: -5, yMax: 5 });
 });
 
+test('calculator restores a fitted view after a full page refresh', async ({ page }) => {
+  let calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  const settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByLabel('Minimum x').fill('-4');
+  await settings.getByLabel('Maximum x').fill('4');
+  await settings.getByLabel('Minimum y').fill('-5');
+  await settings.getByLabel('Maximum y').fill('5');
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await editor.getByLabel('Function expression').fill('4*x+3');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Fit curves');
+
+  const fitted = await calculator.locator('.calc-plot-area').evaluate(element => JSON.parse(element.dataset.view));
+  expect(fitted.xMin).toBe(-4);
+  expect(fitted.xMax).toBe(4);
+  expect(fitted.yMin).toBeLessThan(-13);
+  expect(fitted.yMax).toBeGreaterThan(19);
+
+  await page.reload();
+  const welcome = page.getByRole('button', { name: 'Get started', exact: true });
+  if (await welcome.isVisible().catch(() => false)) await welcome.click();
+  calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+  const view = () => calculator.locator('.calc-plot-area').evaluate(element => JSON.parse(element.dataset.view));
+  await expect(calculator.locator('.calc-mode-label')).toHaveText('CARTESIAN');
+  await expect.poll(view).toEqual(fitted);
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  const restoredSettings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await expect(restoredSettings.getByLabel('Minimum x')).toHaveValue('-4');
+  await expect(restoredSettings.getByLabel('Maximum x')).toHaveValue('4');
+  await expect(restoredSettings.getByLabel('Minimum y')).toHaveValue('-5');
+  await expect(restoredSettings.getByLabel('Maximum y')).toHaveValue('5');
+  await restoredSettings.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+  await clickGraphMenuAction(calculator, 'View', 'Reset view');
+  await expect.poll(view).toEqual({ xMin: -4, xMax: 4, yMin: -5, yMax: 5 });
+});
+
 test('calculator Fit curves includes a narrow peak between rendered samples', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   await chooseCalculatorMode(calculator, 'Graph');
