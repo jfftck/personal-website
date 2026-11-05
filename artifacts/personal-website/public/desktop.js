@@ -6,6 +6,7 @@ import { SETTINGS_ICON } from './apps/toolbar.js';
 import { retryWithBackoff, responseLoadError } from './shared/retry.js';
 import { GAMES, initGameMenu } from './apps/game-catalog.js';
 import { readJSON, readRaw, readRawResult, removeData, writeJSON, writeRaw } from './data-handler.js';
+import { createWindowController, SESSION_KEY, SESSION_KEY_V1 } from './window-controller.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -627,35 +628,13 @@ removeLegacyBackgroundNotifications().catch(error => {
 setInterval(updateClock, 30000);
 
 // ── Session persistence ────────────────────────────────────────
-const SESSION_KEY    = 'desktop-session-v2';
-const SESSION_KEY_V1 = 'desktop-session-v1';
-
-function saveSession() {
-  if (S._skipSave) return;
-  try {
-    const focusedColumnIndex = S.columns.findIndex(col => col.appIds.includes(S.focusedId));
-    const focusedPosition = focusedColumnIndex < 0 ? null : {
-      columnIndex: focusedColumnIndex,
-      appIndex: S.columns[focusedColumnIndex].appIds.indexOf(S.focusedId),
-    };
-    writeJSON(SESSION_KEY, {
-      v: 2,
-      focused: focusedPosition,
-      columns: S.columns.map(col => ({
-        widthPreset: col.widthPreset,
-        apps: col.appIds.map(appId => {
-          const app = S.apps.find(a => a.id === appId);
-          const state = S.appApis[appId]?.getSessionState?.();
-          return { type: app.type, ...(state ? { state } : {}) };
-        }),
-      })),
-    }, { validate: value => value?.v === 2 && Array.isArray(value.columns) });
-  } catch { /* storage unavailable */ }
-}
-
 function safeRemoveSession() {
   removeData(SESSION_KEY);
   removeData(SESSION_KEY_V1);
+}
+
+function saveSession() {
+  return windowController.saveSession();
 }
 
 // ── Context-aware title ────────────────────────────────────────
@@ -673,13 +652,12 @@ function toast(anchorEl, msg) {
   t.addEventListener('animationend', e => { if (e.animationName === 'toastOut') t.remove(); });
 }
 
-// ── Column helpers ─────────────────────────────────────────────
 function getAppColumn(appId) {
-  return S.columns.find(col => col.appIds.includes(appId));
+  return windowController.getAppColumn(appId);
 }
 
 function getAppOrder() {
-  return S.columns.flatMap(col => col.appIds);
+  return windowController.getAppOrder();
 }
 
 const loadedAppModules = new Map();
@@ -962,23 +940,7 @@ function openApp(type, insertIntoColId = null, initialState = null) {
     !matchMedia('(prefers-reduced-motion: reduce)').matches
   ) startWindowOpening(el, windowAnimation);
   const record = { id, type, el, pendingActions: [], windowAnimation, closing: false };
-  S.apps.push(record);
-
-  const existingCol = insertIntoColId ? S.columns.find(c => c.id === insertIntoColId) : null;
-  if (existingCol) {
-    existingCol.appIds.push(id);
-    existingCol.el.appendChild(el);
-  } else {
-    const colId = `col-${S.nextColId++}`;
-    const colEl = createColEl(colId);
-    colEl.appendChild(el);
-    const col = { id: colId, appIds: [id], widthPreset: 'full', el: colEl };
-    S.columns.push(col);
-    appStrip.appendChild(colEl);
-    wireColEvents(colEl);
-  }
-
-  focusApp(id);
+  windowController.addApp(record, insertIntoColId);
   updateEmptyState();
   updateStripLayout();
   if (!S._skipSave) { saveSession(); requestAnimationFrame(() => scrollToApp(id)); }
@@ -1019,311 +981,65 @@ function closeApp(id) {
 }
 
 function removeAppImmediately(id) {
-  const appIdx = S.apps.findIndex(a => a.id === id);
-  if (appIdx === -1) return;
-
-  const { el } = S.apps[appIdx];
-  const col = getAppColumn(id);
-
+  if (!S.apps.some(app => app.id === id)) return;
   S.appApis[id]?.destroy?.();
-  S.apps.splice(appIdx, 1);
-  el.remove();
   delete S.appApis[id];
   delete S.appTitles[id];
-
-  if (col) {
-    const cIdx = col.appIds.indexOf(id);
-    col.appIds.splice(cIdx, 1);
-    if (col.appIds.length === 0) {
-      const colIdx = S.columns.indexOf(col);
-      col.el.remove();
-      S.columns.splice(colIdx, 1);
-    }
-  }
-
-  if (S.focusedId === id) {
-    S.focusedId = null;
-    const order = getAppOrder();
-    if (order.length > 0) {
-      let nextId = null;
-      if (col && col.appIds.length > 0) {
-        nextId = col.appIds[0];
-      } else {
-        nextId = order[Math.max(0, order.indexOf(id) - 1)] || order[0];
-      }
-      if (nextId) focusApp(nextId);
-    }
-  }
-
-  updateTopBar();
-  updateEmptyState();
-  updateStripLayout();
-  saveSession();
+  windowController.removeApp(id);
 }
 
 function focusApp(id) {
-  if (document.body.classList.contains('mod-show-desktop')) setShowDesktop(false);
-  if (S.focusedId === id) return;
-
-  if (S.focusedId) {
-    const prev = S.apps.find(a => a.id === S.focusedId);
-    if (prev) prev.el.classList.remove('focused');
-  }
-
-  S.focusedId = id;
-
-  const next = S.apps.find(a => a.id === id);
-  if (next) {
-    next.el.classList.add('focused');
-    if (!S._skipSave && !document.body.classList.contains('mod-overview')) {
-      requestAnimationFrame(() => scrollToApp(id));
-    }
-  }
-
-  updateTopBar();
-  if (document.body.classList.contains('mod-overview')) {
-    requestAnimationFrame(() => positionOverview());
-  }
-  if (!S._skipSave) saveSession();
+  return windowController.focusApp(id);
 }
 
 function getFocusableControls(container) {
-  if (!container) return [];
-  return [...container.querySelectorAll(
-    'a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]',
-  )].filter(element => (
-    !element.disabled
-    && !element.closest('[hidden], [inert], [aria-hidden="true"]')
-    && getComputedStyle(element).visibility !== 'hidden'
-    && element.getClientRects().length > 0
-  ));
+  return windowController.getFocusableControls(container);
 }
 
 function focusWindowInDirection(direction) {
-  const current = S.apps.find(app => app.id === S.focusedId);
-  if (!current?.el?.isConnected) return;
-  const origin = current.el.getBoundingClientRect();
-  const originX = origin.left + origin.width / 2;
-  const originY = origin.top + origin.height / 2;
-  let nearest = null;
-  let nearestScore = Infinity;
-
-  for (const candidate of S.apps) {
-    if (candidate.id === current.id || !candidate.el?.isConnected) continue;
-    const rect = candidate.el.getBoundingClientRect();
-    const dx = rect.left + rect.width / 2 - originX;
-    const dy = rect.top + rect.height / 2 - originY;
-    const primary = direction === 'left' ? -dx
-      : direction === 'right' ? dx
-        : direction === 'up' ? -dy : dy;
-    if (primary <= 0) continue;
-    const perpendicular = direction === 'left' || direction === 'right' ? Math.abs(dy) : Math.abs(dx);
-    const score = primary + perpendicular * 1.5;
-    if (score < nearestScore) {
-      nearest = candidate;
-      nearestScore = score;
-    }
-  }
-
-  if (!nearest) return;
-  focusApp(nearest.id);
-  requestAnimationFrame(() => {
-    if (S.focusedId !== nearest.id || !nearest.el?.isConnected) return;
-    const controls = getFocusableControls(nearest.el);
-    if (controls.length) controls[0].focus({ preventScroll: true });
-    else {
-      nearest.el.tabIndex = -1;
-      nearest.el.focus({ preventScroll: true });
-    }
-  });
+  return windowController.focusWindowInDirection(direction);
 }
 
 function scrollToApp(id) {
-  const col = getAppColumn(id);
-  if (!col) return;
-  col.el.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+  return windowController.scrollToApp(id);
 }
 
 // ── Width presets ─────────────────────────────────────────────
 function setFocusedWidth(preset) {
-  if (!S.focusedId) return;
-  const col = getAppColumn(S.focusedId);
-  if (!col) return;
-  col.el.classList.remove('width-shrink', 'width-grow');
-  void col.el.offsetWidth;
-  col.el.classList.add('width-shrink');
-  col.el.addEventListener('animationend', () => {
-    col.el.classList.remove('width-shrink');
-    col.el.dataset.width = preset;
-    void col.el.offsetWidth;
-    col.el.classList.add('width-grow');
-    col.el.addEventListener('animationend', () => col.el.classList.remove('width-grow'), { once: true });
-  }, { once: true });
-
-  col.widthPreset = preset;
-  saveSession();
-  updateWidthButtons();
+  return windowController.setFocusedWidth(preset);
 }
 
 function cycleFocusedWidthWider() {
-  if (!S.focusedId) return;
-  const col = getAppColumn(S.focusedId);
-  if (!col) return;
-  const idx = WIDTH_PRESETS.indexOf(col.widthPreset);
-  setFocusedWidth(WIDTH_PRESETS[Math.min(idx + 1, WIDTH_PRESETS.length - 1)]);
+  return windowController.cycleFocusedWidthWider();
 }
 
 function cycleFocusedWidthNarrower() {
-  if (!S.focusedId) return;
-  const col = getAppColumn(S.focusedId);
-  if (!col) return;
-  const idx = WIDTH_PRESETS.indexOf(col.widthPreset);
-  setFocusedWidth(WIDTH_PRESETS[Math.max(idx - 1, 0)]);
+  return windowController.cycleFocusedWidthNarrower();
 }
 
 // ── Consume / Expel ───────────────────────────────────────────
 function consumeLeft() {
-  if (!S.focusedId) return;
-  const col = getAppColumn(S.focusedId);
-  if (!col) return;
-  const colIdx = S.columns.indexOf(col);
-  if (colIdx === 0) return;
-
-  const leftCol = S.columns[colIdx - 1];
-  if (!leftCol.appIds.length) return;
-
-  const takenId  = leftCol.appIds[leftCol.appIds.length - 1];
-  const takenApp = S.apps.find(a => a.id === takenId);
-  if (!takenApp) return;
-
-  leftCol.appIds.pop();
-  takenApp.el.remove();
-
-  if (leftCol.appIds.length === 0) {
-    leftCol.el.remove();
-    S.columns.splice(colIdx - 1, 1);
-  }
-
-  col.appIds.push(takenId);
-  col.el.appendChild(takenApp.el);
-  saveSession();
-  updateTopBar();
-  updateStripLayout();
+  return windowController.consumeLeft();
 }
 
 function expelRight() {
-  if (!S.focusedId) return;
-  const col = getAppColumn(S.focusedId);
-  if (!col || col.appIds.length <= 1) return;
-
-  const colIdx = S.columns.indexOf(col);
-  const appIdx = col.appIds.indexOf(S.focusedId);
-  col.appIds.splice(appIdx, 1);
-  const app = S.apps.find(a => a.id === S.focusedId);
-  app.el.remove();
-
-  const newColId = `col-${S.nextColId++}`;
-  const newColEl = createColEl(newColId);
-  newColEl.appendChild(app.el);
-  newColEl.dataset.width = col.widthPreset;
-
-  const newCol = { id: newColId, appIds: [S.focusedId], widthPreset: col.widthPreset, el: newColEl };
-  S.columns.splice(colIdx + 1, 0, newCol);
-  col.el.after(newColEl);
-  wireColEvents(newColEl);
-
-  saveSession();
-  updateTopBar();
-  updateStripLayout();
-  requestAnimationFrame(() => scrollToApp(S.focusedId));
+  return windowController.expelRight();
 }
 
 function expelLeft() {
-  if (!S.focusedId) return;
-  const col = getAppColumn(S.focusedId);
-  if (!col || col.appIds.length <= 1) return;
-
-  const colIdx = S.columns.indexOf(col);
-  const appIdx = col.appIds.indexOf(S.focusedId);
-  col.appIds.splice(appIdx, 1);
-  const app = S.apps.find(a => a.id === S.focusedId);
-  app.el.remove();
-
-  const newColId = `col-${S.nextColId++}`;
-  const newColEl = createColEl(newColId);
-  newColEl.appendChild(app.el);
-  newColEl.dataset.width = col.widthPreset;
-
-  const newCol = { id: newColId, appIds: [S.focusedId], widthPreset: col.widthPreset, el: newColEl };
-  S.columns.splice(colIdx, 0, newCol);
-  col.el.before(newColEl);
-  wireColEvents(newColEl);
-
-  saveSession();
-  updateTopBar();
-  updateStripLayout();
-  requestAnimationFrame(() => scrollToApp(S.focusedId));
+  return windowController.expelLeft();
 }
 
 function consumeRight() {
-  if (!S.focusedId) return;
-  const col = getAppColumn(S.focusedId);
-  if (!col) return;
-  const colIdx = S.columns.indexOf(col);
-  if (colIdx === S.columns.length - 1) return;
-
-  const rightCol = S.columns[colIdx + 1];
-  if (!rightCol.appIds.length) return;
-
-  const takenId  = rightCol.appIds[0];
-  const takenApp = S.apps.find(a => a.id === takenId);
-  if (!takenApp) return;
-
-  rightCol.appIds.shift();
-  takenApp.el.remove();
-
-  if (rightCol.appIds.length === 0) {
-    rightCol.el.remove();
-    S.columns.splice(colIdx + 1, 1);
-  }
-
-  col.appIds.push(takenId);
-  col.el.appendChild(takenApp.el);
-  saveSession();
-  updateTopBar();
-  updateStripLayout();
+  return windowController.consumeRight();
 }
 
 function moveWindowUp() {
-  if (!S.focusedId) return;
-  const col = getAppColumn(S.focusedId);
-  if (!col || col.appIds.length <= 1) return;
-  const idx = col.appIds.indexOf(S.focusedId);
-  if (idx === 0) return;
-  // Swap in array
-  [col.appIds[idx - 1], col.appIds[idx]] = [col.appIds[idx], col.appIds[idx - 1]];
-  // Swap in DOM — move focused element before the previous sibling
-  const app    = S.apps.find(a => a.id === S.focusedId);
-  const prevEl = S.apps.find(a => a.id === col.appIds[idx]).el;
-  col.el.insertBefore(app.el, prevEl);
-  saveSession();
-  updateTopBar();
+  return windowController.moveWindowUp();
 }
 
 function moveWindowDown() {
-  if (!S.focusedId) return;
-  const col = getAppColumn(S.focusedId);
-  if (!col || col.appIds.length <= 1) return;
-  const idx = col.appIds.indexOf(S.focusedId);
-  if (idx === col.appIds.length - 1) return;
-  // Swap in array
-  [col.appIds[idx], col.appIds[idx + 1]] = [col.appIds[idx + 1], col.appIds[idx]];
-  // Swap in DOM — move focused element after the next sibling
-  const app    = S.apps.find(a => a.id === S.focusedId);
-  const nextEl = S.apps.find(a => a.id === col.appIds[idx]).el;
-  col.el.insertBefore(app.el, nextEl.nextSibling);
-  saveSession();
-  updateTopBar();
+  return windowController.moveWindowDown();
 }
 
 // ── Top-bar rendering ─────────────────────────────────────────
@@ -1364,6 +1080,24 @@ function updateEmptyState() {
 function updateStripLayout() {
   appStrip.classList.toggle('center-apps', S.columns.length === 1);
 }
+
+const windowController = createWindowController({
+  state: S,
+  document,
+  window,
+  appStrip,
+  widthPresets: WIDTH_PRESETS,
+  createColumnElement: createColEl,
+  wireColumnEvents: wireColEvents,
+  persistSession: snapshot => writeJSON(SESSION_KEY, snapshot, {
+    validate: value => value?.v === 2 && Array.isArray(value.columns),
+  }),
+  updateTopBar,
+  updateEmptyState,
+  updateStripLayout,
+  setShowDesktop,
+  positionOverview,
+});
 
 // ── Sticky-note desktop widgets ───────────────────────────────
 let desktopWidgetNotes = [];
@@ -1436,21 +1170,15 @@ updateDesktopNotes(loadStickyNotes());
 
 // ── App navigation ────────────────────────────────────────────
 function focusNextApp() {
-  const order = getAppOrder();
-  if (!order.length) return;
-  focusApp(order[(order.indexOf(S.focusedId) + 1) % order.length]);
+  return windowController.focusNextApp();
 }
 
 function focusPrevApp() {
-  const order = getAppOrder();
-  if (!order.length) return;
-  focusApp(order[(order.indexOf(S.focusedId) - 1 + order.length) % order.length]);
+  return windowController.focusPrevApp();
 }
 
 function focusAppByIndex(n) {
-  const order = getAppOrder();
-  if (n < 1 || n > order.length) return;
-  focusApp(order[n - 1]);
+  return windowController.focusAppByIndex(n);
 }
 
 // ── App menu ──────────────────────────────────────────────────

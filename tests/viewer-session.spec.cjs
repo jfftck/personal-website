@@ -89,6 +89,25 @@ test('the selected window remains focused after a page refresh', async ({ page }
   await expect(restoredImage).not.toHaveClass(/focused/);
 });
 
+test('closing the focused window focuses and saves the remaining window', async ({ page }) => {
+  await seed(page, [{ type: 'doc-viewer' }, { type: 'img-viewer' }]);
+  const doc = page.locator('.app-window[data-type="doc-viewer"]');
+  const image = page.locator('.app-window[data-type="img-viewer"]');
+  await expect(image.locator('.img-viewport img')).toHaveAttribute('src', pictures[0].url);
+  await image.locator('.img-viewport img').click();
+  await expect(image).toHaveClass(/focused/);
+
+  await page.locator('#close-btn').click();
+  await expect(image).toHaveCount(0);
+  await expect(doc).toHaveClass(/focused/);
+  await expect.poll(async () => (await savedApps(page)).map(app => app.type)).toEqual(['doc-viewer']);
+
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveClass(/focused/);
+  await expect(page.locator('.app-window[data-type="img-viewer"]')).toHaveCount(0);
+});
+
 test('window width presets persist on desktop and phone layouts', async ({ page }) => {
   await seed(page, [{ type: 'doc-viewer' }]);
   const column = page.locator('.app-col');
@@ -103,6 +122,7 @@ test('window width presets persist on desktop and phone layouts', async ({ page 
     await page.locator('#win-menu-open').getByRole('button', { name: scenario.label }).click();
 
     await expect(column).toHaveAttribute('data-width', scenario.preset);
+    await expect(column).not.toHaveClass(/width-shrink|width-grow/);
     await expect.poll(async () => (
       await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY)
     )?.columns?.[0]?.widthPreset).toBe(scenario.preset);
