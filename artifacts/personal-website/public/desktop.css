@@ -714,6 +714,14 @@ body {
 .in-app-notification-copy { display: grid; gap: .15rem; min-width: 0; }
 .in-app-notification-copy strong { font-size: .78rem; }
 .in-app-notification-copy span { font-size: .72rem; overflow-wrap: anywhere; }
+.data-handler-recovery-action {
+  justify-self: start; min-height: 2rem; margin-top: .25rem; padding: .35rem .6rem;
+  border: 1px solid var(--focus-color); border-radius: .55rem;
+  background: var(--accent); color: #fff; font: inherit; font-size: .72rem; font-weight: 700;
+  line-height: 1.2; cursor: pointer;
+}
+.data-handler-recovery-action:hover { background: color-mix(in srgb, var(--accent) 86%, white); }
+.data-handler-recovery-action:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 .in-app-notification-dismiss {
   display: grid; place-items: center; width: 1.8rem; aspect-ratio: 1; padding: 0;
   border: 0; border-radius: 50%; background: transparent; color: inherit;

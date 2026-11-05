@@ -1,5 +1,10 @@
 const BACKUP_PREFIX = 'desktop-data-backup-v1:';
-const memoryValues = new Map();
+const DATA_HANDLER_STATE = Symbol.for('personal-desktop.data-handler.v1');
+const handlerState = globalThis[DATA_HANDLER_STATE] || (globalThis[DATA_HANDLER_STATE] = {
+  memoryValues: new Map(),
+  recoveryCandidates: new Map(),
+});
+const { memoryValues, recoveryCandidates } = handlerState;
 
 function getStorage() {
   try {
@@ -51,10 +56,47 @@ function recoverBackup(key, validate) {
     if (raw === null) return { found: false };
     const value = JSON.parse(raw);
     if (!isValid(value, validate)) return { found: false };
-    notify('desktop-data-recovered', { key });
-    return { found: true, value };
+    return { found: true, value, raw };
   } catch {
     return { found: false };
+  }
+}
+
+export function restoreDataBackup(key) {
+  if (typeof key !== 'string' || !key) return false;
+  const recovery = recoveryCandidates.get(key);
+  const storage = getStorage();
+  if (!recovery || !storage) {
+    notify('desktop-data-recovery-error', {
+      key,
+      reason: recovery ? 'storage-unavailable' : 'copy-unavailable',
+    });
+    return false;
+  }
+
+  try {
+    const current = storage.getItem(key);
+    const backup = storage.getItem(backupKey(key));
+    if (current !== recovery.primaryRaw || backup !== recovery.backupRaw) {
+      recoveryCandidates.delete(key);
+      notify('desktop-data-recovery-error', { key, reason: 'data-changed' });
+      return false;
+    }
+    const value = JSON.parse(backup);
+    if (!isValid(value, recovery.validate)) {
+      recoveryCandidates.delete(key);
+      notify('desktop-data-recovery-error', { key, reason: 'copy-invalid' });
+      return false;
+    }
+    storage.setItem(key, backup);
+    memoryValues.delete(key);
+    recoveryCandidates.delete(key);
+    notify('desktop-data-change', { key });
+    notify('desktop-data-recovery-restored', { key });
+    return true;
+  } catch {
+    notify('desktop-data-recovery-error', { key, reason: 'storage-unavailable' });
+    return false;
   }
 }
 
@@ -92,12 +134,23 @@ export function readJSON(key, fallback, { validate } = {}) {
   if (result.value !== null) {
     try {
       const value = JSON.parse(result.value);
-      if (isValid(value, validate)) return value;
+      if (isValid(value, validate)) {
+        if (recoveryCandidates.delete(key)) notify('desktop-data-recovery-saved', { key });
+        return value;
+      }
     } catch {
       // Try the last good snapshot below without altering the stored value.
     }
     const recovered = recoverBackup(key, validate);
-    if (recovered.found) return recovered.value;
+    if (recovered.found) {
+      recoveryCandidates.set(key, {
+        backupRaw: recovered.raw,
+        primaryRaw: result.value,
+        validate,
+      });
+      notify('desktop-data-recovery-available', { key });
+      return recovered.value;
+    }
     notify('desktop-data-error', { key, operation: 'read' });
   }
   return cloneFallback(fallback);
@@ -123,10 +176,12 @@ export function writeRaw(key, value) {
   try {
     storage.setItem(key, next);
     memoryValues.delete(key);
-    if (previousWasReadable && previous !== null && previous !== next) {
+    const hadPendingRecovery = recoveryCandidates.delete(key);
+    if (!hadPendingRecovery && previousWasReadable && previous !== null && previous !== next) {
       try { storage.setItem(backupKey(key), previous); } catch { /* Keep the committed primary value. */ }
     }
     notify('desktop-data-change', { key });
+    if (hadPendingRecovery) notify('desktop-data-recovery-saved', { key });
     return true;
   } catch {
     memoryValues.set(key, next);
@@ -156,8 +211,10 @@ export function removeData(key) {
     return false;
   }
   try {
+    storage.removeItem(backupKey(key));
     storage.removeItem(key);
     memoryValues.delete(key);
+    if (recoveryCandidates.delete(key)) notify('desktop-data-recovery-cleared', { key });
     notify('desktop-data-change', { key });
     return true;
   } catch {

@@ -1073,8 +1073,6 @@ test('shared data handler keeps a last-good copy without repairing data during r
     localStorage.setItem(key, '{broken json');
     const recovered = readJSON(key, { revision: 0 });
     const preservedInvalidPrimary = localStorage.getItem(key);
-    removeData(key);
-    const afterExplicitRemove = readJSON(key, { revision: 0 });
     const unreadableKey = 'data-handler-test-write-without-read';
     const originalGetItem = Storage.prototype.getItem;
     let writeSucceededWithoutRead = false;
@@ -1089,17 +1087,86 @@ test('shared data handler keeps a last-good copy without repairing data during r
     }
     const savedWithoutRead = localStorage.getItem(unreadableKey);
     removeData(unreadableKey);
-    localStorage.removeItem(backupKey);
-    return { recovered, preservedInvalidPrimary, afterExplicitRemove, writeSucceededWithoutRead, savedWithoutRead };
+    return { key, backupKey, recovered, preservedInvalidPrimary, writeSucceededWithoutRead, savedWithoutRead };
   });
   expect(result).toEqual({
+    key: 'data-handler-test-record',
+    backupKey: `desktop-data-backup-v1:${encodeURIComponent('data-handler-test-record')}`,
     recovered: { revision: 1 },
     preservedInvalidPrimary: '{broken json',
-    afterExplicitRemove: { revision: 0 },
     writeSucceededWithoutRead: true,
     savedWithoutRead: JSON.stringify({ saved: true }),
   });
-  await expect(page.locator('[data-data-handler-notice]')).toContainText('Saved data recovered');
+
+  const notice = page.locator('[data-data-handler-recovery="data-handler-test-record"]');
+  await expect(notice).toHaveAttribute('role', 'alert');
+  await expect(notice).toContainText('The current stored value is unchanged');
+  const restore = notice.getByRole('button', { name: 'Restore previous copy for data handler test record' });
+  await page.keyboard.press('Tab');
+  await restore.focus();
+  await expect.poll(() => restore.evaluate(button => ({
+    visible: button.matches(':focus-visible'),
+    outline: getComputedStyle(button).outlineStyle,
+  }))).toEqual({ visible: true, outline: 'solid' });
+  await page.keyboard.press('Enter');
+  await expect(notice).toHaveAttribute('role', 'status');
+  await expect(notice).toContainText('Previous saved copy restored');
+  expect(await page.evaluate(key => localStorage.getItem(key), result.key))
+    .toBe(JSON.stringify({ revision: 1 }));
+
+  const afterRemove = await page.evaluate(async key => {
+    const { readJSON, writeJSON, removeData } = await import('/data-handler.js');
+    writeJSON(key, { revision: 1 });
+    writeJSON(key, { revision: 2 });
+    removeData(key);
+    const backup = localStorage.getItem(`desktop-data-backup-v1:${encodeURIComponent(key)}`);
+    localStorage.setItem(key, '{broken json');
+    const fallback = readJSON(key, { revision: 0 });
+    return { backup, fallback, primary: localStorage.getItem(key) };
+  }, result.key);
+  expect(afterRemove).toEqual({
+    backup: null,
+    fallback: { revision: 0 },
+    primary: '{broken json',
+  });
+});
+
+test('failed data recovery is announced and can be retried', async ({ page }) => {
+  const key = 'data-handler-restore-failure';
+  await page.evaluate(async storageKey => {
+    const { readJSON, writeJSON } = await import('/data-handler.js');
+    const backupKey = `desktop-data-backup-v1:${encodeURIComponent(storageKey)}`;
+    localStorage.removeItem(storageKey);
+    localStorage.removeItem(backupKey);
+    writeJSON(storageKey, { revision: 1 });
+    writeJSON(storageKey, { revision: 2 });
+    localStorage.setItem(storageKey, '{broken json');
+    readJSON(storageKey, { revision: 0 });
+
+    window.__restoreDataOriginalSetItem = Storage.prototype.setItem;
+    const originalSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (name, value) {
+      if (name === storageKey) throw new DOMException('Storage is blocked', 'SecurityError');
+      return originalSetItem.call(this, name, value);
+    };
+  }, key);
+
+  const notice = page.locator(`[data-data-handler-recovery="${key}"]`);
+  await expect(notice).toBeVisible();
+  await notice.getByRole('button', { name: /Restore previous copy/ }).click();
+  await expect(notice).toHaveAttribute('role', 'alert');
+  await expect(notice).toContainText('Browser storage blocked recovery');
+  expect(await page.evaluate(storageKey => localStorage.getItem(storageKey), key)).toBe('{broken json');
+
+  await page.evaluate(() => {
+    Storage.prototype.setItem = window.__restoreDataOriginalSetItem;
+    delete window.__restoreDataOriginalSetItem;
+  });
+  await notice.getByRole('button', { name: /Restore previous copy/ }).click();
+  await expect(notice).toHaveAttribute('role', 'status');
+  await expect(notice).toContainText('Previous saved copy restored');
+  expect(await page.evaluate(storageKey => localStorage.getItem(storageKey), key))
+    .toBe(JSON.stringify({ revision: 1 }));
 });
 
 test('Appearance settings support independent multi-select animation preferences', async ({ page }) => {

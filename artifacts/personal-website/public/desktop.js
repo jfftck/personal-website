@@ -5,7 +5,9 @@ import { loadStickyNotes } from './apps/sticky-notes-data.js';
 import { SETTINGS_ICON } from './apps/toolbar.js';
 import { retryWithBackoff, responseLoadError } from './shared/retry.js';
 import { GAMES, initGameMenu } from './apps/game-catalog.js';
-import { readJSON, readRaw, readRawResult, removeData, writeJSON, writeRaw } from './data-handler.js';
+import {
+  readJSON, readRaw, readRawResult, removeData, restoreDataBackup, writeJSON, writeRaw,
+} from './data-handler.js';
 import { createWindowController, SESSION_KEY, SESSION_KEY_V1 } from './window-controller.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
@@ -28,7 +30,14 @@ const emptyState       = $('empty-state');
 const desktopWidgets   = $('desktop-widgets');
 const showDesktopBtn   = $('show-desktop-btn');
 window.addEventListener('desktop-data-error', showDataHandlerNotification);
-window.addEventListener('desktop-data-recovered', showDataHandlerNotification);
+window.addEventListener('desktop-data-recovery-available', showDataRecoveryAvailable);
+window.addEventListener('desktop-data-recovery-restored', showDataRecoveryResult);
+window.addEventListener('desktop-data-recovery-saved', showDataRecoveryResult);
+window.addEventListener('desktop-data-recovery-error', showDataRecoveryResult);
+window.addEventListener('desktop-data-recovery-cleared', event => {
+  const notice = findDataRecoveryNotice(event.detail?.key);
+  notice?.remove();
+});
 
 // ── Width helpers ─────────────────────────────────────────────
 function rem() { return parseFloat(getComputedStyle(document.documentElement).fontSize); }
@@ -421,29 +430,27 @@ function showInAppReminderNotification(reminder) {
 
 function showDataHandlerNotification(event) {
   const container = $('in-app-notifications');
-  const recovered = event.type === 'desktop-data-recovered';
   const operation = event.detail?.operation;
-  const titleText = recovered ? 'Saved data recovered'
-    : operation === 'read' ? 'Could not read saved data'
-      : operation === 'remove' ? 'Could not remove saved data'
-        : 'Could not save data';
-  const messageText = recovered
-    ? 'A previous saved copy was restored. The original data was left untouched.'
-    : operation === 'read'
-      ? 'A saved item could not be read. Check the page before making more changes.'
-      : operation === 'remove'
-        ? 'A saved item could not be removed from this browser.'
-        : 'A change could not be saved in this browser. Try again before leaving this page.';
+  const titleText = operation === 'read' ? 'Could not read saved data'
+    : operation === 'remove' ? 'Could not remove saved data'
+      : 'Could not save data';
+  const messageText = operation === 'read'
+    ? 'A saved item could not be read. Check the page before making more changes.'
+    : operation === 'remove'
+      ? 'A saved item could not be removed from this browser.'
+      : 'A change could not be saved in this browser. Try again before leaving this page.';
   let notice = container.querySelector('[data-data-handler-notice]');
   if (!notice) {
     notice = document.createElement('article');
     notice.className = 'in-app-notification';
     notice.dataset.dataHandlerNotice = 'true';
-    notice.setAttribute('role', recovered ? 'status' : 'alert');
+    notice.setAttribute('role', 'alert');
+    notice.setAttribute('aria-live', 'assertive');
+    notice.setAttribute('aria-atomic', 'true');
     const icon = document.createElement('span');
     icon.className = 'in-app-notification-icon';
     icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = recovered ? '↺' : '!';
+    icon.textContent = '!';
     const copy = document.createElement('div');
     copy.className = 'in-app-notification-copy';
     const title = document.createElement('strong');
@@ -462,6 +469,97 @@ function showDataHandlerNotification(event) {
   }
   notice.querySelector('.data-handler-notice-title').textContent = titleText;
   notice.querySelector('.data-handler-notice-message').textContent = messageText;
+}
+
+function recoveryKeyLabel(key) {
+  return String(key || 'desktop data')
+    .replace(/^personal-desktop-/, '')
+    .replace(/^desktop-/, '')
+    .replace(/-v\d+$/, '')
+    .replace(/[-_]+/g, ' ')
+    .trim();
+}
+
+function findDataRecoveryNotice(key) {
+  if (typeof key !== 'string') return null;
+  return [...$('in-app-notifications').querySelectorAll('[data-data-handler-recovery]')]
+    .find(notice => notice.dataset.dataHandlerRecovery === key) || null;
+}
+
+function showDataRecoveryAvailable(event) {
+  const key = event.detail?.key;
+  if (typeof key !== 'string' || !key) return;
+  const container = $('in-app-notifications');
+  if (findDataRecoveryNotice(key)) return;
+
+  const label = recoveryKeyLabel(key);
+  const notice = document.createElement('article');
+  notice.className = 'in-app-notification';
+  notice.dataset.dataHandlerRecovery = key;
+  notice.setAttribute('role', 'alert');
+  notice.setAttribute('aria-live', 'assertive');
+  notice.setAttribute('aria-atomic', 'true');
+  notice.tabIndex = -1;
+  const icon = document.createElement('span');
+  icon.className = 'in-app-notification-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = '↺';
+  const copy = document.createElement('div');
+  copy.className = 'in-app-notification-copy';
+  const title = document.createElement('strong');
+  title.className = 'data-handler-recovery-title';
+  title.textContent = 'Previous saved copy available';
+  const message = document.createElement('span');
+  message.className = 'data-handler-recovery-message';
+  message.textContent = `A previous copy of ${label} is available. The current stored value is unchanged; restoring will replace it with that copy.`;
+  const restore = document.createElement('button');
+  restore.type = 'button';
+  restore.className = 'data-handler-recovery-action';
+  restore.textContent = 'Restore Previous Copy';
+  restore.setAttribute('aria-label', `Restore previous copy for ${label}`);
+  restore.addEventListener('click', () => restoreDataBackup(key));
+  copy.append(title, message, restore);
+  notice.append(icon, copy);
+  container.appendChild(notice);
+}
+
+function showDataRecoveryResult(event) {
+  const key = event.detail?.key;
+  const notice = findDataRecoveryNotice(key);
+  if (!notice) return;
+  const title = notice.querySelector('.data-handler-recovery-title');
+  const message = notice.querySelector('.data-handler-recovery-message');
+  const restore = notice.querySelector('.data-handler-recovery-action');
+  const restored = event.type === 'desktop-data-recovery-restored';
+  const saved = event.type === 'desktop-data-recovery-saved';
+  const reason = event.detail?.reason;
+
+  if (restored || saved) {
+    notice.setAttribute('role', 'status');
+    notice.setAttribute('aria-live', 'polite');
+    title.textContent = restored ? 'Previous saved copy restored' : 'A new saved copy is available';
+    message.textContent = restored
+      ? 'The previous copy is now restored in this browser.'
+      : 'A newer copy was saved. This recovery prompt is no longer needed.';
+    restore?.remove();
+    if (restored) notice.focus({ preventScroll: true });
+    return;
+  }
+
+  notice.setAttribute('role', 'alert');
+  notice.setAttribute('aria-live', 'assertive');
+  title.textContent = 'Could not restore the saved copy';
+  message.textContent = reason === 'data-changed'
+    ? 'The saved value changed before recovery. Reload the page to check the latest copy.'
+    : reason === 'copy-invalid'
+      ? 'The previous copy is no longer valid. Your current stored value was not changed.'
+      : reason === 'copy-unavailable'
+        ? 'The previous copy is no longer available. Your current stored value was not changed.'
+        : 'Browser storage blocked recovery. Your current stored value was not changed; try again.';
+  if (reason === 'data-changed' || reason === 'copy-invalid' || reason === 'copy-unavailable') {
+    restore?.remove();
+    notice.focus({ preventScroll: true });
+  }
 }
 
 function scheduleReminderNotification(reminder) {
