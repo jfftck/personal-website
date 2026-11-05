@@ -44,3 +44,9 @@ When cleaning up a failed App Storage write, serialize the reference check and d
 **Why:** a file can still be needed by a historical revision even when no current catalog row points to it, and transient storage errors must not leave untracked objects behind.
 
 **How to apply:** before deleting, recheck both reference sources under the shared content-history lock; retain referenced objects, and keep cleanup failures queued until deletion succeeds.
+
+For same-folder file creates, treat the partial unique database index as the cross-instance authority. The process-local history lock and pre-insert check improve the normal path, but database unique violations must still return the file-name conflict response without changing the winning row.
+
+**Why:** multiple API instances do not share the in-memory lock, so both can pass a precheck before either commits.
+
+**How to apply:** keep the database constraint, map its specific violation to the same 409 message as the precheck, and verify the losing upload cannot replace the winner's object reference or metadata.

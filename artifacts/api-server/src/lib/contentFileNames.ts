@@ -42,6 +42,26 @@ export class ContentNameConflictError extends Error {
   }
 }
 
+export function generatedNameConflictFromDatabaseError(
+  error: unknown,
+): ContentNameConflictError | null {
+  const visited = new Set<object>();
+  let current = error;
+  while (typeof current === "object" && current !== null && !visited.has(current)) {
+    visited.add(current);
+    if (
+      "code" in current &&
+      current.code === "23505" &&
+      "constraint" in current &&
+      current.constraint === "content_files_folder_name_unique"
+    ) {
+      return new ContentNameConflictError();
+    }
+    current = "cause" in current ? current.cause : undefined;
+  }
+  return null;
+}
+
 export function assertGeneratedFileNameAvailable(collision: boolean): void {
   if (collision) throw new ContentNameConflictError();
 }

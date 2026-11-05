@@ -31,6 +31,7 @@ import { restoreContentFileRevisionMetadata } from "../lib/contentRevisionMetada
 import {
   assertGeneratedFileNameAvailable,
   ContentNameConflictError,
+  generatedNameConflictFromDatabaseError,
   fileExtension,
   standardFileName,
 } from "../lib/contentFileNames";
@@ -324,6 +325,13 @@ function apiError(error: unknown, res: Response, next: (error?: unknown) => void
   }
   if (error instanceof ContentNameConflictError) {
     res.status(error.status).json({ error: error.message });
+    return;
+  }
+  const generatedNameConflict = generatedNameConflictFromDatabaseError(error);
+  if (generatedNameConflict) {
+    res
+      .status(generatedNameConflict.status)
+      .json({ error: generatedNameConflict.message });
     return;
   }
   if (error instanceof ContentHistoryError) {

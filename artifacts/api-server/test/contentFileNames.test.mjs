@@ -5,6 +5,7 @@ import {
   assertGeneratedFileNameAvailable,
   CONTENT_NAME_CONFLICT_MESSAGE,
   ContentNameConflictError,
+  generatedNameConflictFromDatabaseError,
   standardFileName,
 } from "../src/lib/contentFileNames.ts";
 import {
@@ -127,4 +128,29 @@ test("a generated-name collision raises a clear 409 before a write can proceed",
   );
   assert.equal(inserted, false);
   assert.doesNotThrow(() => assertGeneratedFileNameAvailable(false));
+});
+
+test("the database filename constraint maps to the same clear 409 conflict", () => {
+  const databaseError = Object.assign(new Error("unique violation"), {
+    code: "23505",
+    constraint: "content_files_folder_name_unique",
+  });
+  const wrappedError = Object.assign(new Error("transaction failed"), {
+    cause: databaseError,
+  });
+
+  const conflict = generatedNameConflictFromDatabaseError(wrappedError);
+
+  assert.ok(conflict instanceof ContentNameConflictError);
+  assert.equal(conflict.status, 409);
+  assert.equal(conflict.message, CONTENT_NAME_CONFLICT_MESSAGE);
+  assert.equal(
+    generatedNameConflictFromDatabaseError(
+      Object.assign(new Error("other unique violation"), {
+        code: "23505",
+        constraint: "content_folders_path_unique",
+      }),
+    ),
+    null,
+  );
 });
