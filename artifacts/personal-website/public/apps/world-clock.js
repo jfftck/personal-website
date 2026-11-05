@@ -228,11 +228,12 @@ export function buildWorldClock(id, ctx) {
     <div class="clock-search">
       <input class="clock-zone-input util-field" type="text" role="combobox" aria-label="City or time zone"
         aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="${listId}"
+        aria-describedby="${listId}-status"
         placeholder="Search any city, country, or time zone" autocomplete="off">
       <div class="clock-place-suggestions menu-popover" id="${listId}" role="listbox" aria-label="Place suggestions" hidden></div>
     </div>
     <button type="button" class="util-action clock-add">Add clock</button>
-    <span class="util-muted clock-search-status" role="status" aria-live="polite"></span>
+    <span id="${listId}-status" class="util-muted clock-search-status" role="status" aria-live="polite"></span>
     <span class="util-muted" style="margin-left:auto">View</span>
     <button type="button" class="util-action clock-layout" aria-label="Change clock layout"></button>
     <button type="button" class="util-action clock-face-mode" aria-label="Change clock face"></button>
@@ -321,10 +322,10 @@ export function buildWorldClock(id, ctx) {
       option.append(name, detail);
       option.addEventListener('pointerdown', event => event.preventDefault());
       option.addEventListener('click', () => {
-        addClock(place);
-        addInput.value = '';
+        const added = addClock(place);
+        if (!added) addInput.value = place.city;
         closeSuggestions();
-        searchStatus.textContent = '';
+        if (added) searchStatus.textContent = '';
         addInput.focus({ preventScroll: true });
       });
       placeSuggestions.append(option);
@@ -465,11 +466,22 @@ export function buildWorldClock(id, ctx) {
     const zone = city?.zone || entry;
     try { new Intl.DateTimeFormat(undefined, { timeZone: zone }); }
     catch {
-      input.setCustomValidity('Choose a place from the suggestions or enter a valid IANA time zone.');
+      const curatedCity = city?.city
+        ? city
+        : CITY_OPTIONS.find(option => option.zone === zone);
+      const message = curatedCity
+        ? `Your browser can't display the time zone for ${curatedCity.city}${curatedCity.country ? `, ${curatedCity.country}` : ''} (${zone}). Try another city or time zone. Your other clocks are unchanged.`
+        : 'Choose a place from the suggestions or enter a time zone supported by your browser. Your other clocks are unchanged.';
+      input.setCustomValidity(message);
+      input.setAttribute('aria-invalid', 'true');
+      searchStatus.classList.add('is-error');
+      searchStatus.textContent = message;
       input.reportValidity();
-      return;
+      return false;
     }
     input.setCustomValidity('');
+    input.removeAttribute('aria-invalid');
+    searchStatus.classList.remove('is-error');
     clearTimeout(searchTimer);
     searchController?.abort();
     searchRequest++;
@@ -479,12 +491,15 @@ export function buildWorldClock(id, ctx) {
     closeSuggestions();
     searchStatus.textContent = '';
     persist(); render();
+    return true;
   };
   root.querySelector('.clock-add').addEventListener('click', () => {
     addClock(root.querySelector('.clock-zone-input').value);
   });
   addInput.addEventListener('input', () => {
     addInput.setCustomValidity('');
+    addInput.removeAttribute('aria-invalid');
+    searchStatus.classList.remove('is-error');
     schedulePlaceSearch();
   });
   addInput.addEventListener('focus', () => {
@@ -502,9 +517,10 @@ export function buildWorldClock(id, ctx) {
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (activeSuggestion >= 0 && currentPlaces[activeSuggestion]) {
-        addClock(currentPlaces[activeSuggestion]);
+        const selectedPlace = currentPlaces[activeSuggestion];
+        const added = addClock(selectedPlace);
         closeSuggestions();
-        searchStatus.textContent = '';
+        if (!added) addInput.value = selectedPlace.city;
       } else {
         root.querySelector('.clock-add').click();
       }

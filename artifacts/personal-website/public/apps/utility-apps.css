@@ -59,6 +59,7 @@
 .clock-zone-input { width:100%; }
 .clock-search-status { flex:1 1 100%; min-height:1em; font-size:.75rem; }
 .clock-search-status:empty { display:none; }
+.clock-search-status.is-error { color:var(--app-text); font-weight:600; }
 .clock-place-suggestions {
   position:absolute;
   z-index:20;

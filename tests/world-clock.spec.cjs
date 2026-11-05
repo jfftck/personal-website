@@ -53,6 +53,61 @@ test('resolves a curated city to its IANA zone and displays the matching city an
     .toMatchObject({ cityLabels: { 'Asia/Kolkata': 'Bengaluru' } });
 });
 
+test('explains unsupported curated zones without adding the city or disrupting other clocks', async ({ page }) => {
+  await page.evaluate(() => {
+    const nativeDateTimeFormat = Intl.DateTimeFormat;
+    Intl.DateTimeFormat = new Proxy(nativeDateTimeFormat, {
+      construct(target, args) {
+        if (args[1]?.timeZone === 'Asia/Kolkata') {
+          throw new RangeError('Unsupported test time zone');
+        }
+        return Reflect.construct(target, args);
+      },
+    });
+  });
+
+  const clock = await openWorldClock(page);
+  const search = clock.getByLabel('City or time zone');
+  const suggestions = clock.getByRole('listbox', { name: 'Place suggestions' });
+  await expect(clock.locator('.clock-item').first()).toBeVisible();
+  const existingClockCount = await clock.locator('.clock-item').count();
+  await search.fill('Bengaluru');
+  await expect(suggestions.getByRole('option')).toHaveCount(1);
+  await suggestions.getByRole('option').click();
+
+  const status = clock.locator('.clock-search-status');
+  await expect(status).toContainText('Bengaluru, India');
+  await expect(status).toContainText('Asia/Kolkata');
+  await expect(status).toContainText('other clocks are unchanged');
+  await expect(status).toHaveClass(/is-error/);
+  await expect(search).toHaveValue('Bengaluru');
+  await expect(search).toHaveAttribute('aria-invalid', 'true');
+  await expect(search).toHaveAttribute('aria-describedby', /status$/);
+  await expect(clock.locator('.clock-item')).toHaveCount(existingClockCount);
+  await expect(clock.locator('.clock-item[data-zone="Asia/Kolkata"]')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(key => localStorage.getItem(key), PREF_KEY)).toBeNull();
+
+  await search.fill('Bengaluru');
+  await expect(suggestions.getByRole('option')).toHaveCount(1);
+  await search.press('ArrowDown');
+  await search.press('Enter');
+  await expect(status).toContainText('Bengaluru, India');
+  await expect(search).toHaveValue('Bengaluru');
+  await expect(clock.locator('.clock-item')).toHaveCount(existingClockCount);
+
+  await search.fill('Paris');
+  await expect(suggestions.getByRole('option')).toHaveCount(1);
+  await suggestions.getByRole('option').click();
+  await expect(clock.locator('.clock-item[data-zone="Europe/Paris"] strong')).toHaveText('Paris');
+  await expect(status).toBeEmpty();
+  await expect(search).toHaveValue('');
+  await expect(search).not.toHaveAttribute('aria-invalid', 'true');
+
+  await clock.getByRole('button', { name: 'Change clock layout' }).click();
+  await expect(clock.getByRole('button', { name: 'Change clock layout' })).toHaveText('Grid');
+  await expect(clock.locator('.clock-item')).toHaveCount(existingClockCount + 1);
+});
+
 test('adds a city entered with spacing and punctuation variants using its catalog name', async ({ page }) => {
   const clock = await openWorldClock(page);
   await clock.getByLabel('City or time zone').fill('Ho-Chi  Minh City');
