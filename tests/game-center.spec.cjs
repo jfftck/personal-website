@@ -2607,6 +2607,53 @@ test.describe('Minesweeper touch flag mode', () => {
     await expect(nextCell).toHaveClass(/revealed/);
     await expect(nextCell).not.toHaveClass(/flagged/);
   });
+
+  test('landscape touch keeps flag mode and the mine board visible and tappable', async ({ page }) => {
+    await page.locator('#app-menu-btn').tap();
+    await page.locator('#game-center-entry').tap();
+    await page.locator('[data-game="minesweeper"]').tap();
+    const app = page.locator('.app-window[data-type="minesweeper"]').last();
+
+    await page.setViewportSize({ width: 844, height: 390 });
+    const flagMode = app.getByRole('switch', { name: 'Flag mode' });
+    const firstCell = app.locator('[data-key="mine-0"]');
+    const [toolbarBounds, toggleBounds, boardBounds, cellBounds, viewport] = await Promise.all([
+      app.locator('.game-toolbar').boundingBox(),
+      flagMode.boundingBox(),
+      app.locator('.mine-board-wrap').boundingBox(),
+      firstCell.boundingBox(),
+      page.evaluate(() => ({ width: innerWidth, height: innerHeight })),
+    ]);
+    const insideViewport = bounds => bounds && bounds.width > 0 && bounds.height > 0 &&
+      bounds.x >= -1 && bounds.y >= -1 &&
+      bounds.x + bounds.width <= viewport.width + 1 &&
+      bounds.y + bounds.height <= viewport.height + 1;
+    const geometry = {
+      toolbarVisible: insideViewport(toolbarBounds),
+      toggleVisible: insideViewport(toggleBounds),
+      boardVisible: insideViewport(boardBounds),
+      cellVisible: insideViewport(cellBounds),
+    };
+    expect(geometry).toEqual({
+      toolbarVisible: true,
+      toggleVisible: true,
+      boardVisible: true,
+      cellVisible: true,
+    });
+
+    await expect(flagMode).toHaveAttribute('aria-checked', 'false');
+    await flagMode.tap();
+    await expect(flagMode).toHaveAttribute('aria-checked', 'true');
+    await firstCell.tap();
+    await expect(firstCell).toHaveClass(/flagged/);
+
+    await flagMode.tap();
+    await expect(flagMode).toHaveAttribute('aria-checked', 'false');
+    const revealCell = app.locator('[data-key="mine-1"]');
+    await revealCell.tap();
+    await expect(revealCell).toHaveClass(/revealed/);
+    await expect(revealCell).not.toHaveClass(/flagged/);
+  });
 });
 
 test('Minesweeper win screen lets users change the next game difficulty', async ({ page }) => {
