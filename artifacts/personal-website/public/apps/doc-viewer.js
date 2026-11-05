@@ -20,7 +20,74 @@ function parseManifestEntry(folder, entry) {
   const ext       = dotIdx >= 0 ? rest.slice(dotIdx + 1).toLowerCase() : 'md';
   const url       = mUrl || `/files/${folder}/${encodeURIComponent(filename)}`;
   const date      = manifestDate || (m ? `${m[1]}-${m[2]}-${m[3]}` : '');
-  return { filename, displayName, url, ext, date, folder, size: size || '—' };
+  return {
+    filename,
+    displayName,
+    url,
+    ext,
+    date,
+    folder,
+    size: size || '—',
+    stylesheetUrl: typeof entry.stylesheetUrl === 'string' ? entry.stylesheetUrl : null,
+  };
+}
+
+function splitSelectorList(selectorText) {
+  const selectors = [];
+  let start = 0;
+  let depth = 0;
+  let quote = '';
+  for (let index = 0; index < selectorText.length; index += 1) {
+    const character = selectorText[index];
+    if (quote) {
+      if (character === quote && selectorText[index - 1] !== '\\') quote = '';
+      continue;
+    }
+    if (character === '"' || character === "'") quote = character;
+    else if (character === '(' || character === '[') depth += 1;
+    else if (character === ')' || character === ']') depth = Math.max(0, depth - 1);
+    else if (character === ',' && depth === 0) {
+      selectors.push(selectorText.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  selectors.push(selectorText.slice(start).trim());
+  return selectors.filter(Boolean);
+}
+
+function scopeDocumentStylesheet(cssText) {
+  if (typeof CSSStyleSheet !== 'function') {
+    throw new Error('This browser cannot safely scope document styles.');
+  }
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(cssText);
+
+  const scopeSelector = selector => {
+    const normalized = selector.trim();
+    if (/^(?:html|body|:root)(?:\s+(?:html|body|:root))*(?=$|\s|[>+~.#:]|\[)/i.test(normalized)) {
+      return normalized.replace(/^(?:html|body|:root)(?:\s+(?:html|body|:root))*/i, '.doc-body');
+    }
+    if (/^\.doc-body(?:$|\s|[>+~.#:]|\[)/i.test(normalized)) return normalized;
+    return `.doc-body ${normalized}`;
+  };
+
+  const serializeRule = rule => {
+    if (rule.type === 3) throw new Error('Document stylesheets cannot import other files.');
+    if (rule.type === 1) {
+      rule.selectorText = splitSelectorList(rule.selectorText).map(scopeSelector).join(', ');
+      return rule.cssText;
+    }
+    if (rule.cssRules && rule.cssRules.length) {
+      const openingBrace = rule.cssText.indexOf('{');
+      if (openingBrace >= 0) {
+        const nested = [...rule.cssRules].map(serializeRule).filter(Boolean).join('\n');
+        return `${rule.cssText.slice(0, openingBrace)}{${nested}}`;
+      }
+    }
+    return rule.cssText;
+  };
+
+  return [...sheet.cssRules].map(serializeRule).filter(Boolean).join('\n');
 }
 
 async function fetchDocManifest(folder) {
@@ -135,10 +202,12 @@ export function buildDocViewer(id, ctx, initialState = null) {
   }
 
   let fileLoadGeneration = 0;
-  function loadFile(url, name) {
+  function loadFile(url, name, stylesheetUrl = null) {
     const generation = ++fileLoadGeneration;
     pendingState = null;
-    currentFile = { url, name };
+    const matchedDocument = allDocs.find(doc => doc.url === url);
+    stylesheetUrl = stylesheetUrl || matchedDocument?.stylesheetUrl || null;
+    currentFile = { url, name, stylesheetUrl };
     ctx.setAppTitle(id, name);
     updateSidebarActive();
     ctx.saveSession?.();
@@ -154,7 +223,7 @@ export function buildDocViewer(id, ctx, initialState = null) {
     docBody.style.display  = '';
     showDocumentLoading('Loading document…');
 
-    retryWithBackoff(async () => {
+    const contentPromise = retryWithBackoff(async () => {
       const response = await fetch(url, { cache: 'no-cache' });
       if (!response.ok) throw responseLoadError(response, name || 'document');
       return response.text();
@@ -164,10 +233,35 @@ export function buildDocViewer(id, ctx, initialState = null) {
           showDocumentLoading(`Connection issue. Retrying ${attempt} of ${maxRetries} in ${(delayMs / 1000).toFixed(1)}s…`);
         }
       },
-    }).then(text => {
+    });
+    const stylesheetPromise = stylesheetUrl
+      ? fetch(stylesheetUrl, { cache: 'no-cache' })
+          .then(response => response.ok ? response.text() : Promise.reject(new Error('Could not load the assigned stylesheet.')))
+          .then(cssText => ({ cssText, warning: '' }))
+          .catch(() => ({ cssText: '', warning: 'The assigned stylesheet could not be loaded. Showing the default document style.' }))
+      : Promise.resolve({ cssText: '', warning: '' });
+
+    Promise.all([contentPromise, stylesheetPromise]).then(([text, stylesheet]) => {
         if (generation !== fileLoadGeneration) return;
         docBody.setAttribute('aria-busy', 'false');
         docBody.innerHTML = renderMarkdown(text);
+        if (stylesheet.cssText) {
+          try {
+            const style = document.createElement('style');
+            style.dataset.documentStylesheet = 'true';
+            style.textContent = scopeDocumentStylesheet(stylesheet.cssText);
+            docBody.prepend(style);
+          } catch {
+            stylesheet.warning = 'The assigned stylesheet could not be applied. Showing the default document style.';
+          }
+        }
+        if (stylesheet.warning) {
+          const warning = document.createElement('p');
+          warning.className = 'doc-style-warning';
+          warning.setAttribute('role', 'status');
+          warning.textContent = stylesheet.warning;
+          docBody.prepend(warning);
+        }
         docScroll.scrollTop = 0;
       })
       .catch(err => {
@@ -182,7 +276,7 @@ export function buildDocViewer(id, ctx, initialState = null) {
         retry.type = 'button';
         retry.className = 'welcome-retry-button';
         retry.textContent = 'Try Again';
-        retry.addEventListener('click', () => loadFile(url, name));
+        retry.addEventListener('click', () => loadFile(url, name, stylesheetUrl));
         docBody.append(message, retry);
       });
   }
@@ -208,7 +302,7 @@ export function buildDocViewer(id, ctx, initialState = null) {
         <span class="doc-sidebar-name">${doc.displayName}</span>
         <span class="doc-sidebar-date">${doc.date}</span>
       `;
-      btn.addEventListener('click', () => loadFile(doc.url, doc.displayName));
+      btn.addEventListener('click', () => loadFile(doc.url, doc.displayName, doc.stylesheetUrl));
       sidebarList.appendChild(btn);
     }
     updateSidebarActive();
@@ -224,7 +318,7 @@ export function buildDocViewer(id, ctx, initialState = null) {
 
     if (allDocs.length > 0 && !currentFile) {
       const doc = allDocs.find(doc => doc.url === pendingState?.url) || allDocs[0];
-      loadFile(doc.url, doc.displayName);
+      loadFile(doc.url, doc.displayName, doc.stylesheetUrl);
     } else if (allDocs.length === 0 && !currentFile) {
       pendingState = null;
       ctx.saveSession?.();

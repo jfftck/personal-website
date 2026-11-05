@@ -387,7 +387,7 @@ components:
         createdAt: { type: string, format: date-time }
     ContentFile:
       type: object
-      required: [id, name, originalFileName, title, description, folderPath, date, contentType, sizeBytes, isWallpaper, url, updatedAt]
+      required: [id, name, originalFileName, title, description, folderPath, date, contentType, sizeBytes, isWallpaper, stylesheetId, url, updatedAt]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -400,11 +400,12 @@ components:
         sizeBytes: { type: integer }
         posterUrl: { type: ["string", "null"], format: uri }
         isWallpaper: { type: boolean }
+        stylesheetId: { type: ["string", "null"], format: uuid }
         url: { type: string }
         updatedAt: { type: string, format: date-time }
     ContentFileVersion:
       type: object
-      required: [id, versionNumber, action, name, originalFileName, title, description, folderPath, date, contentType, sizeBytes, isWallpaper, isDeleted, createdAt, gitCommitSha, gitUrl]
+      required: [id, versionNumber, action, name, originalFileName, title, description, folderPath, date, contentType, sizeBytes, isWallpaper, stylesheetId, isDeleted, createdAt, gitCommitSha, gitUrl]
       properties:
         id: { type: string, format: uuid }
         versionNumber: { type: integer }
@@ -418,6 +419,7 @@ components:
         contentType: { type: string }
         sizeBytes: { type: integer }
         isWallpaper: { type: boolean }
+        stylesheetId: { type: ["string", "null"], format: uuid }
         isDeleted: { type: boolean }
         createdAt: { type: string, format: date-time }
         gitCommitSha: { type: string }
@@ -469,6 +471,7 @@ components:
         sizeBytes: { type: integer, minimum: 0 }
         objectPath: { type: string }
         isWallpaper: { type: boolean }
+        stylesheetId: { type: ["string", "null"], format: uuid }
     ContentFileUpdate:
       type: object
       properties:
@@ -481,5 +484,6 @@ components:
         sizeBytes: { type: integer, minimum: 0 }
         objectPath: { type: string }
         isWallpaper: { type: boolean }
+        stylesheetId: { type: ["string", "null"], format: uuid }
         isPublished: { type: boolean }
 

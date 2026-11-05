@@ -34,7 +34,7 @@ function formatSize(bytes: number): string {
 }
 
 async function getCachedPublicManifest(folderPath: string) {
-  const cacheFolderPath = folderPath === "" ? "__root_manifest_wallpapers_v1__" : folderPath;
+  const cacheFolderPath = folderPath === "" ? "__root_manifest_wallpapers_v2__" : folderPath;
   const [state] = await db
     .select({ generation: contentManifestStateTable.generation })
     .from(contentManifestStateTable)
@@ -56,7 +56,7 @@ async function getCachedPublicManifest(folderPath: string) {
   let etag = cached?.etag;
   let folderCount = cached?.folderCount ?? 0;
   if (manifest === undefined || !etag) {
-    const [folders, files, wallpaperFiles] = await Promise.all([
+    const [folders, files, wallpaperFiles, stylesheetFiles] = await Promise.all([
       db
         .select()
         .from(contentFoldersTable)
@@ -85,6 +85,17 @@ async function getCachedPublicManifest(folderPath: string) {
               ),
             )
             .orderBy(desc(contentFilesTable.contentDate), asc(contentFilesTable.name)),
+      db
+        .select({ id: contentFilesTable.id, folderPath: contentFilesTable.folderPath, name: contentFilesTable.name })
+        .from(contentFilesTable)
+        .where(
+          and(
+            eq(contentFilesTable.folderPath, "stylesheets"),
+            isNull(contentFilesTable.deletedAt),
+            eq(contentFilesTable.isPublished, true),
+            eq(contentFilesTable.contentType, "text/css"),
+          ),
+        ),
     ]);
 
     if (folderPath && !folders.some((folder) => folder.path === folderPath)) {
@@ -98,6 +109,12 @@ async function getCachedPublicManifest(folderPath: string) {
         path: folder.path,
         url: `/files/${folder.path.split("/").map(encodeURIComponent).join("/")}/manifest.json`,
       }));
+    const stylesheetUrls = new Map(
+      stylesheetFiles.map((stylesheet) => [
+        stylesheet.id,
+        normalizePublicUrl(stylesheet.folderPath, stylesheet.name),
+      ]),
+    );
     const entries = files.map((file) => ({
       filename: file.name,
       title: file.title?.trim() || titleFromLegacyName(file.name),
@@ -108,6 +125,7 @@ async function getCachedPublicManifest(folderPath: string) {
       size: formatSize(file.sizeBytes),
       url: normalizePublicUrl(file.folderPath, file.name),
       poster: file.posterUrl ?? undefined,
+      stylesheetUrl: file.stylesheetId ? stylesheetUrls.get(file.stylesheetId) : undefined,
     }));
     const wallpaperEntries = wallpaperFiles.map((file) => ({
       filename: file.name,

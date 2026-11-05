@@ -40,6 +40,7 @@ import {
 } from "../lib/objectStorage";
 
 const MAX_FILE_BYTES = 2_000_000_000;
+const MAX_STYLESHEET_BYTES = 256_000;
 
 function normalizeFolderPath(input: unknown): string {
   if (typeof input !== "string") {
@@ -150,6 +151,53 @@ function isImageAsset(contentType: string, name: string): boolean {
   );
 }
 
+function isStylesheetFile(file: { folderPath: string; name: string; contentType: string }): boolean {
+  return file.folderPath === "stylesheets" &&
+    file.contentType.toLowerCase() === "text/css" &&
+    /\.css$/i.test(file.name);
+}
+
+function isDocumentFile(file: { folderPath: string; name: string; contentType: string }): boolean {
+  return /^(documents|posts)(\/|$)/.test(file.folderPath) &&
+    /\.(md|markdown)$/i.test(file.name) &&
+    /^text\/(markdown|plain)/i.test(file.contentType);
+}
+
+function validateStylesheetFile(
+  file: { folderPath: string; name: string; contentType: string; sizeBytes: number },
+): void {
+  const looksLikeStylesheet =
+    file.folderPath === "stylesheets" ||
+    file.contentType.toLowerCase().startsWith("text/css") ||
+    /\.css$/i.test(file.name);
+  if (looksLikeStylesheet && !isStylesheetFile(file)) {
+    throw new ContentError(400, "Stylesheets must be CSS files saved in the Stylesheets folder.");
+  }
+  if (isStylesheetFile(file) && file.sizeBytes > MAX_STYLESHEET_BYTES) {
+    throw new ContentError(413, "Stylesheets must be 256 KB or smaller.");
+  }
+}
+
+async function getAvailableStylesheet(
+  executor: Pick<typeof db, "select">,
+  stylesheetId: string,
+) {
+  const [stylesheet] = await executor
+    .select({ id: contentFilesTable.id })
+    .from(contentFilesTable)
+    .where(
+      and(
+        eq(contentFilesTable.id, stylesheetId),
+        eq(contentFilesTable.folderPath, "stylesheets"),
+        eq(contentFilesTable.contentType, "text/css"),
+        eq(contentFilesTable.isPublished, true),
+        isNull(contentFilesTable.deletedAt),
+      ),
+    )
+    .limit(1);
+  return stylesheet;
+}
+
 function normalizeSize(input: unknown): number {
   if (
     typeof input !== "number" ||
@@ -193,6 +241,7 @@ function toContentFile(file: DbContentFile) {
     sizeBytes: file.sizeBytes,
     posterUrl: file.posterUrl,
     isWallpaper: file.isWallpaper,
+    stylesheetId: file.stylesheetId ?? null,
     url: normalizePublicUrl(file.folderPath, file.name),
     updatedAt: file.updatedAt.toISOString(),
   };
@@ -212,6 +261,7 @@ function toContentFileVersion(version: DbContentFileVersion) {
     contentType: version.snapshot.contentType,
     sizeBytes: version.snapshot.sizeBytes,
     isWallpaper: version.snapshot.isWallpaper ?? false,
+    stylesheetId: version.snapshot.stylesheetId ?? null,
     isDeleted: Boolean(version.snapshot.deletedAt),
     createdAt: version.createdAt.toISOString(),
     gitCommitSha: version.gitCommitSha,
@@ -478,9 +528,12 @@ contentApiRouter.post(
     const input = CreateContentUploadBody.parse(req.body);
     normalizeFileName(input.name);
     const sizeBytes = normalizeSize(input.sizeBytes);
-    normalizeContentType(input.contentType);
+    const contentType = normalizeContentType(input.contentType);
     if (sizeBytes === 0) {
       throw new ContentError(400, "Choose a file that contains data.");
+    }
+    if (contentType.toLowerCase() === "text/css" && sizeBytes > MAX_STYLESHEET_BYTES) {
+      throw new ContentError(413, "Stylesheets must be 256 KB or smaller.");
     }
     res.json(await createObjectUploadTarget());
   }),
@@ -505,6 +558,11 @@ contentApiRouter.post(
       fileExtension(requestedName) ??
       (contentType.toLowerCase().startsWith("text/markdown") ? ".md" : ".bin");
     const name = normalizeFileName(standardFileName(title, date, extension));
+    const stylesheetId = input.stylesheetId ?? null;
+    validateStylesheetFile({ folderPath, name, contentType, sizeBytes });
+    if (stylesheetId && !isDocumentFile({ folderPath, name, contentType })) {
+      throw new ContentError(400, "Only Markdown documents can use a stylesheet.");
+    }
     if (input.isWallpaper && !isImageAsset(contentType, name)) {
       throw new ContentError(400, "Only image files can be used as desktop wallpaper.");
     }
@@ -513,6 +571,12 @@ contentApiRouter.post(
 
     const file = await withContentHistoryLock(() =>
       db.transaction(async (tx) => {
+        if (
+          stylesheetId &&
+          !(await getAvailableStylesheet(tx, stylesheetId))
+        ) {
+          throw new ContentError(400, "Choose an available CSS stylesheet.");
+        }
         const [collision] = await tx
           .select({ id: contentFilesTable.id })
           .from(contentFilesTable)
@@ -538,6 +602,7 @@ contentApiRouter.post(
             sizeBytes,
             objectPath: input.objectPath,
             isWallpaper: Boolean(input.isWallpaper && isImageAsset(contentType, name)),
+            stylesheetId,
             isPublished: true,
           })
           .returning();
@@ -613,6 +678,31 @@ contentApiRouter.patch(
             update.contentType = String(metadata.contentType);
           }
         }
+        if (input.stylesheetId !== undefined) {
+          const stylesheetId = input.stylesheetId ?? null;
+          const nextDocument = {
+            folderPath: update.folderPath ?? existing.folderPath,
+            name: update.name ?? existing.name,
+            contentType: update.contentType ?? existing.contentType,
+          };
+          if (stylesheetId && !isDocumentFile(nextDocument)) {
+            throw new ContentError(400, "Only Markdown documents can use a stylesheet.");
+          }
+          if (stylesheetId && !(await getAvailableStylesheet(tx, stylesheetId))) {
+            throw new ContentError(400, "Choose an available CSS stylesheet.");
+          }
+          update.stylesheetId = stylesheetId;
+        }
+        const nextFileIdentity = {
+          folderPath: update.folderPath ?? existing.folderPath,
+          name: update.name ?? existing.name,
+          contentType: update.contentType ?? existing.contentType,
+          sizeBytes: update.sizeBytes ?? existing.sizeBytes,
+        };
+        validateStylesheetFile(nextFileIdentity);
+        if (!isDocumentFile(nextFileIdentity) && existing.stylesheetId) {
+          update.stylesheetId = null;
+        }
         if (!isImageAsset(update.contentType ?? existing.contentType, update.name ?? existing.name)) {
           update.isWallpaper = false;
         }
@@ -669,12 +759,38 @@ contentApiRouter.delete(
           .where(and(eq(contentFilesTable.id, normalizeId(req.params.fileId)), isNull(contentFilesTable.deletedAt)))
           .limit(1);
         if (!existing) throw new ContentError(404, "That file could not be found.");
+        const assignedDocuments = isStylesheetFile(existing)
+          ? await tx
+              .select()
+              .from(contentFilesTable)
+              .where(
+                and(
+                  eq(contentFilesTable.stylesheetId, existing.id),
+                  isNull(contentFilesTable.deletedAt),
+                ),
+              )
+          : [];
+        const previousAssignments = new Map(
+          assignedDocuments.map((document) => [document.id, document]),
+        );
+        const unstyledDocuments = assignedDocuments.length
+          ? await tx
+              .update(contentFilesTable)
+              .set({ stylesheetId: null, updatedAt: new Date() })
+              .where(eq(contentFilesTable.stylesheetId, existing.id))
+              .returning()
+          : [];
         const [deleted] = await tx
           .update(contentFilesTable)
           .set({ deletedAt: new Date(), updatedAt: new Date() })
           .where(eq(contentFilesTable.id, existing.id))
           .returning();
         await recordFileHistory(tx, [
+          ...unstyledDocuments.map((document) => ({
+            file: document,
+            previous: previousAssignments.get(document.id),
+            action: "updated" as const,
+          })),
           { file: deleted, previous: existing, action: "trashed" },
         ]);
         await invalidatePublicManifestCache(tx);
@@ -762,6 +878,12 @@ contentApiRouter.post(
         const revisionMetadata = restoreContentFileRevisionMetadata(
           version.snapshot,
         );
+        if (
+          revisionMetadata.stylesheetId &&
+          !(await getAvailableStylesheet(tx, revisionMetadata.stylesheetId))
+        ) {
+          revisionMetadata.stylesheetId = null;
+        }
         const [updated] = await tx
           .update(contentFilesTable)
           .set({
@@ -804,10 +926,16 @@ contentApiRouter.get(
     if (!fileRow.objectPath) {
       throw new ContentError(415, "This external file cannot be edited here.");
     }
-    if (!/\.(md|markdown|txt|csv)$/i.test(fileRow.name)) {
+    if (
+      !/\.(md|markdown|txt|csv)$/i.test(fileRow.name) &&
+      !isStylesheetFile(fileRow)
+    ) {
       throw new ContentError(415, "Only text files can be edited in the console.");
     }
-    if (fileRow.sizeBytes > 5_000_000) {
+    if (
+      fileRow.sizeBytes >
+      (isStylesheetFile(fileRow) ? MAX_STYLESHEET_BYTES : 5_000_000)
+    ) {
       throw new ContentError(413, "This text file is too large to edit in the console.");
     }
     const storedFile = await getStoredObject(fileRow.objectPath);

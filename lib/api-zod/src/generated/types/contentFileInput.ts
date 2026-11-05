@@ -34,4 +34,6 @@ export interface ContentFileInput {
   sizeBytes: number;
   objectPath: string;
   isWallpaper?: boolean;
+  /** @nullable */
+  stylesheetId?: string | null;
 }

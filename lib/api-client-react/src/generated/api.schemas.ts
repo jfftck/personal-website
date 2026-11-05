@@ -51,6 +51,8 @@ export interface ContentFile {
   /** @nullable */
   posterUrl?: string | null;
   isWallpaper: boolean;
+  /** @nullable */
+  stylesheetId: string | null;
   url: string;
   updatedAt: string;
 }
@@ -83,6 +85,8 @@ export interface ContentFileVersion {
   contentType: string;
   sizeBytes: number;
   isWallpaper: boolean;
+  /** @nullable */
+  stylesheetId: string | null;
   isDeleted: boolean;
   createdAt: string;
   gitCommitSha: string;
@@ -157,6 +161,8 @@ export interface ContentFileInput {
   sizeBytes: number;
   objectPath: string;
   isWallpaper?: boolean;
+  /** @nullable */
+  stylesheetId?: string | null;
 }
 
 export interface ContentFileUpdate {
@@ -182,6 +188,8 @@ export interface ContentFileUpdate {
   sizeBytes?: number;
   objectPath?: string;
   isWallpaper?: boolean;
+  /** @nullable */
+  stylesheetId?: string | null;
   isPublished?: boolean;
 }
 

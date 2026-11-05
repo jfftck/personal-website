@@ -22,6 +22,8 @@ export interface ContentFileVersion {
   contentType: string;
   sizeBytes: number;
   isWallpaper: boolean;
+  /** @nullable */
+  stylesheetId: string | null;
   isDeleted: boolean;
   createdAt: Date;
   gitCommitSha: string;

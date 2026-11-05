@@ -35,6 +35,7 @@ const files = [
     contentType: 'text/markdown',
     sizeBytes: 128,
     isWallpaper: false,
+    stylesheetId: null,
     url: 'https://example.test/files/20260101_notes.md',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
@@ -49,8 +50,54 @@ const files = [
     contentType: 'image/jpeg',
     sizeBytes: 1024,
     isWallpaper: true,
+    stylesheetId: null,
     url: 'https://example.test/files/20260202_mountain.jpg',
     updatedAt: '2026-02-02T00:00:00.000Z',
+  },
+  {
+    id: 'file-doc',
+    name: '20260303_Styled_document.md',
+    originalFileName: 'styled-document.md',
+    title: 'Styled document',
+    description: '',
+    folderPath: 'documents',
+    date: '2026-03-03',
+    contentType: 'text/markdown',
+    sizeBytes: 24,
+    isWallpaper: false,
+    stylesheetId: 'file-style',
+    url: 'https://example.test/files/documents/20260303_Styled_document.md',
+    updatedAt: '2026-03-03T00:00:00.000Z',
+  },
+  {
+    id: 'file-doc-two',
+    name: '20260304_Another_document.md',
+    originalFileName: 'another-document.md',
+    title: 'Another document',
+    description: '',
+    folderPath: 'documents',
+    date: '2026-03-04',
+    contentType: 'text/markdown',
+    sizeBytes: 24,
+    isWallpaper: false,
+    stylesheetId: 'file-style',
+    url: 'https://example.test/files/documents/20260304_Another_document.md',
+    updatedAt: '2026-03-04T00:00:00.000Z',
+  },
+  {
+    id: 'file-style',
+    name: '20260301_Ocean.css',
+    originalFileName: 'Ocean.css',
+    title: 'Ocean',
+    description: '',
+    folderPath: 'stylesheets',
+    date: '2026-03-01',
+    contentType: 'text/css',
+    sizeBytes: 32,
+    isWallpaper: false,
+    stylesheetId: null,
+    url: 'https://example.test/files/stylesheets/20260301_Ocean.css',
+    updatedAt: '2026-03-01T00:00:00.000Z',
   },
 ];
 
@@ -111,6 +158,7 @@ test.afterAll(async () => {
 });
 
 async function mockConsoleApi(page, treeHandler = route => fulfillJson(route, tree)) {
+  const requests = [];
   await page.route('**/api/auth/user', route => fulfillJson(route, {
     user: {
       id: 'test-owner',
@@ -124,11 +172,53 @@ async function mockConsoleApi(page, treeHandler = route => fulfillJson(route, tr
   }));
   await page.route('**/api/content/**', async route => {
     const path = new URL(route.request().url()).pathname;
+    const method = route.request().method();
+    if (path === '/api/content/files/file-doc/content' || path === '/api/content/files/file-style/content') {
+      return route.fulfill({
+        contentType: 'text/plain',
+        body: path.endsWith('/file-style/content') ? 'p { color: navy; }' : '# Styled document',
+      });
+    }
     if (path === '/api/content/tree') return treeHandler(route);
     if (path === '/api/content/trash') return fulfillJson(route, []);
     if (/^\/api\/content\/files\/[^/]+\/versions$/.test(path)) return fulfillJson(route, []);
+    if (path === '/api/content/uploads' && method === 'POST') {
+      requests.push({ method, path, body: route.request().postDataJSON() });
+      return fulfillJson(route, { uploadUrl: `${adminUrl}/test-upload`, objectPath: 'private/test-object' });
+    }
+    if (path === '/api/content/files' && method === 'POST') {
+      const body = route.request().postDataJSON();
+      requests.push({ method, path, body });
+      return fulfillJson(route, {
+        id: 'file-style-new',
+        ...body,
+        posterUrl: null,
+        stylesheetId: null,
+        isPublished: true,
+        url: 'https://example.test/files/stylesheets/new.css',
+        updatedAt: '2026-03-05T00:00:00.000Z',
+      });
+    }
+    if (/^\/api\/content\/files\/[^/]+$/.test(path) && method === 'PATCH') {
+      const fileId = path.split('/').at(-1);
+      const body = route.request().postDataJSON();
+      requests.push({ method, path, body });
+      const existing = files.find(file => file.id === fileId) || {};
+      return fulfillJson(route, {
+        ...existing,
+        ...body,
+        updatedAt: '2026-03-05T00:00:00.000Z',
+        url: existing.url || 'https://example.test/files/updated.md',
+      });
+    }
+    if (/^\/api\/content\/files\/[^/]+$/.test(path) && method === 'DELETE') {
+      requests.push({ method, path });
+      return route.fulfill({ status: 204 });
+    }
     return fulfillJson(route, { error: 'Unexpected test request.' }, 404);
   });
+  await page.route('**/test-upload', route => route.fulfill({ status: 200, body: '' }));
+  return { requests };
 }
 
 function fulfillJson(route, body, status = 200) {
@@ -138,6 +228,60 @@ function fulfillJson(route, body, status = 200) {
     body: JSON.stringify(body),
   });
 }
+
+test('Markdown documents can select a saved stylesheet or reset to the default', async ({ page }) => {
+  const { requests } = await mockConsoleApi(page);
+  await page.goto(adminUrl);
+  await page.getByTestId('edit-text-file-doc').click();
+  await expect(page.getByTestId('select-document-stylesheet')).toContainText('Ocean');
+
+  await page.getByTestId('select-document-stylesheet').click();
+  await page.getByRole('option', { name: 'Default' }).click();
+  await page.getByTestId('save-text-file').click();
+
+  await expect.poll(() => requests.find(request => request.method === 'PATCH' && request.path.endsWith('/file-doc'))?.body.stylesheetId).toBeNull();
+});
+
+test('document editor can create a CSS stylesheet and assign it to the document', async ({ page }) => {
+  const { requests } = await mockConsoleApi(page);
+  await page.goto(adminUrl);
+  await page.getByTestId('edit-text-file-doc').click();
+  await page.getByTestId('select-document-stylesheet').click();
+  await page.getByRole('option', { name: 'Create New…' }).click();
+
+  await expect(page.getByRole('dialog', { name: 'Create CSS stylesheet' })).toBeVisible();
+  await page.getByTestId('input-stylesheet-title').fill('Paper');
+  await page.getByTestId('textarea-stylesheet-content').fill('h1 { color: #123456; }');
+  await page.getByTestId('save-stylesheet').click();
+
+  await expect(page.getByTestId('select-document-stylesheet')).toContainText('Paper');
+  const createRequest = requests.find(request => request.method === 'POST' && request.path === '/api/content/files');
+  expect(createRequest.body.folderPath).toBe('stylesheets');
+  expect(createRequest.body.contentType).toBe('text/css');
+  expect(createRequest.body.name).toMatch(/\.css$/);
+
+  await page.getByTestId('save-text-file').click();
+  await expect.poll(() => requests.find(request => request.method === 'PATCH' && request.path.endsWith('/file-doc'))?.body.stylesheetId).toBe('file-style-new');
+});
+
+test('deleting a stylesheet confirms affected documents and resets them to default', async ({ page }) => {
+  await mockConsoleApi(page);
+  await page.goto(adminUrl);
+  await page.getByTestId('edit-text-file-style').click();
+  await expect(page.getByTestId('textarea-stylesheet-content')).toBeVisible();
+
+  const confirm = page.waitForEvent('dialog');
+  const click = page.getByTestId('delete-stylesheet').click();
+  const dialog = await confirm;
+  expect(dialog.message()).toContain('2 documents');
+  expect(dialog.message()).toContain('reset to Default');
+  await dialog.accept();
+  await click;
+
+  await expect(page.getByTestId('file-row-file-style')).toHaveCount(0);
+  await page.getByTestId('edit-text-file-doc').click();
+  await expect(page.getByTestId('select-document-stylesheet')).toContainText('Default');
+});
 
 test('folder navigation filters the file list and clears the prior selection', async ({ page }) => {
   await mockConsoleApi(page);

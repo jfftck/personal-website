@@ -7,6 +7,7 @@ const DEFAULT_FOLDERS = [
   { name: "Documents", path: "documents", parentPath: "" },
   { name: "Pictures", path: "pictures", parentPath: "" },
   { name: "Videos", path: "videos", parentPath: "" },
+  { name: "Stylesheets", path: "stylesheets", parentPath: "" },
 ];
 
 let rootFolderSeed: Promise<void> | undefined;

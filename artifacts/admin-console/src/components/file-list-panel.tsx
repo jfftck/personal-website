@@ -63,8 +63,8 @@ export function FileListPanel({
               <button
                 className="mini-action"
                 type="button"
-                title="Edit Text"
-                aria-label={`Edit ${file.title}`}
+                title={file.folderPath === 'stylesheets' ? 'Edit Stylesheet' : 'Edit Text'}
+                aria-label={`${file.folderPath === 'stylesheets' ? 'Edit stylesheet' : 'Edit'} ${file.title}`}
                 onClick={(event) => { event.stopPropagation(); onEditText(file); }}
                 data-testid={`edit-text-${file.id}`}
               >
@@ -97,7 +97,7 @@ export function fileIcon(file: ContentFile) {
 }
 
 export function isEditableText(file: ContentFile) {
-  return /\.(md|markdown|txt|csv)$/i.test(file.name);
+  return /\.(md|markdown|txt|csv|css)$/i.test(file.name);
 }
 
 export function FileName({ file }: { file: ContentFile }) {

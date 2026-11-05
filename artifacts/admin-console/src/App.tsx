@@ -42,6 +42,19 @@ const UPLOAD_TODAY = TODAY;
 const ROOT_FOLDER_OPTION = '__library_root__';
 const THEME_STORAGE_KEY = 'jmt-console-theme';
 type ThemeOverride = 'light' | 'dark' | null;
+const DEFAULT_STYLESHEET_OPTION = '__document_default__';
+const CREATE_STYLESHEET_OPTION = '__create_stylesheet__';
+const MAX_STYLESHEET_BYTES = 256_000;
+
+function isStylesheetFile(file: ContentFile) {
+  return file.folderPath === 'stylesheets' && file.contentType.toLowerCase() === 'text/css' && /\.css$/i.test(file.name);
+}
+
+function isMarkdownDocument(file: ContentFile) {
+  return /^(documents|posts)(\/|$)/.test(file.folderPath) &&
+    /\.(md|markdown)$/i.test(file.name) &&
+    /^text\/(markdown|plain)/i.test(file.contentType);
+}
 
 function systemPrefersDark() {
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
@@ -117,6 +130,14 @@ function Console() {
   const [editorText, setEditorText] = useState('');
   const [editorBusy, setEditorBusy] = useState(false);
   const [editorLoading, setEditorLoading] = useState(false);
+  const [editorStylesheetId, setEditorStylesheetId] = useState('');
+  const [stylesheetEditorOpen, setStylesheetEditorOpen] = useState(false);
+  const [stylesheetFile, setStylesheetFile] = useState<ContentFile | null>(null);
+  const [stylesheetTitle, setStylesheetTitle] = useState('');
+  const [stylesheetText, setStylesheetText] = useState('');
+  const [stylesheetLoading, setStylesheetLoading] = useState(false);
+  const [stylesheetBusy, setStylesheetBusy] = useState(false);
+  const [stylesheetError, setStylesheetError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -227,6 +248,10 @@ function Console() {
 
   const folders = treeQuery.data?.folders ?? [];
   const allFiles = treeQuery.data?.files ?? [];
+  const stylesheets = useMemo(
+    () => allFiles.filter(isStylesheetFile).sort((left, right) => left.title.localeCompare(right.title)),
+    [allFiles],
+  );
   const trash = trashQuery.data ?? [];
   const folderByPath = useMemo(() => new Map(folders.map((folder) => [folder.path, folder])), [folders]);
   const selectedFolderLabel = selectedFolder ? folderByPath.get(selectedFolder)?.name ?? selectedFolder : 'All files';
@@ -432,19 +457,31 @@ function Console() {
     } catch (error) { setToastMessage(errorMessage(error)); }
   };
 
-  const removeFile = async (file: ContentFile) => {
-    if (!window.confirm(`Move “${file.title}” to trash?`)) return;
+  const removeFile = async (file: ContentFile): Promise<boolean> => {
+    const assignedDocuments = isStylesheetFile(file)
+      ? allFiles.filter((item) => item.stylesheetId === file.id)
+      : [];
+    const confirmation = isStylesheetFile(file)
+      ? `Move “${file.title}” to trash? It is assigned to ${assignedDocuments.length} ${assignedDocuments.length === 1 ? 'document' : 'documents'}. Those documents will be reset to Default.`
+      : `Move “${file.title}” to trash?`;
+    if (!window.confirm(confirmation)) return false;
     try {
       await deleteFile.mutateAsync({ fileId: file.id });
       if (selectedFile?.id === file.id) setSelectedFile(null);
       patchTreeCache((tree) => ({
         ...tree,
-        files: tree.files.filter((item) => item.id !== file.id),
+        files: tree.files
+          .filter((item) => item.id !== file.id)
+          .map((item) => item.stylesheetId === file.id ? { ...item, stylesheetId: null } : item),
       }));
       patchTrashCache((files) => files.some((item) => item.id === file.id) ? files : [file, ...files]);
       await refreshFileVersions(file.id);
       setToastMessage('Moved to trash.');
-    } catch (error) { setToastMessage(errorMessage(error)); }
+      return true;
+    } catch (error) {
+      setToastMessage(errorMessage(error));
+      return false;
+    }
   };
 
   const restore = async (file: ContentFile) => {
@@ -478,9 +515,127 @@ function Console() {
     } catch (error) { setToastMessage(errorMessage(error)); }
   };
 
+  const openStylesheetEditor = async (file?: ContentFile) => {
+    setStylesheetFile(file ?? null);
+    setStylesheetTitle(file?.title ?? '');
+    setStylesheetText('');
+    setStylesheetError('');
+    setStylesheetEditorOpen(true);
+    setStylesheetLoading(Boolean(file));
+    if (!file) return;
+    try {
+      setStylesheetText(await getContentFileContent(file.id));
+    } catch (error) {
+      setStylesheetEditorOpen(false);
+      setToastMessage(errorMessage(error));
+    } finally {
+      setStylesheetLoading(false);
+    }
+  };
+
+  const closeStylesheetEditor = () => {
+    if (stylesheetBusy) return;
+    setStylesheetEditorOpen(false);
+    setStylesheetFile(null);
+    setStylesheetError('');
+  };
+
+  const saveStylesheet = async () => {
+    const title = stylesheetTitle.trim();
+    const content = stylesheetText;
+    const blob = new Blob([content], { type: 'text/css' });
+    if (!title) {
+      setStylesheetError('Enter a stylesheet title.');
+      return;
+    }
+    if (!content.trim()) {
+      setStylesheetError('Add CSS before saving the stylesheet.');
+      return;
+    }
+    if (blob.size > MAX_STYLESHEET_BYTES) {
+      setStylesheetError('Stylesheets must be 256 KB or smaller.');
+      return;
+    }
+    setStylesheetBusy(true);
+    setStylesheetError('');
+    try {
+      const contentType = 'text/css';
+      const target = await createUpload.mutateAsync({
+        data: {
+          name: stylesheetFile?.name ?? filenameFromTitle(title, localToday(), 'new-stylesheet.css', contentType, '.css'),
+          contentType,
+          sizeBytes: blob.size,
+        },
+      });
+      const response = await fetch(target.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: blob,
+      });
+      if (!response.ok) throw new Error(`Stylesheet upload failed (${response.status}).`);
+
+      let saved: ContentFile;
+      if (stylesheetFile) {
+        saved = await updateFile.mutateAsync({
+          fileId: stylesheetFile.id,
+          data: { title, objectPath: target.objectPath, contentType, sizeBytes: blob.size },
+        });
+      } else {
+        const date = localToday();
+        const name = filenameFromTitle(title, date, 'new-stylesheet.css', contentType, '.css');
+        saved = await createFile.mutateAsync({
+          data: {
+            name,
+            originalFileName: name,
+            title,
+            description: '',
+            folderPath: 'stylesheets',
+            date,
+            contentType,
+            sizeBytes: blob.size,
+            objectPath: target.objectPath,
+            isWallpaper: false,
+          },
+        });
+        if (editorFile && isMarkdownDocument(editorFile)) setEditorStylesheetId(saved.id);
+      }
+
+      patchTreeCache((tree) => ({
+        ...tree,
+        files: [...tree.files.filter((item) => item.id !== saved.id), saved],
+      }));
+      if (selectedFile?.id === saved.id) setSelectedFile(saved);
+      if (stylesheetFile) await refreshFileVersions(saved.id);
+      setStylesheetEditorOpen(false);
+      setStylesheetFile(null);
+      setToastMessage(stylesheetFile ? 'Stylesheet saved.' : 'Stylesheet created.');
+    } catch (error) {
+      setStylesheetError(errorMessage(error));
+    } finally {
+      setStylesheetBusy(false);
+    }
+  };
+
+  const deleteStylesheet = async () => {
+    if (!stylesheetFile) return;
+    setStylesheetBusy(true);
+    const removed = await removeFile(stylesheetFile);
+    setStylesheetBusy(false);
+    if (removed) {
+      if (editorStylesheetId === stylesheetFile.id) setEditorStylesheetId('');
+      setStylesheetEditorOpen(false);
+      setStylesheetFile(null);
+    }
+  };
+
   const openTextEditor = async (file: ContentFile) => {
+    if (isStylesheetFile(file)) {
+      await openStylesheetEditor(file);
+      return;
+    }
     setEditorFile(file);
     setEditorText('');
+    setEditorStylesheetId(file.stylesheetId ?? '');
     setEditorLoading(true);
     try {
       setEditorText(await getContentFileContent(file.id));
@@ -503,7 +658,12 @@ function Console() {
       if (!response.ok) throw new Error(`Text upload failed (${response.status}).`);
       const updated = await updateFile.mutateAsync({
         fileId: editorFile.id,
-        data: { objectPath: target.objectPath, contentType, sizeBytes: blob.size },
+        data: {
+          objectPath: target.objectPath,
+          contentType,
+          sizeBytes: blob.size,
+          ...(isMarkdownDocument(editorFile) ? { stylesheetId: editorStylesheetId || null } : {}),
+        },
       });
       setSelectedFile(updated);
       patchTreeCache((tree) => ({
@@ -1005,11 +1165,127 @@ function Console() {
 
       {editorFile ? (
         <div className="overlay" role="presentation">
-          <section className="dialog dialog-wide" aria-labelledby="editor-dialog-title">
+          <section className="dialog dialog-wide" role="dialog" aria-modal="true" aria-labelledby="editor-dialog-title">
             <div className="dialog-head"><div><h2 id="editor-dialog-title">Edit text file</h2><p>{editorFile.folderPath}/{editorFile.name}</p></div><button className="mini-action" type="button" aria-label="Close text editor" disabled={editorBusy} onClick={() => setEditorFile(null)} data-testid="close-text-editor"><X /></button></div>
+            {isMarkdownDocument(editorFile) ? (
+              <div className="stylesheet-assignment">
+                <label className="field-label" htmlFor="document-stylesheet-select">Stylesheet</label>
+                <div className="stylesheet-assignment-controls">
+                  <Select
+                    value={editorStylesheetId || DEFAULT_STYLESHEET_OPTION}
+                    onValueChange={(value) => {
+                      if (value === CREATE_STYLESHEET_OPTION) {
+                        void openStylesheetEditor();
+                        return;
+                      }
+                      setEditorStylesheetId(value === DEFAULT_STYLESHEET_OPTION ? '' : value);
+                    }}
+                  >
+                    <SelectTrigger className="field-control folder-picker-trigger" id="document-stylesheet-select" aria-label="Document stylesheet" data-testid="select-document-stylesheet">
+                      <SelectValue placeholder="Default" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={DEFAULT_STYLESHEET_OPTION}>Default</SelectItem>
+                      {stylesheets.map((stylesheet) => (
+                        <SelectItem key={stylesheet.id} value={stylesheet.id}>{stylesheet.title}</SelectItem>
+                      ))}
+                      <SelectItem value={CREATE_STYLESHEET_OPTION}>Create New…</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <button
+                    className="button button-quiet"
+                    type="button"
+                    disabled={!editorStylesheetId || editorBusy}
+                    onClick={() => {
+                      const stylesheet = stylesheets.find((item) => item.id === editorStylesheetId);
+                      if (stylesheet) void openStylesheetEditor(stylesheet);
+                    }}
+                    data-testid="edit-document-stylesheet"
+                  >
+                    Edit Stylesheet
+                  </button>
+                </div>
+                <p className="field-help">Choose a saved stylesheet or use the default document appearance.</p>
+              </div>
+            ) : null}
             <div className="editor-meta"><span>Plain text editor</span><span>{new Blob([editorText]).size.toLocaleString()} bytes</span></div>
             {editorLoading ? <div className="loading-state"><div><div className="skeleton" style={{ width: 280 }} /><div className="skeleton" style={{ width: 220 }} /><div className="skeleton" style={{ width: 260 }} /></div></div> : <textarea className="editor-area" value={editorText} onChange={(event) => setEditorText(event.target.value)} spellCheck={false} aria-label="Text file contents" data-testid="textarea-text-content" />}
             <div className="dialog-footer"><button className="button button-quiet" type="button" disabled={editorBusy} onClick={() => setEditorFile(null)} data-testid="cancel-text-edit">Cancel</button><button className="button button-primary" type="button" disabled={editorLoading || editorBusy} onClick={() => void saveText()} data-testid="save-text-file">{editorBusy ? 'Saving…' : 'Save Changes'}</button></div>
+          </section>
+        </div>
+      ) : null}
+      {stylesheetEditorOpen ? (
+        <div className="overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeStylesheetEditor(); }}>
+          <section
+            className="dialog dialog-wide stylesheet-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="stylesheet-dialog-title"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && !stylesheetBusy) closeStylesheetEditor();
+              if (event.key === 'Tab') {
+                const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>(
+                  'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+                )].filter((element) => !element.hasAttribute('hidden'));
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                  event.preventDefault();
+                  last?.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                  event.preventDefault();
+                  first?.focus();
+                }
+              }
+            }}
+          >
+            <div className="dialog-head">
+              <div>
+                <h2 id="stylesheet-dialog-title">{stylesheetFile ? 'Edit CSS stylesheet' : 'Create CSS stylesheet'}</h2>
+                <p>{stylesheetFile ? `${stylesheetFile.folderPath}/${stylesheetFile.name}` : 'Styles will be scoped to document content.'}</p>
+              </div>
+              <button className="mini-action" type="button" aria-label="Close stylesheet editor" disabled={stylesheetBusy} onClick={closeStylesheetEditor} data-testid="close-stylesheet-editor"><X /></button>
+            </div>
+            <label className="field-label" htmlFor="stylesheet-title">Stylesheet title</label>
+            <input
+              id="stylesheet-title"
+              className="field-control stylesheet-title"
+              value={stylesheetTitle}
+              maxLength={220}
+              autoFocus
+              autoComplete="off"
+              onChange={(event) => { setStylesheetTitle(event.target.value); setStylesheetError(''); }}
+              data-testid="input-stylesheet-title"
+            />
+            <div className="editor-meta">
+              <span>CSS is applied only inside Markdown documents. External imports are not supported.</span>
+              <span>{new Blob([stylesheetText]).size.toLocaleString()} / 256,000 bytes</span>
+            </div>
+            {stylesheetLoading
+              ? <div className="loading-state" role="status" aria-label="Loading stylesheet"><div><div className="skeleton" style={{ width: 280 }} /><div className="skeleton" style={{ width: 220 }} /><div className="skeleton" style={{ width: 260 }} /></div></div>
+              : <textarea
+                  id="stylesheet-content"
+                  className="editor-area stylesheet-editor-area"
+                  value={stylesheetText}
+                  onChange={(event) => { setStylesheetText(event.target.value); setStylesheetError(''); }}
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  autoComplete="off"
+                  aria-label="CSS stylesheet contents"
+                  data-testid="textarea-stylesheet-content"
+                />}
+            {stylesheetError ? <p className="stylesheet-error" role="alert">{stylesheetError}</p> : null}
+            <div className="dialog-footer stylesheet-dialog-footer">
+              <div>
+                {stylesheetFile ? (
+                  <button className="button button-danger" type="button" disabled={stylesheetBusy} onClick={() => void deleteStylesheet()} data-testid="delete-stylesheet">Move to Trash</button>
+                ) : null}
+              </div>
+              <div className="stylesheet-dialog-actions">
+                <button className="button button-quiet" type="button" disabled={stylesheetBusy} onClick={closeStylesheetEditor} data-testid="cancel-stylesheet">Cancel</button>
+                <button className="button button-primary" type="button" disabled={stylesheetLoading || stylesheetBusy} onClick={() => void saveStylesheet()} data-testid="save-stylesheet">{stylesheetBusy ? 'Saving…' : 'Save Stylesheet'}</button>
+              </div>
+            </div>
           </section>
         </div>
       ) : null}

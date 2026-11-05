@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const PUBLIC_MANIFEST_CACHE_KEY = "public-v1";
+export const PUBLIC_MANIFEST_CACHE_KEY = "public-v2";
 
 export function createManifestEtag(manifest: unknown): string {
   const serialized = JSON.stringify(manifest);

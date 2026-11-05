@@ -70,6 +70,26 @@ test('browsing documents and photos saves the new selection and reloads both', a
   await expect(page.locator('.app-col')).toHaveAttribute('data-width', 'half');
 });
 
+test('document stylesheets are scoped to the document body', async ({ page }) => {
+  await page.unroute('**/documents/manifest.json');
+  await page.route('**/documents/manifest.json', route => route.fulfill({
+    json: [{ ...docs[0], stylesheetUrl: '/documents/session-style.css' }],
+  }));
+  await page.route('**/documents/session-style.css', route => route.fulfill({
+    contentType: 'text/css',
+    body: 'html body { color: #123456; } h1, .note { color: #abcdef; } @media (min-width: 1px) { p { padding: 1rem; } }',
+  }));
+  await seed(page, [{ type: 'doc-viewer' }]);
+
+  const stylesheet = page.locator('.doc-body style[data-document-stylesheet="true"]');
+  await expect(stylesheet).toHaveCount(1);
+  const scopedCss = await stylesheet.textContent();
+  expect(scopedCss).toContain('.doc-body {');
+  expect(scopedCss).toContain('.doc-body h1');
+  expect(scopedCss).toContain('.doc-body .note');
+  expect(scopedCss).toContain('.doc-body p');
+});
+
 test('the selected window remains focused after a page refresh', async ({ page }) => {
   await seed(page, [{ type: 'doc-viewer' }, { type: 'img-viewer' }]);
   const doc = page.locator('.app-window[data-type="doc-viewer"]');

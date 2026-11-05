@@ -19,6 +19,7 @@ export function createContentFileVersionSnapshot(
     sourceUrl: file.sourceUrl,
     posterUrl: file.posterUrl,
     isWallpaper: file.isWallpaper,
+    stylesheetId: file.stylesheetId ?? null,
     isPublished: file.isPublished,
     deletedAt: file.deletedAt?.toISOString() ?? null,
   };
@@ -28,12 +29,13 @@ export function restoreContentFileRevisionMetadata(
   snapshot: ContentFileVersionSnapshot,
 ): Pick<
   ContentFileVersionSnapshot,
-  "name" | "title" | "description" | "contentDate"
+  "name" | "title" | "description" | "contentDate" | "stylesheetId"
 > {
   return {
     name: snapshot.name,
     title: snapshot.title,
     description: snapshot.description ?? "",
     contentDate: snapshot.contentDate,
+    stylesheetId: snapshot.stylesheetId ?? null,
   };
 }

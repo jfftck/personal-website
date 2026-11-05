@@ -29,5 +29,7 @@ export interface ContentFileUpdate {
   sizeBytes?: number;
   objectPath?: string;
   isWallpaper?: boolean;
+  /** @nullable */
+  stylesheetId?: string | null;
   isPublished?: boolean;
 }
