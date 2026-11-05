@@ -70,6 +70,54 @@ test('desktop shell and window frame styles remain stable at desktop and mobile 
   expect(overviewStyles.appWindow.cursor).toBe('zoom-out');
 });
 
+test('scrollbars and form controls use the shared accent and button colors', async ({ page }) => {
+  const colors = await page.evaluate(() => {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    const range = document.createElement('input');
+    range.type = 'range';
+    document.body.append(checkbox, radio, range);
+
+    const resolveColor = property => {
+      const probe = document.createElement('span');
+      probe.style.backgroundColor = `var(${property})`;
+      document.body.append(probe);
+      const color = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return color;
+    };
+    const result = {
+      checkboxBackground: getComputedStyle(checkbox).backgroundColor,
+      radioBackground: getComputedStyle(radio).backgroundColor,
+      buttonHover: resolveColor('--btn-hover'),
+        rangeAppearance: getComputedStyle(range).appearance,
+        rangeRules: [...document.styleSheets]
+          .flatMap(sheet => {
+            try { return [...sheet.cssRules]; } catch { return []; }
+          })
+          .filter(rule => rule.selectorText?.includes('input[type="range"]:not(.settings-tint-slider)'))
+          .map(rule => ({ selector: rule.selectorText, background: rule.style.getPropertyValue('background') })),
+      accent: resolveColor('--accent'),
+      scrollbarThumb: resolveColor('--scrollbar-thumb'),
+      scrollbarTrack: resolveColor('--scrollbar-track'),
+    };
+    checkbox.remove();
+    radio.remove();
+    range.remove();
+    return result;
+  });
+
+  expect(colors.checkboxBackground).toBe(colors.buttonHover);
+  expect(colors.radioBackground).toBe(colors.buttonHover);
+  expect(colors.rangeAppearance).toBe('none');
+  expect(colors.rangeRules.some(rule => rule.selector.includes('slider-runnable-track') && rule.background === 'var(--btn-hover)')).toBe(true);
+  expect(colors.rangeRules.some(rule => rule.selector.includes('slider-thumb') && rule.background === 'var(--accent)')).toBe(true);
+  expect(colors.scrollbarThumb).not.toBe('rgba(0, 0, 0, 0)');
+  expect(colors.scrollbarTrack).toBe('rgba(0, 0, 0, 0)');
+});
+
 test('Settings mobile sections and pages use the full app width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const settings = await openUtility(page, 'settings');

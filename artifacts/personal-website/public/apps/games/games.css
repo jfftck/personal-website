@@ -1851,14 +1851,14 @@
   overflow: auto;
   padding: 2rem;
   overscroll-behavior: contain;
-  scrollbar-color: rgba(255,255,255,.44) rgba(0,0,0,.12);
+  scrollbar-color: var(--scrollbar-thumb) transparent;
   scrollbar-width: thin;
 }
 .card-tableau-scroll::-webkit-scrollbar { width: .6rem; height: .6rem; }
 .card-tableau-scroll::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 1rem;
-  background: rgba(255,255,255,.44);
+  background: var(--scrollbar-thumb);
   background-clip: padding-box;
 }
 .card-tableau-scroll .card-columns {

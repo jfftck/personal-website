@@ -33,8 +33,8 @@
   --backdrop:      blur(14px) saturate(0.55) brightness(0.75);
   --toolbar-backdrop: blur(8px) saturate(0.6) brightness(0.8);
 
-  --scrollbar-thumb: rgba(0, 102, 153, 0.55);
-  --scrollbar-track: rgba(0, 0, 0, 0.20);
+  --scrollbar-thumb: color-mix(in srgb, var(--accent) 58%, transparent);
+  --scrollbar-track: transparent;
 
   --gap:  1rem;
   --edge: 2rem;
@@ -59,8 +59,8 @@
   --focus-color: #069;
   --backdrop: blur(14px) sepia(0.15) brightness(1.08);
   --toolbar-backdrop: blur(8px) brightness(1.05);
-  --scrollbar-thumb: rgba(0, 80, 130, 0.40);
-  --scrollbar-track: rgba(0, 0, 0, 0.06);
+  --scrollbar-thumb: color-mix(in srgb, var(--accent) 58%, transparent);
+  --scrollbar-track: transparent;
 }
 
 :root[data-theme="dark"] {
@@ -80,8 +80,8 @@
   --focus-color: #0af;
   --backdrop: blur(14px) saturate(0.55) brightness(0.75);
   --toolbar-backdrop: blur(8px) saturate(0.6) brightness(0.8);
-  --scrollbar-thumb: rgba(0, 102, 153, 0.55);
-  --scrollbar-track: rgba(0, 0, 0, 0.20);
+  --scrollbar-thumb: color-mix(in srgb, var(--accent) 58%, transparent);
+  --scrollbar-track: transparent;
 }
 
 @media (prefers-color-scheme: light) {
@@ -105,8 +105,8 @@
     --backdrop:      blur(14px) sepia(0.15) brightness(1.08);
     --toolbar-backdrop: blur(8px) brightness(1.05);
 
-    --scrollbar-thumb: rgba(0, 80, 130, 0.40);
-    --scrollbar-track: rgba(0, 0, 0, 0.06);
+    --scrollbar-thumb: color-mix(in srgb, var(--accent) 58%, transparent);
+    --scrollbar-track: transparent;
   }
 }
 
@@ -172,8 +172,8 @@
     --sidebar-bg: oklch(from var(--window-background-tint) l c h / 0.38);
     --overlay-bg: oklch(from var(--window-background-tint) l c h / 0.97);
     --overlay-card: oklch(from var(--window-background-tint) l c h / 0.92);
-    --scrollbar-thumb: oklch(from var(--window-foreground-tint) l c h / 0.5);
-    --scrollbar-track: oklch(from var(--window-background-tint) l c h / 0.38);
+    --scrollbar-thumb: color-mix(in srgb, var(--accent) 58%, transparent);
+    --scrollbar-track: transparent;
   }
   :root[data-window-tints="custom"][data-theme="light"] {
     --window-background-tint: var(--window-light-tint-color, #fff);
@@ -186,8 +186,8 @@
     --sidebar-bg: oklch(from var(--window-foreground-tint) l c h / 0.07);
     --overlay-bg: oklch(from var(--window-background-tint) l c h / 0.97);
     --overlay-card: oklch(from var(--window-background-tint) l c h / 0.93);
-    --scrollbar-thumb: oklch(from var(--window-foreground-tint) l c h / 0.4);
-    --scrollbar-track: oklch(from var(--window-foreground-tint) l c h / 0.06);
+    --scrollbar-thumb: color-mix(in srgb, var(--accent) 58%, transparent);
+    --scrollbar-track: transparent;
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme])[data-window-tints="custom"] {
@@ -201,8 +201,8 @@
       --sidebar-bg: oklch(from var(--window-foreground-tint) l c h / 0.07);
       --overlay-bg: oklch(from var(--window-background-tint) l c h / 0.97);
       --overlay-card: oklch(from var(--window-background-tint) l c h / 0.93);
-      --scrollbar-thumb: oklch(from var(--window-foreground-tint) l c h / 0.4);
-      --scrollbar-track: oklch(from var(--window-foreground-tint) l c h / 0.06);
+      --scrollbar-thumb: color-mix(in srgb, var(--accent) 58%, transparent);
+      --scrollbar-track: transparent;
     }
   }
 }
@@ -212,12 +212,125 @@
 :root input[type="checkbox"],
 :root input[type="radio"] { accent-color: var(--focus-color); }
 
+/* Keep native controls visually consistent with the borderless button palette. */
+:root input[type="checkbox"],
+:root input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  flex: none;
+  place-content: center;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--app-text) 42%, transparent);
+  background: var(--btn-hover);
+  cursor: pointer;
+}
+:root input[type="checkbox"] { border-radius: .25rem; }
+:root input[type="radio"] { border-radius: 50%; }
+:root input[type="checkbox"]:not(:checked):hover,
+:root input[type="radio"]:not(:checked):hover { background: var(--btn-active); }
+:root input[type="checkbox"]:checked,
+:root input[type="radio"]:checked {
+  border-color: var(--focus-color);
+  background-color: var(--focus-color);
+}
+:root input[type="checkbox"]::before {
+  content: "";
+  width: .52rem;
+  height: .3rem;
+  border: solid var(--app-bg);
+  border-width: 0 0 2px 2px;
+  opacity: 0;
+  transform: translateY(-.08rem) rotate(-45deg);
+}
+:root input[type="checkbox"]:checked::before { opacity: 1; }
+:root input[type="radio"]::before {
+  content: "";
+  width: .38rem;
+  height: .38rem;
+  border-radius: 50%;
+  background: var(--app-bg);
+  transform: scale(0);
+  transition: transform 100ms ease-out;
+}
+:root input[type="radio"]:checked::before { transform: scale(1); }
+:root input[type="checkbox"]:focus-visible,
+:root input[type="radio"]:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+}
+:root input[type="checkbox"]:disabled,
+:root input[type="radio"]:disabled { cursor: not-allowed; opacity: .55; }
+
+/* Range controls use the same quiet surface as buttons and the shared accent. */
+:root input[type="range"]:not(.settings-tint-slider) {
+  width: 100%;
+  min-width: 4rem;
+  height: 2.5rem;
+  margin: 0;
+  padding: 0 .15rem;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+:root input[type="range"]:not(.settings-tint-slider)::-webkit-slider-runnable-track {
+  height: .4rem;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--btn-hover);
+}
+:root input[type="range"]:not(.settings-tint-slider)::-webkit-slider-thumb {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: -.48rem;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 2px solid var(--app-bg);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-text) 35%, transparent), 0 .1rem .3rem #0005;
+}
+:root input[type="range"]:not(.settings-tint-slider)::-moz-range-track {
+  height: .4rem;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--btn-hover);
+}
+:root input[type="range"]:not(.settings-tint-slider)::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--app-bg);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-text) 35%, transparent), 0 .1rem .3rem #0005;
+}
+:root input[type="range"]:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; border-radius: .5rem; }
+:root input[type="range"]:disabled { cursor: not-allowed; opacity: .5; }
+@media (pointer: coarse) {
+  :root input[type="range"]:not(.settings-tint-slider)::-webkit-slider-thumb { width: 1.55rem; height: 1.55rem; margin-top: -.63rem; }
+  :root input[type="range"]:not(.settings-tint-slider)::-moz-range-thumb { width: 1.25rem; height: 1.25rem; }
+}
+@media (forced-colors: active) {
+  :root input[type="checkbox"],
+  :root input[type="radio"] { appearance: auto; accent-color: Highlight; }
+  :root input[type="range"]::-webkit-slider-runnable-track,
+  :root input[type="range"]::-moz-range-track { border-color: CanvasText; background: Canvas; }
+  :root input[type="range"]::-webkit-slider-thumb,
+  :root input[type="range"]::-moz-range-thumb { border-color: Canvas; background: Highlight; }
+}
+
 html, body {
   margin: 0;
   padding: 0;
   height: 100%;
   overflow: hidden;
   font-family: Arial, Helvetica, sans-serif;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-width: thin;
 }
 
 body {

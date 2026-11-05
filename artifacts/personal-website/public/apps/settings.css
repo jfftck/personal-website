@@ -218,9 +218,9 @@
 }
 .settings-tint-slider::-webkit-slider-runnable-track {
   height: .4rem;
-  border: 1px solid color-mix(in srgb, var(--app-text) 18%, transparent);
+  border: 1px solid var(--app-border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 20%, var(--util-surface-strong));
+  background: var(--btn-hover);
 }
 .settings-tint-slider::-webkit-slider-thumb {
   width: 1.45rem;
@@ -235,9 +235,9 @@
 }
 .settings-tint-slider::-moz-range-track {
   height: .4rem;
-  border: 1px solid color-mix(in srgb, var(--app-text) 18%, transparent);
+  border: 1px solid var(--app-border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 20%, var(--util-surface-strong));
+  background: var(--btn-hover);
 }
 .settings-tint-slider::-moz-range-thumb {
   width: 1.1rem;
