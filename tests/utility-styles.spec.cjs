@@ -2367,6 +2367,95 @@ test('calculator fits visible curves in every graph mode without changing config
   await expect.poll(view).toEqual({ tMin: 0, tMax: 6.283, xMin: -4, xMax: 4, yMin: -5, yMax: 5 });
 });
 
+test('calculator keeps each graph mode fitted while fitting and resetting other modes', async ({ page }) => {
+  let calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+  const view = () => calculator.locator('.calc-plot-area').evaluate(element => JSON.parse(element.dataset.view));
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  let settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByLabel('Minimum x').fill('-4');
+  await settings.getByLabel('Maximum x').fill('4');
+  await settings.getByLabel('Minimum y').fill('-5');
+  await settings.getByLabel('Maximum y').fill('5');
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  let editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await editor.getByLabel('Function expression').fill('4*x+3');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Fit curves');
+  const cartesianFitted = await view();
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByRole('combobox', { name: 'Graph mode' }).click();
+  await settings.getByRole('option', { name: /Polar/ }).click();
+  await settings.getByLabel('Minimum theta').fill('1');
+  await settings.getByLabel('Maximum theta').fill('5');
+  await settings.getByLabel('Minimum r').fill('0');
+  await settings.getByLabel('Maximum r').fill('10');
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await editor.getByLabel('Function expression').fill('2+sin(theta)');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Fit curves');
+  const polarFitted = await view();
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByRole('combobox', { name: 'Graph mode' }).click();
+  await settings.getByRole('option', { name: /Parametric/ }).click();
+  await settings.getByLabel('Minimum t').fill('0');
+  await settings.getByLabel('Maximum t').fill('6.283');
+  await settings.getByLabel('Minimum x').fill('-4');
+  await settings.getByLabel('Maximum x').fill('4');
+  await settings.getByLabel('Minimum y').fill('-5');
+  await settings.getByLabel('Maximum y').fill('5');
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await editor.getByLabel('x(t)').fill('2*cos(t)');
+  await editor.getByLabel('y(t)').fill('3*sin(t)');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Fit curves');
+  const parametricFitted = await view();
+
+  await page.locator('#close-btn').click();
+  calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+  await expect(calculator.locator('.calc-mode-label')).toHaveText('PARAMETRIC');
+  await expect.poll(view).toEqual(parametricFitted);
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByRole('combobox', { name: 'Graph mode' }).click();
+  await settings.getByRole('option', { name: /Cartesian/ }).click();
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await expect(calculator.locator('.calc-mode-label')).toHaveText('CARTESIAN');
+  await expect.poll(view).toEqual(cartesianFitted);
+  await clickGraphMenuAction(calculator, 'View', 'Reset view');
+  await expect.poll(view).toEqual({ xMin: -4, xMax: 4, yMin: -5, yMax: 5 });
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByRole('combobox', { name: 'Graph mode' }).click();
+  await settings.getByRole('option', { name: /Polar/ }).click();
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await expect.poll(view).toEqual(polarFitted);
+  await clickGraphMenuAction(calculator, 'View', 'Reset view');
+  await expect.poll(view).toEqual({ thetaMin: 1, thetaMax: 5, rMin: 0, rMax: 10 });
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByRole('combobox', { name: 'Graph mode' }).click();
+  await settings.getByRole('option', { name: /Parametric/ }).click();
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+  await expect.poll(view).toEqual(parametricFitted);
+  await clickGraphMenuAction(calculator, 'View', 'Reset view');
+  await expect.poll(view).toEqual({ tMin: 0, tMax: 6.283, xMin: -4, xMax: 4, yMin: -5, yMax: 5 });
+});
+
 test('calculator restores a fitted view after a full page refresh', async ({ page }) => {
   let calculator = await openUtility(page, 'calculator');
   await chooseCalculatorMode(calculator, 'Graph');

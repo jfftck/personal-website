@@ -1193,10 +1193,14 @@ export function buildCalculator(id, ctx) {
         : [['tMin', 'tMax', 't'], ['xMin', 'xMax', 'x'], ['yMin', 'yMax', 'y']];
     if (!error && pairs.some(([a, b]) => nums[a] >= nums[b])) error = 'Each range start must be less than its end.';
     if (error) { $('.calc-settings-error').textContent = error; return; }
+    const rangesChanged = VIEW_RANGE_KEYS[settingsMode].some(key => Number(ranges[key]) !== nums[key]);
     ranges = nextRanges;
     graphDisplay = nextDisplay;
     if (settingsMode !== graphMode) activateGraphMode(settingsMode);
-    viewRanges = null;
+    if (rangesChanged && viewRanges?.[settingsMode]) {
+      delete viewRanges[settingsMode];
+      if (!Object.keys(viewRanges).length) viewRanges = null;
+    }
     $('.calc-mode-label').textContent = graphMode.toUpperCase(); renderFunctions(); settingsDialog.close(); plot(); persistGraphSettings();
   });
 
