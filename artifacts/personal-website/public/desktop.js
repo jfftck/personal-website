@@ -2359,6 +2359,7 @@ const APP_DEFS = {
     './apps/doc-viewer.js',
     () => import('./apps/doc-viewer.js'),
     'buildDocViewer',
+    ['./apps/viewer-apps.css'],
   ),
   'img-viewer': lazyApp(
     'Image Viewer',
@@ -2368,6 +2369,7 @@ const APP_DEFS = {
     './apps/img-viewer.js',
     () => import('./apps/img-viewer.js'),
     'buildImgViewer',
+    ['./apps/viewer-apps.css'],
   ),
   'file-manager': lazyApp(
     'File Manager',
@@ -2377,6 +2379,7 @@ const APP_DEFS = {
     './apps/file-manager.js',
     () => import('./apps/file-manager.js'),
     'buildFileManager',
+    ['./apps/file-manager.css'],
   ),
   'media-player': lazyApp(
     'Media Player',
@@ -2386,6 +2389,7 @@ const APP_DEFS = {
     './apps/media-player.js',
     () => import('./apps/media-player.js'),
     'buildMediaPlayer',
+    ['./apps/viewer-apps.css'],
   ),
   calendar: lazyApp(
     'Calendar',
@@ -2393,6 +2397,7 @@ const APP_DEFS = {
     './apps/calendar.js',
     () => import('./apps/calendar.js'),
     'buildCalendar',
+    ['./apps/utility-apps.css'],
   ),
   'world-clock': lazyApp(
     'World Clock',
@@ -2400,6 +2405,7 @@ const APP_DEFS = {
     './apps/world-clock.js',
     () => import('./apps/world-clock.js'),
     'buildWorldClock',
+    ['./apps/utility-apps.css'],
   ),
   calculator: lazyApp(
     'Calculator',
@@ -2407,6 +2413,7 @@ const APP_DEFS = {
     './apps/calculator.js',
     () => import('./apps/calculator.js'),
     'buildCalculator',
+    ['./apps/calculator.css'],
   ),
   'sticky-notes': lazyApp(
     'Sticky Notes',
@@ -2414,6 +2421,7 @@ const APP_DEFS = {
     './apps/sticky-notes.js',
     () => import('./apps/sticky-notes.js'),
     'buildStickyNotes',
+    ['./apps/utility-apps.css'],
   ),
   weather: lazyApp(
     'Weather',
@@ -2421,6 +2429,7 @@ const APP_DEFS = {
     './apps/weather.js',
     () => import('./apps/weather.js'),
     'buildWeather',
+    ['./apps/utility-apps.css'],
   ),
   settings: lazyApp(
     'Settings',

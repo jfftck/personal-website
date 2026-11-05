@@ -11,6 +11,16 @@ async function openUtility(page, type) {
   return page.locator(`.app-window[data-type="${type}"]`).last();
 }
 
+async function expectFamilyStylesheet(page, fileName) {
+  const familySheet = page.locator(`link[data-app-stylesheet][href$="/apps/${fileName}"]`);
+  await expect(familySheet).toHaveCount(1);
+  await expect.poll(() => familySheet.evaluate(link => Boolean(link.sheet?.cssRules?.length))).toBe(true);
+  const order = await page.locator('link[rel="stylesheet"]').evaluateAll(links =>
+    links.map(link => new URL(link.href).pathname.split('/').pop()),
+  );
+  expect(order.indexOf(fileName)).toBeGreaterThan(order.indexOf('desktop-windows.css'));
+}
+
 async function openGame(page, type) {
   await page.locator('#app-menu-btn').click();
   await page.locator('#game-center-entry').click();
@@ -26,6 +36,7 @@ test('desktop shell and window frame styles remain stable at desktop and mobile 
   expect(stylesheets.indexOf('desktop-windows.css')).toBe(stylesheets.indexOf('desktop.css') + 1);
 
   const app = await openUtility(page, 'calculator');
+  await expectFamilyStylesheet(page, 'calculator.css');
   const inspect = () => page.evaluate(() => {
     const topbar = document.querySelector('#topbar');
     const desktop = document.querySelector('#desktop');
@@ -1487,7 +1498,9 @@ async function setGraphPlotMode(page, calculator, mode) {
 
 test('calculator, calendar, and weather controls follow shared theme tokens', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
+  await expectFamilyStylesheet(page, 'calculator.css');
   await expect(calculator.locator('.calc-mode-select')).toHaveCount(1);
+  await expect.poll(() => calculator.locator('.calc').evaluate(element => getComputedStyle(element).display)).toBe('grid');
   const calculatorMode = calculator.getByRole('combobox', { name: 'Calculator mode' });
   await expect(calculatorMode).toHaveAttribute('aria-haspopup', 'listbox');
   const calculatorModeRadius = await calculatorMode.evaluate(element => getComputedStyle(element).borderRadius);
@@ -1505,6 +1518,8 @@ test('calculator, calendar, and weather controls follow shared theme tokens', as
   expect(calculatorColors.dark.keyRadius).toBe(calculatorColors.light.keyRadius);
 
   const calendar = await openUtility(page, 'calendar');
+  await expectFamilyStylesheet(page, 'utility-apps.css');
+  await expect(calendar.locator('.cal-nav-button')).toHaveCount(2);
   const calendarStyle = await calendar.evaluate(element => ({
     background: getComputedStyle(element).backgroundColor,
     buttonRadius: getComputedStyle(element.querySelector('.cal-nav-button')).borderRadius,
@@ -1515,6 +1530,7 @@ test('calculator, calendar, and weather controls follow shared theme tokens', as
   expect(calendarStyle.viewButtonHeight).toBeGreaterThanOrEqual(38);
 
   const weather = await openUtility(page, 'weather');
+  await expectFamilyStylesheet(page, 'utility-apps.css');
   await expect(weather.locator('app-select').first()).toBeAttached();
   const fields = weather.locator('.weather-setup .util-field');
   await expect(fields).toHaveCount(2);
@@ -1552,6 +1568,48 @@ test('calculator, calendar, and weather controls follow shared theme tokens', as
   expect(popupStyles.background).not.toBe('rgba(0, 0, 0, 0)');
   const [triggerBox, popupBox] = await Promise.all([trigger.boundingBox(), popup.boundingBox()]);
   expect(Math.abs(popupBox.x - triggerBox.x)).toBeLessThan(2);
+});
+
+test('lazy app style families load after the shell and retain their layout selectors', async ({ page }) => {
+  const inspectSelector = (selector, properties) => page.evaluate(({ selector, properties }) => {
+    const probe = document.createElement('div');
+    probe.className = selector;
+    document.body.append(probe);
+    const computed = getComputedStyle(probe);
+    const result = Object.fromEntries(properties.map(property => [property, computed[property]]));
+    probe.remove();
+    return result;
+  }, { selector, properties });
+
+  const clock = await openUtility(page, 'world-clock');
+  await expectFamilyStylesheet(page, 'utility-apps.css');
+  expect((await inspectSelector('clock-app', ['display'])).display).toBe('flex');
+
+  const notes = await openUtility(page, 'sticky-notes');
+  await expectFamilyStylesheet(page, 'utility-apps.css');
+  expect((await inspectSelector('notes-app', ['display'])).display).toBe('grid');
+
+  const documentViewer = await openUtility(page, 'doc-viewer');
+  await expectFamilyStylesheet(page, 'viewer-apps.css');
+  expect((await inspectSelector('doc-scroll', ['overflowY', 'paddingTop'])))
+    .toEqual({ overflowY: 'auto', paddingTop: '32px' });
+
+  await openUtility(page, 'img-viewer');
+  expect((await inspectSelector('img-viewport', ['display', 'cursor'])))
+    .toEqual({ display: 'flex', cursor: 'grab' });
+
+  await openUtility(page, 'media-player');
+  expect((await inspectSelector('media-player-wrapper', ['display', 'backgroundColor'])))
+    .toEqual({ display: 'flex', backgroundColor: 'rgb(0, 0, 0)' });
+
+  const fileManager = await openUtility(page, 'file-manager');
+  await expectFamilyStylesheet(page, 'file-manager.css');
+  expect((await inspectSelector('fm-layout', ['display', 'containerType'])))
+    .toEqual({ display: 'flex', containerType: 'inline-size' });
+  await expect(clock).toBeAttached();
+  await expect(notes).toBeAttached();
+  await expect(documentViewer).toBeAttached();
+  await expect(fileManager).toBeAttached();
 });
 
 test('calculator supports scientific calculations, reusable history, and graphing', async ({ page }) => {
@@ -1847,14 +1905,21 @@ test('calculator supports selectable bases, memory, constants, backspace, and co
   expect(compactHistory.height).toBeGreaterThanOrEqual(128);
   expect(await calculator.locator('.calc').evaluate(element => getComputedStyle(element).display)).toBe('grid');
   expect(await calculator.locator('.calc-main').evaluate(element => getComputedStyle(element).display)).toBe('grid');
-  const surfaces = await calculator.locator('.calc').evaluate(element => ({
-    background: getComputedStyle(element).backgroundColor,
-    border: getComputedStyle(element).borderTopWidth,
-    shadow: getComputedStyle(element).boxShadow,
-    displayBackground: getComputedStyle(element.querySelector('.calc-display')).backgroundColor,
-    historyBackground: getComputedStyle(element.querySelector('.calc-history')).backgroundColor,
-    sidebarBackground: getComputedStyle(element).getPropertyValue('--sidebar-bg').trim(),
-  }));
+  const surfaces = await calculator.locator('.calc').evaluate(element => {
+    const sidebarProbe = document.createElement('div');
+    sidebarProbe.style.cssText = 'position:absolute;visibility:hidden;background:var(--sidebar-bg)';
+    element.append(sidebarProbe);
+    const sidebarBackground = getComputedStyle(sidebarProbe).backgroundColor;
+    sidebarProbe.remove();
+    return {
+      background: getComputedStyle(element).backgroundColor,
+      border: getComputedStyle(element).borderTopWidth,
+      shadow: getComputedStyle(element).boxShadow,
+      displayBackground: getComputedStyle(element.querySelector('.calc-display')).backgroundColor,
+      historyBackground: getComputedStyle(element.querySelector('.calc-history')).backgroundColor,
+      sidebarBackground,
+    };
+  });
   expect(surfaces.background).toBe('rgba(0, 0, 0, 0)');
   expect(surfaces.border).toBe('0px');
   expect(surfaces.shadow).toBe('none');
@@ -3228,6 +3293,7 @@ test('calculator shows formatted view ranges in a right-anchored information pop
 
 test('utility app layouts respond to their own narrow window width', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
+  await expect(calculator.locator('.calc-workspace')).toBeAttached();
   await calculator.evaluate(element => {
     element.style.width = '360px';
     element.style.flex = '0 0 360px';
@@ -3239,10 +3305,12 @@ test('utility app layouts respond to their own narrow window width', async ({ pa
   })).toBe(true);
 
   const calendar = await openUtility(page, 'calendar');
+  await expect(calendar.locator('.cal-nav-button')).toHaveCount(2);
   await calendar.evaluate(element => {
     element.style.width = '320px';
     element.style.flex = '0 0 320px';
   });
+  await expectFamilyStylesheet(page, 'utility-apps.css');
   await calendar.getByRole('button', { name: 'Week', exact: true }).click();
   await calendar.locator('.cal-weekend-control input').check();
   const columns = await calendar.locator('.cal-week-grid').evaluate(element =>

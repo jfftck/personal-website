@@ -8,7 +8,9 @@ Use the shared controls in `public/shared/` and the shared tokens in `public/des
 | --- | --- | --- |
 | Desktop shell | `public/desktop.css` | Light/dark theme tokens, top bar, launcher, desktop stage, toolbar surfaces, shared menus, and desktop chrome. Window content should inherit these tokens instead of defining another global palette. |
 | Window and overview frame | `public/desktop-windows.css` | Shared window frame, focus outline, open/close transitions, overview mode, and overview controls. Loaded immediately after `desktop.css`; keep app-specific refinements in later stylesheets. |
-| Utility apps | `public/desktop.css` plus app styles | `.utility-app` supplies shared utility colors and controls for apps such as Weather, World Clock, Calendar, Sticky Notes, and Calculator. Keep specialized content layouts (for example, a calendar grid or calculator keypad), but use `.util-action`, `.util-field`, and the shared menu pattern for ordinary controls. |
+| Utility apps | `public/desktop.css`, `public/apps/utility-apps.css`, `public/apps/calculator.css` | Shared utility colors, fields, and actions stay in `desktop.css`. Calendar, World Clock, Sticky Notes, and Weather layouts (including their container queries) live in `utility-apps.css`. Calculator is registered to `calculator.css`, but legacy Calculator rules remain in `desktop.css` pending a complete extraction. Use `.util-action`, `.util-field`, and the shared menu pattern for ordinary controls. |
+| Document and media viewers | `public/apps/viewer-apps.css` | Document reading/sidebar styles, image stage/thumbnails, and media-player presentation are loaded for their respective viewers. Shared toolbars and controls remain in `desktop.css`. |
+| File Manager | `public/apps/file-manager.css` | File tree/sidebar, tile and list views, and their container-query breakpoints. Shared toolbar and control styles remain in `desktop.css`. |
 | Settings | `public/apps/settings.css` | Uses the desktop theme with a distinct sidebar, section headings, and card hierarchy. Preserve that information architecture; routine buttons and fields should still use shared controls. |
 | Game surfaces and boards | `public/apps/games/games.css` | Game toolbar and board layouts with per-game rules, board colors, and tactile table treatments. Reuse the common toolbar button base, but retain game-specific board geometry, status, and rules. |
 | Game material and artwork | `public/apps/games/glass.css`, `public/apps/games/artwork.css` | Glass is a board/piece material overlay. Artwork selects card faces/backs and chess/reversi piece styles. These are intentionally independent from the app/window color theme. Do not flatten them into utility-app colors. |
@@ -43,6 +45,13 @@ Use the shared controls in `public/shared/` and the shared tokens in `public/des
 - Keep the selected state separate from keyboard focus. Selected categories and choices can use the focus color for their border, while the visible focus ring only appears on the element currently reached by keyboard.
 - Keep popover stacking and surface treatment shared so menus stay readable above nearby content. Do not copy menu background, blur, or z-index rules into each app.
 - Preserve the game board, piece, card, sticky-note, and window-material themes as distinct visual systems; share their controls without merging their artwork or surfaces.
+- Keep app-specific layout and responsive rules in the corresponding lazy-loaded family stylesheet. Do not copy family rules back into `desktop.css`; only true shell, shared control, and desktop-widget styles belong there. Calculator's legacy global rules are an outstanding exception.
+
+## Stylesheet loading and cascade
+
+`desktop.css` and `desktop-windows.css` load with the desktop shell. App family styles are registered on their lazy app definitions and loaded before that app is built. The loader deduplicates stylesheet links, appends them after the shell styles, and prefetches registered app styles during idle time. Keep each family's base rules and container/media-query overrides together in source order; do not depend on the order in which unrelated apps are opened.
+
+Settings remains in `public/apps/settings.css`. Game boards and artwork remain in their separate game stylesheets; these are not part of the utility, viewer, or File Manager families.
 
 ## Using shared controls
 
