@@ -165,6 +165,29 @@ export function resolveCity(value) {
   return CITY_LOOKUP.get(normalizeCity(value));
 }
 
+export function findCuratedCityMatches(value, options = CITY_OPTIONS, limit = 8) {
+  const normalizedQuery = normalizeCity(value);
+  if (normalizedQuery.length < 2) return [];
+
+  return options
+    .map(city => {
+      const names = [city.city, ...(city.aliases || [])];
+      const exact = names.some(name => normalizeCity(name) === normalizedQuery);
+      const nameMatch = names.some(name => normalizeCity(name).includes(normalizedQuery));
+      const countryMatch = normalizeCity(city.country).includes(normalizedQuery);
+      if (!exact && !nameMatch && !countryMatch) return null;
+      return {
+        city: city.city,
+        country: city.country,
+        zone: city.zone,
+        rank: exact ? 0 : nameMatch ? 1 : 2,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.rank - b.rank || a.city.localeCompare(b.city))
+    .slice(0, limit);
+}
+
 export function findCitySuggestions(value, options = CITY_OPTIONS, limit = 5) {
   const query = normalizeCity(value);
   if (query.length < 4 || query.length > 40) return [];
@@ -267,22 +290,10 @@ export function buildWorldClock(id, ctx) {
     .filter((part, index, parts) => part && parts.indexOf(part) === index)
     .join(' · ');
   const localPlaceMatches = query => {
-    const normalizedQuery = normalizeCity(query);
-    if (normalizedQuery.length < 2) return [];
-    const matches = CITY_OPTIONS.map(city => {
-      const names = [city.city, ...(city.aliases || [])];
-      const exact = names.some(name => normalizeCity(name) === normalizedQuery);
-      const nameMatch = names.some(name => normalizeCity(name).includes(normalizedQuery));
-      const countryMatch = normalizeCity(city.country).includes(normalizedQuery);
-      if (!exact && !nameMatch && !countryMatch) return null;
-      return {
-        city: city.city,
-        country: city.country,
-        zone: city.zone,
-        admin1: '',
-        rank: exact ? 0 : nameMatch ? 1 : 2,
-      };
-    }).filter(Boolean);
+    const matches = findCuratedCityMatches(query).map(city => ({
+      ...city,
+      admin1: '',
+    }));
     if (!matches.length) {
       return findCitySuggestions(query).map(city => ({
         city: city.city, country: city.country, zone: city.zone, admin1: '', rank: 3,
