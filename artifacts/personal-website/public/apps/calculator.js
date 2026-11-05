@@ -400,6 +400,10 @@ export function buildCalculator(id, ctx) {
             <div class="calc-editor-function-fields" hidden></div>
             <fieldset class="note-color-picker calc-color-picker"><legend>Line color</legend><div class="note-color-options calc-color-options"></div></fieldset>
             <p class="calc-editor-error" role="alert" aria-live="polite"></p>
+            <div class="calc-editor-conflict" role="alert" hidden>
+              <p>A newer graph was saved in another calculator. This draft cannot be applied. Reloading the latest graph will discard this unsaved draft.</p>
+              <button type="button" class="calc-reload-latest-graph util-action">Reload latest graph</button>
+            </div>
             <div class="calc-function-keypad" aria-label="Function keypad"></div>
             <app-dialog-actions class="calc-dialog-actions"><button type="button" data-action="cancel">Cancel</button><button type="button" class="calc-apply-functions calc-primary-action">Apply</button></app-dialog-actions>
           </div>
@@ -531,6 +535,8 @@ export function buildCalculator(id, ctx) {
   let functions = functionsByMode[graphMode];
   let activeFunctionId = null;
   let editorDraft = [];
+  let editorBaseSnapshot = null;
+  let editorHasConflict = false;
   let restoreDraft = null;
   function rememberEditorField(field, moveCaretToEnd = false) {
     lastEditorField = field || null;
@@ -571,7 +577,27 @@ export function buildCalculator(id, ctx) {
     storageWarning.hidden = false;
   }
 
+  function markEditorConflict() {
+    editorHasConflict = true;
+    $('.calc-editor-conflict').hidden = false;
+    $('.calc-apply-functions').disabled = true;
+  }
+
+  function detectEditorConflictBeforeApply() {
+    if (editorHasConflict) return true;
+    const latestSnapshot = graphSettingsSnapshotFromSaved(readSavedGraphSettings());
+    if (latestSnapshot === null || latestSnapshot === editorBaseSnapshot) return false;
+    markEditorConflict();
+    return true;
+  }
+
   function applySavedGraphSettings(saved) {
+    const incomingSnapshot = graphSettingsSnapshotFromSaved(saved);
+    if (editorDialog.open && editorBaseSnapshot !== null &&
+        incomingSnapshot !== null && incomingSnapshot !== editorBaseSnapshot) {
+      markEditorConflict();
+    }
+
     if (saved.status === 'empty') {
       graphMode = 'cartesian';
       settingsMode = graphMode;
@@ -636,6 +662,69 @@ export function buildCalculator(id, ctx) {
     return Object.fromEntries(GRAPH_MODES.map(plotMode => [plotMode, functionsByMode[plotMode].map(({ id: functionId, expression, xExpression, yExpression, color, visible }) => ({
       id: functionId, expression, xExpression, yExpression, color, visible,
     }))]));
+  }
+
+  function graphSettingsSnapshot(state) {
+    const normalizedFunctions = Object.fromEntries(GRAPH_MODES.map(plotMode => [
+      plotMode,
+      (state.functionsByMode[plotMode] || []).map(fn => ({
+        id: fn.id,
+        expression: fn.expression,
+        xExpression: fn.xExpression,
+        yExpression: fn.yExpression,
+        color: fn.color,
+        visible: fn.visible,
+      })),
+    ]));
+    const normalizedViewRanges = {};
+    for (const plotMode of GRAPH_MODES) {
+      const view = state.viewRanges?.[plotMode];
+      if (!view) continue;
+      normalizedViewRanges[plotMode] = Object.fromEntries(
+        VIEW_RANGE_KEYS[plotMode].map(key => [key, view[key]]),
+      );
+    }
+    return JSON.stringify({
+      graphMode: state.graphMode,
+      ranges: Object.fromEntries(RANGE_KEYS.map(key => [key, state.ranges[key]])),
+      display: {
+        axisLabels: state.display.axisLabels,
+        xAxisLine: state.display.xAxisLine,
+        yAxisLine: state.display.yAxisLine,
+        gridStyle: state.display.gridStyle,
+        gridSpacing: state.display.gridSpacing,
+      },
+      functionsByMode: normalizedFunctions,
+      viewRanges: normalizedViewRanges,
+    });
+  }
+
+  function graphSettingsSnapshotFromSaved(saved) {
+    if (saved.status === 'valid') return graphSettingsSnapshot(saved);
+    if (saved.status === 'empty') {
+      return graphSettingsSnapshot({
+        graphMode: 'cartesian',
+        ranges: DEFAULT_GRAPH_RANGES,
+        display: GRAPH_DISPLAY_DEFAULTS,
+        functionsByMode: Object.fromEntries(GRAPH_MODES.map(plotMode => [plotMode, []])),
+        viewRanges: {},
+      });
+    }
+    return null;
+  }
+
+  function currentGraphSettingsSnapshot() {
+    return graphSettingsSnapshot({
+      graphMode,
+      ranges,
+      display: graphDisplay,
+      functionsByMode: serializeFunctionsByMode(),
+      viewRanges,
+    });
+  }
+
+  function latestPersistedGraphSettingsSnapshot() {
+    return graphSettingsSnapshotFromSaved(readSavedGraphSettings()) ?? currentGraphSettingsSnapshot();
   }
 
   function activateGraphMode(nextMode) {
@@ -1233,8 +1322,10 @@ export function buildCalculator(id, ctx) {
       radio.addEventListener('change', () => { if (radio.checked) fn.color = hex; });
     });
     $('.calc-editor-error').textContent = '';
+    if (editorHasConflict) applyButton.disabled = true;
   }
-  function openEditor() {
+
+  function createEditorDraftFromCurrentGraph() {
     editorDraft = functions.map(fn => ({ ...fn }));
     if (!editorDraft.length) {
       const blank = makeFunction('');
@@ -1247,6 +1338,28 @@ export function buildCalculator(id, ctx) {
     activeFunctionId = editorDraft.some(fn => fn.id === activeFunctionId)
       ? activeFunctionId
       : editorDraft[0].id;
+  }
+
+  function reloadLatestGraphIntoEditor() {
+    const latest = readSavedGraphSettings();
+    if (latest.status === 'valid' || latest.status === 'empty') applySavedGraphSettings(latest);
+    createEditorDraftFromCurrentGraph();
+    editorBaseSnapshot = latestPersistedGraphSettingsSnapshot();
+    editorHasConflict = false;
+    $('.calc-editor-conflict').hidden = true;
+    renderEditor();
+    const field = graphMode === 'parametric' ? $('.calc-editor-x') : $('.calc-editor-expression');
+    if (field) {
+      rememberEditorField(field, true);
+      field.focus();
+    }
+  }
+
+  function openEditor() {
+    editorHasConflict = false;
+    $('.calc-editor-conflict').hidden = true;
+    editorBaseSnapshot = latestPersistedGraphSettingsSnapshot();
+    createEditorDraftFromCurrentGraph();
     renderEditor(); editorDialog.showModal();
     rememberEditorField(editorDraft.length
       ? graphMode === 'parametric' ? $('.calc-editor-x') : $('.calc-editor-expression')
@@ -1264,7 +1377,9 @@ export function buildCalculator(id, ctx) {
     rememberEditorField(graphMode === 'parametric' ? $('.calc-editor-x') : $('.calc-editor-expression'), true);
     lastEditorField.focus();
   });
+  $('.calc-reload-latest-graph').addEventListener('click', reloadLatestGraphIntoEditor);
   $('.calc-apply-functions').addEventListener('click', () => {
+    if (detectEditorConflictBeforeApply()) return;
     saveEditorDraft();
     const completedDraft = editorDraft.filter(fn => graphMode === 'parametric'
       ? fn.xExpression.trim() || fn.yExpression.trim()

@@ -2515,6 +2515,67 @@ test('open calculator windows stay in sync when graph settings change', async ({
   await expect(reopenedCalculator.locator('.calc-plot-area')).toHaveAttribute('aria-valuetext', /theta -2 to 8/);
 });
 
+test('calculator function editor blocks stale drafts and can reload a newer graph', async ({ page }) => {
+  const firstCalculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(firstCalculator, 'Graph');
+  const secondPage = await page.context().newPage();
+  await secondPage.goto('/');
+  await secondPage.locator('#welcome-win-close').click();
+  const secondCalculator = await openUtility(secondPage, 'calculator');
+  await chooseCalculatorMode(secondCalculator, 'Graph');
+
+  await firstCalculator.getByRole('button', { name: 'Edit functions' }).click();
+  const firstEditor = firstCalculator.getByRole('dialog', { name: 'Edit functions' });
+  const firstExpression = firstEditor.getByRole('textbox', { name: 'Function expression' });
+  await firstExpression.fill('sin(x)');
+
+  await secondCalculator.getByRole('button', { name: 'Edit functions' }).click();
+  const secondEditor = secondCalculator.getByRole('dialog', { name: 'Edit functions' });
+  await secondEditor.getByRole('textbox', { name: 'Function expression' }).fill('cos(x)');
+  await secondEditor.getByRole('button', { name: 'Apply', exact: true }).click();
+
+  const conflict = firstEditor.locator('.calc-editor-conflict');
+  await expect(conflict).toBeVisible();
+  await expect(conflict).toContainText('A newer graph was saved in another calculator');
+  await expect(conflict).toContainText('Reloading the latest graph will discard this unsaved draft');
+  await expect(firstExpression).toHaveValue('sin(x)');
+  await expect(firstEditor.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled();
+  await expect.poll(() => page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('personal-desktop-calculator-graph-v1') || 'null');
+    return saved?.functionsByMode?.cartesian?.map(fn => fn.expression);
+  })).toEqual(['cos(x)']);
+
+  await conflict.getByRole('button', { name: 'Reload latest graph' }).click();
+  await expect(conflict).toBeHidden();
+  await expect(firstExpression).toHaveValue('cos(x)');
+  await expect(firstEditor.getByRole('button', { name: 'Apply', exact: true })).toBeEnabled();
+  await firstEditor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('personal-desktop-calculator-graph-v1') || 'null');
+    return saved?.functionsByMode?.cartesian?.map(fn => fn.expression);
+  })).toEqual(['cos(x)']);
+
+  await firstCalculator.getByRole('button', { name: 'Edit functions' }).click();
+  await expect(firstEditor).toBeVisible();
+  await firstExpression.fill('tan(x)');
+  await page.evaluate(() => {
+    const key = 'personal-desktop-calculator-graph-v1';
+    const saved = JSON.parse(localStorage.getItem(key));
+    saved.functionsByMode.cartesian[0].expression = 'x^2';
+    localStorage.setItem(key, JSON.stringify(saved));
+  });
+  await firstEditor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect(conflict).toBeVisible();
+  await expect(firstExpression).toHaveValue('tan(x)');
+  await expect(firstEditor.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled();
+  await expect.poll(() => page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('personal-desktop-calculator-graph-v1') || 'null');
+    return saved?.functionsByMode?.cartesian?.map(fn => fn.expression);
+  })).toEqual(['x^2']);
+  await conflict.getByRole('button', { name: 'Reload latest graph' }).click();
+  await expect(firstExpression).toHaveValue('x^2');
+});
+
 test('calculator safely resets malformed or outdated saved graph settings', async ({ page }) => {
   for (const saved of ['{broken', JSON.stringify({ version: 0, graphMode: 'cartesian' })]) {
     await page.evaluate(value => localStorage.setItem('personal-desktop-calculator-graph-v1', value), saved);
