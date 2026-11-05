@@ -2643,6 +2643,50 @@ test('calculator safely resets malformed or outdated saved graph settings', asyn
   }
 });
 
+test('calculator keeps graph recovery available when clearing saved settings is blocked', async ({ page }) => {
+  await page.evaluate(() => {
+    const key = 'personal-desktop-calculator-graph-v1';
+    localStorage.setItem(key, '{broken');
+    const originalRemoveItem = Storage.prototype.removeItem;
+    window.__graphRemoveAccess = { blocked: true, originalRemoveItem };
+    Storage.prototype.removeItem = function (name) {
+      if (window.__graphRemoveAccess.blocked &&
+          (name === key || name.startsWith('desktop-data-backup-v1:'))) {
+        throw new DOMException('Storage removal is blocked', 'SecurityError');
+      }
+      return originalRemoveItem.call(this, name);
+    };
+  });
+
+  const calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+  const recovery = calculator.locator('.calc-storage-recovery');
+  const warning = calculator.locator('.calc-storage-warning');
+  await expect(recovery).toBeVisible();
+  await recovery.getByRole('button', { name: 'Reset saved graph' }).click();
+
+  await expect(recovery).toBeVisible();
+  await expect(recovery).toContainText('could not be cleared');
+  await expect(warning).toBeVisible();
+  await expect.poll(() => page.evaluate(() =>
+    localStorage.getItem('personal-desktop-calculator-graph-v1')
+  )).toBe('{broken');
+
+  await page.evaluate(() => { window.__graphRemoveAccess.blocked = false; });
+  await recovery.getByRole('button', { name: 'Reset saved graph' }).click();
+  await expect(recovery).toBeHidden();
+  await expect(warning).toBeHidden();
+  await expect(calculator.locator('.calc-graph-status')).toContainText('Saved graph reset to defaults.');
+  await expect.poll(() => page.evaluate(() =>
+    localStorage.getItem('personal-desktop-calculator-graph-v1')
+  )).toBeNull();
+
+  await page.evaluate(() => {
+    Storage.prototype.removeItem = window.__graphRemoveAccess.originalRemoveItem;
+    delete window.__graphRemoveAccess;
+  });
+});
+
 test('calculator keeps graph storage warnings visible until settings save successfully', async ({ page }) => {
   await page.evaluate(() => {
     window.__graphStorageAccess = { readBlocked: true, writeBlocked: false };

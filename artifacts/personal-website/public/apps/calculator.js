@@ -762,7 +762,14 @@ export function buildCalculator(id, ctx) {
 
   function resetSavedGraph() {
     try {
-      if (!removeData(GRAPH_SETTINGS_KEY)) showStorageWarning('write');
+      if (!removeData(GRAPH_SETTINGS_KEY)) {
+        showStorageWarning('write');
+        recoveryMessage.textContent = 'Saved graph settings could not be cleared. Check this browser’s storage access, then retry the reset.';
+        recoveryNotice.hidden = false;
+        graphStatus.textContent = 'Saved graph settings are still stored. Retry the reset when browser storage is available.';
+        return;
+      }
+      storageWarning.hidden = true;
       graphMode = 'cartesian';
       settingsMode = graphMode;
       ranges = { ...DEFAULT_GRAPH_RANGES };
