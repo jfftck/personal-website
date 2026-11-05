@@ -120,6 +120,14 @@ test('Settings mobile sections and pages use the full app width', async ({ page 
 test('Wallpaper settings apply changes immediately without save or cancel actions', async ({ page }) => {
   await page.evaluate(async () => {
     const { buildSettings } = await import('/apps/settings.js');
+    const stylesheet = document.createElement('link');
+    stylesheet.rel = 'stylesheet';
+    stylesheet.href = '/apps/settings.css';
+    document.head.append(stylesheet);
+    await new Promise((resolve, reject) => {
+      stylesheet.addEventListener('load', resolve, { once: true });
+      stylesheet.addEventListener('error', reject, { once: true });
+    });
     window.__wallpaperTestCalls = [];
     const ctx = {
       settings: {
@@ -155,6 +163,21 @@ test('Wallpaper settings apply changes immediately without save or cancel action
   await expect(wallpaperPage.getByText('Selected', { exact: true })).toHaveCount(0);
   const selectedWallpaper = wallpaperPage.locator('.settings-wallpaper-tile:has(input:checked)');
   await expect(selectedWallpaper.locator('input')).toBeChecked();
+  const selectedMode = wallpaperPage.locator('.settings-choice-option[aria-pressed="true"]').first();
+  const selectedStyles = await selectedMode.evaluate(button => ({
+    borderColor: getComputedStyle(button).borderTopColor,
+    radioBorderColor: getComputedStyle(button.querySelector('.settings-choice-radio')).borderTopColor,
+    focusColor: (() => {
+      const probe = document.createElement('span');
+      probe.style.borderTop = '1px solid var(--focus-color)';
+      button.append(probe);
+      const color = getComputedStyle(probe).borderTopColor;
+      probe.remove();
+      return color;
+    })(),
+  }));
+  expect(selectedStyles.borderColor).toBe(selectedStyles.focusColor);
+  expect(selectedStyles.radioBorderColor).toBe(selectedStyles.focusColor);
   await expect(wallpaperPage.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
   await expect(wallpaperPage.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
   await expect(wallpaperPage.locator('.settings-subheading')).toHaveCount(0);

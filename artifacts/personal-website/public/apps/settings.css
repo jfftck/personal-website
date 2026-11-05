@@ -321,9 +321,9 @@
 .settings-choice-option:hover { background: var(--util-surface-strong); }
 .settings-choice-option:disabled { opacity: .48; cursor: not-allowed; }
 .settings-choice-option:disabled:hover { background: transparent; }
-.settings-choice-option[aria-pressed="true"] { border-color: color-mix(in srgb,var(--accent) 38%,transparent); background: var(--settings-accent-wash); }
+.settings-choice-option[aria-pressed="true"] { border-color: var(--focus-color); background: var(--settings-accent-wash); }
 .settings-choice-radio { width: .9rem; height: .9rem; flex: none; border: 1px solid var(--util-detail); border-radius: 50%; }
-.settings-choice-option[aria-pressed="true"] .settings-choice-radio { border: .28rem solid var(--accent); }
+.settings-choice-option[aria-pressed="true"] .settings-choice-radio { border: .28rem solid var(--focus-color); }
 .settings-choice-copy strong, .settings-choice-copy small { display: block; }
 .settings-choice-copy strong { font-size: .72rem; }
 .settings-choice-copy small { margin-top: .1rem; color: var(--util-detail); font-size: .62rem; }
