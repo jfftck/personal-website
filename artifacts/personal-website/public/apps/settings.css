@@ -247,11 +247,13 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-text) 35%, transparent), 0 .1rem .3rem #0005;
 }
 :root input[type="range"].settings-tint-slider:focus-visible { outline: none; }
-.settings-tint-slider:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 2px var(--app-bg), 0 0 0 4px var(--focus-color), 0 .1rem .3rem #0005;
+.settings-tint-slider:focus::-webkit-slider-thumb {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 3px;
 }
-.settings-tint-slider:focus-visible::-moz-range-thumb {
-  box-shadow: 0 0 0 2px var(--app-bg), 0 0 0 4px var(--focus-color), 0 .1rem .3rem #0005;
+.settings-tint-slider:focus::-moz-range-thumb {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 3px;
 }
 .settings-tint-slider:disabled { opacity: .45; cursor: default; }
 .settings-tint-reset {
@@ -273,8 +275,8 @@
   .settings-tint-slider::-moz-range-track { border-color: CanvasText; background: Canvas; }
   .settings-tint-slider::-webkit-slider-thumb,
   .settings-tint-slider::-moz-range-thumb { border-color: Canvas; background: Highlight; }
-  .settings-tint-slider:focus-visible::-webkit-slider-thumb,
-  .settings-tint-slider:focus-visible::-moz-range-thumb { outline: 2px solid Highlight; outline-offset: 3px; }
+  .settings-tint-slider:focus::-webkit-slider-thumb,
+  .settings-tint-slider:focus::-moz-range-thumb { outline-color: Highlight; }
 }
 .settings-theme-label strong, .settings-theme-label small { display: block; }
 .settings-theme-label strong { font-size: .78rem; }

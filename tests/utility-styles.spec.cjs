@@ -660,12 +660,13 @@ test('window background opacity previews, persists after interaction, and resets
   await page.keyboard.press('Home');
   const focusTreatment = await opacity.evaluate(slider => ({
     inputOutline: getComputedStyle(slider).outlineStyle,
-    thumbShadow: getComputedStyle(slider, '::-webkit-slider-thumb').boxShadow,
-    focusColor: getComputedStyle(slider).getPropertyValue('--focus-color').trim()
-      || getComputedStyle(document.documentElement).getPropertyValue('--focus-color').trim(),
+    thumbRing: [...document.styleSheets]
+      .flatMap(sheet => { try { return [...sheet.cssRules]; } catch { return []; } })
+      .find(rule => rule.selectorText === '.settings-tint-slider:focus::-webkit-slider-thumb')
+      ?.style.getPropertyValue('outline'),
   }));
   expect(focusTreatment.inputOutline).toBe('none');
-  expect(focusTreatment.thumbShadow).toContain(focusTreatment.focusColor);
+  expect(focusTreatment.thumbRing).toContain('var(--focus-color)');
   await expect(opacity).toHaveValue('0');
   await expect.poll(() => page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--window-background-opacity').trim(),
