@@ -858,14 +858,16 @@ export function buildSettings(id, ctx, initialState) {
     timerOption.append(intervalSelect);
     scheduleOptions.append(timerOption);
     scheduleCard.append(scheduleOptions);
-    scheduleCard.append(animationPicker.createPicker({
+    const transitionPicker = animationPicker.createPicker({
       id: 'wallpaper-transition',
       label: 'Wallpaper transition',
       description: 'Choose one or more transitions. When several are selected, one is chosen at random.',
       choices: WALLPAPER_TRANSITIONS,
       selected: wallpaperDraft.transition,
       onChange: selected => { wallpaperDraft.transition = selected; queueWallpaperUpdate(); },
-    }));
+    });
+    transitionPicker.classList.add('settings-wallpaper-transition');
+    scheduleCard.append(transitionPicker);
     controlGrid.append(modeCard, scheduleCard);
     body.append(controlGrid);
     enhanceSelect(intervalSelect);

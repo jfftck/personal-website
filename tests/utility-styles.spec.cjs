@@ -233,6 +233,10 @@ test('Wallpaper settings apply changes immediately without save or cancel action
   await expect(wallpaperPage.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
   await expect(wallpaperPage.locator('.settings-subheading')).toHaveCount(0);
 
+  const transitionMargin = await wallpaperPage.locator('.settings-wallpaper-transition').evaluate(element =>
+    Number.parseFloat(getComputedStyle(element).marginTop),
+  );
+  expect(transitionMargin).toBeGreaterThan(0);
   const transitionPicker = wallpaperPage.getByRole('button', { name: /Wallpaper transition/ });
   await transitionPicker.evaluate(button => button.click());
   const transitionPanel = wallpaperPage.getByRole('dialog', { name: 'Wallpaper transition options' });
@@ -654,6 +658,14 @@ test('window background opacity previews, persists after interaction, and resets
 
   await opacity.focus();
   await page.keyboard.press('Home');
+  const focusTreatment = await opacity.evaluate(slider => ({
+    inputOutline: getComputedStyle(slider).outlineStyle,
+    thumbShadow: getComputedStyle(slider, '::-webkit-slider-thumb').boxShadow,
+    focusColor: getComputedStyle(slider).getPropertyValue('--focus-color').trim()
+      || getComputedStyle(document.documentElement).getPropertyValue('--focus-color').trim(),
+  }));
+  expect(focusTreatment.inputOutline).toBe('none');
+  expect(focusTreatment.thumbShadow).toContain(focusTreatment.focusColor);
   await expect(opacity).toHaveValue('0');
   await expect.poll(() => page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--window-background-opacity').trim(),
