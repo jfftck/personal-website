@@ -209,6 +209,8 @@
 
 /* --- Reset --- */
 *, *::before, *::after { box-sizing: border-box; }
+:root input[type="checkbox"],
+:root input[type="radio"] { accent-color: var(--focus-color); }
 
 html, body {
   margin: 0;
@@ -384,7 +386,7 @@ body {
   text-align: left;
   cursor: pointer;
 }
-.quick-toggle[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.quick-toggle[aria-pressed="true"] { border: 1px solid var(--focus-color); background: var(--accent); color: #fff; }
 .quick-toggle[hidden] { display: none; }
 .quick-toggle svg, #theme-reset svg { width: 1.15rem; height: 1.15rem; fill: currentColor; flex: 0 0 auto; }
 #time-format-toggle,
@@ -683,6 +685,7 @@ body {
 #win-menu-btn[aria-expanded="true"],
 #show-desktop-btn[aria-pressed="true"],
 #overview-btn[aria-pressed="true"] {
+  border: 1px solid var(--focus-color);
   background-color: var(--accent);
   color: #fff;
 }
@@ -1196,7 +1199,7 @@ body.mod-show-desktop #empty-state {
   color: inherit;
   text-align: start;
   background: transparent;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 0.65rem;
   cursor: pointer;
   font: inherit;
@@ -1206,6 +1209,7 @@ body.mod-show-desktop #empty-state {
 .desktop-search-result.active {
   background: var(--btn-hover);
 }
+.desktop-search-result.active { border-color: var(--focus-color); }
 
 .desktop-search-result:focus-visible {
   outline: 2px solid var(--focus-color);
@@ -1478,7 +1482,7 @@ app-select { display:contents; }
 }
 .standard-select-option:hover,
 .standard-select-option.is-active { background:var(--btn-hover); }
-.standard-select-option[aria-selected="true"] { background:var(--btn-active); }
+.standard-select-option[aria-selected="true"] { border:1px solid var(--focus-color); background:var(--btn-active); }
 .standard-select-option[aria-disabled="true"] { opacity:.48;cursor:not-allowed; }
 .standard-select-native {
   position:absolute !important;
@@ -1793,15 +1797,15 @@ app-button { display:contents; }
 .cal-toolbar-options { justify-content:flex-end; }
 .cal-nav-button { font-size:1.25rem; line-height:1; }
 .cal-view-switch { justify-self:center; display:flex; align-items:center; gap:.3rem; padding:0; border:0; border-radius:.75rem; background:transparent; }
-.cal-view-button { min-height:2.4rem; padding:.38rem .68rem; border:0; border-radius:.55rem; background:transparent; color:var(--app-text); font-size:.78rem; font-weight:600; cursor:pointer; transition:background-color 120ms ease,color 120ms ease; }
+.cal-view-button { min-height:2.4rem; padding:.38rem .68rem; border:1px solid transparent; border-radius:.55rem; background:transparent; color:var(--app-text); font-size:.78rem; font-weight:600; cursor:pointer; transition:background-color 120ms ease,color 120ms ease; }
 .cal-view-button:hover { background:var(--btn-hover); }
-.cal-view-button[aria-pressed="true"] { background:var(--accent); color:#fff; box-shadow:0 1px 4px rgba(0,0,0,.18); }
+.cal-view-button[aria-pressed="true"] { border-color:var(--focus-color); background:var(--accent); color:#fff; box-shadow:0 1px 4px rgba(0,0,0,.18); }
 .cal-toolbar .util-action[data-app-button-variant="quiet"]:hover { background:var(--btn-hover); }
 .cal-toolbar .util-action[data-app-button-variant="quiet"]:active { background:var(--btn-active); }
 .cal-view-button:focus-visible,.cal-weekend-control:focus-within { outline:2px solid var(--focus-color); outline-offset:2px; }
 .cal-weekend-control { display:flex; align-items:center; gap:.35rem; color:var(--util-detail); font-size:.74rem; white-space:nowrap; cursor:pointer; }
 .cal-weekend-control[hidden] { display:none; }
-.cal-weekend-control input { accent-color:var(--accent); }
+.cal-weekend-control input { accent-color:var(--focus-color); }
 .cal-period { flex:none; margin:0; padding:.85rem 1rem .35rem; color:var(--util-amber); font-size:1rem; font-weight:700; text-align:center; }
 .cal-content { flex:1; min-height:0; overflow:auto; padding:.5rem clamp(.6rem,2.2vw,1.25rem) 1.2rem; }
 .cal-month-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:.35rem; }
@@ -1810,7 +1814,7 @@ app-button { display:contents; }
 .cal-date-cell:hover,.cal-week-day:hover,.cal-agenda-item:hover { background:var(--util-surface-strong); }
 .cal-date-cell.outside-month { color:var(--util-detail); opacity:.56; }
 .cal-date-cell.today,.cal-week-day.today,.cal-agenda-item.today { border-color:color-mix(in srgb,var(--accent) 75%,var(--app-border)); }
-.cal-date-cell.selected,.cal-week-day.selected,.cal-agenda-item.selected { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 22%,var(--app-bg)); color:var(--app-text); font-weight:750; }
+.cal-date-cell.selected,.cal-week-day.selected,.cal-agenda-item.selected { border-color:var(--focus-color); background:color-mix(in srgb,var(--accent) 22%,var(--app-bg)); color:var(--app-text); font-weight:750; }
 .cal-week-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:.55rem; min-height:100%; }
 .cal-week-grid.includes-weekend { grid-template-columns:repeat(7,minmax(0,1fr)); }
 .cal-week-day { display:flex; flex-direction:column; align-items:center; gap:.85rem; min-width:0; min-height:11rem; padding:.85rem .25rem; border:1px solid var(--app-border); border-radius:.8rem; background:var(--util-surface); color:var(--app-text); cursor:pointer; }
@@ -1867,7 +1871,7 @@ app-button { display:contents; }
   cursor:pointer;
 }
 .clock-place-option:hover { background:var(--btn-hover); }
-.clock-place-option[aria-selected="true"] { background:var(--btn-active); }
+.clock-place-option[aria-selected="true"] { border:1px solid var(--focus-color); background:var(--btn-active); }
 .clock-place-name { font-size:.86rem; font-weight:650; }
 .clock-place-detail { color:var(--util-detail); font-size:.72rem; overflow-wrap:anywhere; }
 .clock-controls > .clock-add { flex:none; }
@@ -1897,7 +1901,7 @@ app-button { display:contents; }
 .notes-sidebar { padding:.85rem; border-right:1px solid var(--app-border);display:flex;flex-direction:column;gap:.65rem;min-height:0; }
 .notes-list { overflow:auto;display:grid;align-content:start;gap:.4rem; }
 .note-select { text-align:left;border:1px solid transparent;background:var(--util-surface);border-radius:.55rem;padding:.6rem;cursor:pointer;overflow:hidden; }
-.note-select.active { border-color:color-mix(in srgb,var(--util-amber) 65%,transparent);background:color-mix(in srgb,var(--util-amber) 12%,transparent); }
+.note-select.active { border-color:var(--focus-color);background:color-mix(in srgb,var(--util-amber) 12%,transparent); }
 .note-select strong,.note-select small { display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
 .note-editor { padding:1.15rem;display:flex;flex-direction:column;gap:.6rem;min-width:0;min-height:0;border:1px solid var(--app-border);border-radius:.85rem;background:var(--util-surface);color:var(--app-text); }
 .note-editor input,.note-editor textarea { width:100%;border:1px solid transparent;background:transparent;color:inherit;padding:.45rem;border-radius:.4rem; }
@@ -1915,7 +1919,7 @@ app-button { display:contents; }
 .note-color-choice input:checked + .note-color-swatch { box-shadow:0 0 0 2px var(--app-bg),0 0 0 4px var(--focus-color); }
 .note-editor[data-note-color] { background:color-mix(in srgb,var(--sticky-note-accent) 34%,var(--app-bg));border-color:color-mix(in srgb,var(--sticky-note-accent) 52%,var(--app-border)); }
 .note-select[data-note-color] { color:var(--app-text);background:color-mix(in srgb,var(--sticky-note-accent) 16%,var(--app-bg));border-color:color-mix(in srgb,var(--sticky-note-accent) 32%,var(--app-border)); }
-.note-select.active[data-note-color] { background:color-mix(in srgb,var(--sticky-note-accent) 27%,var(--app-bg));border-color:color-mix(in srgb,var(--sticky-note-accent) 70%,var(--app-border)); }
+.note-select.active[data-note-color] { background:color-mix(in srgb,var(--sticky-note-accent) 27%,var(--app-bg));border-color:var(--focus-color); }
 .desktop-note-widget[data-note-color] { background:color-mix(in srgb,var(--sticky-note-accent) 34%,var(--app-bg));border-color:color-mix(in srgb,var(--sticky-note-accent) 58%,var(--app-border));color:var(--app-text); }
 .desktop-note-widget[data-note-color]:hover { border-color:color-mix(in srgb,var(--sticky-note-accent) 78%,var(--app-border)); }
 .note-editor[data-note-color="yellow"],.note-select[data-note-color="yellow"],.desktop-note-widget[data-note-color="yellow"],.note-color-choice[data-note-color="yellow"] { --sticky-note-accent:#e5bb22; }
@@ -1945,7 +1949,7 @@ app-button { display:contents; }
 .weather-location-menu[hidden] { display:none; }
 .weather-location-option { width:100%;display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.4375rem .625rem;border:0;border-radius:.375rem;background:transparent;color:var(--app-text);text-align:left;font:inherit;font-size:.8125rem;cursor:pointer;transition:background 100ms ease; }
 .weather-location-option:hover { background:var(--btn-hover); }
-.weather-location-option[aria-checked="true"] { background:var(--btn-active); }
+.weather-location-option[aria-checked="true"] { border:1px solid var(--focus-color); background:var(--btn-active); }
 .weather-location-option-name { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .weather-settings-button { width:2.45rem;height:2.45rem;flex:none;display:grid;place-items:center;border:1px solid var(--app-border);border-radius:.7rem;background:var(--util-surface);color:var(--app-text);cursor:pointer; }
 .weather-settings-button:hover { background:var(--util-surface-strong); }
@@ -2209,7 +2213,7 @@ app-button { display:contents; }
 
 .doc-sidebar-item.active {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 2px 0 0 var(--focus-color);
 }
 
 .doc-sidebar-item:focus-visible {
@@ -3035,7 +3039,7 @@ kbd {
   min-height:2rem; border:1px solid var(--app-border); border-radius:.55rem;
   padding:.35rem .6rem; background:var(--util-surface); color:var(--app-text); cursor:pointer;
 }
-.calc-modes button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+.calc-modes button[aria-pressed="true"] { background:var(--accent); border-color:var(--focus-color); color:#fff; }
 .calc-workspace { display:grid; grid-template-columns:minmax(0,1fr) minmax(12rem, .38fr); gap:1rem; min-height:0; padding-top:1rem; }
 .calc-main { min-width:0; }
 .calc-display { display:grid; grid-template-columns:1fr; gap:.25rem; min-height:clamp(9rem, 25cqh, 15rem); padding:1rem clamp(.5rem,2cqw,1.2rem); border:1px solid var(--app-border); border-radius:.8rem; background:var(--util-surface); }
@@ -3463,7 +3467,7 @@ kbd {
 .welcome-tab.active,
 .welcome-tab[aria-selected="true"] {
   opacity: 1;
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--focus-color);
 }
 .welcome-tab:focus-visible {
   outline: 2px solid var(--focus-color);
@@ -3674,7 +3678,7 @@ kbd {
   background:var(--toolbar-bg); color:var(--app-text); cursor:pointer;
   font:600 .68rem ui-monospace,monospace;
 }
-.calc-base-control button[aria-pressed="true"] { border-color:var(--accent); background:var(--accent); color:#fff; }
+.calc-base-control button[aria-pressed="true"] { border-color:var(--focus-color); background:var(--accent); color:#fff; }
 .calc-backspace { position:absolute; top:50%; right:.2rem; transform:translateY(-50%); min-width:1.8rem; font-size:.95rem; }
 .calc-backspace:hover,.calc-base-control button:hover,.calc-memory button:hover { background:var(--util-surface-strong); }
 .calc-base-control button[aria-pressed="true"]:hover { background:var(--accent); }
@@ -3808,7 +3812,7 @@ kbd {
 .calc-view-option-title { color:var(--util-detail); font-size:.72rem; font-weight:700; }
 .calc-view-options { display:flex; flex-wrap:wrap; gap:.25rem; }
 .calc-view-options button { flex:1 1 2.8rem; min-height:1.8rem; padding:.25rem .38rem; font-size:.76rem; }
-.calc-view-options button[aria-pressed="true"] { border-color:var(--accent); background:var(--accent); color:#fff; }
+.calc-view-options button[aria-pressed="true"] { border-color:var(--focus-color); background:var(--accent); color:#fff; }
 .calc-view-options button[aria-pressed="true"]:hover { background:var(--accent); }
 .calc-graph-toolbar button:disabled { cursor:not-allowed; opacity:.48; }
 .calc-menu-divider { width:100%; height:1px; margin:0; border:0; background:var(--app-border); }

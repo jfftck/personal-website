@@ -167,6 +167,7 @@ test('Wallpaper settings apply changes immediately without save or cancel action
   const selectedStyles = await selectedMode.evaluate(button => ({
     borderColor: getComputedStyle(button).borderTopColor,
     radioBorderColor: getComputedStyle(button.querySelector('.settings-choice-radio')).borderTopColor,
+    checkboxAccentColor: getComputedStyle(document.querySelector('.settings-wallpaper-tile input')).accentColor,
     focusColor: (() => {
       const probe = document.createElement('span');
       probe.style.borderTop = '1px solid var(--focus-color)';
@@ -178,6 +179,7 @@ test('Wallpaper settings apply changes immediately without save or cancel action
   }));
   expect(selectedStyles.borderColor).toBe(selectedStyles.focusColor);
   expect(selectedStyles.radioBorderColor).toBe(selectedStyles.focusColor);
+  expect(selectedStyles.checkboxAccentColor).toBe(selectedStyles.focusColor);
   await expect(wallpaperPage.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
   await expect(wallpaperPage.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
   await expect(wallpaperPage.locator('.settings-subheading')).toHaveCount(0);

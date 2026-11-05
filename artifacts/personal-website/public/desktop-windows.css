@@ -27,7 +27,7 @@
 
 .ov-pill-btn {
   flex: 1;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 0.375rem;
   background: transparent;
   color: var(--topbar-text);
@@ -41,6 +41,7 @@
 }
 .ov-pill-btn:hover  { background: var(--btn-hover); }
 .ov-pill-btn.active {
+  border-color: var(--focus-color);
   background: var(--accent);
   color: #fff;
 }
@@ -114,8 +115,8 @@
   opacity: 1;
   background: var(--btn-active);
   border-style: solid;
-  border-color: var(--accent-glow);
-  box-shadow: 0 0 0 1px var(--accent-glow), 0 0 8px var(--accent-glow);
+  border-color: var(--focus-color);
+  box-shadow: 0 0 0 1px var(--focus-color), 0 0 8px color-mix(in srgb, var(--focus-color) 55%, transparent);
 }
 
 /* Within-column zones: horizontal bars */
