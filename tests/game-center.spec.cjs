@@ -221,6 +221,76 @@ test('root menu restores app and file entries; all nine game tiles stay nested w
   await expect(page.locator('#app-menu')).toBeHidden();
 });
 
+test('game and game UI module failures can be retried without duplicate windows or losing restored state', async ({ page }) => {
+  const session = savedMinesweeper({ level: 'beginner', finalSafeCell: 10 });
+  session.columns.push({ widthPreset: 'full', apps: [{ type: 'calculator' }] });
+  await page.evaluate(value => localStorage.setItem('desktop-session-v2', JSON.stringify(value)), session);
+
+  let failGameModule = true;
+  let failGameUi = true;
+  let moduleRequests = 0;
+  let gameUiRequests = 0;
+  await page.route('**/apps/game-center.js*', async route => {
+    moduleRequests += 1;
+    if (failGameModule) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'text/javascript',
+        body: '/* Simulated temporary game module failure */',
+      });
+    } else {
+      await route.continue();
+    }
+  });
+  await page.route('**/apps/games/minesweeper-ui.js*', async route => {
+    gameUiRequests += 1;
+    if (failGameUi) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'text/javascript',
+        body: '/* Simulated temporary game UI failure */',
+      });
+    } else {
+      await route.continue();
+    }
+  });
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+
+  const game = page.locator('.app-window[data-type="minesweeper"]');
+  const calculator = page.locator('.app-window.calc-wrap[data-type="calculator"]');
+  await expect(game).toHaveAttribute('data-load-state', 'error', { timeout: 15_000 });
+  await expect(game).toContainText('Minesweeper couldn’t be loaded');
+  await expect(game.getByRole('button', { name: 'Retry' })).toBeVisible();
+  await expect(calculator).toBeVisible();
+  await expect(game).toHaveCount(1);
+  expect(moduleRequests).toBeGreaterThanOrEqual(4);
+
+  const failedRequestCount = moduleRequests;
+  failGameModule = false;
+  await game.getByRole('button', { name: 'Retry' }).click();
+
+  await expect(game).toHaveAttribute('data-load-state', 'loading');
+  await expect(game).toHaveAttribute('data-load-state', 'error', { timeout: 15_000 });
+  await expect(game.getByRole('button', { name: 'Retry' })).toBeVisible();
+  await expect(game).toHaveCount(1);
+  await expect(calculator).toBeVisible();
+  expect(gameUiRequests).toBeGreaterThanOrEqual(4);
+
+  const failedUiRequestCount = gameUiRequests;
+  failGameUi = false;
+  await game.getByRole('button', { name: 'Retry' }).click();
+
+  await expect(game.getByRole('button', { name: 'Resume saved game' })).toBeVisible({ timeout: 15_000 });
+  await expect(game).toHaveCount(1);
+  await expect(calculator).toBeVisible();
+  expect(moduleRequests).toBeGreaterThan(failedRequestCount);
+  expect(gameUiRequests).toBeGreaterThan(failedUiRequestCount);
+  await game.getByRole('button', { name: 'Resume saved game' }).click();
+  await expect(game.locator('.mine-cell').nth(11)).toHaveClass(/revealed/);
+  await expect(game.locator('.mine-cell').nth(10)).not.toHaveClass(/revealed/);
+});
+
 test('Pyramid, TriPeaks, and Golf use shared card settings and their own playable layouts', async ({ page }) => {
   const expectStagger = async (table, type) => {
     if (type === 'pyramid') {

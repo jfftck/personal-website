@@ -863,11 +863,14 @@ function getAppOrder() {
 
 const loadedAppModules = new Map();
 const loadedAppStyles = new Map();
+let nextAppModuleLoadId = 0;
 
 function loadAppModule(def, onRetry) {
   let loading = loadedAppModules.get(def.modulePath);
   if (!loading) {
-    loading = retryWithBackoff(() => def.loadModule(), { onRetry })
+    const loadId = ++nextAppModuleLoadId;
+    let attempt = 0;
+    loading = retryWithBackoff(() => def.loadModule(attempt++, loadId), { onRetry })
       .catch(error => {
         loadedAppModules.delete(def.modulePath);
         throw error;
@@ -2339,7 +2342,12 @@ const APP_DEFS = {
     title: game.title,
     iconSvg: game.iconSvg,
     modulePath: GAME_MODULE_PATH,
-    loadModule: () => import('./apps/game-center.js'),
+    loadModule: (attempt, loadId) => {
+      if (attempt === 0) return import('./apps/game-center.js');
+      const moduleUrl = new URL('./apps/game-center.js', import.meta.url);
+      moduleUrl.searchParams.set('retry', `${loadId}-${attempt}`);
+      return import(/* @vite-ignore */ moduleUrl.href);
+    },
     styles: GAME_STYLE_PATHS,
     build: (module, id, state, ctx) => module.buildGame(game.type, id, ctx, state),
   }])),
