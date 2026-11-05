@@ -2515,6 +2515,56 @@ test('open calculator windows stay in sync when graph settings change', async ({
   await expect(reopenedCalculator.locator('.calc-plot-area')).toHaveAttribute('aria-valuetext', /theta -2 to 8/);
 });
 
+test('calculator graph changes stay in sync across browser tabs', async ({ page }) => {
+  const firstCalculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(firstCalculator, 'Graph');
+
+  const secondPage = await page.context().newPage();
+  await secondPage.goto('/');
+  await secondPage.locator('#welcome-win-close').click();
+  const secondCalculator = await openUtility(secondPage, 'calculator');
+  await chooseCalculatorMode(secondCalculator, 'Graph');
+
+  await firstCalculator.getByRole('button', { name: 'Graph settings' }).click();
+  const firstSettings = firstCalculator.getByRole('dialog', { name: 'Graph settings' });
+  const firstMode = firstSettings.getByRole('combobox', { name: 'Graph mode' });
+  await firstMode.click();
+  await firstSettings.getByRole('option', { name: /Polar/ }).click();
+  await firstSettings.getByLabel('Minimum theta').fill('-2');
+  await firstSettings.getByLabel('Maximum theta').fill('8');
+  await firstSettings.getByRole('button', { name: 'Apply settings' }).click();
+  await expect(secondCalculator.locator('.calc-mode-label')).toHaveText('POLAR');
+  await expect(secondCalculator.locator('.calc-plot-area')).toHaveAttribute('aria-valuetext', /theta -2 to 8/);
+
+  await firstCalculator.getByRole('button', { name: 'Edit functions' }).click();
+  const editor = firstCalculator.getByRole('dialog', { name: 'Edit functions' });
+  await editor.getByLabel('Function expression').fill('sin(theta)');
+  await editor.getByRole('button', { name: 'New function' }).click();
+  await editor.getByLabel('Function expression').fill('cos(theta)');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+
+  await openGraphInfo(secondCalculator);
+  await expect(secondCalculator.locator('.calc-function-item')).toHaveCount(2);
+  await expect(secondCalculator.locator('.calc-function-summary').first()).toContainText('sin(theta)');
+  await openGraphInfo(firstCalculator);
+  await firstCalculator.getByRole('button', { name: /Hide function/ }).first().click();
+  await expect(secondCalculator.locator('.calc-function-toggle[aria-pressed="false"]')).toHaveCount(1);
+
+  await secondCalculator.getByRole('button', { name: 'Graph settings' }).click();
+  const secondSettings = secondCalculator.getByRole('dialog', { name: 'Graph settings' });
+  await secondSettings.getByLabel('Minimum theta').fill('-3');
+  await secondSettings.getByLabel('Maximum theta').fill('9');
+  await secondSettings.getByRole('button', { name: 'Apply settings' }).click();
+  await expect(firstCalculator.locator('.calc-plot-area')).toHaveAttribute('aria-valuetext', /theta -3 to 9/);
+
+  await expect(secondCalculator.locator('.calc-plot-area')).toHaveAttribute('aria-valuetext', /theta -3 to 9/);
+
+  await firstCalculator.getByRole('button', { name: 'Plot', exact: true }).click();
+  await secondCalculator.getByRole('button', { name: 'Plot', exact: true }).click();
+  await expect(firstCalculator.locator('.calc-graph-line')).toHaveCount(1);
+  await expect(secondCalculator.locator('.calc-graph-line')).toHaveCount(1);
+});
+
 test('calculator function editor blocks stale drafts and can reload a newer graph', async ({ page }) => {
   const firstCalculator = await openUtility(page, 'calculator');
   await chooseCalculatorMode(firstCalculator, 'Graph');
