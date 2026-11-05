@@ -267,6 +267,29 @@
   font-size: .7rem;
 }
 .settings-tint-reset svg { width: .95rem; height: .95rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.settings-topbar-tints {
+  display: grid;
+  gap: .7rem;
+  margin-top: .35rem;
+  padding-top: .85rem;
+  border-top: 1px solid var(--settings-rule);
+}
+.settings-topbar-tints > h3 { margin: 0; color: var(--app-text); font-size: .82rem; }
+.settings-topbar-tints > .settings-description { margin: 0; }
+.settings-topbar-mode-label { color: var(--app-text); font-size: .72rem; font-weight: 650; }
+.settings-topbar-tints app-select { width: min(100%, 24rem); }
+.settings-topbar-custom-panel {
+  display: grid;
+  gap: .85rem;
+  padding: .8rem;
+  border: 1px solid var(--settings-rule);
+  border-radius: .75rem;
+  background: var(--util-surface);
+}
+.settings-topbar-custom-panel[hidden] { display: none; }
+.settings-topbar-custom-panel > h4 { margin: 0; color: var(--app-text); font-size: .76rem; font-weight: 700; }
+.settings-topbar-tint-group { min-width: 0; }
+.settings-topbar-tint-slider { width: 100%; }
 @media (pointer: coarse) {
   .settings-tint-slider::-webkit-slider-thumb { width: 1.7rem; height: 1.7rem; margin-top: -.7rem; }
   .settings-tint-slider::-moz-range-thumb { width: 1.35rem; height: 1.35rem; }

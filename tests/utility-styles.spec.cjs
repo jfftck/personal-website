@@ -431,7 +431,7 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
       return { color: style.color, fontSize: style.fontSize, fontWeight: style.fontWeight };
     }),
   );
-  expect(sliderLabelStyles).toHaveLength(3);
+  expect(sliderLabelStyles).toHaveLength(8);
   for (const labelStyle of sliderLabelStyles) expect(labelStyle).toEqual(tintHeaderStyle);
   await expect(darkTintGroup.getByRole('button', { name: 'None dark tint' })).toHaveAttribute('aria-pressed', 'false');
   let darkLightness = settings.getByRole('slider', { name: 'Dark tint lightness' });
@@ -474,6 +474,14 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
     lightTint: 'purple',
     lightLightness: 75,
     backgroundOpacity: 92,
+    topbar: {
+      mode: 'matching-window',
+      backgroundOpacity: null,
+      darkBackground: { tint: 'blue', lightness: 25 },
+      darkForeground: { tint: 'none', lightness: 100 },
+      lightBackground: { tint: 'none', lightness: 100 },
+      lightForeground: { tint: 'blue', lightness: 25 },
+    },
   });
   await expect.poll(() => lightness.evaluate(input => document.activeElement === input)).toBe(true);
   await lightness.scrollIntoViewIfNeeded();
@@ -605,6 +613,14 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
     lightTint: 'none',
     lightLightness: 75,
     backgroundOpacity: 92,
+    topbar: {
+      mode: 'matching-window',
+      backgroundOpacity: null,
+      darkBackground: { tint: 'blue', lightness: 25 },
+      darkForeground: { tint: 'none', lightness: 100 },
+      lightBackground: { tint: 'none', lightness: 100 },
+      lightForeground: { tint: 'blue', lightness: 25 },
+    },
   });
   const resetTints = restoredSettings.getByRole('button', { name: 'Reset to defaults' });
   await expect(resetTints).toBeEnabled();
@@ -615,6 +631,14 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
     lightTint: 'none',
     lightLightness: 100,
     backgroundOpacity: 92,
+    topbar: {
+      mode: 'matching-window',
+      backgroundOpacity: null,
+      darkBackground: { tint: 'blue', lightness: 25 },
+      darkForeground: { tint: 'none', lightness: 100 },
+      lightBackground: { tint: 'none', lightness: 100 },
+      lightForeground: { tint: 'blue', lightness: 25 },
+    },
   });
   await expect(restoredSettings.getByRole('button', { name: 'Reset to defaults' })).toBeDisabled();
 });
@@ -649,6 +673,14 @@ test('tint sliders debounce live previews and save the settled value', async ({ 
     lightTint: 'none',
     lightLightness: 84,
     backgroundOpacity: 92,
+    topbar: {
+      mode: 'matching-window',
+      backgroundOpacity: null,
+      darkBackground: { tint: 'blue', lightness: 25 },
+      darkForeground: { tint: 'none', lightness: 100 },
+      lightBackground: { tint: 'none', lightness: 100 },
+      lightForeground: { tint: 'blue', lightness: 25 },
+    },
   });
   await expect.poll(() => page.evaluate(() => window.tintStyleWrites)).toBe(2);
   await page.evaluate(() => {
@@ -695,7 +727,105 @@ test('window background opacity previews, persists after interaction, and resets
       lightTint: 'none',
       lightLightness: 100,
       backgroundOpacity: 92,
+      topbar: {
+        mode: 'matching-window',
+        backgroundOpacity: null,
+        darkBackground: { tint: 'blue', lightness: 25 },
+        darkForeground: { tint: 'none', lightness: 100 },
+        lightBackground: { tint: 'none', lightness: 100 },
+        lightForeground: { tint: 'blue', lightness: 25 },
+      },
     });
+});
+
+test('top bar tinting follows or overrides the window theme and exposes role-specific custom ranges', async ({ page }) => {
+  const settings = await openUtility(page, 'settings');
+  const supports = await page.evaluate(() =>
+    CSS.supports('color', 'oklch(from #006699 calc(l + 0.1) c h)'),
+  );
+  if (!supports) return;
+
+  await settings.locator('.settings-theme-choice[data-theme="light"]').click();
+  const root = page.locator('html');
+  await expect(root).toHaveAttribute('data-topbar-theme', 'light');
+  const topbarOpacity = settings.getByRole('slider', { name: 'Top bar background opacity' });
+  await expect(topbarOpacity).toBeVisible();
+  await expect(topbarOpacity).toHaveValue('82');
+  const resetIsAfterTopbar = await settings.locator('.settings-window-tints').evaluate(section => {
+    const children = [...section.children];
+    const topbar = section.querySelector('.settings-topbar-tints');
+    const reset = section.querySelector('.settings-tint-reset');
+    return Boolean(topbar && reset?.closest('app-button')
+      && children.at(-2) === topbar
+      && children.at(-1) === reset.closest('app-button'));
+  });
+  expect(resetIsAfterTopbar).toBe(true);
+  await topbarOpacity.focus();
+  await page.keyboard.press('Home');
+  await expect(settings.getByRole('slider', { name: 'Top bar background opacity' })).toHaveValue('0');
+  await expect.poll(() => page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--topbar-background-opacity').trim(),
+  )).toBe('0%');
+  await expect.poll(() => page.evaluate(key =>
+    JSON.parse(localStorage.getItem(key))?.topbar?.backgroundOpacity, 'desktop-window-tints-v3',
+  )).toBe(0);
+
+  const mode = settings.getByRole('combobox', { name: 'Top bar appearance' });
+  await mode.focus();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(mode).toHaveAttribute('aria-expanded', 'false');
+  await expect(root).toHaveAttribute('data-topbar-theme', 'dark');
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key))?.topbar?.mode, 'desktop-window-tints-v3'))
+    .toBe('reverse-window');
+  await settings.locator('.settings-theme-choice[data-theme="dark"]').click();
+  await expect(root).toHaveAttribute('data-topbar-theme', 'light');
+  await settings.locator('.settings-theme-choice[data-theme="light"]').click();
+  await expect(root).toHaveAttribute('data-topbar-theme', 'dark');
+
+  await settings.getByRole('combobox', { name: 'Top bar appearance' }).click();
+  await page.getByRole('option', { name: 'Light', exact: true }).click();
+  await expect(root).toHaveAttribute('data-topbar-theme', 'light');
+  await settings.getByRole('combobox', { name: 'Top bar appearance' }).click();
+  await page.getByRole('option', { name: 'Dark', exact: true }).click();
+  await expect(root).toHaveAttribute('data-topbar-theme', 'dark');
+  await settings.getByRole('combobox', { name: 'Top bar appearance' }).click();
+  await page.getByRole('option', { name: 'Custom Dark' }).click();
+  await expect(root).toHaveAttribute('data-topbar-theme', 'custom-dark');
+  await expect(settings.getByRole('slider', { name: 'Background lightness' })).toHaveAttribute('min', '5');
+  await expect(settings.getByRole('slider', { name: 'Background lightness' })).toHaveAttribute('max', '25');
+  await expect(settings.getByRole('slider', { name: 'Foreground lightness' })).toHaveAttribute('min', '75');
+  await expect(settings.getByRole('slider', { name: 'Foreground lightness' })).toHaveAttribute('max', '100');
+  await settings.getByRole('group', { name: 'Light top bar foreground tint' })
+    .getByRole('button', { name: 'Purple Light top bar foreground tint' }).click();
+  await expect(settings.getByRole('slider', { name: 'Foreground lightness' })).toHaveAttribute('max', '95');
+  await settings.getByRole('group', { name: 'Dark top bar background tint' })
+    .getByRole('button', { name: 'None Dark top bar background tint' }).click();
+  await expect(settings.getByRole('slider', { name: 'Background lightness' })).toHaveAttribute('min', '0');
+
+  await settings.getByRole('combobox', { name: 'Top bar appearance' }).click();
+  await page.getByRole('option', { name: 'Custom Light' }).click();
+  await expect(root).toHaveAttribute('data-topbar-theme', 'custom-light');
+  await expect(settings.getByRole('slider', { name: 'Top bar background opacity' })).toBeVisible();
+  await expect(settings.getByRole('slider', { name: 'Background lightness' })).toHaveAttribute('min', '75');
+  await expect(settings.getByRole('slider', { name: 'Background lightness' })).toHaveAttribute('max', '100');
+  await expect(settings.getByRole('slider', { name: 'Foreground lightness' })).toHaveAttribute('min', '5');
+  await expect(settings.getByRole('slider', { name: 'Foreground lightness' })).toHaveAttribute('max', '25');
+  await settings.getByRole('group', { name: 'Dark top bar foreground tint' })
+    .getByRole('button', { name: 'None Dark top bar foreground tint' }).click();
+  await expect(settings.getByRole('slider', { name: 'Foreground lightness' })).toHaveAttribute('min', '0');
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), 'desktop-window-tints-v3');
+  expect(saved.topbar).toMatchObject({
+    mode: 'custom-light',
+    darkBackground: { tint: 'none' },
+  });
+  const customTopbarColors = await root.evaluate(element => ({
+    background: getComputedStyle(element).getPropertyValue('--topbar-custom-background').trim(),
+    foreground: getComputedStyle(element).getPropertyValue('--topbar-custom-foreground').trim(),
+  }));
+  expect(customTopbarColors.background).toBe('oklch(100% 0 0)');
+  expect(customTopbarColors.foreground).toContain('oklch(');
 });
 
 test('Tab wraps through the focused window and Ctrl arrows or Vim keys move between windows', async ({ page }) => {

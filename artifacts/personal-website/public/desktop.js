@@ -47,12 +47,29 @@ const ACCENT_COLORS = ['blue', 'teal', 'green', 'gold', 'coral', 'purple'];
 const WINDOW_TINTS_KEY = 'desktop-window-tints-v3';
 const LEGACY_WINDOW_TINT_KEYS = ['desktop-window-tints-v2', 'desktop-window-tints-v1'];
 const WINDOW_TINT_COLORS = ACCENT_COLORS;
+const WINDOW_TINT_HUES = Object.freeze({
+  blue: 240.76,
+  teal: 190,
+  green: 145,
+  gold: 85,
+  coral: 25,
+  purple: 300,
+});
+const TOPBAR_TINT_MODES = ['matching-window', 'reverse-window', 'dark', 'light', 'custom-dark', 'custom-light'];
 const DEFAULT_WINDOW_TINTS = Object.freeze({
   darkTint: 'blue',
   darkLightness: 25,
   lightTint: 'none',
   lightLightness: 100,
   backgroundOpacity: 92,
+  topbar: {
+    mode: 'matching-window',
+    backgroundOpacity: null,
+    darkBackground: { tint: 'blue', lightness: 25 },
+    darkForeground: { tint: 'none', lightness: 100 },
+    lightBackground: { tint: 'none', lightness: 100 },
+    lightForeground: { tint: 'blue', lightness: 25 },
+  },
 });
 const TIME_KEY    = 'desktop-time-24h';
 const WALLPAPER_KEY = 'desktop-wallpaper-settings-v1';
@@ -158,6 +175,7 @@ function applyTheme(theme = readRaw(THEME_KEY), { persist = true } = {}) {
     delete document.documentElement.dataset.theme;
     if (persist) removeData(THEME_KEY);
   }
+  applyTopbarTintAttributes(readWindowTints());
   themeToggle.setAttribute('aria-pressed', String(effectiveTheme() === 'dark'));
   themeSplit.classList.toggle('has-override', hasOverride);
   themeReset.setAttribute('aria-hidden', String(!hasOverride));
@@ -199,7 +217,57 @@ function normalizeWindowTints(value = {}) {
   const backgroundOpacity = Number.isFinite(Number(savedBackgroundOpacity))
     ? Math.max(0, Math.min(100, Math.round(Number(savedBackgroundOpacity))))
     : DEFAULT_WINDOW_TINTS.backgroundOpacity;
-  return { darkTint, darkLightness, lightTint, lightLightness, backgroundOpacity };
+  const normalizeTopbarTint = (saved, fallback, appearance) => {
+    const tint = saved?.tint === 'none' || WINDOW_TINT_COLORS.includes(saved?.tint)
+      ? saved.tint
+      : fallback.tint;
+    const min = appearance === 'dark' ? (tint === 'none' ? 0 : 5) : 75;
+    const max = appearance === 'dark' ? 25 : (tint === 'none' ? 100 : 95);
+    const lightness = Number.isFinite(Number(saved?.lightness))
+      ? Math.max(min, Math.min(max, Math.round(Number(saved.lightness))))
+      : fallback.lightness;
+    return { tint, lightness };
+  };
+  const topbarValue = value?.topbar || {};
+  const topbarMode = TOPBAR_TINT_MODES.includes(topbarValue.mode)
+    ? topbarValue.mode
+    : DEFAULT_WINDOW_TINTS.topbar.mode;
+  const savedTopbarOpacity = topbarValue.backgroundOpacity;
+  const topbarBackgroundOpacity = savedTopbarOpacity !== null && savedTopbarOpacity !== undefined
+    && Number.isFinite(Number(savedTopbarOpacity))
+    ? Math.max(0, Math.min(100, Math.round(Number(savedTopbarOpacity))))
+    : null;
+  return {
+    darkTint,
+    darkLightness,
+    lightTint,
+    lightLightness,
+    backgroundOpacity,
+    topbar: {
+      mode: topbarMode,
+      backgroundOpacity: topbarBackgroundOpacity,
+      darkBackground: normalizeTopbarTint(
+        topbarValue.darkBackground,
+        DEFAULT_WINDOW_TINTS.topbar.darkBackground,
+        'dark',
+      ),
+      darkForeground: normalizeTopbarTint(
+        topbarValue.darkForeground,
+        DEFAULT_WINDOW_TINTS.topbar.darkForeground,
+        'light',
+      ),
+      lightBackground: normalizeTopbarTint(
+        topbarValue.lightBackground,
+        DEFAULT_WINDOW_TINTS.topbar.lightBackground,
+        'light',
+      ),
+      lightForeground: normalizeTopbarTint(
+        topbarValue.lightForeground,
+        DEFAULT_WINDOW_TINTS.topbar.lightForeground,
+        'dark',
+      ),
+    },
+  };
 }
 
 function readSavedWindowTints() {
@@ -233,6 +301,41 @@ function applyWindowTintAttributes(value) {
   root.style.setProperty('--window-dark-lightness', `${tints.darkLightness}%`);
   root.style.setProperty('--window-lightness', `${tints.lightLightness}%`);
   root.style.setProperty('--window-background-opacity', `${tints.backgroundOpacity}%`);
+  applyTopbarTintAttributes(tints);
+}
+
+function topbarTintColor({ tint, lightness }, appearance) {
+  if (tint === 'none') return `oklch(${lightness}% 0 0)`;
+  const chroma = appearance === 'dark' ? '0.0645' : '0.0622';
+  return `oklch(${lightness}% ${chroma} ${WINDOW_TINT_HUES[tint]})`;
+}
+
+function applyTopbarTintAttributes(value) {
+  const root = document.documentElement;
+  const tints = normalizeWindowTints(value);
+  const mode = tints.topbar.mode;
+  const theme = effectiveTheme();
+  let resolvedTheme = theme;
+  if (mode === 'reverse-window') resolvedTheme = theme === 'dark' ? 'light' : 'dark';
+  else if (mode === 'dark' || mode === 'light') resolvedTheme = mode;
+  else if (mode === 'custom-dark' || mode === 'custom-light') resolvedTheme = mode;
+  root.dataset.topbarTheme = resolvedTheme;
+  const defaultOpacity = resolvedTheme === 'dark' || resolvedTheme === 'custom-dark' ? 78 : 82;
+  root.style.setProperty(
+    '--topbar-background-opacity',
+    `${tints.topbar.backgroundOpacity ?? defaultOpacity}%`,
+  );
+
+  if (mode === 'custom-dark') {
+    root.style.setProperty('--topbar-custom-background', topbarTintColor(tints.topbar.darkBackground, 'dark'));
+    root.style.setProperty('--topbar-custom-foreground', topbarTintColor(tints.topbar.darkForeground, 'light'));
+  } else if (mode === 'custom-light') {
+    root.style.setProperty('--topbar-custom-background', topbarTintColor(tints.topbar.lightBackground, 'light'));
+    root.style.setProperty('--topbar-custom-foreground', topbarTintColor(tints.topbar.lightForeground, 'dark'));
+  } else {
+    root.style.removeProperty('--topbar-custom-background');
+    root.style.removeProperty('--topbar-custom-foreground');
+  }
 }
 
 function setWindowTints(value) {

@@ -39,7 +39,23 @@ const DEFAULT_WINDOW_TINTS = {
   lightTint: 'none',
   lightLightness: 100,
   backgroundOpacity: 92,
+  topbar: {
+    mode: 'matching-window',
+    backgroundOpacity: null,
+    darkBackground: { tint: 'blue', lightness: 25 },
+    darkForeground: { tint: 'none', lightness: 100 },
+    lightBackground: { tint: 'none', lightness: 100 },
+    lightForeground: { tint: 'blue', lightness: 25 },
+  },
 };
+const TOPBAR_TINT_MODES = [
+  ['matching-window', 'Matching Window'],
+  ['reverse-window', 'Reverse of Window'],
+  ['dark', 'Dark'],
+  ['light', 'Light'],
+  ['custom-dark', 'Custom Dark'],
+  ['custom-light', 'Custom Light'],
+];
 const WINDOW_DARK_TINT_OPTIONS = [
   { value: 'none', label: 'None', color: '#000' },
   ...ACCENT_COLORS,
@@ -114,12 +130,56 @@ function normalizeWindowTints(value) {
   const backgroundOpacity = Number.isFinite(Number(savedBackgroundOpacity))
     ? Math.max(0, Math.min(100, Math.round(Number(savedBackgroundOpacity))))
     : DEFAULT_WINDOW_TINTS.backgroundOpacity;
+  const normalizeTopbarTint = (saved, fallback, appearance) => {
+    const tint = saved?.tint === 'none' || ACCENT_COLORS.some(option => option.value === saved?.tint)
+      ? saved.tint
+      : fallback.tint;
+    const min = appearance === 'dark' ? (tint === 'none' ? 0 : 5) : 75;
+    const max = appearance === 'dark' ? 25 : (tint === 'none' ? 100 : 95);
+    const lightness = Number.isFinite(Number(saved?.lightness))
+      ? Math.max(min, Math.min(max, Math.round(Number(saved.lightness))))
+      : fallback.lightness;
+    return { tint, lightness };
+  };
+  const topbarValue = value?.topbar || {};
+  const topbarMode = TOPBAR_TINT_MODES.some(([mode]) => mode === topbarValue.mode)
+    ? topbarValue.mode
+    : DEFAULT_WINDOW_TINTS.topbar.mode;
+  const savedTopbarOpacity = topbarValue.backgroundOpacity;
+  const topbarBackgroundOpacity = savedTopbarOpacity !== null && savedTopbarOpacity !== undefined
+    && Number.isFinite(Number(savedTopbarOpacity))
+    ? Math.max(0, Math.min(100, Math.round(Number(savedTopbarOpacity))))
+    : null;
   return {
     darkTint,
     darkLightness,
     lightTint,
     lightLightness,
     backgroundOpacity,
+    topbar: {
+      mode: topbarMode,
+      backgroundOpacity: topbarBackgroundOpacity,
+      darkBackground: normalizeTopbarTint(
+        topbarValue.darkBackground,
+        DEFAULT_WINDOW_TINTS.topbar.darkBackground,
+        'dark',
+      ),
+      darkForeground: normalizeTopbarTint(
+        topbarValue.darkForeground,
+        DEFAULT_WINDOW_TINTS.topbar.darkForeground,
+        'light',
+      ),
+      lightBackground: normalizeTopbarTint(
+        topbarValue.lightBackground,
+        DEFAULT_WINDOW_TINTS.topbar.lightBackground,
+        'light',
+      ),
+      lightForeground: normalizeTopbarTint(
+        topbarValue.lightForeground,
+        DEFAULT_WINDOW_TINTS.topbar.lightForeground,
+        'dark',
+      ),
+    },
   };
 }
 
@@ -280,7 +340,7 @@ export function buildSettings(id, ctx, initialState) {
 
   function renderAppearance(body) {
     const card = el('section', 'settings-card settings-appearance-card');
-    card.append(el('span', 'settings-card-eyebrow', 'WINDOW'), el('h2', '', 'Color theme'), el('p', 'settings-description', 'Your choice follows you across every desktop window.'));
+    card.append(el('span', 'settings-card-eyebrow', 'SYSTEM'), el('h2', '', 'Color theme'), el('p', 'settings-description', 'Your choice follows you across every desktop window.'));
     const options = el('div', 'settings-theme-options');
     options.setAttribute('role', 'group');
     options.setAttribute('aria-label', 'Color theme');
@@ -545,11 +605,212 @@ export function buildSettings(id, ctx, initialState) {
         }
       });
 
+      const topbarSection = el('section', 'settings-topbar-tints');
+      topbarSection.append(
+        el('h3', '', 'Top bar tinting'),
+        el('p', 'settings-description settings-window-tint-description',
+          'Choose whether the top bar follows the window theme or uses its own colors.'),
+      );
+      const topbarModeLabel = el('label', 'settings-topbar-mode-label', 'Top bar appearance');
+      const topbarMode = document.createElement('select');
+      topbarMode.className = 'util-select settings-topbar-mode';
+      topbarMode.id = `settings-topbar-mode-${id}`;
+      for (const [value, label] of TOPBAR_TINT_MODES) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        topbarMode.append(option);
+      }
+      topbarMode.value = windowTints.topbar.mode;
+      topbarModeLabel.append(topbarMode);
+      topbarSection.append(topbarModeLabel);
+      enhanceSelect(topbarMode);
+      const topbarOpacity = document.createElement('input');
+      topbarOpacity.className = 'settings-tint-slider settings-topbar-opacity-slider';
+      topbarOpacity.type = 'range';
+      topbarOpacity.min = '0';
+      topbarOpacity.max = '100';
+      topbarOpacity.step = '1';
+      topbarOpacity.id = `settings-topbar-background-opacity-${id}`;
+      topbarOpacity.setAttribute('aria-label', 'Top bar background opacity');
+      const topbarModeTheme = windowTints.topbar.mode === 'reverse-window'
+        ? (current.theme === 'dark' ? 'light' : 'dark')
+        : (windowTints.topbar.mode === 'dark' || windowTints.topbar.mode === 'custom-dark'
+          ? 'dark'
+          : windowTints.topbar.mode === 'light' || windowTints.topbar.mode === 'custom-light'
+            ? 'light'
+            : current.theme);
+      const topbarOpacityFallback = topbarModeTheme === 'dark' ? 78 : 82;
+      topbarOpacity.value = String(windowTints.topbar.backgroundOpacity ?? topbarOpacityFallback);
+      const topbarOpacityHeading = el('div', 'settings-tint-lightness-heading');
+      const topbarOpacityLabel = el('label', '', 'Background opacity');
+      topbarOpacityLabel.htmlFor = topbarOpacity.id;
+      const topbarOpacityValue = el('output', 'settings-tint-lightness-value', `${topbarOpacity.value}%`);
+      topbarOpacityValue.htmlFor = topbarOpacity.id;
+      topbarOpacityHeading.append(topbarOpacityLabel, topbarOpacityValue);
+      const topbarOpacityControl = el('div', 'settings-tint-lightness-control');
+      topbarOpacityControl.append(topbarOpacityHeading, topbarOpacity);
+      topbarSection.append(
+        el('p', 'settings-description settings-tint-help', 'Adjust the transparency of the top bar background.'),
+        topbarOpacityControl,
+      );
+
+      const topbarCustomConfig = {
+        'custom-dark': {
+          title: 'Custom dark top bar',
+          backgroundKey: 'darkBackground',
+          foregroundKey: 'darkForeground',
+          backgroundAppearance: 'dark',
+          foregroundAppearance: 'light',
+        },
+        'custom-light': {
+          title: 'Custom light top bar',
+          backgroundKey: 'lightBackground',
+          foregroundKey: 'lightForeground',
+          backgroundAppearance: 'light',
+          foregroundAppearance: 'dark',
+        },
+      };
+      const topbarCustomPanels = new Map();
+      const updateTopbarPreview = () => {
+        cancelTintPreview();
+        tintPreviewTimer = window.setTimeout(() => {
+          tintPreviewTimer = 0;
+          settings?.previewWindowTints?.(windowTints);
+        }, 70);
+      };
+      const persistTopbarTints = () => {
+        try {
+          cancelTintPreview();
+          settings?.setWindowTints?.(windowTints);
+          current = snapshot();
+        } catch (error) {
+          setMessage(page.querySelector('.settings-inline-status'), error?.message || 'The top bar tint could not be changed.', 'error');
+        }
+      };
+      topbarOpacity.addEventListener('input', () => {
+        windowTints.topbar.backgroundOpacity = Number(topbarOpacity.value);
+        topbarOpacityValue.textContent = `${topbarOpacity.value}%`;
+        updateTopbarPreview();
+      });
+      topbarOpacity.addEventListener('change', () => {
+        const restoreFocus = document.activeElement === topbarOpacity;
+        persistTopbarTints();
+        if (restoreFocus) requestAnimationFrame(() => {
+          page.querySelector('.settings-topbar-opacity-slider')?.focus({ preventScroll: true });
+        });
+      });
+      const buildTopbarTintGroup = (appearance, role, property) => {
+        const isDark = appearance === 'dark';
+        const group = el('div', 'settings-tint-group settings-topbar-tint-group');
+        const title = `${appearance === 'dark' ? 'Dark' : 'Light'} top bar ${role}`;
+        group.append(el('h4', '', role[0].toUpperCase() + role.slice(1)));
+        const options = el('div', 'settings-tint-options');
+        options.setAttribute('role', 'group');
+        options.setAttribute('aria-label', `${title} tint`);
+        const choices = isDark ? WINDOW_DARK_TINT_OPTIONS : WINDOW_LIGHT_TINT_OPTIONS;
+        const record = windowTints.topbar[property];
+        const colorFor = option => option.value === 'none'
+          ? `oklch(${record.lightness}% 0 0)`
+          : `oklch(${record.lightness}% ${isDark ? '0.0645' : '0.0622'} ${option.hue})`;
+        for (const option of choices) {
+          const button = el('button', 'settings-tint-choice');
+          button.type = 'button';
+          button.setAttribute('aria-label', `${option.label} ${title} tint`);
+          button.setAttribute('aria-pressed', String(record.tint === option.value));
+          button.dataset.tintValue = option.value;
+          const swatch = el('span', `settings-tint-swatch settings-tint-swatch-${appearance}`);
+          swatch.style.backgroundColor = colorFor(option);
+          swatch.setAttribute('aria-hidden', 'true');
+          button.append(swatch, el('span', 'settings-tint-label', option.label));
+          button.addEventListener('click', () => {
+            record.tint = option.value;
+            const min = isDark ? (option.value === 'none' ? 0 : 5) : 75;
+            const max = isDark ? 25 : (option.value === 'none' ? 100 : 95);
+            record.lightness = Math.max(min, Math.min(max, record.lightness));
+            slider.min = String(min);
+            slider.max = String(max);
+            slider.value = String(record.lightness);
+            value.textContent = `${record.lightness}%`;
+            for (const choice of choices) {
+              const choiceButton = options.querySelector(`[data-tint-value="${choice.value}"]`);
+              choiceButton?.setAttribute('aria-pressed', String(choice.value === option.value));
+              const choiceSwatch = choiceButton?.querySelector('.settings-tint-swatch');
+              if (choiceSwatch) choiceSwatch.style.backgroundColor = colorFor(choice);
+            }
+            persistTopbarTints();
+          });
+          options.append(button);
+        }
+
+        const help = isDark
+          ? (role === 'background'
+            ? 'Use 5% to 25% lightness for colors, or 0% to 25% for None.'
+            : 'Use 75% to 95% lightness for colors, or 75% to 100% for None.')
+          : (role === 'background'
+            ? 'Use 75% to 95% lightness for colors, or 75% to 100% for None.'
+            : 'Use 5% to 25% lightness for colors, or 0% to 25% for None.');
+        group.append(options, el('p', 'settings-description settings-tint-help', help));
+        const slider = document.createElement('input');
+        slider.className = 'settings-tint-slider settings-topbar-tint-slider';
+        slider.type = 'range';
+        slider.min = String(isDark ? (record.tint === 'none' ? 0 : 5) : 75);
+        slider.max = String(isDark ? 25 : (record.tint === 'none' ? 100 : 95));
+        slider.step = '1';
+        slider.value = String(record.lightness);
+        slider.id = `settings-topbar-${property}-lightness-${id}`;
+        slider.dataset.tintKey = property;
+        slider.setAttribute('aria-label', `${title} lightness`);
+        const heading = el('div', 'settings-tint-lightness-heading');
+        const label = el('label', '', `${role[0].toUpperCase() + role.slice(1)} lightness`);
+        label.htmlFor = slider.id;
+        const value = el('output', 'settings-tint-lightness-value', `${record.lightness}%`);
+        value.htmlFor = slider.id;
+        heading.append(label, value);
+        const control = el('div', 'settings-tint-lightness-control');
+        control.append(heading, slider);
+        slider.addEventListener('input', () => {
+          record.lightness = Number(slider.value);
+          value.textContent = `${slider.value}%`;
+          for (const option of choices) {
+            const swatch = options.querySelector(`[data-tint-value="${option.value}"] .settings-tint-swatch`);
+            if (swatch) swatch.style.backgroundColor = colorFor(option);
+          }
+          updateTopbarPreview();
+        });
+        slider.addEventListener('change', () => {
+          const restoreFocus = document.activeElement === slider;
+          persistTopbarTints();
+          if (restoreFocus) requestAnimationFrame(() => {
+            page.querySelector(`.settings-topbar-tint-slider[data-tint-key="${property}"]`)?.focus({ preventScroll: true });
+          });
+        });
+        group.append(control);
+        return group;
+      };
+      for (const [mode, config] of Object.entries(topbarCustomConfig)) {
+        const panel = el('div', 'settings-topbar-custom-panel');
+        panel.hidden = windowTints.topbar.mode !== mode;
+        panel.append(
+          el('h4', '', config.title),
+          buildTopbarTintGroup(config.backgroundAppearance, 'background', config.backgroundKey),
+          buildTopbarTintGroup(config.foregroundAppearance, 'foreground', config.foregroundKey),
+        );
+        topbarCustomPanels.set(mode, panel);
+        topbarSection.append(panel);
+      }
+      topbarMode.addEventListener('change', () => {
+        windowTints.topbar.mode = topbarMode.value;
+        for (const [mode, panel] of topbarCustomPanels) panel.hidden = mode !== topbarMode.value;
+        persistTopbarTints();
+      });
+
       resetTints.disabled = windowTints.darkTint === DEFAULT_WINDOW_TINTS.darkTint
         && windowTints.darkLightness === DEFAULT_WINDOW_TINTS.darkLightness
         && windowTints.lightTint === DEFAULT_WINDOW_TINTS.lightTint
         && windowTints.lightLightness === DEFAULT_WINDOW_TINTS.lightLightness
-        && windowTints.backgroundOpacity === DEFAULT_WINDOW_TINTS.backgroundOpacity;
+        && windowTints.backgroundOpacity === DEFAULT_WINDOW_TINTS.backgroundOpacity
+        && JSON.stringify(windowTints.topbar) === JSON.stringify(DEFAULT_WINDOW_TINTS.topbar);
       resetTints.addEventListener('click', () => {
         try {
           cancelTintPreview();
@@ -559,7 +820,14 @@ export function buildSettings(id, ctx, initialState) {
           setMessage(page.querySelector('.settings-inline-status'), error?.message || 'The window tints could not be reset.', 'error');
         }
       });
-      windowTintSection.append(darkGroup, lightGroup, opacityDescription, opacityControl, wrapAppButton(resetTints));
+      windowTintSection.append(
+        darkGroup,
+        lightGroup,
+        opacityDescription,
+        opacityControl,
+        topbarSection,
+        wrapAppButton(resetTints),
+      );
     } else {
       windowTintSection.append(el('p', 'settings-description', 'Window tint choices require a browser that supports CSS relative colors.'));
     }

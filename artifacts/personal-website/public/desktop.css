@@ -110,6 +110,22 @@
   }
 }
 
+/* The top bar can follow the desktop theme or use an independent palette. */
+:root[data-topbar-theme="dark"] {
+  --topbar-bg: rgb(0 30 50 / var(--topbar-background-opacity, 78%));
+  --topbar-border: rgba(255, 255, 255, 0.10);
+  --topbar-text: #e8f4ff;
+  --btn-hover: rgba(255, 255, 255, 0.14);
+  --btn-active: rgba(255, 255, 255, 0.22);
+}
+:root[data-topbar-theme="light"] {
+  --topbar-bg: rgb(225 243 255 / var(--topbar-background-opacity, 82%));
+  --topbar-border: rgba(0, 80, 130, 0.14);
+  --topbar-text: #002840;
+  --btn-hover: rgba(0, 80, 130, 0.10);
+  --btn-active: rgba(0, 80, 130, 0.18);
+}
+
 /* Accent palettes derive every shade from one equal-lightness base color.
    Browsers without relative-color support keep the original dark blue. */
 @supports (color: oklch(from #006699 calc(l + 0.1) c h)) {
@@ -159,6 +175,15 @@
   }
   :root[data-window-dark-tint]:not([data-window-dark-tint="none"]) {
     --window-dark-tint-color: oklch(from var(--window-dark-source, var(--palette-blue)) var(--window-dark-lightness, 25%) calc(c * 0.57) h);
+  }
+
+  :root[data-topbar-theme="custom-dark"],
+  :root[data-topbar-theme="custom-light"] {
+    --topbar-bg: oklch(from var(--topbar-custom-background) l c h / var(--topbar-background-opacity, 82%));
+    --topbar-border: oklch(from var(--topbar-custom-foreground) l c h / 0.16);
+    --topbar-text: var(--topbar-custom-foreground);
+    --btn-hover: color-mix(in srgb, var(--topbar-custom-foreground) 12%, transparent);
+    --btn-active: color-mix(in srgb, var(--topbar-custom-foreground) 22%, transparent);
   }
 
   :root[data-window-tints="custom"] {
