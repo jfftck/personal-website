@@ -2014,6 +2014,99 @@ test('win animation settings remain usable while the victory new game screen is 
   await expect(drawControl).toBeFocused();
 });
 
+test('win animation drawer stays usable on phones and narrow game windows', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const layouts = [
+    { label: 'phone viewport', viewport: { width: 390, height: 844 }, widthPreset: 'full' },
+    { label: 'narrow desktop window', viewport: { width: 1024, height: 800 }, widthPreset: 'third' },
+  ];
+
+  for (const layout of layouts) {
+    await page.setViewportSize(layout.viewport);
+    const session = savedKlondike({
+      columns: [[[13, 0]]],
+      foundations: {
+        0: Array.from({ length: 12 }, (_, index) => index + 1),
+        1: Array.from({ length: 13 }, (_, index) => index + 1),
+        2: Array.from({ length: 13 }, (_, index) => index + 1),
+        3: Array.from({ length: 13 }, (_, index) => index + 1),
+      },
+    });
+    session.columns[0].widthPreset = layout.widthPreset;
+    const app = await restoreGame(page, session);
+    const game = app.locator('.game-app');
+    await app.locator('[data-key="card-12"]').dblclick();
+    const victoryScreen = app.locator('.game-new-game-screen');
+    await expect(victoryScreen).toBeVisible();
+
+    const settings = await openSettings(app);
+    const trigger = settings.getByRole('button', { name: /^Win animation:/ });
+    await trigger.click();
+    const panel = app.getByRole('dialog', { name: 'Win animation options' });
+    await expect(panel).toBeVisible();
+    await expect(app.locator('.animation-picker-layer')).toHaveClass(/is-open/);
+    await expect(app.locator('.animation-picker-drawer')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+
+    const geometry = await app.evaluate(root => {
+      const drawer = root.querySelector('.animation-picker-drawer');
+      const gameRoot = drawer.closest('.game-app') || root;
+      const gameRect = gameRoot.getBoundingClientRect();
+      const drawerRect = drawer.getBoundingClientRect();
+      const closeRect = drawer.querySelector('.animation-picker-close').getBoundingClientRect();
+      return {
+        game: { left: gameRect.left, top: gameRect.top, right: gameRect.right, bottom: gameRect.bottom, width: gameRect.width },
+        drawer: { left: drawerRect.left, top: drawerRect.top, right: drawerRect.right, bottom: drawerRect.bottom },
+        close: { left: closeRect.left, top: closeRect.top, right: closeRect.right, bottom: closeRect.bottom },
+      };
+    });
+    if (layout.widthPreset === 'third') expect(geometry.game.width, layout.label).toBeLessThan(360);
+    else expect(geometry.game.width, layout.label).toBeLessThanOrEqual(layout.viewport.width + 1);
+    expect(geometry.drawer.left, layout.label).toBeGreaterThanOrEqual(geometry.game.left - 1);
+    expect(geometry.drawer.top, layout.label).toBeGreaterThanOrEqual(geometry.game.top - 1);
+    expect(geometry.drawer.right, layout.label).toBeLessThanOrEqual(geometry.game.right + 1);
+    expect(geometry.drawer.bottom, layout.label).toBeLessThanOrEqual(geometry.game.bottom + 1);
+    expect(geometry.close.left, layout.label).toBeGreaterThanOrEqual(geometry.drawer.left - 1);
+    expect(geometry.close.top, layout.label).toBeGreaterThanOrEqual(geometry.drawer.top - 1);
+    expect(geometry.close.right, layout.label).toBeLessThanOrEqual(geometry.drawer.right + 1);
+    expect(geometry.close.bottom, layout.label).toBeLessThanOrEqual(geometry.drawer.bottom + 1);
+    expect(geometry.game.right - geometry.drawer.right, layout.label).toBeLessThan(2);
+
+    const none = panel.getByRole('checkbox', { name: 'No animation' });
+    const kitchenSink = panel.getByRole('checkbox', { name: 'Kitchen Sink' });
+    if (layout.widthPreset === 'third') {
+      await expect(none).toBeFocused();
+      if (!await none.isChecked()) await page.keyboard.press('Space');
+      for (let index = 0; index < 12 && !await kitchenSink.evaluate(node => node === document.activeElement); index++) {
+        await page.keyboard.press('Tab');
+      }
+      await expect(kitchenSink).toBeFocused();
+      await page.keyboard.press('Space');
+    } else {
+      if (!await none.isChecked()) await none.click();
+      await kitchenSink.click();
+    }
+    await expect(kitchenSink).toBeChecked();
+    const itemVisibility = await app.evaluate(() => {
+      const options = document.querySelector('.animation-picker-options').getBoundingClientRect();
+      const item = document.querySelector('.animation-picker-option:last-child').getBoundingClientRect();
+      return { options: { top: options.top, bottom: options.bottom, left: options.left, right: options.right },
+        item: { top: item.top, bottom: item.bottom, left: item.left, right: item.right } };
+    });
+    expect(itemVisibility.item.top, layout.label).toBeGreaterThanOrEqual(itemVisibility.options.top - 1);
+    expect(itemVisibility.item.bottom, layout.label).toBeLessThanOrEqual(itemVisibility.options.bottom + 1);
+    expect(itemVisibility.item.left, layout.label).toBeGreaterThanOrEqual(itemVisibility.options.left - 1);
+    expect(itemVisibility.item.right, layout.label).toBeLessThanOrEqual(itemVisibility.options.right + 1);
+
+    await panel.getByRole('button', { name: 'Done' }).click();
+    await settings.getByRole('button', { name: 'Close settings' }).click();
+    await expect(victoryScreen).toBeVisible();
+    await expect(victoryScreen).toHaveAttribute('aria-modal', 'true');
+    await expect.poll(() => page.evaluate(() =>
+      JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).solitaire))
+      .toEqual(['kitchen-sink']);
+  }
+});
+
 test('Chess and Reversi can use a fixed win animation or random selection', async ({ page }) => {
   const chess = await openGame(page, 'chess');
   const chessSettings = await openSettings(chess);
