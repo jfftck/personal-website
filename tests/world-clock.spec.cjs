@@ -138,6 +138,29 @@ test('offers clear typo matches without adding a city until the user chooses one
   await expect(suggestions).toBeHidden();
 });
 
+test('keyboard users can focus and choose a typo match, then return to the city field', async ({ page }) => {
+  const clock = await openWorldClock(page);
+  const cityInput = clock.getByLabel('City or time zone');
+  const suggestions = clock.getByRole('listbox', { name: 'Place suggestions' });
+  const parisOption = suggestions.getByRole('option');
+
+  await cityInput.fill('Pariss');
+  await expect(parisOption).toHaveCount(1);
+  await expect(parisOption).toContainText('Paris');
+  await expect(parisOption).toContainText('France');
+  await expect(parisOption).toContainText('Europe/Paris');
+
+  await cityInput.press('Tab');
+  await expect(parisOption).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  await expect(clock.locator('.clock-item[data-zone="Europe/Paris"] strong')).toHaveText('Paris');
+  await expect(clock.locator('.clock-item[data-zone="Europe/Paris"]')).toHaveCount(1);
+  await expect(cityInput).toBeFocused();
+  await expect(cityInput).toHaveValue('');
+  await expect(suggestions).toBeHidden();
+});
+
 test('the unified search includes country and alternate-name matches', async ({ page }) => {
   const clock = await openWorldClock(page);
   const search = clock.getByLabel('City or time zone');
