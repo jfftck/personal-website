@@ -186,7 +186,7 @@ test('Wallpaper settings apply changes immediately without save or cancel action
             { url: '/wallpaper-two.jpg', title: 'Wallpaper Two' },
           ],
           settings: {
-            selected: ['/wallpaper-one.jpg'],
+            selected: ['/wallpaper-one.jpg', '/wallpaper-two.jpg'],
             mode: 'random',
             rotation: 'visit',
             intervalMinutes: 60,
@@ -209,8 +209,9 @@ test('Wallpaper settings apply changes immediately without save or cancel action
   const wallpaperPage = page.locator('.settings-app').last();
   await expect(wallpaperPage.getByText('Eligible wallpapers')).toBeVisible();
   await expect(wallpaperPage.getByText('Selected', { exact: true })).toHaveCount(0);
+  await expect(wallpaperPage.locator('.settings-nav-copy small')).toHaveCount(0);
   const selectedWallpaper = wallpaperPage.locator('.settings-wallpaper-tile:has(input:checked)');
-  await expect(selectedWallpaper.locator('input')).toBeChecked();
+  await expect(selectedWallpaper.first().locator('input')).toBeChecked();
   const selectedMode = wallpaperPage.locator('.settings-choice-option[aria-pressed="true"]').first();
   const selectedStyles = await selectedMode.evaluate(button => ({
     borderColor: getComputedStyle(button).borderTopColor,
@@ -248,6 +249,43 @@ test('Wallpaper settings apply changes immediately without save or cancel action
   expect(await page.evaluate(() => window.__wallpaperTestCalls[1].transition)).toEqual([]);
   await transitionPanel.getByRole('button', { name: 'Done' }).click();
   await expect(wallpaperPage.getByRole('status')).toContainText('applied');
+
+  let timerOption = wallpaperPage.locator('.settings-timer-option');
+  await expect(timerOption).toBeVisible();
+  await timerOption.getByRole('button', { name: /On a timer/ }).click();
+  timerOption = wallpaperPage.locator('.settings-timer-option');
+  const intervalTrigger = timerOption.getByRole('combobox', { name: 'Wallpaper change interval' });
+  await expect(intervalTrigger).toBeEnabled();
+  const timerLayout = await timerOption.evaluate(row => {
+    const rowRect = row.getBoundingClientRect();
+    const textRect = row.querySelector('.settings-timer-choice .settings-choice-copy').getBoundingClientRect();
+    const selectRect = row.querySelector('.standard-select-trigger').getBoundingClientRect();
+    return { rowRight: rowRect.right, textRight: textRect.right, selectLeft: selectRect.left, selectRight: selectRect.right };
+  });
+  expect(timerLayout.selectLeft).toBeGreaterThan(timerLayout.textRight);
+  expect(timerLayout.selectRight).toBeLessThanOrEqual(timerLayout.rowRight);
+
+  await intervalTrigger.click();
+  const intervalOptions = page.getByRole('listbox', { name: 'Wallpaper change interval' });
+  await expect(intervalOptions.getByRole('option')).toHaveText([
+    '1 minute', '5 minutes', '15 minutes', '30 minutes', '1 hour', '6 hours', '1 day',
+  ]);
+  await intervalOptions.getByRole('option', { name: '6 hours' }).click();
+  await expect.poll(() => page.evaluate(() => window.__wallpaperTestCalls.length)).toBe(4);
+  expect(await page.evaluate(() => window.__wallpaperTestCalls[3].intervalMinutes)).toBe(360);
+  await expect(wallpaperPage.locator('.settings-timer-option .standard-select-trigger')).toHaveText('6 hours');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await wallpaperPage.locator('.settings-mobile-item[data-page="wallpaper"]').click();
+  await expect(wallpaperPage.locator('.settings-timer-option')).toBeVisible();
+  const mobileTimerLayout = await wallpaperPage.locator('.settings-timer-option').evaluate(row => {
+    const rowRect = row.getBoundingClientRect();
+    const textRect = row.querySelector('.settings-timer-choice .settings-choice-copy').getBoundingClientRect();
+    const selectRect = row.querySelector('.standard-select-trigger').getBoundingClientRect();
+    return { rowRight: rowRect.right, textRight: textRect.right, selectLeft: selectRect.left, selectRight: selectRect.right };
+  });
+  expect(mobileTimerLayout.selectLeft).toBeGreaterThan(mobileTimerLayout.textRight);
+  expect(mobileTimerLayout.selectRight).toBeLessThanOrEqual(mobileTimerLayout.rowRight);
 });
 
 test('animation settings use the picker labels without duplicate card headings', async ({ page }) => {

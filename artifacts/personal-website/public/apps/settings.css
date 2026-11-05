@@ -90,7 +90,6 @@
 .settings-nav-icon svg { width: 1rem; height: 1rem; fill: currentColor; }
 .settings-nav-copy { display: grid; gap: .12rem; min-width: 0; }
 .settings-nav-copy strong { font-size: .79rem; font-weight: 650; }
-.settings-nav-copy small { color: var(--util-detail); font-size: .64rem; line-height: 1.35; }
 .settings-main { min-width: 0; min-height: 0; overflow: auto; position: relative; }
 .settings-page { min-height: 100%; }
 .settings-page-header { display: flex; align-items: center; gap: 1rem; padding: 2rem clamp(1.2rem, 4vw, 3rem) 1.3rem; }
@@ -327,6 +326,34 @@
 .settings-choice-copy strong, .settings-choice-copy small { display: block; }
 .settings-choice-copy strong { font-size: .72rem; }
 .settings-choice-copy small { margin-top: .1rem; color: var(--util-detail); font-size: .62rem; }
+.settings-timer-option {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: .45rem;
+  padding: .18rem .28rem .18rem .55rem;
+  border: 1px solid transparent;
+  border-radius: .6rem;
+  color: var(--app-text);
+}
+.settings-timer-option:hover { background: var(--util-surface-strong); }
+.settings-timer-option.is-selected {
+  border-color: var(--focus-color);
+  background: var(--settings-accent-wash);
+}
+.settings-timer-choice {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  padding: .25rem 0;
+  border-color: transparent;
+  background: transparent;
+}
+.settings-timer-choice:hover,
+.settings-timer-choice[aria-pressed="true"] { border-color: transparent; background: transparent; }
+.settings-timer-option .standard-select-field { flex: 0 0 auto; width: min(9rem, 43%); }
+.settings-timer-option .standard-select-control { width: 100%; }
+.settings-timer-option .standard-select-trigger { min-height: 2rem; padding: .35rem .5rem; font-size: .68rem; }
 .settings-cycle-list { display: grid; gap: .35rem; margin: .75rem 0 0; padding: 0; list-style: none; }
 .settings-cycle-item { display: grid; grid-template-columns: 1.5rem 2rem minmax(0,1fr) auto; align-items: center; gap: .5rem; min-width: 0; padding: .35rem; border-radius: .5rem; background: var(--util-surface); }
 .settings-cycle-number { color: var(--accent); font-family: ui-monospace, monospace; font-size: .64rem; }
@@ -371,7 +398,6 @@
   .settings-mobile-item { width: 100%; min-width: 0; min-height: 4.5rem; box-sizing: border-box; padding: .8rem; border-color: var(--settings-rule); background: var(--util-surface); }
   .settings-mobile-item .settings-nav-icon { width: 2.35rem; height: 2.35rem; flex-basis: 2.35rem; }
   .settings-mobile-item .settings-nav-copy strong { font-size: .83rem; }
-  .settings-mobile-item .settings-nav-copy small { font-size: .68rem; }
   .settings-page { position: absolute; inset: 0; width: auto; min-width: 0; box-sizing: border-box; overflow: auto; background: var(--app-bg); }
   .settings-page-header { display: grid; gap: .85rem; padding: 1rem 1rem .85rem; }
   .settings-page-header .settings-title-block h1 { font-size: 1.65rem; }

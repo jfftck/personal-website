@@ -5,10 +5,10 @@ import { createAnimationPickerController } from './animation-picker.js';
 import { wrapAppButton } from '../shared/app-controls.js';
 
 const PAGES = [
-  { id: 'appearance', title: 'Appearance', detail: 'Choose how your desktop looks.' },
-  { id: 'time', title: 'Time & Date', detail: 'Set the time format used across the desktop.' },
-  { id: 'notifications', title: 'Notifications', detail: 'Control system reminders and alerts.' },
-  { id: 'wallpaper', title: 'Wallpaper', detail: 'Choose the images and rhythm of your desktop.' },
+  { id: 'appearance', title: 'Appearance' },
+  { id: 'time', title: 'Time & Date' },
+  { id: 'notifications', title: 'Notifications' },
+  { id: 'wallpaper', title: 'Wallpaper' },
 ];
 
 const ICONS = {
@@ -208,7 +208,7 @@ export function buildSettings(id, ctx, initialState) {
         icon.className = 'settings-nav-icon';
         icon.innerHTML = ICONS[item.id];
         const labels = el('span', 'settings-nav-copy');
-        labels.append(el('strong', '', item.title), el('small', '', item.detail));
+        labels.append(el('strong', '', item.title));
         button.append(icon, labels);
         button.addEventListener('click', () => selectPage(item.id));
         nav.append(button);
@@ -814,28 +814,50 @@ export function buildSettings(id, ctx, initialState) {
     }
     const scheduleCard = el('section', 'settings-card settings-control-card');
     scheduleCard.append(el('span', 'settings-card-eyebrow', 'SCHEDULE'), el('h2', '', 'Change wallpaper'));
-    scheduleCard.append(makeChoiceGroup('Wallpaper schedule', [
-      ['visit', 'On each visit', 'Choose when you return'],
-      ['interval', 'On a timer', 'Rotate while you are here'],
-    ], wallpaperDraft.rotation, value => { wallpaperDraft.rotation = value; queueWallpaperUpdate(); }, !canRotate));
-    if (wallpaperDraft.rotation === 'interval') {
-      const field = el('label', 'settings-select-label');
-      field.append(el('span', '', 'Change every'));
-      const select = document.createElement('select');
-      select.className = 'util-field settings-select';
-      select.setAttribute('aria-label', 'Wallpaper interval');
-      for (const minutes of [1, 5, 15, 30, 60, 360, 1440]) {
-        const option = document.createElement('option');
-        option.value = String(minutes);
-        option.textContent = minutes === 1 ? '1 minute' : `${minutes} minutes`;
-        option.selected = Number(wallpaperDraft.intervalMinutes) === minutes;
-        select.append(option);
-      }
-      select.addEventListener('change', () => { wallpaperDraft.intervalMinutes = Number(select.value); queueWallpaperUpdate(); });
-      field.append(select);
-      scheduleCard.append(field);
-      enhanceSelect(select);
+    const scheduleOptions = el('div', 'settings-choice-list');
+    scheduleOptions.setAttribute('role', 'group');
+    scheduleOptions.setAttribute('aria-label', 'Wallpaper schedule');
+    const chooseSchedule = value => {
+      wallpaperDraft.rotation = value;
+      queueWallpaperUpdate();
+    };
+    scheduleOptions.append(makeChoiceButton(
+      'visit', 'On each visit', 'Choose when you return',
+      wallpaperDraft.rotation === 'visit', chooseSchedule, !canRotate,
+    ));
+    const timerOption = el('div', `settings-timer-option${wallpaperDraft.rotation === 'interval' ? ' is-selected' : ''}`);
+    const timerButton = makeChoiceButton(
+      'interval', 'On a timer', 'Rotate while you are here',
+      wallpaperDraft.rotation === 'interval', chooseSchedule, !canRotate,
+    );
+    timerButton.classList.add('settings-timer-choice');
+    timerOption.append(timerButton);
+    const intervalSelect = document.createElement('select');
+    intervalSelect.className = 'util-field settings-select settings-interval-select';
+    intervalSelect.setAttribute('aria-label', 'Wallpaper change interval');
+    intervalSelect.disabled = !canRotate || wallpaperDraft.rotation !== 'interval';
+    for (const [minutes, label] of [
+      [1, '1 minute'],
+      [5, '5 minutes'],
+      [15, '15 minutes'],
+      [30, '30 minutes'],
+      [60, '1 hour'],
+      [360, '6 hours'],
+      [1440, '1 day'],
+    ]) {
+      const option = document.createElement('option');
+      option.value = String(minutes);
+      option.textContent = label;
+      option.selected = Number(wallpaperDraft.intervalMinutes) === minutes;
+      intervalSelect.append(option);
     }
+    intervalSelect.addEventListener('change', () => {
+      wallpaperDraft.intervalMinutes = Number(intervalSelect.value);
+      queueWallpaperUpdate();
+    });
+    timerOption.append(intervalSelect);
+    scheduleOptions.append(timerOption);
+    scheduleCard.append(scheduleOptions);
     scheduleCard.append(animationPicker.createPicker({
       id: 'wallpaper-transition',
       label: 'Wallpaper transition',
@@ -846,6 +868,7 @@ export function buildSettings(id, ctx, initialState) {
     }));
     controlGrid.append(modeCard, scheduleCard);
     body.append(controlGrid);
+    enhanceSelect(intervalSelect);
 
     const footer = el('div', 'settings-wallpaper-footer');
     const footerStatus = el('p', 'settings-inline-status');
@@ -874,16 +897,20 @@ export function buildSettings(id, ctx, initialState) {
     group.setAttribute('role', 'group');
     group.setAttribute('aria-label', label);
     for (const [value, title, description] of choices) {
-      const button = el('button', 'settings-choice-option');
-      button.type = 'button';
-      button.disabled = disabled;
-      button.setAttribute('aria-pressed', String(value === selected));
-      button.append(el('span', 'settings-choice-radio'), el('span', 'settings-choice-copy'));
-      button.querySelector('.settings-choice-copy').append(el('strong', '', title), el('small', '', description));
-      button.addEventListener('click', () => onChange(value));
-      group.append(button);
+      group.append(makeChoiceButton(value, title, description, value === selected, onChange, disabled));
     }
     return group;
+  }
+
+  function makeChoiceButton(value, title, description, selected, onChange, disabled = false) {
+    const button = el('button', 'settings-choice-option');
+    button.type = 'button';
+    button.disabled = disabled;
+    button.setAttribute('aria-pressed', String(selected));
+    button.append(el('span', 'settings-choice-radio'), el('span', 'settings-choice-copy'));
+    button.querySelector('.settings-choice-copy').append(el('strong', '', title), el('small', '', description));
+    button.addEventListener('click', () => onChange(value));
+    return button;
   }
 
   function moveSelected(index, delta) {
