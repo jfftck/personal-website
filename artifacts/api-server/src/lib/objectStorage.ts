@@ -45,11 +45,18 @@ function resolveObjectPath(objectPath: string): {
   bucketName: string;
   objectName: string;
 } {
-  if (!/^\/objects\/uploads\/[a-f0-9-]{36}$/i.test(objectPath)) {
+  if (!isStoredUploadObjectPath(objectPath)) {
     throw new Error("Invalid App Storage object reference.");
   }
   const entityPath = objectPath.slice("/objects/".length);
   return parseBucketObjectPath(`${getPrivateObjectDirectory()}/${entityPath}`);
+}
+
+export function isStoredUploadObjectPath(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^\/objects\/uploads\/[a-f0-9-]{36}$/i.test(value)
+  );
 }
 
 export async function createObjectUploadTarget(): Promise<{

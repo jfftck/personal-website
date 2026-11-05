@@ -26,6 +26,7 @@ import {
   recordFileHistory,
   withContentHistoryLock,
 } from "../lib/contentHistory";
+import { rethrowAfterFailedUploadCleanup } from "../lib/failedUploadCleanup";
 import { restoreContentFileRevisionMetadata } from "../lib/contentRevisionMetadata";
 import {
   assertGeneratedFileNameAvailable,
@@ -35,8 +36,10 @@ import {
 } from "../lib/contentFileNames";
 import {
   createObjectUploadTarget,
+  deleteStoredObject,
   getStoredObject,
   getStoredObjectMetadata,
+  isStoredUploadObjectPath,
 } from "../lib/objectStorage";
 
 const MAX_FILE_BYTES = 2_000_000_000;
@@ -296,6 +299,24 @@ async function validateUploadObject(objectPath: unknown, expectedSize: number) {
   }
 }
 
+async function isContentObjectReferenced(objectPath: string): Promise<boolean> {
+  const [file] = await db
+    .select({ id: contentFilesTable.id })
+    .from(contentFilesTable)
+    .where(eq(contentFilesTable.objectPath, objectPath))
+    .limit(1);
+  if (file) return true;
+
+  const [version] = await db
+    .select({ id: contentFileVersionsTable.id })
+    .from(contentFileVersionsTable)
+    .where(
+      sql`(${contentFileVersionsTable.snapshot} ->> 'objectPath') = ${objectPath}`,
+    )
+    .limit(1);
+  return Boolean(version);
+}
+
 function apiError(error: unknown, res: Response, next: (error?: unknown) => void) {
   if (error instanceof ContentError) {
     res.status(error.status).json({ error: error.message });
@@ -542,76 +563,105 @@ contentApiRouter.post(
 contentApiRouter.post(
   "/content/files",
   apiHandler(async (req, res) => {
-    await ensureRootFolders();
-    const input = CreateContentFileBody.parse(req.body);
-    const requestedName = normalizeFileName(input.name);
-    const originalFileName = normalizeOriginalFileName(
-      input.originalFileName,
-    );
-    const title = normalizeContentTitle(input.title);
-    const description = normalizeContentDescription(input.description ?? "");
-    const folderPath = normalizeFolderPath(input.folderPath);
-    const date = normalizeContentDate(input.date);
-    const contentType = normalizeContentType(input.contentType);
-    const sizeBytes = normalizeSize(input.sizeBytes);
-    const extension =
-      fileExtension(requestedName) ??
-      (contentType.toLowerCase().startsWith("text/markdown") ? ".md" : ".bin");
-    const name = normalizeFileName(standardFileName(title, date, extension));
-    const stylesheetId = input.stylesheetId ?? null;
-    validateStylesheetFile({ folderPath, name, contentType, sizeBytes });
-    if (stylesheetId && !isDocumentFile({ folderPath, name, contentType })) {
-      throw new ContentError(400, "Only Markdown documents can use a stylesheet.");
-    }
-    if (input.isWallpaper && !isImageAsset(contentType, name)) {
-      throw new ContentError(400, "Only image files can be used as desktop wallpaper.");
-    }
-    await assertFolderExists(folderPath);
-    await validateUploadObject(input.objectPath, sizeBytes);
+    const rawObjectPath =
+      req.body && typeof req.body === "object"
+        ? (req.body as { objectPath?: unknown }).objectPath
+        : undefined;
+    const uploadedObjectPath = isStoredUploadObjectPath(rawObjectPath)
+      ? rawObjectPath
+      : null;
 
-    const file = await withContentHistoryLock(() =>
-      db.transaction(async (tx) => {
-        if (
-          stylesheetId &&
-          !(await getAvailableStylesheet(tx, stylesheetId))
-        ) {
-          throw new ContentError(400, "Choose an available CSS stylesheet.");
-        }
-        const [collision] = await tx
-          .select({ id: contentFilesTable.id })
-          .from(contentFilesTable)
-          .where(
-            and(
-              eq(contentFilesTable.folderPath, folderPath),
-              eq(contentFilesTable.name, name),
-              isNull(contentFilesTable.deletedAt),
-            ),
-          )
-          .limit(1);
-        assertGeneratedFileNameAvailable(Boolean(collision));
-        const [created] = await tx
-          .insert(contentFilesTable)
-          .values({
-            name,
-            originalFileName,
-            title,
-            description,
-            folderPath,
-            contentDate: date,
-            contentType,
-            sizeBytes,
-            objectPath: input.objectPath,
-            isWallpaper: Boolean(input.isWallpaper && isImageAsset(contentType, name)),
-            stylesheetId,
-            isPublished: true,
-          })
-          .returning();
-        await recordFileHistory(tx, [{ file: created, action: "created" }]);
-        await invalidatePublicManifestCache(tx);
-        return created;
-      }),
-    );
-    res.status(201).json(toContentFile(file));
+    try {
+      await ensureRootFolders();
+      const input = CreateContentFileBody.parse(req.body);
+      const requestedName = normalizeFileName(input.name);
+      const originalFileName = normalizeOriginalFileName(
+        input.originalFileName,
+      );
+      const title = normalizeContentTitle(input.title);
+      const description = normalizeContentDescription(input.description ?? "");
+      const folderPath = normalizeFolderPath(input.folderPath);
+      const date = normalizeContentDate(input.date);
+      const contentType = normalizeContentType(input.contentType);
+      const sizeBytes = normalizeSize(input.sizeBytes);
+      const extension =
+        fileExtension(requestedName) ??
+        (contentType.toLowerCase().startsWith("text/markdown") ? ".md" : ".bin");
+      const name = normalizeFileName(standardFileName(title, date, extension));
+      const stylesheetId = input.stylesheetId ?? null;
+      validateStylesheetFile({ folderPath, name, contentType, sizeBytes });
+      if (stylesheetId && !isDocumentFile({ folderPath, name, contentType })) {
+        throw new ContentError(400, "Only Markdown documents can use a stylesheet.");
+      }
+      if (input.isWallpaper && !isImageAsset(contentType, name)) {
+        throw new ContentError(400, "Only image files can be used as desktop wallpaper.");
+      }
+      await assertFolderExists(folderPath);
+      await validateUploadObject(input.objectPath, sizeBytes);
+
+      const file = await withContentHistoryLock(() =>
+        db.transaction(async (tx) => {
+          if (
+            stylesheetId &&
+            !(await getAvailableStylesheet(tx, stylesheetId))
+          ) {
+            throw new ContentError(400, "Choose an available CSS stylesheet.");
+          }
+          const [collision] = await tx
+            .select({ id: contentFilesTable.id })
+            .from(contentFilesTable)
+            .where(
+              and(
+                eq(contentFilesTable.folderPath, folderPath),
+                eq(contentFilesTable.name, name),
+                isNull(contentFilesTable.deletedAt),
+              ),
+            )
+            .limit(1);
+          assertGeneratedFileNameAvailable(Boolean(collision));
+          const [created] = await tx
+            .insert(contentFilesTable)
+            .values({
+              name,
+              originalFileName,
+              title,
+              description,
+              folderPath,
+              contentDate: date,
+              contentType,
+              sizeBytes,
+              objectPath: input.objectPath,
+              isWallpaper: Boolean(input.isWallpaper && isImageAsset(contentType, name)),
+              stylesheetId,
+              isPublished: true,
+            })
+            .returning();
+          await recordFileHistory(tx, [{ file: created, action: "created" }]);
+          await invalidatePublicManifestCache(tx);
+          return created;
+        }),
+      );
+      res.status(201).json(toContentFile(file));
+    } catch (error) {
+      if (uploadedObjectPath) {
+        return rethrowAfterFailedUploadCleanup(
+          error,
+          uploadedObjectPath,
+          {
+            runExclusive: withContentHistoryLock,
+            hasReference: isContentObjectReferenced,
+            deleteObject: deleteStoredObject,
+            logError: (cleanupError, objectPath) => {
+              req.log.error(
+                { err: cleanupError, objectPath },
+                "Failed to clean up an unreferenced App Storage upload after content creation failed",
+              );
+            },
+          },
+        );
+      }
+      throw error;
+    }
   }),
 );
 
