@@ -73,7 +73,7 @@ function fileTileName(fileManager, name) {
   return fileManager.locator('.fm-tile-name').filter({ hasText: name });
 }
 
-test('toolbar actions use borderless shared buttons and retain view selection', async ({ page }) => {
+test('selected view has a focus-color border while other toolbar actions stay borderless', async ({ page }) => {
   const fileManager = page.locator('.app-window[data-type="file-manager"]');
   const tileView = fileManager.getByRole('button', { name: 'Tile view' });
   const listView = fileManager.getByRole('button', { name: 'List view' });
@@ -82,17 +82,90 @@ test('toolbar actions use borderless shared buttons and retain view selection', 
   for (const button of [tileView, listView, refresh]) {
     await expect(button).toHaveClass(/util-action/);
     await expect(button).toHaveAttribute('data-app-button-variant', 'quiet');
-    const borderColor = await button.evaluate(element => getComputedStyle(element).borderTopColor);
-    expect(borderColor).toBe('rgba(0, 0, 0, 0)');
   }
+
+  const focusColor = await tileView.evaluate(element => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--focus-color)';
+    element.parentElement.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+  const borderColor = button => button.evaluate(element => getComputedStyle(element).borderTopColor);
 
   await expect(tileView).toHaveAttribute('aria-pressed', 'true');
   await expect(listView).toHaveAttribute('aria-pressed', 'false');
+  expect(await borderColor(tileView)).toBe(focusColor);
+  expect(await borderColor(listView)).toBe('rgba(0, 0, 0, 0)');
+  expect(await borderColor(refresh)).toBe('rgba(0, 0, 0, 0)');
+
   await listView.click();
   await expect(tileView).toHaveAttribute('aria-pressed', 'false');
   await expect(listView).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => borderColor(tileView)).toBe('rgba(0, 0, 0, 0)');
+  expect(await borderColor(listView)).toBe(focusColor);
+  expect(await borderColor(refresh)).toBe('rgba(0, 0, 0, 0)');
   const activeBackground = await listView.evaluate(element => getComputedStyle(element).backgroundColor);
   expect(activeBackground).not.toBe('rgba(0, 0, 0, 0)');
+});
+
+test('File Manager sidebar selection matches the Settings sidebar across themes and widths', async ({ page }) => {
+  const fileManager = page.locator('.app-window[data-type="file-manager"]');
+  await page.locator('#app-menu-btn').click();
+  await page.locator('#app-list .app-launcher[data-type="settings"]').click();
+  const settings = page.locator('.app-window[data-type="settings"]').last();
+  const fileManagerSelection = fileManager.locator('.fm-sidebar-btn.active');
+  const settingsSelection = settings.locator('.settings-nav-item.is-active');
+  await settings.getByRole('button', { name: 'Appearance' }).click();
+  await expect(settingsSelection).toBeVisible();
+  await expect(settingsSelection).toHaveAttribute('aria-current', 'page');
+
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(themeName => {
+      document.documentElement.dataset.theme = themeName;
+    }, theme);
+    await expect.poll(async () => page.evaluate(() => {
+      const fileItem = document.querySelector('.app-window[data-type="file-manager"] .fm-sidebar-btn.active');
+      const settingsItem = document.querySelector('.app-window[data-type="settings"] .settings-nav-item.is-active');
+      const read = element => {
+        const style = getComputedStyle(element);
+        return {
+          backgroundColor: style.backgroundColor,
+          borderColor: style.borderTopColor,
+          borderRadius: style.borderTopLeftRadius,
+          borderWidth: style.borderTopWidth,
+          padding: style.padding,
+        };
+      };
+      return JSON.stringify(read(fileItem)) === JSON.stringify(read(settingsItem));
+    })).toBe(true);
+  }
+
+  await page.setViewportSize({ width: 360, height: 780 });
+  await expect(fileManagerSelection).toBeVisible();
+  const compactSidebar = await fileManagerSelection.evaluate(element => {
+    const sidebar = element.closest('.fm-sidebar');
+    const style = getComputedStyle(sidebar);
+    return { width: sidebar.getBoundingClientRect().width, borderColor: getComputedStyle(element).borderTopColor, outlineOffset: getComputedStyle(element).outlineOffset, padding: style.paddingInline };
+  });
+  expect(compactSidebar.width).toBeLessThanOrEqual(48);
+  expect(compactSidebar.borderColor).not.toBe('rgba(0, 0, 0, 0)');
+  await page.keyboard.press('Tab');
+  await fileManagerSelection.focus();
+  const focusStyle = await fileManagerSelection.evaluate(element => {
+    const style = getComputedStyle(element);
+    return {
+      matchesFocusVisible: element.matches(':focus-visible'),
+      outlineColor: style.outlineColor,
+      outlineOffset: style.outlineOffset,
+      outlineStyle: style.outlineStyle,
+    };
+  });
+  expect(focusStyle.matchesFocusVisible).toBe(true);
+  expect(focusStyle.outlineColor).not.toBe('rgba(0, 0, 0, 0)');
+  expect(focusStyle.outlineOffset).toBe('2px');
+  expect(focusStyle.outlineStyle).toBe('solid');
 });
 
 test('refresh revalidates after the initial folder request settles', async ({ page }) => {

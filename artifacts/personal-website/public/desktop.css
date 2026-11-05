@@ -1587,7 +1587,10 @@ app-select { display:contents; }
 
 .fm-toolbar .tool-btn:hover { background: var(--btn-hover); }
 .fm-toolbar .tool-btn:active { background: var(--btn-active); }
-.fm-toolbar .fm-view-btn[aria-pressed="true"] { background: var(--btn-active); }
+.fm-toolbar .fm-view-btn[aria-pressed="true"] {
+  background: var(--btn-active);
+  border-color: var(--focus-color);
+}
 .fm-toolbar .fm-view-btn[aria-pressed="true"]:hover { background: var(--btn-active); }
 
 /* Exact overflow fallback for browsers without container queries. */
@@ -2751,7 +2754,7 @@ kbd {
   border-color: var(--focus-color);
   background: var(--fm-accent-wash);
 }
-.fm-sidebar-btn:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
+.fm-sidebar-btn:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 
 .fm-sidebar-icon {
   display: grid;
