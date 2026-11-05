@@ -78,5 +78,6 @@ test("restoring an older revision returns editable metadata without changing the
     title: "Original title",
     description: "A camera photo.",
     contentDate: "2026-10-30",
+    stylesheetId: null,
   });
 });

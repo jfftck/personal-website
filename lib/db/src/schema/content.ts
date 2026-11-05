@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   date,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -104,6 +105,29 @@ export const contentFileVersionsTable = pgTable(
       table.versionNumber,
     ),
     uniqueIndex("content_file_versions_git_path_unique").on(table.gitPath),
+  ],
+);
+
+export const legacyImportObjectCleanupTable = pgTable(
+  "legacy_import_object_cleanup",
+  {
+    objectPath: text("object_path").primaryKey(),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error").notNull(),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("legacy_import_object_cleanup_next_attempt_idx").on(
+      table.nextAttemptAt,
+    ),
   ],
 );
 

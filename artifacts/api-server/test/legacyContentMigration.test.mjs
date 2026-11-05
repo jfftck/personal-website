@@ -3,7 +3,11 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { importLegacyContentDirectory } from "../src/lib/legacyContentImportCore.ts";
+import {
+  cleanupLegacyImportObject,
+  importLegacyContentDirectory,
+  retryFailedLegacyObjectCleanup,
+} from "../src/lib/legacyContentImportCore.ts";
 
 test("re-importing legacy posts preserves catalog rows and stored object references", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "legacy-import-"));
@@ -117,4 +121,91 @@ test("a competing import cleans up its object when the catalog insert loses a co
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("a failed conflict cleanup records the affected App Storage object", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "legacy-import-cleanup-"));
+  await writeFile(path.join(root, "20261030_conflict.md"), "temporary object");
+  const objectPath = "/objects/uploads/failed-conflict-cleanup";
+  const objects = new Set();
+  const recorded = [];
+  const reported = [];
+  const cleanupError = new Error("App Storage is temporarily unavailable.");
+  const adapter = {
+    async ensureFolder() {},
+    async findExistingFile() {
+      return false;
+    },
+    createObjectPath() {
+      return objectPath;
+    },
+    async saveObject(path) {
+      objects.add(path);
+    },
+    async insertFile() {
+      return false;
+    },
+    async deleteObject() {
+      throw cleanupError;
+    },
+    async recordFailedCleanup(path, error) {
+      recorded.push({ path, error });
+    },
+    reportCleanupFailure(error, path) {
+      reported.push({ path, error });
+    },
+  };
+
+  try {
+    await importLegacyContentDirectory(root, "posts", adapter);
+    assert.deepEqual([...objects], [objectPath]);
+    assert.deepEqual(recorded, [{ path: objectPath, error: cleanupError }]);
+    assert.deepEqual(reported, [{ path: objectPath, error: cleanupError }]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("cleanup recovery deletes only unreferenced objects and clears resolved records", async () => {
+  const unreferencedPath = "/objects/uploads/unreferenced-import";
+  const referencedPath = "/objects/uploads/referenced-import";
+  const deleted = [];
+  const cleared = [];
+  const referenced = new Set([referencedPath]);
+
+  await retryFailedLegacyObjectCleanup(
+    [{ objectPath: unreferencedPath }, { objectPath: referencedPath }],
+    {
+      async isObjectReferenced(path) {
+        return referenced.has(path);
+      },
+      async deleteObject(path) {
+        deleted.push(path);
+      },
+      async clearFailedCleanup(path) {
+        cleared.push(path);
+      },
+      async recordFailedCleanup() {
+        assert.fail("successful reconciliation should not record another failure");
+      },
+    },
+  );
+
+  assert.deepEqual(deleted, [unreferencedPath]);
+  assert.deepEqual(cleared, [unreferencedPath, referencedPath]);
+});
+
+test("failed cleanup recovery is surfaced if its durable record cannot be saved", async () => {
+  const objectPath = "/objects/uploads/unrecorded-import";
+  await assert.rejects(
+    cleanupLegacyImportObject(objectPath, {
+      async deleteObject() {
+        throw new Error("App Storage delete failed.");
+      },
+      async recordFailedCleanup() {
+        throw new Error("Database insert failed.");
+      },
+    }),
+    new RegExp(objectPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+  );
 });

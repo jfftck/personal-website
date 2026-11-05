@@ -13,7 +13,16 @@ export type LegacyContentFile = {
   isPublished: true;
 };
 
-export type LegacyContentImportAdapter = {
+export type LegacyObjectCleanupAdapter = {
+  runExclusive?: <T>(operation: () => Promise<T>) => Promise<T>;
+  isObjectReferenced?: (objectPath: string) => Promise<boolean>;
+  deleteObject: (objectPath: string) => Promise<void>;
+  recordFailedCleanup?: (objectPath: string, error: unknown) => Promise<void>;
+  clearFailedCleanup?: (objectPath: string) => Promise<void>;
+  reportCleanupFailure?: (error: unknown, objectPath: string) => void;
+};
+
+export type LegacyContentImportAdapter = LegacyObjectCleanupAdapter & {
   ensureFolder: (folderPath: string) => Promise<void>;
   findExistingFile: (
     folderPath: string,
@@ -26,8 +35,67 @@ export type LegacyContentImportAdapter = {
     contentType: string,
   ) => Promise<void>;
   insertFile: (file: LegacyContentFile) => Promise<boolean>;
-  deleteObject: (objectPath: string) => Promise<void>;
 };
+
+function reportCleanupFailure(
+  adapter: LegacyObjectCleanupAdapter,
+  error: unknown,
+  objectPath: string,
+) {
+  try {
+    adapter.reportCleanupFailure?.(error, objectPath);
+  } catch {
+    // Reporting should not replace the import or cleanup result.
+  }
+}
+
+export async function cleanupLegacyImportObject(
+  objectPath: string,
+  adapter: LegacyObjectCleanupAdapter,
+): Promise<boolean> {
+  const cleanup = async () => {
+    if (await adapter.isObjectReferenced?.(objectPath)) {
+      await adapter.clearFailedCleanup?.(objectPath);
+      return false;
+    }
+    await adapter.deleteObject(objectPath);
+    await adapter.clearFailedCleanup?.(objectPath);
+    return true;
+  };
+
+  try {
+    return adapter.runExclusive
+      ? await adapter.runExclusive(cleanup)
+      : await cleanup();
+  } catch (error) {
+    try {
+      if (!adapter.recordFailedCleanup) throw error;
+      await adapter.recordFailedCleanup(objectPath, error);
+      reportCleanupFailure(adapter, error, objectPath);
+      return false;
+    } catch (recordError) {
+      reportCleanupFailure(adapter, recordError, objectPath);
+      const surfaced = new Error(
+        `Could not clean up imported object ${objectPath}; its recovery record could not be saved.`,
+      );
+      Object.assign(surfaced, { cause: recordError });
+      throw surfaced;
+    }
+  }
+}
+
+export async function retryFailedLegacyObjectCleanup(
+  records: Array<{ objectPath: string }>,
+  adapter: LegacyObjectCleanupAdapter,
+): Promise<void> {
+  for (const { objectPath } of records) {
+    try {
+      await cleanupLegacyImportObject(objectPath, adapter);
+    } catch {
+      // cleanupLegacyImportObject reports failures with the affected path.
+    }
+  }
+}
 
 function contentTypeFor(filename: string): string {
   const extension = path.extname(filename).toLowerCase();
@@ -115,10 +183,10 @@ export async function importLegacyContentDirectory(
           isPublished: true,
         });
         if (!inserted) {
-          await adapter.deleteObject(objectPath).catch(() => undefined);
+          await cleanupLegacyImportObject(objectPath, adapter);
         }
       } catch (error) {
-        await adapter.deleteObject(objectPath).catch(() => undefined);
+        await cleanupLegacyImportObject(objectPath, adapter);
         throw error;
       }
     }

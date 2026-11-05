@@ -38,3 +38,9 @@ Admin-authored posts and documents are Markdown. Their stored filename is genera
 **Why:** the user wants to retain the upload's source name while allowing the display title and descriptive metadata to change independently.
 
 **How to apply:** set the source name from the selected file and exclude it from metadata edits; keep the browser's native date input, validate and normalize its value after submission, and preserve the upload's actual extension.
+
+When cleaning up a failed App Storage write, serialize the reference check and deletion with content-history mutations, and check both current catalog rows and revision snapshots. Persist failed deletions with the object path for bounded automatic retries.
+
+**Why:** a file can still be needed by a historical revision even when no current catalog row points to it, and transient storage errors must not leave untracked objects behind.
+
+**How to apply:** before deleting, recheck both reference sources under the shared content-history lock; retain referenced objects, and keep cleanup failures queued until deletion succeeds.
