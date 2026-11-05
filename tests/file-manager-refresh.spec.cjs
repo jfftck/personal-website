@@ -108,6 +108,29 @@ test('selected view has a focus-color border while other toolbar actions stay bo
   expect(await borderColor(refresh)).toBe('rgba(0, 0, 0, 0)');
   const activeBackground = await listView.evaluate(element => getComputedStyle(element).backgroundColor);
   expect(activeBackground).not.toBe('rgba(0, 0, 0, 0)');
+
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 360, height: 780 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect(listView).toHaveAttribute('aria-pressed', 'true');
+    expect(await borderColor(listView)).toBe(focusColor);
+    expect(await borderColor(refresh)).toBe('rgba(0, 0, 0, 0)');
+    await page.keyboard.press('Tab');
+    await refresh.focus();
+    const focusStyle = await refresh.evaluate(element => {
+      const style = getComputedStyle(element);
+      return {
+        visible: element.matches(':focus-visible'),
+        color: style.outlineColor,
+        style: style.outlineStyle,
+      };
+    });
+    expect(focusStyle.visible).toBe(true);
+    expect(focusStyle.color).toBe(focusColor);
+    expect(focusStyle.style).toBe('solid');
+  }
 });
 
 test('File Manager sidebar selection matches the Settings sidebar across themes and widths', async ({ page }) => {

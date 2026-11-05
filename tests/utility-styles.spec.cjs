@@ -165,6 +165,100 @@ test('Settings mobile sections and pages use the full app width', async ({ page 
   expect(desktopGeometry.mainStartsAfterSidebar).toBe(true);
 });
 
+test('representative app toolbars keep selected states, quiet actions, and keyboard focus at all widths', async ({ page }) => {
+  await page.route('**/documents/manifest.json', route => route.fulfill({
+    json: [{ filename: '20261105_Toolbar_Test.md', url: '/files/documents/toolbar-test.md' }],
+  }));
+  await page.route('**/posts/manifest.json', route => route.fulfill({ json: [] }));
+  await page.route('**/files/documents/toolbar-test.md', route => route.fulfill({
+    contentType: 'text/markdown',
+    body: '# Toolbar test',
+  }));
+  await page.route('**/pictures/manifest.json', route => route.fulfill({
+    json: [{ filename: '20261105_Toolbar_Test.svg', url: '/files/pictures/toolbar-test.svg' }],
+  }));
+  await page.route('**/files/pictures/toolbar-test.svg', route => route.fulfill({
+    contentType: 'image/svg+xml',
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><rect width="120" height="80" fill="#357"/></svg>',
+  }));
+  await page.route('**/videos/manifest.json', route => route.fulfill({ json: [] }));
+
+  const verifyToolbarState = async (selected, quietAction) => {
+    for (const viewport of [
+      { width: 1280, height: 800 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expect(selected).toHaveAttribute('aria-pressed', 'true');
+      const focusColor = await selected.evaluate(element => {
+        const probe = document.createElement('span');
+        probe.style.borderTop = '1px solid var(--focus-color)';
+        element.parentElement.append(probe);
+        const color = getComputedStyle(probe).borderTopColor;
+        probe.remove();
+        return color;
+      });
+      await expect.poll(() => selected.evaluate(element => getComputedStyle(element).borderTopColor))
+        .toBe(focusColor);
+      const selectedStyle = await selected.evaluate(element => ({
+        background: getComputedStyle(element).backgroundColor,
+      }));
+      expect(selectedStyle.background).not.toBe('rgba(0, 0, 0, 0)');
+      expect(await quietAction.evaluate(element => getComputedStyle(element).borderTopColor))
+        .toBe('rgba(0, 0, 0, 0)');
+
+      await page.keyboard.press('Tab');
+      await quietAction.focus();
+      const focusStyle = await quietAction.evaluate(element => {
+        const style = getComputedStyle(element);
+        return {
+          visible: element.matches(':focus-visible'),
+          color: style.outlineColor,
+          style: style.outlineStyle,
+          offset: style.outlineOffset,
+        };
+      });
+      expect(focusStyle.visible).toBe(true);
+      expect(focusStyle.color).toBe(focusColor);
+      expect(focusStyle.style).toBe('solid');
+      expect(focusStyle.offset).toBe('2px');
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+  };
+
+  const calculator = await openUtility(page, 'calculator');
+  const mode = calculator.getByRole('combobox', { name: 'Calculator mode' });
+  await mode.click();
+  const modePopup = await mode.getAttribute('aria-controls');
+  await page.locator(`#${modePopup}`).getByRole('option', { name: 'Scientific', exact: true }).click();
+  const baseEight = calculator.locator('.calc-base-control button[data-radix="8"]');
+  await baseEight.click();
+  await verifyToolbarState(baseEight, calculator.getByRole('button', { name: 'Memory store' }));
+  const memoryActionBorder = await calculator.getByRole('button', { name: 'Memory store' })
+    .evaluate(element => getComputedStyle(element).borderTopColor);
+  expect(memoryActionBorder).toBe('rgba(0, 0, 0, 0)');
+
+  const documentViewer = await openUtility(page, 'doc-viewer');
+  const documentBrowse = documentViewer.locator('.app-toolbar .tool-btn[data-action="open"]');
+  await documentBrowse.click();
+  await verifyToolbarState(documentBrowse, documentViewer.locator('.app-toolbar .tool-btn[data-action="zoom-in"]'));
+
+  const imageViewer = await openUtility(page, 'img-viewer');
+  const imageBrowse = imageViewer.locator('.app-toolbar .tool-btn[data-action="open"]');
+  await imageBrowse.click();
+  await verifyToolbarState(imageBrowse, imageViewer.locator('.app-toolbar .tool-btn[data-action="zoom-in"]'));
+
+  const mediaPlayer = await openUtility(page, 'media-player');
+  const mediaBrowse = mediaPlayer.locator('.app-toolbar .tool-btn[data-action="open"]');
+  await mediaBrowse.click();
+  await verifyToolbarState(mediaBrowse, mediaPlayer.locator('.app-toolbar .tool-btn[data-action="external"]'));
+
+  const calendar = await openUtility(page, 'calendar');
+  const weekView = calendar.locator('.cal-view-button[data-view="week"]');
+  await weekView.click();
+  await verifyToolbarState(weekView, calendar.locator('.cal-today-button'));
+});
+
 test('Wallpaper settings apply changes immediately without save or cancel actions', async ({ page }) => {
   await page.evaluate(async () => {
     const { buildSettings } = await import('/apps/settings.js');

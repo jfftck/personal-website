@@ -762,6 +762,54 @@ test('all game toolbars place instructions and undo left, new game in the center
   }
 });
 
+test('game toolbar toggles stay selected while ordinary actions remain borderless and focusable', async ({ page }) => {
+  const app = await openGame(page, 'minesweeper');
+  const toolbar = app.locator('.game-toolbar');
+  const flagMode = toolbar.getByRole('switch', { name: 'Flag mode' });
+  const settings = toolbar.getByRole('button', { name: 'Settings' });
+  await flagMode.click();
+
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect(flagMode).toHaveAttribute('aria-checked', 'true');
+    const focusColor = await flagMode.evaluate(element => {
+      const probe = document.createElement('span');
+      probe.style.borderTop = '1px solid var(--focus-color)';
+      element.parentElement.append(probe);
+      const color = getComputedStyle(probe).borderTopColor;
+      probe.remove();
+      return color;
+    });
+    const selectedStyle = await flagMode.evaluate(element => ({
+      background: getComputedStyle(element).backgroundColor,
+    }));
+    await expect.poll(() => flagMode.evaluate(element => getComputedStyle(element).borderTopColor))
+      .toBe(focusColor);
+    expect(selectedStyle.background).not.toBe('rgba(0, 0, 0, 0)');
+    expect(await settings.evaluate(element => getComputedStyle(element).borderTopColor))
+      .toBe('rgba(0, 0, 0, 0)');
+
+    await page.keyboard.press('Tab');
+    await settings.focus();
+    const focusStyle = await settings.evaluate(element => {
+      const style = getComputedStyle(element);
+      return {
+        visible: element.matches(':focus-visible'),
+        color: style.outlineColor,
+        style: style.outlineStyle,
+        offset: style.outlineOffset,
+      };
+    });
+    expect(focusStyle.visible).toBe(true);
+    expect(focusStyle.color).toBe(focusColor);
+    expect(focusStyle.style).toBe('solid');
+    expect(focusStyle.offset).toBe('2px');
+  }
+});
+
 test('Glass game materials are translucent and blurred, with distinguishable colors in both appearances', async ({ page }) => {
   for (const game of ['klondike', 'chess', 'reversi', 'minesweeper']) {
     const app = await openGame(page, game);
