@@ -1,4 +1,11 @@
 const { test, expect } = require('@playwright/test');
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+
+const desktopStylesheet = readFileSync(
+  join(__dirname, '../artifacts/personal-website/public/desktop.css'),
+  'utf8',
+);
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -27,6 +34,10 @@ async function openGame(page, type) {
   await page.locator(`#game-list [data-game="${type}"]`).click();
   return page.locator(`.app-window[data-type="${type}"]`).last();
 }
+
+test('Calculator selectors stay out of the desktop shell stylesheet', () => {
+  expect(desktopStylesheet).not.toMatch(/\.calc(?:[-_a-zA-Z0-9]*)/);
+});
 
 test('desktop shell and window frame styles remain stable at desktop and mobile widths', async ({ page }) => {
   const stylesheets = await page.locator('link[rel="stylesheet"]').evaluateAll(links =>
