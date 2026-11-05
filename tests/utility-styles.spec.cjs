@@ -421,6 +421,18 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
   expect(await page.evaluate(key => localStorage.getItem(key), tintKey)).toBeNull();
   const darkTintGroup = settings.getByRole('group', { name: 'Dark window tint' });
   await expect(darkTintGroup.getByRole('button')).toHaveCount(7);
+  const tintHeaderStyle = await settings.locator('.settings-tint-group h4').first().evaluate(element => {
+    const style = getComputedStyle(element);
+    return { color: style.color, fontSize: style.fontSize, fontWeight: style.fontWeight };
+  });
+  const sliderLabelStyles = await settings.locator('.settings-tint-lightness-heading label').evaluateAll(labels =>
+    labels.map(element => {
+      const style = getComputedStyle(element);
+      return { color: style.color, fontSize: style.fontSize, fontWeight: style.fontWeight };
+    }),
+  );
+  expect(sliderLabelStyles).toHaveLength(3);
+  for (const labelStyle of sliderLabelStyles) expect(labelStyle).toEqual(tintHeaderStyle);
   await expect(darkTintGroup.getByRole('button', { name: 'None dark tint' })).toHaveAttribute('aria-pressed', 'false');
   let darkLightness = settings.getByRole('slider', { name: 'Dark tint lightness' });
   await expect(darkLightness).toHaveValue('25');

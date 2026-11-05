@@ -203,6 +203,7 @@
 .settings-tint-lightness-control { display: grid; gap: .35rem; margin-top: .15rem; }
 .settings-tint-lightness-control[hidden] { display: none; }
 .settings-tint-lightness-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; color: var(--util-detail); font-size: .68rem; }
+.settings-tint-lightness-heading label { color: var(--app-text); font-size: .72rem; font-weight: 650; }
 .settings-tint-lightness-value { color: var(--app-text); font-variant-numeric: tabular-nums; }
 .settings-tint-slider {
   width: 100%;
