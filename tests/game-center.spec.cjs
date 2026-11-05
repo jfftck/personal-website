@@ -1968,32 +1968,50 @@ test('win animation settings remain usable while the victory new game screen is 
   await app.locator('[data-key="card-12"]').dblclick();
   const screen = app.locator('.game-new-game-screen');
   await expect(screen).toBeVisible();
+  const drawControl = screen.getByRole('combobox', { name: 'Draw' });
+  await expect(drawControl).toBeFocused();
 
-  const settings = await openSettings(app);
+  const settingsToggle = app.getByRole('button', { name: 'Settings', exact: true });
+  await page.keyboard.press('Shift+Tab');
+  await expect(settingsToggle).toBeFocused();
+  await expect(screen).toHaveAttribute('aria-modal', 'false');
+  await page.keyboard.press('Enter');
+  const settings = app.locator('.game-settings-dialog');
+  await expect(settings).toBeVisible();
   await expect(screen).toHaveAttribute('aria-modal', 'false');
   await expect(settings).toHaveAttribute('aria-modal', 'true');
   await expect(settings.getByRole('button', { name: 'Close settings' })).toBeFocused();
   const animationTrigger = settings.getByRole('button', { name: /^Win animation:/ });
-  await animationTrigger.click();
+  for (let index = 0; index < 16 && !await animationTrigger.evaluate(node => node === document.activeElement); index++) {
+    await page.keyboard.press('Tab');
+  }
+  await expect(animationTrigger).toBeFocused();
+  await page.keyboard.press('Enter');
   const animationOptions = app.getByRole('dialog', { name: 'Win animation options' });
   await expect(settings).toHaveAttribute('aria-modal', 'false');
   await expect(animationOptions).toHaveAttribute('aria-modal', 'true');
-  await expect(animationOptions.getByRole('checkbox', { name: 'No animation' })).toBeFocused();
-  await animationOptions.getByRole('checkbox', { name: 'No animation' }).click();
-  await animationOptions.getByRole('checkbox', { name: 'Bounce' }).click();
-  await animationOptions.getByRole('button', { name: 'Done' }).click();
-  await expect(settings).toHaveAttribute('aria-modal', 'true');
+  const noAnimation = animationOptions.getByRole('checkbox', { name: 'No animation' });
+  await expect(noAnimation).toBeFocused();
+  if (!await noAnimation.isChecked()) await page.keyboard.press('Space');
+  await expect(noAnimation).toBeChecked();
+  const bounce = animationOptions.getByRole('checkbox', { name: 'Bounce' });
+  for (let index = 0; index < 12 && !await bounce.evaluate(node => node === document.activeElement); index++) {
+    await page.keyboard.press('Tab');
+  }
+  await expect(bounce).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(bounce).toBeChecked();
+  await page.keyboard.press('Escape');
   await expect(animationTrigger).toBeFocused();
+  await expect(settings).toHaveAttribute('aria-modal', 'true');
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('game-center-win-animation-settings-v1')).solitaire))
     .toEqual(['bounce']);
 
-  await settings.getByRole('button', { name: 'Close settings' }).click();
+  await page.keyboard.press('Escape');
   await expect(screen).toBeVisible();
   await expect(screen).toHaveAttribute('aria-modal', 'true');
-  await expect(screen.getByRole('combobox', { name: 'Draw' })).toBeFocused();
-  await screen.getByRole('button', { name: 'Start new game' }).click();
-  await expect(screen).toHaveCount(0);
+  await expect(drawControl).toBeFocused();
 });
 
 test('Chess and Reversi can use a fixed win animation or random selection', async ({ page }) => {

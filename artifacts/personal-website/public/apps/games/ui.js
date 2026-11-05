@@ -112,7 +112,7 @@ function createGameSettings(root, toolbar, title, id) {
     isOpen = true;
     priorFocus = document.activeElement;
     suspendedEndScreen = root.querySelector(
-      '.game-new-game-screen[aria-modal="true"], .game-computer-error-screen[aria-modal="true"]',
+      '.game-new-game-screen, .game-computer-error-screen',
     );
     suspendedEndScreenFocus = suspendedEndScreen?.querySelector(
       'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -292,6 +292,50 @@ export function showRestorePrompt(area, onResume, onNew, invalid = false) {
   area.replaceChildren(panel);
 }
 
+function connectGameScreenFocusCycle(screen, settingsToggle) {
+  const screenControls = () => [...screen.querySelectorAll(
+    'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )].filter(node => !node.closest('[hidden]'));
+  const onTab = event => {
+    if (event.key !== 'Tab') return;
+    const controls = screenControls();
+    if (!controls.length) return;
+    const first = controls[0];
+    const last = controls.at(-1);
+    const settingsAvailable = settingsToggle?.isConnected && !settingsToggle.disabled;
+    if (settingsAvailable && document.activeElement === settingsToggle) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus({ preventScroll: true });
+    } else if (settingsAvailable && event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      settingsToggle.focus({ preventScroll: true });
+    } else if (settingsAvailable && !event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      settingsToggle.focus({ preventScroll: true });
+    } else if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus({ preventScroll: true });
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus({ preventScroll: true });
+    }
+  };
+  const onSettingsFocus = () => screen.setAttribute('aria-modal', 'false');
+  const onScreenFocus = () => screen.setAttribute('aria-modal', 'true');
+  screen.addEventListener('keydown', onTab);
+  screen.addEventListener('focusin', onScreenFocus);
+  if (settingsToggle) {
+    settingsToggle.addEventListener('keydown', onTab);
+    settingsToggle.addEventListener('focus', onSettingsFocus);
+  }
+  return () => {
+    screen.removeEventListener('keydown', onTab);
+    screen.removeEventListener('focusin', onScreenFocus);
+    settingsToggle?.removeEventListener('keydown', onTab);
+    settingsToggle?.removeEventListener('focus', onSettingsFocus);
+  };
+}
+
 export function showNewGameScreen(area, id, headingText, messageText, options, onStart) {
   const game = area.closest('.game-app');
   const screen = document.createElement('section');
@@ -307,8 +351,10 @@ export function showNewGameScreen(area, id, headingText, messageText, options, o
   const savedToolbarDisabled = [...(toolbar?.querySelectorAll('button, select, input') || [])]
     .filter(control => !control.classList.contains('game-settings-toggle'))
     .map(control => ({ control, disabled: control.disabled }));
+  const settingsToggle = toolbar?.querySelector('.game-settings-toggle');
   const screenId = `new-game-${String(id).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   let active = true;
+  const disconnectFocusCycle = connectGameScreenFocusCycle(screen, settingsToggle);
   const priorFocus = document.activeElement;
   let fieldset = null;
   function refreshOptionVisibility() {
@@ -377,6 +423,7 @@ export function showNewGameScreen(area, id, headingText, messageText, options, o
     if (!active) return;
     active = false;
     screen.remove();
+    disconnectFocusCycle();
     savedInert.forEach(({ node, inert }) => { node.inert = inert; });
     savedToolbarDisabled.forEach(({ control, disabled }) => { control.disabled = disabled; });
     if (restoreFocus && priorFocus?.isConnected) priorFocus.focus({ preventScroll: true });
@@ -387,17 +434,6 @@ export function showNewGameScreen(area, id, headingText, messageText, options, o
       event.preventDefault();
       event.stopPropagation();
       return;
-    }
-    if (event.key !== 'Tab') return;
-    const focusable = [...screen.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
-      .filter(node => !node.closest('[hidden]'));
-    if (!focusable.length) return;
-    if (event.shiftKey && document.activeElement === focusable[0]) {
-      event.preventDefault();
-      focusable.at(-1).focus();
-    } else if (!event.shiftKey && document.activeElement === focusable.at(-1)) {
-      event.preventDefault();
-      focusable[0].focus();
     }
   });
   screen.querySelector('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')
@@ -418,8 +454,10 @@ export function showComputerErrorScreen(area, id, messageText, onRetry, onNewGam
   const savedToolbarDisabled = [...(toolbar?.querySelectorAll('button, select, input') || [])]
     .filter(control => !control.classList.contains('game-settings-toggle'))
     .map(control => ({ control, disabled: control.disabled }));
+  const settingsToggle = toolbar?.querySelector('.game-settings-toggle');
   const screenId = `computer-error-${String(id).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   let active = true;
+  const disconnectFocusCycle = connectGameScreenFocusCycle(screen, settingsToggle);
   const priorFocus = document.activeElement;
 
   screen.className = 'game-new-game-screen game-computer-error-screen';
@@ -459,6 +497,7 @@ export function showComputerErrorScreen(area, id, messageText, onRetry, onNewGam
     if (!active) return;
     active = false;
     screen.remove();
+    disconnectFocusCycle();
     savedInert.forEach(({ node, inert }) => { node.inert = inert; });
     savedToolbarDisabled.forEach(({ control, disabled }) => { control.disabled = disabled; });
     if (restoreFocus && priorFocus?.isConnected) priorFocus.focus({ preventScroll: true });
@@ -469,17 +508,6 @@ export function showComputerErrorScreen(area, id, messageText, onRetry, onNewGam
       event.preventDefault();
       event.stopPropagation();
       return;
-    }
-    if (event.key !== 'Tab') return;
-    const focusable = [...screen.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
-      .filter(node => !node.closest('[hidden]'));
-    if (!focusable.length) return;
-    if (event.shiftKey && document.activeElement === focusable[0]) {
-      event.preventDefault();
-      focusable.at(-1).focus();
-    } else if (!event.shiftKey && document.activeElement === focusable.at(-1)) {
-      event.preventDefault();
-      focusable[0].focus();
     }
   });
   screen.querySelector('button:not([disabled])')?.focus({ preventScroll: true });
