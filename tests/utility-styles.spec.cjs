@@ -2527,6 +2527,67 @@ test('calculator Fit curves includes a narrow peak between rendered samples', as
   await expect(settings.getByLabel('Maximum y')).toHaveValue('5');
 });
 
+test('calculator Fit curves includes a narrow Polar peak and preserves its angle range', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  const settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByRole('combobox', { name: 'Graph mode' }).click();
+  await settings.getByRole('option', { name: /Polar/ }).click();
+  await settings.getByLabel('Minimum theta').fill('0');
+  await settings.getByLabel('Maximum theta').fill('6.283');
+  await settings.getByLabel('Minimum r').fill('0');
+  await settings.getByLabel('Maximum r').fill('10');
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await editor.getByLabel('Function expression').fill('100/(1000000*(theta-1.2342168125)^2+1)');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Fit curves');
+
+  const fitted = await calculator.locator('.calc-plot-area').evaluate(element => JSON.parse(element.dataset.view));
+  expect(fitted.thetaMin).toBe(0);
+  expect(fitted.thetaMax).toBe(6.283);
+  expect(fitted.rMax).toBeGreaterThan(50);
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  await expect(settings.getByLabel('Minimum theta')).toHaveValue('0');
+  await expect(settings.getByLabel('Maximum theta')).toHaveValue('6.283');
+});
+
+test('calculator Fit curves includes a narrow Parametric peak and preserves its parameter range', async ({ page }) => {
+  const calculator = await openUtility(page, 'calculator');
+  await chooseCalculatorMode(calculator, 'Graph');
+
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  const settings = calculator.getByRole('dialog', { name: 'Graph settings' });
+  await settings.getByRole('combobox', { name: 'Graph mode' }).click();
+  await settings.getByRole('option', { name: /Parametric/ }).click();
+  await settings.getByLabel('Minimum t').fill('0');
+  await settings.getByLabel('Maximum t').fill('6.283');
+  await settings.getByLabel('Minimum x').fill('-4');
+  await settings.getByLabel('Maximum x').fill('4');
+  await settings.getByLabel('Minimum y').fill('-5');
+  await settings.getByLabel('Maximum y').fill('5');
+  await settings.getByRole('button', { name: 'Apply settings' }).click();
+
+  await calculator.getByRole('button', { name: 'Edit functions' }).click();
+  const editor = calculator.getByRole('dialog', { name: 'Edit functions' });
+  await editor.getByLabel('x(t)').fill('t');
+  await editor.getByLabel('y(t)').fill('100/(1000000*(t-1.2342168125)^2+1)');
+  await editor.getByRole('button', { name: 'Apply', exact: true }).click();
+  await clickGraphMenuAction(calculator, 'View', 'Fit curves');
+
+  const fitted = await calculator.locator('.calc-plot-area').evaluate(element => JSON.parse(element.dataset.view));
+  expect(fitted.tMin).toBe(0);
+  expect(fitted.tMax).toBe(6.283);
+  expect(fitted.yMax).toBeGreaterThan(50);
+  await calculator.getByRole('button', { name: 'Graph settings' }).click();
+  await expect(settings.getByLabel('Minimum t')).toHaveValue('0');
+  await expect(settings.getByLabel('Maximum t')).toHaveValue('6.283');
+});
+
 test('calculator graph functions, colors, visibility, mode, and ranges persist across reopen and refresh', async ({ page }) => {
   let calculator = await openUtility(page, 'calculator');
   await chooseCalculatorMode(calculator, 'Graph');
