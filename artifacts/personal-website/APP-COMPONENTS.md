@@ -6,7 +6,8 @@ Use the shared controls in `public/shared/` and the shared tokens in `public/des
 
 | Family | Source | Role and boundaries |
 | --- | --- | --- |
-| Desktop shell and windows | `public/desktop.css` | Light/dark system theme, accent and focus colors, window tint/opacity, toolbar surfaces, popovers, and desktop chrome. Window content should inherit these tokens instead of defining another global palette. |
+| Desktop shell | `public/desktop.css` | Light/dark theme tokens, top bar, launcher, desktop stage, toolbar surfaces, shared menus, and desktop chrome. Window content should inherit these tokens instead of defining another global palette. |
+| Window and overview frame | `public/desktop-windows.css` | Shared window frame, focus outline, open/close transitions, overview mode, and overview controls. Loaded immediately after `desktop.css`; keep app-specific refinements in later stylesheets. |
 | Utility apps | `public/desktop.css` plus app styles | `.utility-app` supplies shared utility colors and controls for apps such as Weather, World Clock, Calendar, Sticky Notes, and Calculator. Keep specialized content layouts (for example, a calendar grid or calculator keypad), but use `.util-action`, `.util-field`, and the shared menu pattern for ordinary controls. |
 | Settings | `public/apps/settings.css` | Uses the desktop theme with a distinct sidebar, section headings, and card hierarchy. Preserve that information architecture; routine buttons and fields should still use shared controls. |
 | Game surfaces and boards | `public/apps/games/games.css` | Game toolbar and board layouts with per-game rules, board colors, and tactile table treatments. Reuse the common toolbar button base, but retain game-specific board geometry, status, and rules. |

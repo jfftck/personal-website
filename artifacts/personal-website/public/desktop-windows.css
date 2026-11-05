@@ -1,0 +1,277 @@
+/* Window frame, window transitions, and overview layout/controls.
+   Loaded after desktop.css so later app-specific rules retain their precedence. */
+
+/* ── Overview controls layer ── */
+#overview-controls {
+  position: fixed;
+  inset: 0;
+  z-index: 510;
+  pointer-events: none;
+}
+
+/* Width preset pill above active window */
+#ov-width-pill {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--overlay-card);
+  -webkit-backdrop-filter: var(--backdrop);
+  backdrop-filter: var(--backdrop);
+  border: 1px solid var(--topbar-border);
+  border-radius: 0.625rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  pointer-events: auto;
+}
+
+.ov-pill-btn {
+  flex: 1;
+  border: none;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--topbar-text);
+  font-size: 0.75rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.3125rem 0;
+  text-align: center;
+  transition: background 100ms ease;
+}
+.ov-pill-btn:hover  { background: var(--btn-hover); }
+.ov-pill-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+.ov-pill-btn:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
+
+/* Column navigation arrows */
+.ov-arrow {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: var(--overlay-card);
+  -webkit-backdrop-filter: var(--backdrop);
+  backdrop-filter: var(--backdrop);
+  border: 1px solid var(--topbar-border);
+  color: var(--topbar-text);
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+  transition: background 120ms ease;
+}
+.ov-arrow:hover  { background: var(--btn-hover); }
+.ov-arrow:active { background: var(--btn-active); }
+.ov-arrow:disabled { opacity: 0.25; pointer-events: none; }
+.ov-arrow:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
+
+/* Window drag handles */
+.ov-drag-handle {
+  position: absolute;
+  width: 40px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--overlay-card);
+  -webkit-backdrop-filter: var(--backdrop);
+  backdrop-filter: var(--backdrop);
+  border: 1px solid var(--topbar-border);
+  border-radius: 0.375rem;
+  color: var(--topbar-text);
+  cursor: grab;
+  pointer-events: auto;
+  opacity: 0.7;
+  transition: opacity 120ms ease, background 120ms ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.ov-drag-handle:hover    { opacity: 1; background: var(--btn-hover); }
+.ov-drag-handle.dragging { opacity: 0.4; cursor: grabbing; }
+
+/* Hide all non-active handles while a drag is in progress */
+#overview-controls.ov-dragging .ov-drag-handle:not(.dragging) {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 80ms ease;
+}
+
+/* ── Drop zones ── */
+.ov-drop-zone {
+  position: absolute;
+  pointer-events: auto;
+  border-radius: 0.25rem;
+  border: 2px dashed var(--focus-color);
+  opacity: 0.35;
+  transition: opacity 80ms ease, background 80ms ease, border-color 80ms ease;
+}
+.ov-drop-zone.active {
+  opacity: 1;
+  background: var(--btn-active);
+  border-style: solid;
+  border-color: var(--accent-glow);
+  box-shadow: 0 0 0 1px var(--accent-glow), 0 0 8px var(--accent-glow);
+}
+
+/* Within-column zones: horizontal bars */
+.ov-drop-zone--within {
+  /* sizing set via inline style */
+}
+
+/* New-column zones: vertical bars */
+.ov-drop-zone--new-col {
+  border-radius: 0.375rem;
+}
+
+/* Drag ghost */
+.ov-drag-ghost {
+  position: fixed;
+  z-index: 520;
+  width: 40px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 0.375rem;
+  pointer-events: none;
+  opacity: 0.9;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+
+/* ── Overview mode ── */
+/* JS computes the precise translate+scale — CSS only sets the transition and cursor */
+body.mod-overview #desktop {
+  overflow: visible;
+}
+body.mod-overview #app-strip-wrapper {
+  overflow: visible;
+}
+body.mod-overview #app-strip {
+  transition: transform 260ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+body.overview-exiting #app-strip {
+  transition: transform 260ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+body.mod-overview #app-strip.ov-notransition {
+  transition: none !important;
+}
+body.mod-overview #app-strip.ov-no-transition,
+body.overview-exiting #app-strip.ov-no-transition { transition: none !important; }
+body.mod-overview .app-window {
+  cursor: pointer;
+  pointer-events: auto;
+}
+body.mod-overview .app-window.focused {
+  cursor: zoom-out;
+}
+
+.app-window.overview-window-entering[data-overview-animation="zoom"] { animation: overview-window-zoom-in 360ms cubic-bezier(.2,.8,.2,1) var(--overview-stagger, 0ms) both; }
+.app-window.overview-window-entering[data-overview-animation="fade"] { animation: overview-window-fade-in 320ms ease var(--overview-stagger, 0ms) both; }
+.app-window.overview-window-entering[data-overview-animation="slide-up"] { animation: overview-window-slide-in 360ms cubic-bezier(.2,.8,.2,1) var(--overview-stagger, 0ms) both; }
+.app-window.overview-window-entering[data-overview-animation="rubber-band"] { animation: overview-rubber-band-in 440ms cubic-bezier(.2,.8,.2,1) var(--overview-stagger, 0ms) both; }
+.app-window.overview-window-exiting[data-overview-animation="zoom"] { animation: overview-window-zoom-out 300ms ease-in var(--overview-stagger, 0ms) both; }
+.app-window.overview-window-exiting[data-overview-animation="fade"] { animation: overview-window-fade-out 300ms ease-in var(--overview-stagger, 0ms) both; }
+.app-window.overview-window-exiting[data-overview-animation="slide-up"] { animation: overview-window-slide-out 320ms ease-in var(--overview-stagger, 0ms) both; }
+.app-window.overview-window-exiting[data-overview-animation="rubber-band"] { animation: overview-rubber-band-out 380ms cubic-bezier(.2,.8,.2,1) var(--overview-stagger, 0ms) both; }
+
+/* ------------------------------------------------------------
+   APP WINDOWS
+   ------------------------------------------------------------ */
+.app-window {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid var(--app-border);
+  background-color: var(--app-bg);
+  -webkit-backdrop-filter: var(--backdrop);
+  backdrop-filter: var(--backdrop);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  outline: 0.25rem solid transparent;
+  outline-offset: 0;
+  transform-origin: center center;
+  transition: box-shadow 200ms ease, outline-color 200ms ease, opacity 280ms ease, transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: relative;
+  container-type: inline-size;
+}
+
+.app-window.window-opening[data-window-animation="fade"] { animation: window-fade-in 280ms ease-out both; }
+.app-window.window-opening[data-window-animation="zoom"] { animation: window-zoom-in 320ms cubic-bezier(.2,.8,.2,1) both; }
+.app-window.window-opening[data-window-animation="slide-up"] { animation: window-slide-up-in 320ms cubic-bezier(.2,.8,.2,1) both; }
+.app-window.window-opening[data-window-animation="slide-left"] { animation: window-slide-left-in 320ms cubic-bezier(.2,.8,.2,1) both; }
+.app-window.window-opening[data-window-animation="flip"] { animation: window-flip-in 360ms cubic-bezier(.2,.8,.2,1) both; transform-origin: center center; }
+.app-window.window-closing { pointer-events: none; }
+.app-window.window-closing[data-window-animation="fade"] { animation: window-fade-out 220ms ease-in both; }
+.app-window.window-closing[data-window-animation="zoom"] { animation: window-zoom-out 240ms ease-in both; }
+.app-window.window-closing[data-window-animation="slide-up"] { animation: window-slide-up-out 240ms ease-in both; }
+.app-window.window-closing[data-window-animation="slide-left"] { animation: window-slide-left-out 240ms ease-in both; }
+.app-window.window-closing[data-window-animation="flip"] { animation: window-flip-out 260ms ease-in both; transform-origin: center center; }
+@keyframes window-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes window-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes window-zoom-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+@keyframes window-zoom-out { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(1.035); } }
+@keyframes window-slide-up-in { from { opacity: 0; transform: translateY(.8rem); } to { opacity: 1; transform: translateY(0); } }
+@keyframes window-slide-up-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-.55rem); } }
+@keyframes window-slide-left-in { from { opacity: 0; transform: translateX(1rem); } to { opacity: 1; transform: translateX(0); } }
+@keyframes window-slide-left-out { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-.8rem); } }
+@keyframes window-flip-in { from { opacity: 0; transform: perspective(65rem) rotateX(-7deg) scale(.98); } to { opacity: 1; transform: perspective(65rem) rotateX(0) scale(1); } }
+@keyframes window-flip-out { from { opacity: 1; transform: perspective(65rem) rotateX(0) scale(1); } to { opacity: 0; transform: perspective(65rem) rotateX(7deg) scale(.98); } }
+@keyframes desktop-window-zoom-out { to { opacity: 0; transform: scale(.88); } }
+@keyframes desktop-window-zoom-in { from { opacity: 0; transform: scale(.88); } to { opacity: 1; transform: scale(1); } }
+@keyframes desktop-window-fade-out { to { opacity: 0; } }
+@keyframes desktop-window-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes desktop-window-slide-out { to { opacity: 0; transform: translateY(-1.4rem) scale(.96); } }
+@keyframes desktop-window-slide-in { from { opacity: 0; transform: translateY(-1.4rem) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes desktop-window-tilt-out { to { opacity: 0; transform: perspective(55rem) rotateX(-11deg) translateY(-18%) scale(.94); } }
+@keyframes desktop-window-tilt-in { from { opacity: 0; transform: perspective(55rem) rotateX(-11deg) translateY(-18%) scale(.94); } to { opacity: 1; transform: perspective(55rem) rotateX(0) translateY(0) scale(1); } }
+@keyframes desktop-window-flip-out { to { opacity: 0; transform: perspective(60rem) rotateY(10deg) scale(.94); } }
+@keyframes desktop-window-flip-in { from { opacity: 0; transform: perspective(60rem) rotateY(10deg) scale(.94); } to { opacity: 1; transform: perspective(60rem) rotateY(0) scale(1); } }
+@keyframes overview-window-zoom-in { from { opacity: .4; transform: scale(1.12); } to { opacity: 1; transform: scale(1); } }
+@keyframes overview-window-zoom-out { to { opacity: .45; transform: scale(.9); } }
+@keyframes overview-window-fade-in { from { opacity: .2; } to { opacity: 1; } }
+@keyframes overview-window-fade-out { to { opacity: .2; } }
+@keyframes overview-window-slide-in { from { opacity: .3; transform: translateY(.8rem); } to { opacity: 1; transform: translateY(0); } }
+@keyframes overview-window-slide-out { to { opacity: .3; transform: translateY(.8rem); } }
+@keyframes overview-rubber-band-in { 0% { opacity: .4; transform: scale(1.28); } 58% { transform: scale(.94); } 76% { transform: scale(1.045); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes overview-rubber-band-out { 0% { opacity: 1; transform: scale(1); } 45% { transform: scale(1.07); } 100% { opacity: .45; transform: scale(.88); } }
+
+.app-window.focused {
+  outline-color: var(--focus-color);
+  box-shadow: 0 0.5rem 2.5rem rgba(0, 170, 255, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #desktop-widgets,
+  #app-strip-wrapper,
+  .app-window {
+    transition: none !important;
+  }
+  body.mod-overview #app-strip,
+  body.overview-exiting #app-strip { transition: none !important; }
+  .app-window.window-opening,
+  .app-window.window-closing,
+  .app-window.desktop-transitioning,
+  .app-window.overview-window-entering,
+  .app-window.overview-window-exiting {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 640px) and (orientation: portrait) {
+  .app-window {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+}

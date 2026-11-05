@@ -11,6 +11,65 @@ async function openUtility(page, type) {
   return page.locator(`.app-window[data-type="${type}"]`).last();
 }
 
+test('desktop shell and window frame styles remain stable at desktop and mobile widths', async ({ page }) => {
+  const stylesheets = await page.locator('link[rel="stylesheet"]').evaluateAll(links =>
+    links.map(link => new URL(link.href).pathname.split('/').pop()),
+  );
+  expect(stylesheets.indexOf('desktop.css')).toBeGreaterThanOrEqual(0);
+  expect(stylesheets.indexOf('desktop-windows.css')).toBe(stylesheets.indexOf('desktop.css') + 1);
+
+  const app = await openUtility(page, 'calculator');
+  const inspect = () => page.evaluate(() => {
+    const topbar = document.querySelector('#topbar');
+    const desktop = document.querySelector('#desktop');
+    const stripWrapper = document.querySelector('#app-strip-wrapper');
+    const strip = document.querySelector('#app-strip');
+    const appWindow = document.querySelector('.app-window.focused');
+    const style = element => {
+      const computed = getComputedStyle(element);
+      return {
+        display: computed.display,
+        position: computed.position,
+        overflow: computed.overflow,
+        borderRadius: computed.borderRadius,
+        borderLeftWidth: computed.borderLeftWidth,
+        outlineStyle: computed.outlineStyle,
+        outlineColor: computed.outlineColor,
+        backgroundColor: computed.backgroundColor,
+        cursor: computed.cursor,
+        transitionDuration: computed.transitionDuration,
+      };
+    };
+    return {
+      topbar: style(topbar),
+      desktop: style(desktop),
+      stripWrapper: style(stripWrapper),
+      strip: style(strip),
+      appWindow: style(appWindow),
+    };
+  });
+
+  const desktopStyles = await inspect();
+  expect(desktopStyles.topbar.position).toBe('fixed');
+  expect(desktopStyles.topbar.display).toBe('grid');
+  expect(desktopStyles.appWindow.display).toBe('flex');
+  expect(desktopStyles.appWindow.borderRadius).toBe('16px');
+  expect(desktopStyles.appWindow.outlineStyle).toBe('solid');
+  expect(desktopStyles.appWindow.outlineColor).not.toBe('rgba(0, 0, 0, 0)');
+  expect(desktopStyles.appWindow.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileStyles = await inspect();
+  expect(mobileStyles.appWindow.borderRadius).toBe('0px');
+  expect(mobileStyles.appWindow.borderLeftWidth).toBe('0px');
+
+  await app.evaluate(element => document.body.classList.add('mod-overview'));
+  const overviewStyles = await inspect();
+  expect(overviewStyles.desktop.overflow).toBe('visible');
+  expect(overviewStyles.stripWrapper.overflow).toBe('visible');
+  expect(overviewStyles.appWindow.cursor).toBe('zoom-out');
+});
+
 test('Settings mobile sections and pages use the full app width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const settings = await openUtility(page, 'settings');
