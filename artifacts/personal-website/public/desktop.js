@@ -2888,11 +2888,7 @@ function _buildOverviewControls(natColRects, natWinRects, stripRect, tX, tY, sca
       lBtn.addEventListener('click', e => {
         e.stopPropagation();
         if (ci === 0) return;
-        [S.columns[ci - 1], S.columns[ci]] = [S.columns[ci], S.columns[ci - 1]];
-        appStrip.insertBefore(S.columns[ci - 1].el, S.columns[ci].el);
-        saveSession();
-        updateTopBar();
-        positionOverview();
+        windowController.moveColumn(col.id, ci - 1);
       });
       layer.appendChild(lBtn);
 
@@ -2905,11 +2901,7 @@ function _buildOverviewControls(natColRects, natWinRects, stripRect, tX, tY, sca
       rBtn.addEventListener('click', e => {
         e.stopPropagation();
         if (ci === S.columns.length - 1) return;
-        [S.columns[ci], S.columns[ci + 1]] = [S.columns[ci + 1], S.columns[ci]];
-        S.columns[ci].el.after(S.columns[ci + 1].el);
-        saveSession();
-        updateTopBar();
-        positionOverview();
+        windowController.moveColumn(col.id, ci + 1);
       });
       layer.appendChild(rBtn);
     }
@@ -3109,92 +3101,7 @@ function _wireOvDrag(handle, appId, layer) {
 }
 
 function _ovPerformDrop(draggedId, meta) {
-  if (!meta) return;
-
-  // ── New column ──
-  if (meta.type === 'new-col') {
-    const srcCol = getAppColumn(draggedId);
-    if (!srcCol) return;
-    let insertAt = parseInt(meta.insertAt, 10);
-    if (!Number.isInteger(insertAt)) return;
-
-    // A solo window already is a complete column, so move that column.
-    if (srcCol.appIds.length === 1) {
-      const srcIdx = S.columns.indexOf(srcCol);
-      if (insertAt === srcIdx || insertAt === srcIdx + 1) return;
-
-      S.columns.splice(srcIdx, 1);
-      srcCol.el.remove();
-      if (insertAt > srcIdx) insertAt--;
-      insertAt = Math.min(insertAt, S.columns.length);
-      S.columns.splice(insertAt, 0, srcCol);
-      appStrip.insertBefore(srcCol.el, appStrip.children[insertAt] || null);
-
-      saveSession();
-      updateTopBar();
-      updateStripLayout();
-      requestAnimationFrame(() => positionOverview());
-      return;
-    }
-
-    srcCol.appIds.splice(srcCol.appIds.indexOf(draggedId), 1);
-    const app = S.apps.find(a => a.id === draggedId);
-    app.el.remove();
-    // srcCol retains ≥1 window — do not remove it
-
-    const newColId = `col-${S.nextColId++}`;
-    const newColEl = createColEl(newColId);
-    newColEl.dataset.width = srcCol.widthPreset;
-    newColEl.appendChild(app.el);
-    const newCol = { id: newColId, appIds: [draggedId], widthPreset: srcCol.widthPreset, el: newColEl };
-
-    insertAt = Math.min(insertAt, S.columns.length);
-    appStrip.insertBefore(newColEl, appStrip.children[insertAt] || null);
-    wireColEvents(newColEl);
-
-    S.columns.splice(insertAt, 0, newCol);
-
-    saveSession();
-    updateTopBar();
-    updateStripLayout();
-    requestAnimationFrame(() => positionOverview());
-    return;
-  }
-
-  // ── Within existing column ──
-  if (meta.type === 'within') {
-    const { colId } = meta;
-    const insertAt  = parseInt(meta.insertAt, 10);
-    const srcCol    = getAppColumn(draggedId);
-    if (!srcCol) return;
-
-    // Bail if drop is a no-op (window is already in that slot)
-    if (srcCol.id === colId) {
-      const curIdx = srcCol.appIds.indexOf(draggedId);
-      if (curIdx === insertAt || curIdx === insertAt - 1) return;
-    }
-
-    srcCol.appIds.splice(srcCol.appIds.indexOf(draggedId), 1);
-    const app = S.apps.find(a => a.id === draggedId);
-    app.el.remove();
-
-    if (srcCol.appIds.length === 0) {
-      srcCol.el.remove();
-      S.columns.splice(S.columns.indexOf(srcCol), 1);
-    }
-
-    const dstCol = S.columns.find(c => c.id === colId);
-    if (!dstCol) return;
-
-    const at = Math.min(insertAt, dstCol.appIds.length);
-    dstCol.appIds.splice(at, 0, draggedId);
-    dstCol.el.insertBefore(app.el, dstCol.el.querySelectorAll('.app-window')[at] || null);
-
-    saveSession();
-    updateTopBar();
-    updateStripLayout();
-    requestAnimationFrame(() => positionOverview());
-  }
+  return windowController.rearrangeWindow(draggedId, meta);
 }
 
 window.addEventListener('resize', () => {

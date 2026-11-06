@@ -49,6 +49,23 @@ async function savedApps(page) {
   return page.evaluate(key => JSON.parse(localStorage.getItem(key)).columns.flatMap(col => col.apps), KEY);
 }
 
+async function dragOverviewWindow(page, appId, dropSelector) {
+  const handle = page.locator(`.ov-drag-handle[data-app-id="${appId}"]`);
+  const handleBox = await handle.boundingBox();
+  expect(handleBox).not.toBeNull();
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await page.mouse.down();
+
+  const dropZone = page.locator(dropSelector);
+  await expect(dropZone).toBeVisible();
+  const dropBox = await dropZone.boundingBox();
+  expect(dropBox).not.toBeNull();
+  await page.mouse.move(dropBox.x + dropBox.width / 2, dropBox.y + dropBox.height / 2, { steps: 8 });
+  await expect(dropZone).toHaveClass(/active/);
+  await page.mouse.up();
+  await expect(page.locator('#overview-controls')).not.toHaveClass(/ov-dragging/);
+}
+
 test('browsing documents and photos saves the new selection and reloads both', async ({ page }) => {
   await seed(page, [{ type: 'doc-viewer' }, { type: 'img-viewer' }]);
   const doc = page.locator('[data-type="doc-viewer"].app-window');
@@ -204,6 +221,129 @@ test('splitting and merging windows between columns persists the same order at d
     expect(saved.focused).toEqual({ columnIndex: 0, appIndex: 0 });
     await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveClass(/focused/);
   }
+});
+
+test('overview drag between columns preserves order, widths, and focus after refresh', async ({ page }) => {
+  const session = {
+    v: 2,
+    focused: { columnIndex: 0, appIndex: 1 },
+    columns: [
+      {
+        widthPreset: 'half',
+        apps: [{ type: 'doc-viewer' }, { type: 'img-viewer' }],
+      },
+      {
+        widthPreset: 'third',
+        apps: [{ type: 'doc-viewer', state: { url: docs[1].url } }],
+      },
+    ],
+  };
+  await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+    key: KEY,
+    value: session,
+  });
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+
+  const image = page.locator('.app-window[data-type="img-viewer"]');
+  const imageId = await image.getAttribute('data-id');
+  const destinationId = await page.locator('.app-col').nth(1).getAttribute('data-col-id');
+  await expect(page.locator('.app-window[data-type="doc-viewer"]').nth(0).locator('.doc-body'))
+    .toContainText('First document');
+  await expect(page.locator('.app-window[data-type="doc-viewer"]').nth(1).locator('.doc-body'))
+    .toContainText('Second document');
+  await expect(image).toHaveClass(/focused/);
+
+  await page.locator('#overview-btn').click();
+  await expect(page.locator('.ov-drag-handle')).toHaveCount(3);
+  await dragOverviewWindow(
+    page,
+    imageId,
+    `.ov-drop-zone--within[data-col-id="${destinationId}"][data-insert-at="0"]`,
+  );
+
+  await expect.poll(async () => (
+    await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY)
+  )).toMatchObject({
+    columns: [
+      { widthPreset: 'half', apps: [{ type: 'doc-viewer' }] },
+      {
+        widthPreset: 'third',
+        apps: [{ type: 'img-viewer' }, { type: 'doc-viewer', state: { url: docs[1].url } }],
+      },
+    ],
+    focused: { columnIndex: 1, appIndex: 0 },
+  });
+
+  await page.getByRole('button', { name: 'Move column left' }).click();
+  const reordered = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(reordered.columns.map(column => column.apps.map(app => app.type))).toEqual([
+    ['img-viewer', 'doc-viewer'],
+    ['doc-viewer'],
+  ]);
+  expect(reordered.columns.map(column => column.widthPreset)).toEqual(['third', 'half']);
+  expect(reordered.focused).toEqual({ columnIndex: 0, appIndex: 0 });
+
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  const columns = page.locator('.app-col');
+  await expect(columns).toHaveCount(2);
+  await expect(columns.nth(0)).toHaveAttribute('data-width', 'third');
+  await expect(columns.nth(1)).toHaveAttribute('data-width', 'half');
+  await expect.poll(() => page.locator('.app-window').evaluateAll(windows => (
+    windows.map(window => window.dataset.type)
+  ))).toEqual(['img-viewer', 'doc-viewer', 'doc-viewer']);
+  await expect(page.locator('.app-window[data-type="img-viewer"]')).toHaveClass(/focused/);
+  await expect(page.locator('.app-window[data-type="doc-viewer"]').nth(0).locator('.doc-body'))
+    .toContainText('Second document');
+  await expect(page.locator('.app-window[data-type="doc-viewer"]').nth(1).locator('.doc-body'))
+    .toContainText('First document');
+});
+
+test('overview drag into a new column preserves the source width and focused window after refresh', async ({ page }) => {
+  const session = {
+    v: 2,
+    focused: { columnIndex: 0, appIndex: 1 },
+    columns: [{
+      widthPreset: 'half',
+      apps: [{ type: 'doc-viewer' }, { type: 'img-viewer' }],
+    }],
+  };
+  await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+    key: KEY,
+    value: session,
+  });
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+
+  const image = page.locator('.app-window[data-type="img-viewer"]');
+  const imageId = await image.getAttribute('data-id');
+  await expect(image).toHaveClass(/focused/);
+  await page.locator('#overview-btn').click();
+  await expect(page.locator('.ov-drag-handle')).toHaveCount(2);
+  await dragOverviewWindow(
+    page,
+    imageId,
+    '.ov-drop-zone--new-col[data-insert-at="1"]',
+  );
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(saved.columns.map(column => column.apps.map(app => app.type))).toEqual([
+    ['doc-viewer'],
+    ['img-viewer'],
+  ]);
+  expect(saved.columns.map(column => column.widthPreset)).toEqual(['half', 'half']);
+  expect(saved.focused).toEqual({ columnIndex: 1, appIndex: 0 });
+
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  await expect(page.locator('.app-col')).toHaveCount(2);
+  await expect(page.locator('.app-col').nth(0)).toHaveAttribute('data-width', 'half');
+  await expect(page.locator('.app-col').nth(1)).toHaveAttribute('data-width', 'half');
+  await expect(page.locator('.app-window[data-type="img-viewer"]')).toHaveClass(/focused/);
+  await expect.poll(() => page.locator('.app-window').evaluateAll(windows => (
+    windows.map(window => window.dataset.type)
+  ))).toEqual(['doc-viewer', 'img-viewer']);
 });
 
 test('directional window focus follows geometry and Vim keys at desktop and phone widths', async ({ page }) => {

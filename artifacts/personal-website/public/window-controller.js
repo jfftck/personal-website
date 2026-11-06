@@ -362,6 +362,101 @@ export function createWindowController({
     updateTopBar();
   }
 
+  function completeOverviewRearrangement() {
+    saveSession();
+    updateTopBar();
+    updateStripLayout();
+    if (document.body.classList.contains('mod-overview')) {
+      window.requestAnimationFrame(() => positionOverview());
+    }
+  }
+
+  function moveColumn(columnId, targetIndex) {
+    const sourceIndex = state.columns.findIndex(column => column.id === columnId);
+    if (sourceIndex < 0 || !Number.isInteger(targetIndex)) return false;
+
+    const destinationIndex = Math.max(0, Math.min(targetIndex, state.columns.length - 1));
+    if (sourceIndex === destinationIndex) return false;
+
+    const [column] = state.columns.splice(sourceIndex, 1);
+    column.el.remove();
+    state.columns.splice(destinationIndex, 0, column);
+    appStrip.insertBefore(column.el, appStrip.children[destinationIndex] || null);
+
+    completeOverviewRearrangement();
+    return true;
+  }
+
+  function rearrangeWindow(appId, meta) {
+    const app = state.apps.find(candidate => candidate.id === appId);
+    const sourceColumn = getAppColumn(appId);
+    if (!app || !sourceColumn || !meta || typeof meta !== 'object') return false;
+
+    const insertAt = Number(meta.insertAt);
+    if (!Number.isInteger(insertAt) || insertAt < 0) return false;
+
+    if (meta.type === 'new-col') {
+      if (insertAt > state.columns.length) return false;
+
+      if (sourceColumn.appIds.length === 1) {
+        const sourceIndex = state.columns.indexOf(sourceColumn);
+        if (insertAt === sourceIndex || insertAt === sourceIndex + 1) return false;
+        return moveColumn(
+          sourceColumn.id,
+          insertAt > sourceIndex ? insertAt - 1 : insertAt,
+        );
+      }
+
+      sourceColumn.appIds.splice(sourceColumn.appIds.indexOf(appId), 1);
+      app.el.remove();
+
+      const columnId = `col-${state.nextColId++}`;
+      const columnElement = createColumnElement(columnId);
+      columnElement.dataset.width = sourceColumn.widthPreset;
+      columnElement.appendChild(app.el);
+      const column = {
+        id: columnId,
+        appIds: [appId],
+        widthPreset: sourceColumn.widthPreset,
+        el: columnElement,
+      };
+
+      state.columns.splice(insertAt, 0, column);
+      appStrip.insertBefore(columnElement, appStrip.children[insertAt] || null);
+      wireColumnEvents(columnElement);
+      completeOverviewRearrangement();
+      return true;
+    }
+
+    if (meta.type !== 'within') return false;
+
+    const destinationColumn = state.columns.find(column => column.id === meta.colId);
+    if (!destinationColumn || insertAt > destinationColumn.appIds.length) return false;
+    if (sourceColumn === destinationColumn) {
+      const currentIndex = sourceColumn.appIds.indexOf(appId);
+      if (sourceColumn.appIds.length === 1
+        || currentIndex === insertAt
+        || currentIndex === insertAt - 1) return false;
+    }
+
+    sourceColumn.appIds.splice(sourceColumn.appIds.indexOf(appId), 1);
+    app.el.remove();
+    if (sourceColumn.appIds.length === 0) {
+      sourceColumn.el.remove();
+      state.columns.splice(state.columns.indexOf(sourceColumn), 1);
+    }
+
+    const targetIndex = Math.min(insertAt, destinationColumn.appIds.length);
+    destinationColumn.appIds.splice(targetIndex, 0, appId);
+    destinationColumn.el.insertBefore(
+      app.el,
+      destinationColumn.el.querySelectorAll('.app-window')[targetIndex] || null,
+    );
+
+    completeOverviewRearrangement();
+    return true;
+  }
+
   function focusNextApp() {
     const order = getAppOrder();
     if (!order.length) return;
@@ -394,8 +489,10 @@ export function createWindowController({
     getAppColumn,
     getAppOrder,
     getFocusableControls,
+    moveColumn,
     moveWindowDown,
     moveWindowUp,
+    rearrangeWindow,
     removeApp,
     saveSession,
     scrollToApp,
