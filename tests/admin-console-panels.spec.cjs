@@ -529,6 +529,52 @@ test('document editor can create a CSS stylesheet and assign it to the document'
   await expect.poll(() => requests.find(request => request.method === 'PATCH' && request.path.endsWith('/file-doc'))?.body.stylesheetId).toBe('file-style-new');
 });
 
+test('stylesheet editor previews unsaved CSS in isolated desktop and mobile frames', async ({ page }) => {
+  const { requests } = await mockConsoleApi(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(adminUrl);
+  await page.getByTestId('edit-text-file-doc').click();
+  await page.getByTestId('select-document-stylesheet').click();
+  await page.getByRole('option', { name: 'Create New…' }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Create CSS stylesheet' });
+  await expect(dialog).toBeVisible();
+  const frame = page.getByTestId('stylesheet-preview-frame');
+  const preview = page.frameLocator('[data-testid="stylesheet-preview-frame"]');
+  await expect(frame).toHaveAttribute('sandbox', '');
+
+  await page.getByTestId('textarea-stylesheet-content').fill(
+    'body { background-color: rgb(255, 0, 0); } h1 { color: rgb(18, 52, 86); } /* </style><script>document.body.dataset.previewProbe="injected"</script> */',
+  );
+  await expect(preview.locator('h1').first()).toHaveCSS('color', 'rgb(18, 52, 86)');
+  await expect(preview.locator('body')).toHaveCSS('background-color', 'rgb(255, 0, 0)');
+  await expect(preview.locator('script')).toHaveCount(0);
+
+  const srcDoc = await frame.getAttribute('srcdoc');
+  expect(srcDoc).toContain("default-src 'none'");
+  expect(srcDoc).toContain('Notes from the Coast');
+  expect(srcDoc).not.toContain('</style><script>');
+  const dialogBackground = await dialog.evaluate(element => getComputedStyle(element).backgroundColor);
+  expect(dialogBackground).not.toBe('rgb(255, 0, 0)');
+
+  const desktopWidth = await frame.evaluate(element => element.getBoundingClientRect().width);
+  expect(desktopWidth).toBeGreaterThan(700);
+  await page.getByTestId('stylesheet-preview-mobile').click();
+  await expect(page.getByTestId('stylesheet-preview-mobile')).toHaveAttribute('aria-pressed', 'true');
+  const mobileWidth = await frame.evaluate(element => element.getBoundingClientRect().width);
+  expect(mobileWidth).toBeGreaterThan(300);
+  expect(mobileWidth).toBeLessThanOrEqual(375);
+
+  await page.getByTestId('stylesheet-preview-desktop').focus();
+  await page.keyboard.press('Space');
+  await expect(page.getByTestId('stylesheet-preview-desktop')).toHaveAttribute('aria-pressed', 'true');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const phoneWidth = await frame.evaluate(element => element.getBoundingClientRect().width);
+  expect(phoneWidth).toBeGreaterThan(0);
+  expect(phoneWidth).toBeLessThanOrEqual(390);
+  expect(requests.filter(request => request.method === 'POST' && request.path === '/api/content/uploads')).toHaveLength(0);
+});
+
 test('deleting a stylesheet confirms affected documents and resets them to default', async ({ page }) => {
   await mockConsoleApi(page);
   await page.goto(adminUrl);

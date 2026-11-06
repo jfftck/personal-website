@@ -55,6 +55,57 @@ function isStylesheetFile(file: ContentFile) {
   return file.contentType.toLowerCase() === 'text/css' && /\.css$/i.test(file.name);
 }
 
+function createStylesheetPreviewDocument(cssText: string) {
+  const safeCssText = cssText.replace(/<\/style/gi, '\\3C /style');
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root { color-scheme: light; --app-text: #24313d; --accent: #236b88; --accent-light: #3284a3; --app-border: #d7e0e5; }
+    html { min-height: 100%; background: #edf1f3; }
+    body { min-height: 100vh; margin: 0; padding: 28px; background: #fff; color: #24313d; font: 16px/1.65 Georgia, "Times New Roman", serif; }
+    .doc-body { max-width: 68ch; margin: 0 auto; line-height: 1.75; color: var(--app-text); font-size: 16px; }
+    .doc-body h1 { margin: 0 0 .35em; font: 700 1.75em/1.2 Georgia, "Times New Roman", serif; }
+    .doc-body h2 { margin: 1.8em 0 .5em; color: var(--accent); font: 600 1.2em/1.3 Georgia, "Times New Roman", serif; }
+    .doc-body p, .doc-body ul, .doc-body blockquote, .doc-body pre, .doc-body table { margin: 0 0 1em; }
+    .doc-body ul { padding-left: 1.5em; }
+    .doc-body blockquote { border-left: 3px solid var(--accent); padding-left: 1em; color: #50606a; }
+    .doc-body code { border-radius: 4px; background: #edf3f5; padding: .1em .35em; font: .9em ui-monospace, monospace; }
+    .doc-body pre { overflow-x: auto; border: 1px solid var(--app-border); border-radius: 8px; padding: 1em; background: #f5f7f8; }
+    .doc-body pre code { padding: 0; background: transparent; }
+    .doc-body .md-table { width: 100%; border-collapse: collapse; }
+    .doc-body .md-table th, .doc-body .md-table td { border: 1px solid var(--app-border); padding: .45em .65em; text-align: left; }
+    .doc-body .md-table th { background: #eaf1f4; }
+    @media (max-width: 600px) { body { padding: 20px; } }
+  </style>
+  <style>${safeCssText}</style>
+</head>
+<body class="doc-body">
+  <h1>Notes from the Coast</h1>
+  <p>This sample shows how a document stylesheet affects headings, paragraphs, links, lists, tables, and code.</p>
+  <h2>A little structure</h2>
+  <p>Readable documents benefit from a clear rhythm. A stylesheet can change the type, spacing, and color without changing the original Markdown.</p>
+  <ul>
+    <li>Keep headings easy to scan</li>
+    <li>Give longer passages room to breathe</li>
+  </ul>
+  <blockquote>Good typography should make the content easier to read, not compete with it.</blockquote>
+  <p>Inline code: <code>const title = "Hello";</code></p>
+  <pre><code>function greet(name) {
+  return \`Hello, \${name}!\`;
+}</code></pre>
+  <table class="md-table">
+    <thead><tr><th>Day</th><th>Weather</th></tr></thead>
+    <tbody><tr><td>Monday</td><td>Cloudy</td></tr><tr><td>Tuesday</td><td>Clear</td></tr></tbody>
+  </table>
+</body>
+</html>`;
+}
+
 function isMarkdownDocument(file: ContentFile) {
   return /\.(md|markdown)$/i.test(file.name) &&
     /^text\/(markdown|plain)/i.test(file.contentType);
@@ -136,6 +187,7 @@ function Console() {
   const [stylesheetFile, setStylesheetFile] = useState<ContentFile | null>(null);
   const [stylesheetTitle, setStylesheetTitle] = useState('');
   const [stylesheetText, setStylesheetText] = useState('');
+  const [stylesheetPreviewViewport, setStylesheetPreviewViewport] = useState<'desktop' | 'mobile'>('desktop');
   const [stylesheetLoading, setStylesheetLoading] = useState(false);
   const [stylesheetBusy, setStylesheetBusy] = useState(false);
   const [stylesheetError, setStylesheetError] = useState('');
@@ -169,6 +221,11 @@ function Console() {
   });
   const resetMetadataRef = useRef(metadataForm.reset);
   resetMetadataRef.current = metadataForm.reset;
+  const stylesheetTextBytes = useMemo(() => new Blob([stylesheetText]).size, [stylesheetText]);
+  const stylesheetPreviewDocument = useMemo(
+    () => stylesheetTextBytes <= MAX_STYLESHEET_BYTES ? createStylesheetPreviewDocument(stylesheetText) : '',
+    [stylesheetText, stylesheetTextBytes],
+  );
 
   const patchTreeCache = useCallback((update: (tree: ContentTreeData) => ContentTreeData) => {
     const queryKey = getGetContentTreeQueryKey();
@@ -572,6 +629,7 @@ function Console() {
     setStylesheetFile(file ?? null);
     setStylesheetTitle(file?.title ?? '');
     setStylesheetText('');
+    setStylesheetPreviewViewport('desktop');
     setStylesheetError('');
     setStylesheetEditorOpen(true);
     setStylesheetLoading(Boolean(file));
@@ -1055,6 +1113,48 @@ function Console() {
                   data-testid="textarea-stylesheet-content"
                 />}
             {stylesheetError ? <p className="stylesheet-error" role="alert">{stylesheetError}</p> : null}
+            <section className="stylesheet-preview" aria-labelledby="stylesheet-preview-title">
+              <div className="stylesheet-preview-head">
+                <div>
+                  <h3 id="stylesheet-preview-title">Sample document preview</h3>
+                  <p>Updates as you edit. Changes are not saved until you select Save Stylesheet.</p>
+                </div>
+                <div className="stylesheet-preview-sizes" role="group" aria-label="Preview width">
+                  <button
+                    className={`button button-quiet${stylesheetPreviewViewport === 'desktop' ? ' is-selected' : ''}`}
+                    type="button"
+                    aria-pressed={stylesheetPreviewViewport === 'desktop'}
+                    onClick={() => setStylesheetPreviewViewport('desktop')}
+                    data-testid="stylesheet-preview-desktop"
+                  >
+                    Desktop
+                  </button>
+                  <button
+                    className={`button button-quiet${stylesheetPreviewViewport === 'mobile' ? ' is-selected' : ''}`}
+                    type="button"
+                    aria-pressed={stylesheetPreviewViewport === 'mobile'}
+                    onClick={() => setStylesheetPreviewViewport('mobile')}
+                    data-testid="stylesheet-preview-mobile"
+                  >
+                    Mobile
+                  </button>
+                </div>
+              </div>
+              <div className={`stylesheet-preview-frame-shell${stylesheetPreviewViewport === 'mobile' ? ' is-mobile' : ''}`}>
+                {stylesheetLoading
+                  ? <div className="stylesheet-preview-status" role="status">Loading stylesheet…</div>
+                  : stylesheetTextBytes > MAX_STYLESHEET_BYTES
+                    ? <div className="stylesheet-preview-status" role="status">Preview is unavailable above 256 KB. Reduce the stylesheet size to preview it.</div>
+                    : <iframe
+                        className="stylesheet-preview-frame"
+                        title="Sample Markdown document preview"
+                        sandbox=""
+                        referrerPolicy="no-referrer"
+                        srcDoc={stylesheetPreviewDocument}
+                        data-testid="stylesheet-preview-frame"
+                      />}
+              </div>
+            </section>
             <div className="dialog-footer stylesheet-dialog-footer">
               <div>
                 {stylesheetFile ? (
