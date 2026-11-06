@@ -76,6 +76,7 @@ export function FileDetailsPanel({
   onEditText,
   onRestoreRevision,
 }: FileDetailsPanelProps) {
+  const currentFolderPath = metadataForm.watch("folderPath") ?? "";
   return (
     <>
       <button
@@ -257,7 +258,7 @@ export function FileDetailsPanel({
                       <FormLabel className="field-label">Destination folder</FormLabel>
                       <div className="folder-picker-row">
                         <Select
-                          value={field.value || ROOT_FOLDER_OPTION}
+                          value={currentFolderPath || ROOT_FOLDER_OPTION}
                           onValueChange={(value) =>
                             field.onChange(value === ROOT_FOLDER_OPTION ? "" : value)
                           }

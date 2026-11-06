@@ -195,6 +195,19 @@ async function mockConsoleApi(page, treeHandler) {
     }
     if (path === '/api/content/trash') return fulfillJson(route, []);
     if (/^\/api\/content\/files\/[^/]+\/versions$/.test(path)) return fulfillJson(route, []);
+    if (path === '/api/content/folders' && method === 'POST') {
+      const body = route.request().postDataJSON();
+      const folder = {
+        id: `folder-created-${currentTree.folders.length + 1}`,
+        name: body.name,
+        parentPath: body.parentPath || '',
+        path: body.parentPath ? `${body.parentPath}/${body.name}` : body.name,
+        createdAt: '2026-03-05T00:00:00.000Z',
+      };
+      requests.push({ method, path, body });
+      currentTree.folders = [...currentTree.folders, folder];
+      return fulfillJson(route, folder, 201);
+    }
     if (path === '/api/content/uploads' && method === 'POST') {
       requests.push({ method, path, body: route.request().postDataJSON() });
       return fulfillJson(route, { uploadUrl: `${adminUrl}/test-upload`, objectPath: 'private/test-object' });
@@ -393,6 +406,93 @@ function fulfillJson(route, body, status = 200) {
     body: JSON.stringify(body),
   });
 }
+
+test('folder dialog validates, cancels, and returns to the upload and edit flows', async ({ page }) => {
+  const { requests } = await mockConsoleApi(page);
+  await page.goto(adminUrl);
+
+  await page.getByTestId('new-folder').click();
+  let dialog = page.getByRole('dialog', { name: 'Create folder' });
+  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId('save-folder')).toBeDisabled();
+  await page.getByTestId('cancel-folder').click();
+  await expect(dialog).toHaveCount(0);
+
+  const createFolder = async (name) => {
+    const responsePromise = page.waitForResponse(response =>
+      response.url().includes('/api/content/folders') &&
+      response.request().method() === 'POST',
+    );
+    await page.getByTestId('input-folder-name').fill(name);
+    await page.getByTestId('save-folder').click();
+    const response = await responsePromise;
+    expect(response.status()).toBe(201);
+    return response.json();
+  };
+
+  await page.getByTestId('new-folder').click();
+  const topLevel = await createFolder('from-toolbar');
+  await expect(page.getByTestId(`select-folder-${topLevel.id}`)).toHaveText('from-toolbar');
+
+  await page.getByTestId('open-upload').click();
+  await page.getByTestId('create-folder-from-upload').click();
+  dialog = page.getByRole('dialog', { name: 'Create folder' });
+  await expect(dialog).toBeVisible();
+  const uploadFolder = await createFolder('from-upload');
+  await expect(page.getByRole('dialog', { name: 'Add to the library' })).toBeVisible();
+  await expect(page.getByTestId('select-upload-destination')).toHaveText(uploadFolder.path);
+  await page.getByTestId('cancel-upload').click();
+
+  await page.getByTestId('file-row-file-root').click();
+  await page.getByTestId('create-folder-from-edit').click();
+  dialog = page.getByRole('dialog', { name: 'Create folder' });
+  await expect(dialog).toBeVisible();
+  const editFolder = await createFolder('from-edit');
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId(`select-folder-${editFolder.id}`)).toHaveText('from-edit');
+  await expect(page.getByTestId('select-file-destination')).toHaveText(editFolder.path);
+  expect(requests.filter(request => request.path === '/api/content/folders')).toHaveLength(3);
+});
+
+test('upload and Markdown dialogs cancel, validate required fields, and save', async ({ page }) => {
+  const api = await mockUploadRevisionApi(page);
+  await page.goto(adminUrl);
+
+  await page.getByTestId('open-upload').click();
+  let dialog = page.getByRole('dialog', { name: 'Add to the library' });
+  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId('submit-upload')).toBeDisabled();
+  await page.getByTestId('cancel-upload').click();
+  await expect(dialog).toHaveCount(0);
+
+  await page.getByTestId('new-markdown-document').click();
+  dialog = page.getByRole('dialog', { name: 'New Markdown Document' });
+  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId('submit-upload')).toBeDisabled();
+  await page.getByTestId('input-upload-title').fill('A New Document');
+  await expect(page.getByTestId('generated-upload-filename')).toHaveText(/^\d{8}_A_New_Document\.md$/);
+
+  const createResponse = page.waitForResponse(response =>
+    response.url().includes('/api/content/files') &&
+    response.request().method() === 'POST',
+  );
+  await page.getByTestId('submit-upload').click();
+  const created = await (await createResponse).json();
+  expect(created.name).toMatch(/^\d{8}_A_New_Document\.md$/);
+  expect(created.originalFileName).toBe(created.name);
+  await expect(page.getByTestId('textarea-text-content')).toBeVisible();
+  expect(api.getCurrentFile().id).toBe(created.id);
+});
+
+test('file metadata editor validates the title before saving', async ({ page }) => {
+  const { requests } = await mockConsoleApi(page);
+  await page.goto(adminUrl);
+  await page.getByTestId('file-row-file-root').click();
+  await page.getByTestId('input-file-title').fill('');
+  await page.getByTestId('save-file-details').click();
+  await expect(page.getByTestId('error-file-title')).toHaveText('Enter a title.');
+  expect(requests.filter(request => request.method === 'PATCH')).toHaveLength(0);
+});
 
 test('Markdown documents can select a saved stylesheet or reset to the default', async ({ page }) => {
   const { requests } = await mockConsoleApi(page);

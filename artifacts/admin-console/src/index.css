@@ -243,7 +243,7 @@
 .stylesheet-dialog-footer { justify-content:space-between; }
 .stylesheet-dialog-actions { display:flex; justify-content:flex-end; gap:8px; }
 .stylesheet-error { margin:10px 0 0; color:hsl(var(--destructive)); font-size:12px; }
-.dropzone { min-height:170px; display:grid; place-items:center; padding:20px; border:1px dashed hsl(var(--border)); border-radius:11px; text-align:center; background:hsl(var(--background)); color:hsl(var(--muted-foreground)); cursor:pointer; }
+.dropzone { width:100%; min-height:170px; display:grid; place-items:center; padding:20px; border:1px dashed hsl(var(--border)); border-radius:11px; appearance:none; text-align:center; background:hsl(var(--background)); color:hsl(var(--muted-foreground)); cursor:pointer; font:inherit; }
 .dropzone.dragging { border-color:hsl(var(--primary)); background:hsl(var(--primary) / .07); }
 .dropzone svg { width:24px; height:24px; color:hsl(var(--primary)); margin:0 auto 8px; }
 .dropzone strong { display:block; color:hsl(var(--foreground)); font-size:12px; }

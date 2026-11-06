@@ -55,6 +55,11 @@ async function readManifest(url, etag) {
   };
 }
 
+function publicFolderManifestUrl(baseUrl, folderPath) {
+  const encodedPath = folderPath.split('/').map(encodeURIComponent).join('/');
+  return `${baseUrl}/files/${encodedPath}/manifest.json`;
+}
+
 test('signed-in admin folder changes refresh the tree and public manifest', async ({ page }) => {
   test.skip(!process.env.DATABASE_URL, 'requires the content database');
 
@@ -235,10 +240,10 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
       publicRoot.response.headers.get('etag'),
     )).response.status).toBe(304);
     expect((await readManifest(
-      `${secondApiBaseUrl}/files/${encodeURIComponent(createdPath)}/manifest.json`,
+      publicFolderManifestUrl(secondApiBaseUrl, createdPath),
     )).response.status).toBe(404);
     expect((await readManifest(
-      `${secondApiBaseUrl}/files/${encodeURIComponent(renamedPath)}/manifest.json`,
+      publicFolderManifestUrl(secondApiBaseUrl, renamedPath),
     )).response.status).toBe(200);
 
     const childPath = `child-${suffix}`;
@@ -282,15 +287,15 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
     expect(movedPublicRoot.response.status).toBe(200);
     expect(movedPublicRoot.manifest.folders.some(folder => folder.path === renamedPath)).toBe(false);
     const correctedFolderManifest = await readManifest(
-      `${secondApiBaseUrl}/files/${encodeURIComponent(correctedPath)}/manifest.json`,
+      publicFolderManifestUrl(secondApiBaseUrl, correctedPath),
     );
     expect(correctedFolderManifest.response.status).toBe(200);
     expect(Array.isArray(correctedFolderManifest.manifest)).toBe(true);
     expect((await readManifest(
-      `${secondApiBaseUrl}/files/${encodeURIComponent(movedPath)}/manifest.json`,
+      publicFolderManifestUrl(secondApiBaseUrl, movedPath),
     )).response.status).toBe(200);
     expect((await readManifest(
-      `${secondApiBaseUrl}/files/${encodeURIComponent(renamedPath)}/manifest.json`,
+      publicFolderManifestUrl(secondApiBaseUrl, renamedPath),
     )).response.status).toBe(404);
 
     const beforeDelete = await readManifest(`${apiBaseUrl}/files/manifest.json`);
@@ -333,7 +338,7 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
     );
     expect(publicRoot.response.status).toBe(200);
     const updatedCorrectedManifest = await readManifest(
-      `${secondApiBaseUrl}/files/${encodeURIComponent(correctedPath)}/manifest.json`,
+      publicFolderManifestUrl(secondApiBaseUrl, correctedPath),
     );
     expect(updatedCorrectedManifest.response.status).toBe(200);
     expect(updatedCorrectedManifest.manifest).toHaveLength(0);
@@ -342,7 +347,7 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
       publicRoot.response.headers.get('etag'),
     )).response.status).toBe(304);
     expect((await readManifest(
-      `${secondApiBaseUrl}/files/${encodeURIComponent(movedPath)}/manifest.json`,
+      publicFolderManifestUrl(secondApiBaseUrl, movedPath),
     )).response.status).toBe(404);
 
     // A leaf folder with an active file must remain intact when deletion is rejected.
