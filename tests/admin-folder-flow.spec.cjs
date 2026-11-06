@@ -397,6 +397,26 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
     await expect(page.getByTestId('status-toast')).toHaveText(
       'Move or remove this folder’s contents first.',
     );
+
+    page.once('dialog', dialog => dialog.accept());
+    const trashActiveFilePromise = page.waitForResponse(response =>
+      response.url().includes(`/api/content/files/${activeFileId}`) &&
+      response.request().method() === 'DELETE',
+    );
+    await page.getByTestId(`trash-file-${activeFileId}`).click();
+    const trashedActiveFileResponse = await trashActiveFilePromise;
+    expect(trashedActiveFileResponse.status()).toBe(204);
+    await expect(page.getByTestId(`file-row-${activeFileId}`)).toHaveCount(0);
+    await expect(page.getByTestId('status-toast')).toHaveText('Moved to trash.');
+
+    page.once('dialog', dialog => dialog.accept());
+    const deleteEmptyFolderPromise = page.waitForResponse(response =>
+      response.url().includes(`/api/content/folders/${activeFileFolderId}`) &&
+      response.request().method() === 'DELETE',
+    );
+    await page.getByTestId(`delete-folder-${activeFileFolderId}`).click();
+    expect((await deleteEmptyFolderPromise).status()).toBe(204);
+    await expect(page.getByTestId(`select-folder-${activeFileFolderId}`)).toHaveCount(0);
   } finally {
     if (activeFileId) {
       await fetch(`${apiBaseUrl}/api/content/files/${activeFileId}`, {
