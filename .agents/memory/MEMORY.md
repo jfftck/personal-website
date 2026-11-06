@@ -4,6 +4,7 @@
 - [Playwright browser runtime](playwright-runtime.md) — browser downloads may succeed while local Chromium remains incompatible with the Nix system libraries.
 - [Reminder behavior](reminder-behavior.md) — keep reminders page-open only; do not rely on background execution or a server.
 - [Calculator keyboard shortcuts](calculator-keyboard-shortcuts.md) — global shortcuts must leave native controls’ Enter and Space activation to the browser.
+- [Calculator session persistence](calculator-session-persistence.md) — history and memory survive restarts, while explicit clears remove backups and no cross-session sync is assumed.
 - [Calculator compact layout](calculator-compact-layout.md) — explicit compact button line heights prevent keypad rows overflowing their grid tracks.
 - [Content storage architecture](content-storage.md) — App Storage holds file bytes, `/files` serves generated public manifests, and private Git stores revision snapshots and object references.
 - [Desktop browser-data persistence](desktop-browser-data.md) — route app-local browser state through one handler; reads must not rewrite malformed data or resurrect explicitly removed values.

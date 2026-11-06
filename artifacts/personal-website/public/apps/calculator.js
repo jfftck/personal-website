@@ -6,6 +6,7 @@ import { wrapAppButton } from '../shared/app-controls.js';
 import { SETTINGS_ICON } from './toolbar.js';
 import { readRaw, writeRaw } from '../data-handler.js';
 import { convertExpressionRadix, evaluateExpression, formatRadixNumber } from './calculator-math.js';
+import { createCalculatorSession } from './calculator-session.js';
 import {
   clearGraphSettings,
   createGraphSettingsDefaults,
@@ -91,7 +92,6 @@ const GRAPH_KEY_TOOLTIPS = Object.freeze({
   '(': 'Open parenthesis · type (',
   ')': 'Close parenthesis · type )',
 });
-const HISTORY_LIMIT = 24;
 const CALCULATOR_MODE_KEY = 'personal-desktop-calculator-mode-v1';
 const PLOT_FRAME = Object.freeze({
   left: 48, right: 616, top: 26, bottom: 374,
@@ -409,7 +409,7 @@ export function buildCalculator(id, ctx) {
   const settingsDialog = $('.calc-settings-dialog');
   let lastEditorField = null;
   let lastEditorSelection = null;
-  const history = [];
+  const calculatorSession = createCalculatorSession();
   let mode = (() => {
     try {
       const saved = readRaw(CALCULATOR_MODE_KEY);
@@ -419,7 +419,6 @@ export function buildCalculator(id, ctx) {
     }
   })();
   let radix = 10;
-  let memoryValue = null;
   let resultFresh = false;
   const graphDefaults = createGraphSettingsDefaults();
   let graphMode = graphDefaults.graphMode;
@@ -653,7 +652,8 @@ export function buildCalculator(id, ctx) {
   };
   const renderHistory = () => {
     historyList.replaceChildren();
-    history.forEach(entry => {
+    const entries = calculatorSession.getHistory();
+    entries.forEach(entry => {
       const li = document.createElement('li');
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'calc-history-entry';
@@ -668,7 +668,12 @@ export function buildCalculator(id, ctx) {
       });
       li.append(button); historyList.append(li);
     });
-    historyEmpty.hidden = history.length > 0;
+    historyEmpty.hidden = entries.length > 0;
+  };
+  const updateMemoryButtons = () => {
+    const hasMemory = calculatorSession.hasMemory();
+    root.querySelector('[data-memory="recall"]').disabled = !hasMemory;
+    root.querySelector('[data-memory="clear"]').disabled = !hasMemory;
   };
   const calculate = (record = true) => {
     try {
@@ -677,7 +682,8 @@ export function buildCalculator(id, ctx) {
       value.textContent = format(result); message.textContent = '';
       input.setSelectionRange(input.value.length, input.value.length);
       if (record && expression) {
-        history.unshift({ expression, result: format(result), numericResult: result }); history.splice(HISTORY_LIMIT); renderHistory(); resultFresh = true;
+        calculatorSession.recordCalculation({ expression, result: format(result), numericResult: result });
+        renderHistory(); resultFresh = true;
       }
       return result;
     } catch (error) {
@@ -798,6 +804,7 @@ export function buildCalculator(id, ctx) {
     button.addEventListener('click', () => {
       const action = button.dataset.memory;
       if (action === 'recall') {
+        const memoryValue = calculatorSession.getMemory();
         if (memoryValue === null) return;
         input.value = formatRadixNumber(memoryValue, radix);
         resultFresh = false;
@@ -807,25 +814,23 @@ export function buildCalculator(id, ctx) {
         return;
       }
       if (action === 'clear') {
-        memoryValue = null;
-        root.querySelector('[data-memory="recall"]').disabled = true;
-        button.disabled = true;
+        calculatorSession.clearMemory();
+        updateMemoryButtons();
         message.textContent = 'Memory cleared.';
         return;
       }
       const current = calculate(false);
       if (current === null) return;
-      if (action === 'store') memoryValue = current;
-      else if (action === 'add') memoryValue = (memoryValue ?? 0) + current;
-      else if (action === 'subtract') memoryValue = (memoryValue ?? 0) - current;
-      root.querySelector('[data-memory="recall"]').disabled = memoryValue === null;
-      root.querySelector('[data-memory="clear"]').disabled = memoryValue === null;
+      if (action === 'store') calculatorSession.storeMemory(current);
+      else if (action === 'add') calculatorSession.addToMemory(current);
+      else if (action === 'subtract') calculatorSession.subtractFromMemory(current);
+      updateMemoryButtons();
       message.textContent = action === 'store' ? 'Memory stored.' : 'Memory updated.';
     });
   });
   $('.calc-backspace').addEventListener('click', backspace);
   modeSelect.addEventListener('change', () => setMode(modeSelect.value));
-  $('.calc-history-clear').addEventListener('click', () => { history.splice(0); renderHistory(); });
+  $('.calc-history-clear').addEventListener('click', () => { calculatorSession.clearHistory(); renderHistory(); });
   input.addEventListener('input', () => { resultFresh = false; updatePreview(); });
   input.addEventListener('keydown', event => {
     if (radix === 16 && /^[a-f]$/i.test(event.key)) {
@@ -2155,6 +2160,7 @@ export function buildCalculator(id, ctx) {
   };
   document.addEventListener('keydown', onKey);
   renderHistory();
+  updateMemoryButtons();
   setMode(mode);
   if (ctx?.appApis && id) ctx.appApis[id] = { destroy: () => {
     document.removeEventListener('keydown', onKey);

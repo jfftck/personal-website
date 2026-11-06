@@ -1667,6 +1667,76 @@ test('calculator supports scientific calculations, reusable history, and graphin
   await expect(calculator.locator('.calc-graph-line')).toHaveCount(1);
 });
 
+test('calculator restores history and memory after restart and persists clear actions', async ({ page }) => {
+  let calculator = await openUtility(page, 'calculator');
+  const expression = calculator.getByRole('textbox', { name: 'Expression' });
+  await expression.fill('7+3');
+  await calculator.getByRole('button', { name: '=', exact: true }).click();
+  await expect(calculator.getByRole('button', { name: 'Reuse result 10 from 7+3' })).toBeVisible();
+  await calculator.getByRole('button', { name: 'Memory store' }).click();
+  await expect(calculator.getByRole('button', { name: 'Memory recall' })).toBeEnabled();
+
+  await page.reload();
+  const welcome = page.locator('#welcome-win-close');
+  if (await welcome.isVisible().catch(() => false)) await welcome.click();
+  calculator = await openUtility(page, 'calculator');
+  await expect(calculator.getByRole('button', { name: 'Reuse result 10 from 7+3' })).toBeVisible();
+  await expect(calculator.getByRole('button', { name: 'Memory recall' })).toBeEnabled();
+  await calculator.getByRole('button', { name: 'Memory recall' }).click();
+  await expect(calculator.getByRole('textbox', { name: 'Expression' })).toHaveValue('10');
+  await expect(calculator.locator('.calc-value')).toHaveText('10');
+
+  await calculator.locator('.calc-history-clear').click();
+  await calculator.getByRole('button', { name: 'Clear memory' }).click();
+  await expect(calculator.locator('.calc-history-empty')).toBeVisible();
+  await expect(calculator.getByRole('button', { name: 'Memory recall' })).toBeDisabled();
+  await expect(calculator.getByRole('button', { name: 'Clear memory' })).toBeDisabled();
+
+  await page.reload();
+  if (await welcome.isVisible().catch(() => false)) await welcome.click();
+  calculator = await openUtility(page, 'calculator');
+  await expect(calculator.locator('.calc-history-empty')).toBeVisible();
+  await expect(calculator.getByRole('button', { name: 'Memory recall' })).toBeDisabled();
+  await expect(calculator.getByRole('button', { name: 'Clear memory' })).toBeDisabled();
+});
+
+test('calculator ignores malformed saved session data and remains usable when writes fail', async ({ page }) => {
+  await page.evaluate(() => {
+    localStorage.setItem('personal-desktop-calculator-history-v1', '{broken');
+    localStorage.setItem('personal-desktop-calculator-memory-v1', JSON.stringify({ value: 42 }));
+  });
+  const calculator = await openUtility(page, 'calculator');
+  await expect(calculator.locator('.calc-history-empty')).toBeVisible();
+  await expect(calculator.getByRole('button', { name: 'Memory recall' })).toBeDisabled();
+  await expect(calculator.getByRole('button', { name: 'Clear memory' })).toBeDisabled();
+  await expect.poll(() => page.evaluate(() => [
+    localStorage.getItem('personal-desktop-calculator-history-v1'),
+    localStorage.getItem('personal-desktop-calculator-memory-v1'),
+  ])).toEqual(['{broken', '{"value":42}']);
+
+  await page.evaluate(() => {
+    const originalSetItem = Storage.prototype.setItem;
+    window.__originalCalculatorStorageSetItem = originalSetItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === 'personal-desktop-calculator-history-v1' || key === 'personal-desktop-calculator-memory-v1') {
+        throw new DOMException('Storage writes are blocked', 'QuotaExceededError');
+      }
+      return originalSetItem.call(this, key, value);
+    };
+  });
+  await calculator.getByRole('textbox', { name: 'Expression' }).fill('8+1');
+  await calculator.getByRole('button', { name: '=', exact: true }).click();
+  await expect(calculator.getByRole('button', { name: 'Reuse result 9 from 8+1' })).toBeVisible();
+  await calculator.getByRole('button', { name: 'Memory store' }).click();
+  await expect(calculator.getByRole('button', { name: 'Memory recall' })).toBeEnabled();
+  await calculator.getByRole('button', { name: 'Memory recall' }).click();
+  await expect(calculator.getByRole('textbox', { name: 'Expression' })).toHaveValue('9');
+  await expect.poll(() => page.evaluate(() => [
+    localStorage.getItem('personal-desktop-calculator-history-v1'),
+    localStorage.getItem('personal-desktop-calculator-memory-v1'),
+  ])).toEqual(['{broken', '{"value":42}']);
+});
+
 test('calculator supports selectable bases, memory, constants, backspace, and compact scientific keys', async ({ page }) => {
   const calculator = await openUtility(page, 'calculator');
   const expression = calculator.getByRole('textbox', { name: 'Expression' });
