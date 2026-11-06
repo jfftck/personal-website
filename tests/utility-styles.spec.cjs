@@ -53,6 +53,30 @@ async function expectInsideAppWindow(app, element) {
   expect(elementBox.x + elementBox.width).toBeLessThanOrEqual(appBox.x + appBox.width + 1);
 }
 
+async function tapControl(page, control) {
+  await expect(control).toBeVisible();
+  await control.scrollIntoViewIfNeeded();
+  const box = await control.boundingBox();
+  expect(box).not.toBeNull();
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+}
+
+async function expectKeyboardFocus(control) {
+  await expect(control).toBeFocused();
+  expect(await control.evaluate(element => element.matches(':focus-visible'))).toBe(true);
+  expect(await control.evaluate(element => getComputedStyle(element).outlineStyle)).toBe('solid');
+}
+
+async function expectNoHorizontalPageScroll(page) {
+  const dimensions = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    document: document.documentElement.scrollWidth,
+    body: document.body.scrollWidth,
+  }));
+  expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport);
+  expect(dimensions.body).toBeLessThanOrEqual(dimensions.viewport);
+}
+
 async function mockCompactViewerFiles(page) {
   await page.route('**/documents/manifest.json', route => route.fulfill({
     json: [
@@ -3963,6 +3987,120 @@ test('Media Player can select a video from its compact browse list', async ({ pa
   await expectInsideAppWindow(app, player);
   await expectInsideAppWindow(app, browse);
   await expectInsideAppWindow(app, external);
+});
+
+test.describe('compact viewer controls support keyboard and touch', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('Document Viewer browse and zoom controls work without page scrolling', async ({ page }) => {
+    await mockCompactViewerFiles(page);
+    const app = await openUtility(page, 'doc-viewer');
+    await expect(app.locator('.doc-body h1')).toHaveText('Compact First Document');
+    const browse = app.locator('.doc-toolbar [data-action="open"]');
+    const zoomOut = app.locator('.doc-toolbar [data-action="zoom-out"]');
+    const zoomIn = app.locator('.doc-toolbar [data-action="zoom-in"]');
+    const sidebar = app.locator('.doc-sidebar');
+    const zoomReadout = app.locator('.zoom-readout');
+
+    await browse.focus();
+    await page.keyboard.press('Space');
+    await expect(sidebar).toBeVisible();
+    await page.keyboard.press('Tab');
+    await expectKeyboardFocus(zoomOut);
+    await page.keyboard.press('Enter');
+    await expect(zoomReadout).toHaveText('90%');
+    await expectNoHorizontalPageScroll(page);
+
+    await tapControl(page, browse);
+    await expect(sidebar).toBeHidden();
+    await tapControl(page, zoomIn);
+    await expect(zoomReadout).toHaveText('100%');
+    await expectNoHorizontalPageScroll(page);
+  });
+
+  test('Image Viewer browse and zoom controls work without page scrolling', async ({ page }) => {
+    await mockCompactViewerFiles(page);
+    const app = await openUtility(page, 'img-viewer');
+    const image = app.locator('.img-viewport img');
+    await expect(image).toHaveAttribute('src', '/files/pictures/compact-list-first.svg');
+    await expect.poll(() => image.evaluate(element => element.complete && element.naturalWidth > 0)).toBe(true);
+
+    const browse = app.locator('.img-toolbar [data-action="open"]');
+    const zoomIn = app.locator('.img-toolbar [data-action="zoom-in"]');
+    const fit = app.locator('.img-toolbar [data-action="fit"]');
+    const sidebar = app.locator('.doc-sidebar');
+    const transform = app.locator('.img-transform');
+
+    await browse.focus();
+    await page.keyboard.press('Space');
+    await expect(sidebar).toBeVisible();
+    for (let index = 0; index < 6; index += 1) await page.keyboard.press('Tab');
+    await expectKeyboardFocus(zoomIn);
+    const keyboardTransform = await transform.getAttribute('style');
+    await page.keyboard.press('Space');
+    await expect.poll(() => transform.getAttribute('style')).not.toBe(keyboardTransform);
+    await expectNoHorizontalPageScroll(page);
+
+    await tapControl(page, browse);
+    await expect(sidebar).toBeHidden();
+    const touchTransform = await transform.getAttribute('style');
+    await tapControl(page, fit);
+    const fittedTouchTransform = await transform.getAttribute('style');
+    expect(fittedTouchTransform).not.toBe(touchTransform);
+    await tapControl(page, zoomIn);
+    await expect.poll(() => transform.getAttribute('style')).not.toBe(fittedTouchTransform);
+    await expectNoHorizontalPageScroll(page);
+  });
+
+  test('Media Player browse controls work with keyboard and touch without page scrolling', async ({ page }) => {
+    await mockCompactViewerFiles(page);
+    const app = await openUtility(page, 'media-player');
+    await expect(app.locator('.media-video')).toHaveAttribute('src', '/files/videos/compact-list-first.mp4');
+    const browse = app.locator('.media-toolbar [data-action="open"]');
+    const external = app.locator('.media-toolbar [data-action="external"]');
+    const sidebar = app.locator('.doc-sidebar');
+
+    await browse.focus();
+    await page.keyboard.press('Space');
+    await expect(sidebar).toBeVisible();
+    await page.keyboard.press('Tab');
+    await expectKeyboardFocus(external);
+    await page.keyboard.press('Shift+Tab');
+    await expectKeyboardFocus(browse);
+    await page.keyboard.press('Space');
+    await expect(sidebar).toBeHidden();
+    await expectNoHorizontalPageScroll(page);
+
+    await tapControl(page, browse);
+    await expect(sidebar).toBeVisible();
+    await tapControl(page, browse);
+    await expect(sidebar).toBeHidden();
+    await expectNoHorizontalPageScroll(page);
+  });
+
+  test('File Manager view and refresh controls work with keyboard and touch without page scrolling', async ({ page }) => {
+    await mockCompactViewerFiles(page);
+    const app = await openUtility(page, 'file-manager');
+    const tileView = app.locator('.fm-view-btn[data-view="tile"]');
+    const listView = app.locator('.fm-view-btn[data-view="list"]');
+    const refresh = app.locator('.fm-refresh-btn');
+    const refreshStatus = app.locator('.fm-refresh-status');
+
+    await listView.focus();
+    await page.keyboard.press('Space');
+    await expect(listView).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Tab');
+    await expectKeyboardFocus(refresh);
+    await page.keyboard.press('Enter');
+    await expect(refreshStatus).toHaveText('Folder refreshed.');
+    await expectNoHorizontalPageScroll(page);
+
+    await tapControl(page, tileView);
+    await expect(tileView).toHaveAttribute('aria-pressed', 'true');
+    await tapControl(page, refresh);
+    await expect(refreshStatus).toHaveText('Folder refreshed.');
+    await expectNoHorizontalPageScroll(page);
+  });
 });
 
 test('File Manager navigation, views, and refresh fit narrow windows', async ({ page }) => {
