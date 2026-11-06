@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import {
-  Archive, Check, ChevronRight, FileText, Folder, FolderPlus, Menu, MoreHorizontal,
+  Archive, ChevronRight, FileText, Folder, FolderPlus, Menu,
   Plus, RefreshCw, Search, Upload, X,
 } from 'lucide-react';
 import {
@@ -21,7 +21,12 @@ import {
   titleFromFilename,
 } from '@/lib/content-formatters';
 import { ErrorBoundary } from '@/components/error-boundary';
-import { FileListPanel, FileName, fileIcon, isEditableText } from '@/components/file-list-panel';
+import {
+  FileDetailsPanel,
+  type MetadataFormValues,
+} from '@/components/file-details-panel';
+import { FileListPanel, FileName } from '@/components/file-list-panel';
+import { ROOT_FOLDER_OPTION } from '@/lib/content-constants';
 import { FolderNavigation } from '@/components/folder-navigation';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -39,7 +44,6 @@ const localToday = () => {
 };
 const TODAY = localToday();
 const UPLOAD_TODAY = TODAY;
-const ROOT_FOLDER_OPTION = '__library_root__';
 const THEME_STORAGE_KEY = 'jmt-console-theme';
 type ThemeOverride = 'light' | 'dark' | null;
 const DEFAULT_STYLESHEET_OPTION = '__document_default__';
@@ -67,7 +71,6 @@ function savedThemeOverride(): ThemeOverride {
 
 type FolderFormValues = { name: string; parentPath: string };
 type UploadFormValues = { title: string; description: string; date: string; folderPath: string; isWallpaper: boolean };
-type MetadataFormValues = { title: string; description: string; date: string; folderPath: string; isWallpaper: boolean };
 type ContentTreeData = { folders: ContentFolder[]; files: ContentFile[] };
 
 function displaySize(bytes: number) {
@@ -888,216 +891,25 @@ function Console() {
                 ) : null}
               />
 
-              <button
-                className={`detail-backdrop ${selectedFile ? 'visible' : ''}`}
-                type="button"
-                disabled={!selectedFile}
-                aria-hidden={!selectedFile}
-                aria-label="Close file details"
-                onClick={() => setSelectedFile(null)}
-                data-testid="detail-panel-backdrop"
+              <FileDetailsPanel
+                file={selectedFile}
+                folders={folders}
+                metadataForm={metadataForm}
+                revisions={fileVersionsQuery.data}
+                revisionsLoading={fileVersionsQuery.isLoading}
+                revisionsError={fileVersionsQuery.isError
+                  ? errorMessage(fileVersionsQuery.error)
+                  : null}
+                isSaving={updateFile.isPending}
+                isRestoring={restoreFileVersion.isPending}
+                formatSize={displaySize}
+                onClose={() => setSelectedFile(null)}
+                onSaveMetadata={saveMetadata}
+                onCreateFolder={openFolderModalForEdit}
+                onTogglePublication={(file) => void togglePublication(file)}
+                onEditText={(file) => void openTextEditor(file)}
+                onRestoreRevision={(version) => void restoreRevision(version)}
               />
-              <aside className={`panel detail-panel ${selectedFile ? 'mobile-visible' : ''}`} aria-label="Selected file details">
-                <div className="detail-top"><h2>File details</h2>{selectedFile ? <button className="mini-action" type="button" aria-label="Close file details" onClick={() => setSelectedFile(null)} data-testid="close-file-details"><X /></button> : null}</div>
-                {!selectedFile ? (
-                  <div className="detail-empty"><div><div className="detail-empty-icon"><MoreHorizontal /></div><p>Select a file to edit its title, content date, or text.</p></div></div>
-                ) : (
-                  <>
-                    <div className="detail-file">
-                        {selectedFile.contentType.toLowerCase().startsWith('image/') ? (
-                          <div className="detail-media-frame">
-                            <img
-                              className="detail-media"
-                              src={selectedFile.url}
-                              alt={selectedFile.title || selectedFile.name}
-                              loading="lazy"
-                              decoding="async"
-                            />
-                          </div>
-                        ) : selectedFile.contentType.toLowerCase().startsWith('video/') ? (
-                          <div className="detail-media-frame">
-                            <video
-                              className="detail-media"
-                              src={selectedFile.url}
-                              poster={selectedFile.posterUrl ?? undefined}
-                              controls
-                              playsInline
-                              preload="metadata"
-                              aria-label={`Preview ${selectedFile.title || selectedFile.name}`}
-                            />
-                          </div>
-                        ) : (
-                          <div className="detail-file-icon">{fileIcon(selectedFile)}</div>
-                        )}
-                        <h3 title={selectedFile.title}>{selectedFile.title}</h3>
-                        <p title={`${selectedFile.name} · ${selectedFile.folderPath || 'Root folder'}`}>
-                          {selectedFile.name} · {selectedFile.folderPath || 'Root folder'}
-                        </p>
-                    </div>
-                    <Form {...metadataForm}>
-                    <form key={`${selectedFile.id}-${selectedFile.updatedAt}`} onSubmit={metadataForm.handleSubmit(saveMetadata)}>
-                      <FormField control={metadataForm.control} name="title" rules={{ required: 'Enter a title.' }} render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="field-label">Title</FormLabel>
-                          <FormControl><input className="field-control" maxLength={220} data-testid="input-file-title" {...field} /></FormControl>
-                          <FormMessage data-testid="error-file-title" />
-                          <p className="field-help file-name-preview">File name: <code title={filenameFromTitle(
-                            metadataForm.watch('title') ?? '',
-                            metadataForm.watch('date') ?? '',
-                            selectedFile.name,
-                            selectedFile.contentType,
-                            '.md',
-                          ) || 'Choose a title and date'} data-testid="generated-file-name">{filenameFromTitle(
-                            metadataForm.watch('title') ?? '',
-                            metadataForm.watch('date') ?? '',
-                            selectedFile.name,
-                            selectedFile.contentType,
-                            '.md',
-                          ) || 'Choose a title and date'}</code></p>
-                        </FormItem>
-                      )} />
-                      <div className="readonly-file-field">
-                        <label className="field-label" htmlFor="input-file-original-name">Original file name</label>
-                        <input id="input-file-original-name" className="field-control" value={selectedFile.originalFileName ?? ''} readOnly placeholder="Not recorded for this file" title={selectedFile.originalFileName || 'Not recorded for this file'} data-testid="input-file-original-name" />
-                        <p className="field-help">Captured from the upload and kept unchanged. Edit the title to use a friendlier name.</p>
-                      </div>
-                      <FormField control={metadataForm.control} name="description" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="field-label">Description</FormLabel>
-                          <FormControl><textarea className="field-control field-textarea" maxLength={2000} rows={3} placeholder="Add details about this file" data-testid="input-file-description" {...field} /></FormControl>
-                          <FormMessage data-testid="error-file-description" />
-                        </FormItem>
-                      )} />
-                      <FormField control={metadataForm.control} name="date" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="field-label">Content date</FormLabel>
-                          <FormControl><input className="field-control" type="date" data-testid="input-file-date" {...field} onChange={(event) => { field.onChange(event); metadataForm.clearErrors('date'); }} /></FormControl>
-                          <FormMessage data-testid="error-file-date" />
-                        </FormItem>
-                      )} />
-                      <FormField control={metadataForm.control} name="folderPath" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="field-label">Destination folder</FormLabel>
-                          <div className="folder-picker-row">
-                            <Select value={field.value || ROOT_FOLDER_OPTION} onValueChange={(value) => field.onChange(value === ROOT_FOLDER_OPTION ? '' : value)}>
-                              <FormControl>
-                                <SelectTrigger className="field-control folder-picker-trigger" title={field.value || 'Root folder'} data-testid="select-file-destination" aria-label="Destination folder">
-                                  <SelectValue placeholder="Choose a folder" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value={ROOT_FOLDER_OPTION}>Root folder</SelectItem>
-                                {[...folders].sort((a, b) => a.path.localeCompare(b.path)).map((folder) => (
-                                  <SelectItem key={folder.id} value={folder.path}>{folder.path}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <button className="button button-quiet folder-picker-create" type="button" onClick={openFolderModalForEdit} data-testid="create-folder-from-edit"><FolderPlus /> New Folder</button>
-                          </div>
-                          <FormMessage data-testid="error-file-destination" />
-                        </FormItem>
-                      )} />
-                      {isImageFile({ name: selectedFile.name, type: selectedFile.contentType }) ? (
-                        <FormField control={metadataForm.control} name="isWallpaper" render={({ field }) => (
-                          <FormItem className="checkbox-item">
-                            <FormControl>
-                              <input
-                                type="checkbox"
-                                checked={field.value}
-                                onChange={(event) => field.onChange(event.target.checked)}
-                                onBlur={field.onBlur}
-                                name={field.name}
-                                ref={field.ref}
-                                data-testid="checkbox-file-wallpaper"
-                              />
-                            </FormControl>
-                            <div>
-                              <FormLabel className="checkbox-label">Allow as desktop wallpaper</FormLabel>
-                              <p className="field-help">This image will be marked as eligible in the public file manifest.</p>
-                            </div>
-                          </FormItem>
-                        )} />
-                      ) : null}
-                      <div className="detail-stats">
-                        <div><span className="stat-label">Type</span><span className="stat-value" title={selectedFile.contentType}>{selectedFile.contentType}</span></div>
-                        <div><span className="stat-label">Size</span><span className="stat-value">{displaySize(selectedFile.sizeBytes)}</span></div>
-                        <div><span className="stat-label">Updated</span><span className="stat-value">{new Date(selectedFile.updatedAt).toLocaleDateString()}</span></div>
-                        <div>
-                          <span className="stat-label">Publication</span>
-                          <span
-                            className={`publication-badge ${selectedFile.isPublished ? 'is-published' : 'is-unpublished'}`}
-                            role="status"
-                            data-testid={`publication-status-${selectedFile.id}`}
-                          >
-                            {selectedFile.isPublished ? 'Published' : 'Unpublished'}
-                          </span>
-                        </div>
-                        <div><span className="stat-label">File URL</span><a className="stat-value" href={selectedFile.url} target="_blank" rel="noreferrer" title={selectedFile.url} data-testid={`file-public-url-${selectedFile.id}`}>{selectedFile.url}</a></div>
-                      </div>
-                      <div className="detail-actions">
-                        <button
-                          className={`button ${selectedFile.isPublished ? 'button-quiet' : 'button-primary'}`}
-                          type="button"
-                          onClick={() => void togglePublication(selectedFile)}
-                          disabled={updateFile.isPending}
-                          aria-label={`${selectedFile.isPublished ? 'Unpublish' : 'Publish'} ${selectedFile.title}`}
-                          data-testid={`toggle-publication-${selectedFile.id}`}
-                        >
-                          {selectedFile.isPublished ? 'Unpublish' : 'Publish'}
-                        </button>
-                        <button className="button button-primary" type="submit" disabled={updateFile.isPending} data-testid="save-file-details"><Check /> Save Details</button>
-                        {isEditableText(selectedFile) ? <button className="button button-quiet" type="button" onClick={() => void openTextEditor(selectedFile)} data-testid="open-text-editor"><FileText /> Edit Text</button> : null}
-                      </div>
-                    </form>
-                    </Form>
-                    <p className="status-line">Choose the destination folder above.</p>
-                    <section className="revision-history" aria-labelledby="revision-history-title" data-testid="revision-history">
-                      <div className="revision-history-heading">
-                        <div>
-                          <h3 id="revision-history-title">Revision History</h3>
-                          <p>File bytes stay in App Storage; Git records each revision.</p>
-                        </div>
-                        <a className="button button-quiet revision-repository-link" href="https://github.com/jfftck/personal-files" target="_blank" rel="noreferrer">Repository</a>
-                      </div>
-                      {fileVersionsQuery.isLoading ? (
-                        <div className="revision-loading" role="status">Loading revisions…</div>
-                      ) : fileVersionsQuery.isError ? (
-                        <div className="revision-error" role="alert">{errorMessage(fileVersionsQuery.error)}</div>
-                      ) : !fileVersionsQuery.data?.length ? (
-                        <div className="revision-empty">No revisions are available yet.</div>
-                      ) : (
-                        <ol className="revision-list">
-                          {fileVersionsQuery.data.map((version, index) => (
-                            <li className="revision-item" key={version.id} data-testid={`revision-${version.versionNumber}`}>
-                              <div className="revision-item-header">
-                                <strong title={`Version ${version.versionNumber} · ${version.action[0].toUpperCase() + version.action.slice(1)}`}>Version {version.versionNumber} · {version.action[0].toUpperCase() + version.action.slice(1)}</strong>
-                                <time dateTime={version.createdAt} title={new Date(version.createdAt).toLocaleString()}>{new Date(version.createdAt).toLocaleString()}</time>
-                              </div>
-                              <p className="revision-file" title={`${version.title} · ${version.name} · ${version.folderPath || 'Root folder'} · ${version.date}`}>{version.title} <span>·</span> {version.name} <span>·</span> {version.folderPath || 'Root folder'} <span>·</span> {version.date}</p>
-                              <div className="revision-item-footer">
-                                <a href={version.gitUrl} target="_blank" rel="noreferrer">Commit {version.gitCommitSha.slice(0, 7)}</a>
-                                {index === 0 ? (
-                                  <span className="revision-current">Current</span>
-                                ) : (
-                                  <button
-                                    className="button button-quiet revision-restore"
-                                    type="button"
-                                    disabled={restoreFileVersion.isPending}
-                                    onClick={() => void restoreRevision(version)}
-                                    data-testid={`restore-revision-${version.versionNumber}`}
-                                  >
-                                    Restore This Version
-                                  </button>
-                                )}
-                              </div>
-                            </li>
-                          ))}
-                        </ol>
-                      )}
-                    </section>
-                  </>
-                )}
-              </aside>
             </div>
           )}
         </main>

@@ -488,6 +488,29 @@ test('selecting a file opens and closes the mobile details panel', async ({ page
   await expect(details).toBeHidden();
 });
 
+test('desktop file details stay beside the list and preserve previews and revision history', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockConsoleApi(page);
+  await page.goto(adminUrl);
+
+  const details = page.locator('.detail-panel');
+  const emptyMessage = 'Select a file to edit its title, content date, or text.';
+  await expect(details).toBeVisible();
+  await expect(details.getByText(emptyMessage)).toBeVisible();
+
+  await page.getByTestId('file-row-file-photo').click();
+  await expect(details.getByTestId('input-file-title')).toHaveValue('Mountain photo');
+  await expect(details.locator('.detail-media')).toHaveAttribute(
+    'src',
+    'https://example.test/files/20260202_mountain.jpg',
+  );
+  await expect(details.getByTestId('revision-history')).toBeVisible();
+  await expect(details.getByTestId('publication-status-file-photo')).toHaveText('Published');
+
+  await details.getByTestId('close-file-details').click();
+  await expect(details.getByText(emptyMessage)).toBeVisible();
+});
+
 test('publishing a file updates its details, list state, and refreshed tree', async ({ page }) => {
   const { requests } = await mockConsoleApi(page);
   await page.goto(adminUrl);
