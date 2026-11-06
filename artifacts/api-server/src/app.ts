@@ -30,8 +30,8 @@ app.use(
 );
 app.use(cors());
 app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "100kb" }));
+app.use(express.urlencoded({ extended: true, limit: "100kb", parameterLimit: 1000 }));
 
 // Public file delivery stays unauthenticated and keeps the static-looking URL.
 app.use("/files", publicContentRouter);

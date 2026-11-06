@@ -164,3 +164,5 @@ overrides:
   esbuild: "0.28.2"
   # orval pins js-yaml to an exact version older than the CVE fix (>=4.3.2)
   js-yaml: '4.3.2'
+  # GHSA-27r3-jxmh-p828: patched compressed-body handling for Express parsers
+  body-parser: '2.4.0'
