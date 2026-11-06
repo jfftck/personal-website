@@ -1914,6 +1914,8 @@ app-button { display:contents; }
   line-height:1;
 }
 .util-action[data-app-button-variant="quiet"] { border-color:transparent; background:transparent; }
+.util-action[data-app-button-variant="quiet"]:hover { background:var(--btn-hover, var(--util-surface-strong)); }
+.util-action[data-app-button-variant="quiet"]:active { background:var(--btn-active, var(--util-surface-strong)); }
 .util-action[data-app-button-variant="primary"] {
   border-color:color-mix(in srgb,var(--accent) 86%,#000);
   background:color-mix(in srgb,var(--accent) 86%,#000);

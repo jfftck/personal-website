@@ -89,13 +89,14 @@
 .clock-place-option[aria-selected="true"] { border:1px solid var(--focus-color); background:var(--btn-active); }
 .clock-place-name { font-size:.86rem; font-weight:650; }
 .clock-place-detail { color:var(--util-detail); font-size:.72rem; overflow-wrap:anywhere; }
-.clock-controls > .clock-add { flex:none; }
+.clock-controls .clock-add { flex:none; }
 .clock-list { overflow:auto; display:grid; gap:.65rem; grid-template-columns:1fr; min-height:0; }
 .clock-list.grid { grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); align-content:start; }
 .clock-item { display:flex; align-items:center; justify-content:space-between; gap:.8rem; border:1px solid var(--app-border); border-radius:.85rem; padding:.85rem 1rem; background:var(--util-surface); }
 .clock-item strong { display:block; font-size:1.05rem; }
 .clock-item time { font-variant-numeric:tabular-nums; font-size:1.55rem; letter-spacing:.03em; }
-.clock-remove { border:0; background:transparent; color:inherit; opacity:.58; cursor:pointer; padding:.4rem; }
+.clock-remove { opacity:.58; transition:opacity 120ms ease; }
+.clock-remove:hover { opacity:1; }
 .clock-face { width:54px;height:54px;border:2px solid var(--util-teal);border-radius:50%;position:relative;flex:none; }
 .clock-face:before,.clock-face:after { content:"";position:absolute;left:50%;top:50%;width:2px;background:var(--util-amber);transform-origin:top center;border-radius:3px; }
 .clock-face:before { height:15px;transform:rotate(var(--hour)) translateY(2px); }
@@ -109,10 +110,10 @@
 .note-select.active { border-color:var(--focus-color);background:color-mix(in srgb,var(--util-amber) 12%,transparent); }
 .note-select strong,.note-select small { display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
 .note-editor { padding:1.15rem;display:flex;flex-direction:column;gap:.6rem;min-width:0;min-height:0;border:1px solid var(--app-border);border-radius:.85rem;background:var(--util-surface);color:var(--app-text); }
-.note-editor input,.note-editor textarea { width:100%;border:1px solid transparent;background:transparent;color:inherit;padding:.45rem;border-radius:.4rem; }
+.note-editor .util-field { width:100%;border:1px solid transparent;background:transparent;color:inherit;padding:.45rem;border-radius:.4rem; }
 .note-editor input { font-size:1.4rem;font-weight:650; }
 .note-editor textarea { flex:1;resize:none;line-height:1.65;min-height:120px; }
-.note-editor input:focus,.note-editor textarea:focus { border-color:var(--app-border);outline:none; }
+.note-editor .util-field:focus { border-color:var(--app-border); }
 .note-editor .util-muted { color:color-mix(in srgb,var(--app-text) 72%,var(--sticky-note-accent)); }
 .note-color-picker { display:grid;gap:.3rem;margin:0;padding:0;border:0; }
 .note-color-picker legend { padding:0;color:var(--util-detail);font-size:.75rem;font-weight:600; }
@@ -134,9 +135,6 @@
 .note-editor[data-note-color="blue"],.note-select[data-note-color="blue"],.desktop-note-widget[data-note-color="blue"],.note-color-choice[data-note-color="blue"] { --sticky-note-accent:#3689cf; }
 .note-editor[data-note-color="green"],.note-select[data-note-color="green"],.desktop-note-widget[data-note-color="green"],.note-color-choice[data-note-color="green"] { --sticky-note-accent:#48945a; }
 .note-toolbar { display:flex;justify-content:space-between;align-items:center;gap:.5rem; }
-.note-toolbar .util-action { border-color:transparent;background:transparent; }
-.note-toolbar .util-action:hover { background:var(--btn-hover); }
-.note-toolbar .util-action:active { background:var(--btn-active); }
 .note-desktop-toggle { display:inline-flex;align-items:center;gap:.4rem;min-height:2rem;font-size:.78rem;white-space:nowrap;cursor:pointer; }
 .note-desktop-toggle input { accent-color:var(--util-amber); }
 
@@ -145,9 +143,8 @@
 .weather-top { position:relative;min-height:150px;flex:none;padding:.25rem .2rem 1rem;border-bottom:1px solid var(--app-border); }
 .weather-top-tools { position:absolute;inset-block-start:.15rem;inset-inline-end:.2rem;display:flex;align-items:center;gap:.4rem;z-index:600;isolation:isolate; }
 .weather-location-picker { position:relative;min-width:0; }
-.weather-location-button { width:4.6rem;height:2.45rem;display:flex;align-items:center;justify-content:space-between;gap:.35rem;min-width:0;padding:.35rem .55rem;border:1px solid var(--app-border);border-radius:.65rem;background:var(--util-surface);color:var(--app-text);cursor:pointer; }
-.weather-location-button:hover { background:var(--util-surface-strong); }
-.weather-location-button[aria-expanded="true"] { background:var(--util-surface-strong);border-color:color-mix(in srgb,var(--util-teal) 55%,var(--app-border)); }
+.weather-location-button { width:4.6rem;height:2.45rem;display:flex;align-items:center;justify-content:space-between;gap:.35rem;min-width:0;padding:.35rem .55rem; }
+.weather-location-button[aria-expanded="true"] { background:var(--btn-active);border-color:var(--focus-color); }
 .weather-location-button:focus-visible,.weather-location-option:focus-visible { outline:2px solid var(--focus-color);outline-offset:2px; }
 .weather-location-button > svg { width:1rem;height:1rem;flex:none;fill:currentColor; }
 .weather-location-chevron { fill:none !important;stroke:currentColor;stroke-width:2;transition:transform .16s ease; }
@@ -158,8 +155,6 @@
 .weather-location-option:hover { background:var(--btn-hover); }
 .weather-location-option[aria-checked="true"] { border:1px solid var(--focus-color); background:var(--btn-active); }
 .weather-location-option-name { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.weather-settings-button { width:2.45rem;height:2.45rem;flex:none;display:grid;place-items:center;border:1px solid var(--app-border);border-radius:.7rem;background:var(--util-surface);color:var(--app-text);cursor:pointer; }
-.weather-settings-button:hover { background:var(--util-surface-strong); }
 .weather-settings-button svg { width:1.15rem;height:1.15rem;fill:currentColor; }
 .weather-credit { position:absolute;inset-block-start:2.75rem;inset-inline-end:.2rem;z-index:0;color:var(--util-detail);font-size:.7rem;text-decoration:none; }
 .weather-credit:hover { color:var(--util-teal);text-decoration:underline; }
@@ -198,8 +193,7 @@
 .weather-settings-form { display:grid;gap:.85rem; }
 .weather-settings-heading { display:flex;align-items:center;justify-content:space-between;gap:1rem; }
 .weather-settings-heading h2 { margin:0;font-size:1.25rem; }
-.weather-settings-close { width:2rem;height:2rem;border:0;border-radius:.55rem;background:transparent;color:var(--app-text);font-size:1.4rem;line-height:1;cursor:pointer; }
-.weather-settings-close:hover { background:var(--util-surface); }
+.weather-settings-close { font-size:1.2rem;line-height:1; }
 .weather-settings-form > label,.weather-settings-form > .standard-select-field,
 .weather-settings-form > app-select > .standard-select-field { display:grid;gap:.35rem;font-size:.88rem; }
 .weather-settings-hint { margin:-.65rem 0 0;color:var(--util-detail);font-size:.8rem; }
@@ -224,7 +218,6 @@
 .weather-interval-field { display:flex;align-items:center;gap:.55rem; }
 .weather-refresh-interval { width:7rem; }
 .weather-settings-actions { display:flex;justify-content:flex-end;gap:.5rem;margin-top:.1rem; }
-.weather-settings-save { border-color:color-mix(in srgb,var(--util-teal) 55%,var(--app-border));background:color-mix(in srgb,var(--util-teal) 18%,transparent); }
 .weather-settings-save:disabled { opacity:.65;cursor:wait; }
 .weather-error { color:var(--util-danger); }
 
@@ -238,7 +231,7 @@
   .note-desktop-toggle { font-size:.72rem; }
   .clock-item { padding:.7rem; }
   .clock-search { flex-basis:100%; max-width:none; }
-  .clock-controls > .clock-add { flex:1 1 auto; }
+  .clock-controls .clock-add { flex:1 1 auto; }
   .weather-meta { font-size:.85rem; }
 }
 @container (width < 520px) {
@@ -259,7 +252,7 @@
   .cal-agenda-empty { display:none; }
   .clock-app { padding:.65rem; gap:.55rem; }
   .clock-search { flex-basis:100%; min-width:0; max-width:none; }
-  .clock-controls > .clock-add { flex:1 1 100%; }
+  .clock-controls .clock-add { flex:1 1 100%; }
   .clock-controls > .util-muted:not(.clock-search-status) { margin-left:0 !important; }
   .clock-item { min-width:0; flex-wrap:wrap; gap:.4rem; padding:.6rem; }
   .clock-item > div:first-child { flex:1 1 calc(100% - 3rem); min-width:0; }

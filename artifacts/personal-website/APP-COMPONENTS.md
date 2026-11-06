@@ -8,9 +8,9 @@ Use the shared controls in `public/shared/` and the shared tokens in `public/des
 | --- | --- | --- |
 | Desktop shell | `public/desktop.css` | Light/dark theme tokens, top bar, launcher, desktop stage, toolbar surfaces, shared menus, and desktop chrome. Window content should inherit these tokens instead of defining another global palette. |
 | Window and overview frame | `public/desktop-windows.css` | Shared window frame, focus outline, open/close transitions, overview mode, and overview controls. Loaded immediately after `desktop.css`; keep app-specific refinements in later stylesheets. |
-| Utility apps | `public/desktop.css`, `public/apps/utility-apps.css`, `public/apps/calculator.css` | Shared utility colors, fields, and actions stay in `desktop.css`. Calendar, World Clock, Sticky Notes, and Weather layouts (including their container queries) live in `utility-apps.css`. Calculator layout, keypad, graph, and dialog styles live in its lazy `calculator.css` stylesheet. Use `.util-action`, `.util-field`, and the shared menu pattern for ordinary controls. |
+| Utility apps | `public/desktop.css`, `public/apps/utility-apps.css`, `public/apps/calculator.css` | Shared utility colors, fields, and actions stay in `desktop.css`. Calendar, World Clock, Sticky Notes, and Weather layouts (including their container queries) live in `utility-apps.css`. Calculator layout, keypad, graph, and dialog styles live in its lazy `calculator.css` stylesheet. Use the shared button, field, select, and menu patterns for routine controls; keep calculator math entry and sticky-note color choices specialized. |
 | Document and media viewers | `public/apps/viewer-apps.css` | Document reading/sidebar styles, image stage/thumbnails, and media-player presentation are loaded for their respective viewers. Shared toolbars and controls remain in `desktop.css`. |
-| File Manager | `public/apps/file-manager.css` | File tree/sidebar, tile and list views, and their container-query breakpoints. Shared toolbar and control styles remain in `desktop.css`. |
+| File Manager | `public/apps/file-manager.css` | File tree/sidebar, tile and list views, and their container-query breakpoints. Toolbar actions use the shared quiet-button pattern; the active view retains a visible selected border. |
 | Settings | `public/apps/settings.css` | Uses the desktop theme with a distinct sidebar, section headings, and card hierarchy. Preserve that information architecture; routine buttons and fields should still use shared controls. |
 | Game surfaces and boards | `public/apps/games/games.css` | Game toolbar and board layouts with per-game rules, board colors, and tactile table treatments. Reuse the common toolbar button base, but retain game-specific board geometry, status, and rules. |
 | Game material and artwork | `public/apps/games/glass.css`, `public/apps/games/artwork.css` | Glass is a board/piece material overlay. Artwork selects card faces/backs and chess/reversi piece styles. These are intentionally independent from the app/window color theme. Do not flatten them into utility-app colors. |
@@ -21,7 +21,7 @@ Use the shared controls in `public/shared/` and the shared tokens in `public/des
 
 - The top bar and app launcher are desktop chrome, not utility-app controls.
 - Settings cards, theme swatches, selected categories, and calendar view segments communicate selection; their selected appearance is not a keyboard-focus ring.
-- Calculator math keys and expression inputs need math-specific sizing and typography.
+- Calculator math keys, expression/function inputs, and graph-choice segments need math-specific sizing, typography, or selected treatment.
 - Sticky-note colors, game boards, game pieces, and playing-card artwork remain independently themed.
 - Game start/win/error screens and board cells have game-specific interaction and layering. Do not replace them with generic dialogs or tiles.
 
@@ -29,9 +29,9 @@ Use the shared controls in `public/shared/` and the shared tokens in `public/des
 
 | Control | Shared pattern | Current use and allowed variation |
 | --- | --- | --- |
-| Standard action button | `<app-button><button …></button></app-button>` and `.util-action` | Settings navigation/reset/order actions, animation-picker trigger/Done, viewer toolbars, and calendar navigation. Native buttons remain the semantic and event target. Variants: `size="icon"` or `size="compact"`; `variant="primary"` or `variant="quiet"` when needed. A specific app may add layout classes, but should not restyle the common border, surface, focus, or disabled state. |
+| Standard action button | `<app-button><button …></button></app-button>` and `.util-action` | Settings navigation/reset/order actions, animation-picker trigger/Done, viewer and File Manager toolbars, calendar navigation, and routine Weather, World Clock, Sticky Notes, and Calculator actions. Native buttons remain the semantic and event target. Variants: `size="icon"` or `size="compact"`; `variant="primary"` or `variant="quiet"` when needed. A specific app may add layout classes, but should not restyle the common border, surface, focus, or disabled state. |
 | Game toolbar action | Native button with `.util-action` | Game toolbar controls share the action surface and focus behavior while `games.css` supplies the game palette and icon dimensions. Preserve game-specific pressed states such as Minesweeper Flag mode. |
-| Text input | `.util-field` on the native input/textarea | Shared border, surface, text, and placeholder styling. Keep labels and descriptions in the app so the visible and accessible names remain meaningful. Calculator expression/function inputs are an intentional specialized exception. |
+| Text input | `.util-field` on the native input/textarea | Shared border, surface, text, and placeholder styling. Keep labels and descriptions in the app so the visible and accessible names remain meaningful. Sticky-note title/body fields use the shared field focus behavior with a transparent paper-like surface. Calculator expression, function, and graph-range inputs remain specialized. |
 | Select/menu | `<app-select>` around a native `<select>`; `enhanceSelect()` / `enhanceSelects()` | The native select remains the value/form source; the custom component supplies the accessible listbox, keyboard handling, popover/anchor positioning, and fallback. Do not introduce a parallel dropdown for ordinary option lists. |
 | Popover list | `.menu-popover` and the standard select popover styles | Shared tinted/blurred surface and stacking behavior for app menus. Keep menu items and placement app-specific, and ensure the popover overlays nearby content. |
 | Dialog footer | `<app-dialog-actions>` inside a native `<dialog>` | Shared Cancel-before-primary ordering and Cancel behavior. Keep apply/save behavior in the owning app. Game overlays that must coexist with game screens remain a separate, explicitly managed pattern. |
@@ -41,6 +41,7 @@ Use the shared controls in `public/shared/` and the shared tokens in `public/des
 ## Recommended style boundaries
 
 - Keep one shared base for ordinary button border, surface, focus, and disabled states. App-specific classes should primarily set placement, sizing, and content; game toolbars may additionally use the game palette.
+- Quiet actions share their transparent resting surface and hover/active feedback; use the shared quiet variant instead of repeating toolbar surface rules in an app stylesheet.
 - Keep text fields and option menus on `.util-field` and `<app-select>`. The calculator’s math editor, segmented views, color swatches, and game-specific choices need their own geometry, not a second general-purpose control style.
 - Keep the selected state separate from keyboard focus. Selected categories and choices can use the focus color for their border, while the visible focus ring only appears on the element currently reached by keyboard.
 - Keep popover stacking and surface treatment shared so menus stay readable above nearby content. Do not copy menu background, blur, or z-index rules into each app.

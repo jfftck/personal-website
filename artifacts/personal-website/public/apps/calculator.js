@@ -2,7 +2,7 @@
 
 import { enhanceSelect, refreshCustomSelect } from './custom-select.js';
 import { NOTE_COLORS } from './sticky-notes-data.js';
-import '../shared/app-controls.js';
+import { wrapAppButton } from '../shared/app-controls.js';
 import { SETTINGS_ICON } from './toolbar.js';
 import { readRaw, readRawResult, removeData, writeRaw } from '../data-handler.js';
 import { convertExpressionRadix, evaluateExpression, formatRadixNumber } from './calculator-math.js';
@@ -468,6 +468,21 @@ export function buildCalculator(id, ctx) {
         <footer class="calc-dialog-actions"><button type="button" class="calc-review-setup">Review setup</button><button type="button" class="calc-apply-setup calc-primary-action" hidden>Apply setup</button></footer>
       </form>
     </dialog>`;
+
+  const wrapButtons = (selector, options = {}) => {
+    root.querySelectorAll(selector).forEach(button => wrapAppButton(button, options));
+  };
+  wrapButtons('.calc-memory button', { variant: 'quiet' });
+  wrapButtons('.calc-open-editor, .calc-open-settings', { variant: 'quiet' });
+  wrapButtons('.calc-zoom-out, .calc-zoom-in, .calc-info-trigger', { size: 'icon', variant: 'quiet' });
+  wrapButtons('.calc-view-trigger, .calc-setup-trigger', { variant: 'quiet' });
+  wrapButtons('.calc-menu-action', { variant: 'quiet' });
+  wrapButtons('.calc-view-options button, .calc-log-options button', { size: 'compact' });
+  wrapButtons('.calc-apply-custom-ratio, .calc-apply-custom-scale');
+  wrapButtons('.calc-history-clear', { size: 'compact', variant: 'quiet' });
+  wrapButtons('.calc-plot, .calc-apply-functions, .calc-apply-settings, .calc-apply-setup', { variant: 'primary' });
+  wrapButtons('.calc-new-function, .calc-reload-latest-graph, .calc-reset-saved, .calc-review-setup');
+  wrapButtons('.calc-dialog-close, .calc-dialog-actions [data-action="cancel"]', { variant: 'quiet' });
 
   enhanceSelect(root.querySelector('.calc-graph-mode'));
   enhanceSelect(root.querySelector('.calc-mode-select-field'));

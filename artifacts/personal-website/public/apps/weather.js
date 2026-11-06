@@ -1,5 +1,6 @@
 import { enhanceSelects, focusCustomSelect, refreshCustomSelect } from './custom-select.js';
 import { SETTINGS_ICON } from './toolbar.js';
+import { wrapAppButton } from '../shared/app-controls.js';
 import { readJSON, writeJSON } from '../data-handler.js';
 
 const PREF_KEY = 'personal-desktop-weather-setup-v1';
@@ -259,9 +260,13 @@ export function buildWeather(id, ctx) {
         </section>
         <label>Update weather every <span class="weather-interval-field"><input class="weather-refresh-interval util-field" type="number" min="5" max="1440" step="5" required><span>minutes</span></span></label>
         <p class="weather-settings-error" role="status" aria-live="polite"></p>
-        <div class="weather-settings-actions"><button class="util-action weather-settings-cancel" type="button">Cancel</button><button class="util-action weather-settings-save" type="submit">Save settings</button></div>
+        <app-dialog-actions class="weather-settings-actions"><button class="util-action weather-settings-cancel" type="button" data-action="cancel">Cancel</button><button class="util-action weather-settings-save" type="submit">Save settings</button></app-dialog-actions>
       </form>
     </dialog>`;
+    wrapAppButton(root.querySelector('.weather-location-button'));
+    wrapAppButton(root.querySelector('.weather-settings-button'), { size: 'icon', variant: 'quiet' });
+    wrapAppButton(root.querySelector('.weather-settings-close'), { size: 'compact', variant: 'quiet' });
+    wrapAppButton(root.querySelector('.weather-settings-save'), { variant: 'primary' });
     enhanceSelects(root);
     root.querySelector('.weather-current').textContent = `${Math.round(current.temperature_2m)}${degrees}`;
     root.querySelector('.weather-place').textContent = displayName;
@@ -472,7 +477,6 @@ export function buildWeather(id, ctx) {
       focusCustomSelect(dialog.querySelector('.weather-settings-unit'));
     });
     dialog.querySelector('.weather-settings-close').addEventListener('click', () => dialog.close());
-    dialog.querySelector('.weather-settings-cancel').addEventListener('click', () => dialog.close());
     dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
     dialog.addEventListener('close', scheduleRefresh);
     dialog.querySelector('form').addEventListener('submit', event => {

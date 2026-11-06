@@ -1,6 +1,7 @@
 'use strict';
 
 import { NOTE_COLORS, loadStickyNotes, saveStickyNotes } from './sticky-notes-data.js';
+import { wrapAppButton } from '../shared/app-controls.js';
 export { NOTE_COLORS, loadStickyNotes } from './sticky-notes-data.js';
 
 export function buildStickyNotes(id, ctx, initialState = null) {
@@ -11,6 +12,7 @@ export function buildStickyNotes(id, ctx, initialState = null) {
     ? initialState.openNoteId
     : notes[0]?.id || null;
   root.innerHTML = `<aside class="notes-sidebar"><button type="button" class="util-action note-create">＋ New note</button><div class="notes-list"></div></aside><div class="note-editor"></div>`;
+  wrapAppButton(root.querySelector('.note-create'));
   const list = root.querySelector('.notes-list'), editor = root.querySelector('.note-editor');
   const publishDesktopNotes = () => ctx?.updateDesktopNotes?.(notes);
   const save = () => { saveStickyNotes(notes); publishDesktopNotes(); };
@@ -30,11 +32,13 @@ export function buildStickyNotes(id, ctx, initialState = null) {
     const note = notes.find(item => item.id === selected);
     if (!note) {
       editor.innerHTML = `<div class="weather-state util-muted"><strong>No notes yet</strong><p>Keep a small thought close at hand.</p><button type="button" class="util-action note-empty-create">Create a note</button></div>`;
+      wrapAppButton(editor.querySelector('.note-empty-create'));
       editor.querySelector('.note-empty-create').addEventListener('click', create);
       return;
     }
     editor.dataset.noteColor = note.color || 'yellow';
-    editor.innerHTML = `<div class="note-toolbar"><span class="util-muted">Saved in this browser</span><label class="note-desktop-toggle"><input type="checkbox" aria-label="Show this note on the desktop"><span>Show on desktop</span></label><button type="button" class="util-action note-delete">Delete</button></div><fieldset class="note-color-picker"><legend>Background color</legend><div class="note-color-options"></div></fieldset><input aria-label="Note title" maxlength="100" placeholder="Untitled note"><textarea aria-label="Note text" placeholder="Write something worth remembering…"></textarea>`;
+    editor.innerHTML = `<div class="note-toolbar"><span class="util-muted">Saved in this browser</span><label class="note-desktop-toggle"><input type="checkbox" aria-label="Show this note on the desktop"><span>Show on desktop</span></label><button type="button" class="util-action note-delete">Delete</button></div><fieldset class="note-color-picker"><legend>Background color</legend><div class="note-color-options"></div></fieldset><input class="util-field" aria-label="Note title" maxlength="100" placeholder="Untitled note"><textarea class="util-field" aria-label="Note text" placeholder="Write something worth remembering…"></textarea>`;
+    wrapAppButton(editor.querySelector('.note-delete'), { variant: 'quiet' });
     const title = editor.querySelector('input[aria-label="Note title"]'), body = editor.querySelector('textarea');
     title.value = note.title; body.value = note.body;
     const colorOptions = editor.querySelector('.note-color-options');

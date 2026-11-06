@@ -1,6 +1,7 @@
 'use strict';
 
 import { readJSON, writeJSON } from '../data-handler.js';
+import { wrapAppButton } from '../shared/app-controls.js';
 
 const KEY = 'personal-desktop-world-clock-v1';
 const DEFAULT_ZONES = ['UTC', 'America/New_York', 'Europe/London', 'Asia/Tokyo'];
@@ -261,6 +262,9 @@ export function buildWorldClock(id, ctx) {
     <button type="button" class="util-action clock-layout" aria-label="Change clock layout"></button>
     <button type="button" class="util-action clock-face-mode" aria-label="Change clock face"></button>
   </div><div class="clock-list"></div>`;
+  root.querySelectorAll('.clock-add, .clock-layout, .clock-face-mode').forEach(button => {
+    wrapAppButton(button);
+  });
   const list = root.querySelector('.clock-list');
   const addInput = root.querySelector('.clock-zone-input');
   const placeSuggestions = root.querySelector('.clock-place-suggestions');
@@ -426,7 +430,10 @@ export function buildWorldClock(id, ctx) {
       item.innerHTML = `<div><strong></strong><span class="util-muted clock-date"></span></div><div class="clock-face" aria-hidden="true" hidden></div><time></time><button class="clock-remove" type="button" aria-label="Remove time zone">×</button>`;
       item.querySelector('strong').textContent = label;
       item.querySelector('time').dateTime = new Date().toISOString();
-      item.querySelector('.clock-remove').setAttribute('aria-label', `Remove ${label} clock`);
+      const removeButton = item.querySelector('.clock-remove');
+      removeButton.setAttribute('aria-label', `Remove ${label} clock`);
+      removeButton.title = `Remove ${label} clock`;
+      wrapAppButton(removeButton, { size: 'compact', variant: 'quiet' });
       item.querySelector('.clock-face').hidden = prefs.face !== 'analog';
       item.querySelector('time').classList.toggle('sr-only', prefs.face === 'analog');
       const draw = () => {
