@@ -7,6 +7,231 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+test("OIDC routes reject untrusted origins and limit requests per client IP", async () => {
+  const artifactDir = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+  );
+  let issuer = "";
+  let apiUrl = "";
+  let apiChild;
+  const mockIssuer = createServer((req, res) => {
+    const requestUrl = new URL(req.url ?? "/", issuer);
+    res.setHeader("Content-Type", "application/json");
+    if (requestUrl.pathname === "/.well-known/openid-configuration") {
+      res.end(
+        JSON.stringify({
+          issuer,
+          authorization_endpoint: `${issuer}/authorize`,
+          token_endpoint: `${issuer}/token`,
+          jwks_uri: `${issuer}/jwks`,
+          end_session_endpoint: `${issuer}/logout`,
+          response_types_supported: ["code"],
+          subject_types_supported: ["public"],
+          id_token_signing_alg_values_supported: ["RS256"],
+          token_endpoint_auth_methods_supported: ["none"],
+          grant_types_supported: ["authorization_code"],
+        }),
+      );
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+
+  const availablePort = async () => {
+    const server = createServer();
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const port = address.port;
+    await new Promise((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+    return port;
+  };
+
+  const waitForServer = async (child, healthUrl) => {
+    const deadline = Date.now() + 20_000;
+    while (Date.now() < deadline) {
+      if (child.exitCode !== null) return false;
+      try {
+        const response = await fetch(healthUrl);
+        if (response.ok) return true;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+    child.kill("SIGTERM");
+    return false;
+  };
+
+  const cookiesFrom = (response) =>
+    (response.headers.getSetCookie?.() ?? [
+      response.headers.get("set-cookie") ?? "",
+    ])
+      .map((cookie) => cookie.split(";", 1)[0])
+      .filter(Boolean);
+
+  const login = (ip, returnTo, extraHeaders = {}) => {
+    const query = returnTo === undefined
+      ? ""
+      : `?returnTo=${encodeURIComponent(returnTo)}`;
+    return fetch(`${apiUrl}/api/login${query}`, {
+      redirect: "manual",
+      headers: { "X-Forwarded-For": ip, ...extraHeaders },
+    });
+  };
+
+  try {
+    await new Promise((resolve, reject) => {
+      mockIssuer.once("error", reject);
+      mockIssuer.listen(0, "127.0.0.1", resolve);
+    });
+    const mockAddress = mockIssuer.address();
+    assert.ok(mockAddress && typeof mockAddress !== "string");
+    issuer = `http://127.0.0.1:${mockAddress.port}`;
+
+    const apiPort = await availablePort();
+    apiUrl = `http://127.0.0.1:${apiPort}`;
+    apiChild = spawn(process.execPath, ["dist/index.mjs"], {
+      cwd: artifactDir,
+      env: {
+        ...process.env,
+        PORT: String(apiPort),
+        NODE_ENV: "test",
+        REPL_ID: "auth-hardening-test-client",
+        ISSUER_URL: issuer,
+      },
+      stdio: "ignore",
+    });
+    assert.equal(
+      await waitForServer(apiChild, `${apiUrl}/api/healthz`),
+      true,
+    );
+
+    for (const [path, headers, ip] of [
+      [
+        "/api/login",
+        {
+          "X-Forwarded-Host": "attacker.example",
+          "X-Forwarded-Proto": "https",
+        },
+        "198.51.100.1",
+      ],
+      [
+        "/api/login",
+        { "X-Forwarded-Proto": "https" },
+        "198.51.100.2",
+      ],
+      [
+        "/api/login",
+        {
+          "X-Forwarded-Host": "personal.jeffreytackett.us",
+          "X-Forwarded-Proto": "http",
+        },
+        "198.51.100.5",
+      ],
+      [
+        "/api/callback?code=forged&state=forged",
+        {
+          "X-Forwarded-Host": "attacker.example",
+          "X-Forwarded-Proto": "https",
+        },
+        "198.51.100.3",
+      ],
+      [
+        "/api/logout",
+        {
+          "X-Forwarded-Host": "attacker.example",
+          "X-Forwarded-Proto": "https",
+        },
+        "198.51.100.4",
+      ],
+    ]) {
+      const response = await fetch(`${apiUrl}${path}`, {
+        redirect: "manual",
+        headers: { "X-Forwarded-For": ip, ...headers },
+      });
+      assert.equal(response.status, 400, `${path} should reject forged origin headers`);
+      assert.match((await response.json()).error, /approved app address/i);
+    }
+
+    for (const [returnTo, ip] of [
+      ["https://attacker.example/", "198.51.100.10"],
+      ["//attacker.example/", "198.51.100.11"],
+      ["/admin-console/%ZZ", "198.51.100.12"],
+    ]) {
+      const response = await login(ip, returnTo);
+      assert.equal(response.status, 302);
+      const returnToCookie = cookiesFrom(response).find((cookie) =>
+        cookie.startsWith("return_to="),
+      );
+      assert.ok(returnToCookie);
+      assert.equal(
+        decodeURIComponent(returnToCookie.slice("return_to=".length)),
+        "/admin-console/",
+      );
+    }
+
+    const publishedOriginLogin = await login(
+      "198.51.100.13",
+      "/admin-console/",
+      {
+        "X-Forwarded-Host": "personal.jeffreytackett.us",
+        "X-Forwarded-Proto": "https",
+      },
+    );
+    assert.equal(publishedOriginLogin.status, 302);
+    const publishedAuthorizationUrl = new URL(
+      publishedOriginLogin.headers.get("location") ?? "",
+    );
+    assert.equal(
+      publishedAuthorizationUrl.searchParams.get("redirect_uri"),
+      "https://personal.jeffreytackett.us/api/callback",
+    );
+
+    const limitedIp = "198.51.100.20";
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const response = await login(limitedIp);
+      assert.equal(response.status, 302);
+    }
+    const blockedLogin = await login(limitedIp);
+    assert.equal(blockedLogin.status, 429);
+    assert.match(blockedLogin.headers.get("retry-after") ?? "", /^\d+$/);
+    assert.match((await blockedLogin.json()).error, /wait and try again/i);
+    assert.equal((await login("198.51.100.21")).status, 302);
+
+    const callbackIp = "198.51.100.30";
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const response = await fetch(`${apiUrl}/api/callback`, {
+        redirect: "manual",
+        headers: { "X-Forwarded-For": callbackIp },
+      });
+      assert.equal(response.status, 302);
+    }
+    const blockedCallback = await fetch(`${apiUrl}/api/callback`, {
+      redirect: "manual",
+      headers: { "X-Forwarded-For": callbackIp },
+    });
+    assert.equal(blockedCallback.status, 429);
+    assert.match(blockedCallback.headers.get("retry-after") ?? "", /^\d+$/);
+  } finally {
+    if (apiChild && apiChild.exitCode === null) {
+      apiChild.kill("SIGTERM");
+      await new Promise((resolve) => apiChild.once("exit", resolve));
+    }
+    if (mockIssuer.listening) {
+      await new Promise((resolve, reject) =>
+        mockIssuer.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  }
+});
+
 test(
   "Replit OIDC creates an owner session, persists it, and logout invalidates it",
   { skip: !process.env.DATABASE_URL },
@@ -92,6 +317,7 @@ test(
         const params = new URLSearchParams(body);
         assert.equal(params.get("code"), "test-code");
         assert.ok(params.get("code_verifier"));
+        assert.equal(params.get("redirect_uri"), `${apiUrl}/api/callback`);
         res.end(
           JSON.stringify({
             access_token: "test-access-token",
@@ -173,6 +399,10 @@ test(
       assert.ok(authorizationLocation);
       const authorizationUrl = new URL(authorizationLocation);
       assert.equal(authorizationUrl.origin, issuer);
+      assert.equal(
+        authorizationUrl.searchParams.get("redirect_uri"),
+        `${apiUrl}/api/callback`,
+      );
       const loginCookies = cookiesFrom(loginResponse);
       const cookieValue = (name) =>
         loginCookies.find((cookie) => cookie.startsWith(`${name}=`))?.slice(name.length + 1);
@@ -210,6 +440,12 @@ test(
         { redirect: "manual", headers: { Cookie: sessionCookie } },
       );
       assert.equal(logoutResponse.status, 302);
+      const logoutLocation = new URL(logoutResponse.headers.get("location") ?? "");
+      assert.equal(logoutLocation.origin, issuer);
+      assert.equal(
+        logoutLocation.searchParams.get("post_logout_redirect_uri"),
+        `${apiUrl}/admin-console/`,
+      );
 
       const afterLogout = await fetch(`${apiUrl}/api/auth/user`, {
         headers: { Cookie: sessionCookie },

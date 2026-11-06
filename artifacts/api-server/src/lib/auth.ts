@@ -9,11 +9,82 @@ export const ISSUER_URL = process.env.ISSUER_URL ?? "https://replit.com/oidc";
 export const SESSION_COOKIE = "sid";
 export const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
 
+// Verified deployment domains; update this allowlist when the published domains change.
+const trustedPublishedHosts = new Set([
+  "personal.jeffreytackett.us",
+  "personal-jfftck.replit.app",
+]);
+const localHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
 export interface SessionData {
   user: AuthUser;
   access_token: string;
   refresh_token?: string;
   expires_at?: number;
+}
+
+function getReplitDevelopmentHost(): string | null {
+  const configuredDomain = process.env.REPLIT_DEV_DOMAIN?.trim();
+  if (!configuredDomain) return null;
+
+  try {
+    const value = configuredDomain.includes("://")
+      ? configuredDomain
+      : `https://${configuredDomain}`;
+    return new URL(value).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+export function getTrustedAppOrigin(req: Request): string | null {
+  const forwardedHost = req.get("x-forwarded-host");
+  const forwardedProto = req.get("x-forwarded-proto");
+  if (
+    (forwardedHost && forwardedHost.includes(",")) ||
+    (forwardedProto && forwardedProto.includes(","))
+  ) {
+    return null;
+  }
+
+  const host = (forwardedHost ?? req.get("host") ?? "").trim();
+  const protocol = (forwardedProto ?? req.protocol).trim().toLowerCase();
+  if (!host || host.length > 255 || /\s/.test(host)) return null;
+  if (protocol !== "http" && protocol !== "https") return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(`${protocol}://${host}`);
+  } catch {
+    return null;
+  }
+
+  if (
+    parsed.username ||
+    parsed.password ||
+    parsed.pathname !== "/" ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    return null;
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  const developmentHost = getReplitDevelopmentHost();
+  const isNonProduction =
+    process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
+  const isPublishedHost = trustedPublishedHosts.has(hostname);
+  const isDevelopmentHost =
+    isNonProduction && developmentHost !== null && hostname === developmentHost;
+  const isLocalHost = process.env.NODE_ENV === "test" && localHosts.has(hostname);
+
+  if ((isPublishedHost || isDevelopmentHost) && protocol === "https" && !parsed.port) {
+    return parsed.origin;
+  }
+  if (isLocalHost && protocol === "http") {
+    return parsed.origin;
+  }
+  return null;
 }
 
 let oidcConfig: oidc.Configuration | null = null;

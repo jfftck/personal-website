@@ -6,8 +6,12 @@ import { logger } from "./lib/logger";
 import { publicContentRouter } from "./routes/publicContent";
 import cookieParser from "cookie-parser";
 import { authMiddleware } from "./middlewares/authMiddleware";
+import { authRateLimit } from "./middlewares/authRateLimit";
 
 const app: Express = express();
+
+// Replit serves the API through one reverse-proxy hop; trust that hop for client IPs.
+app.set("trust proxy", 1);
 
 app.use(
   pinoHttp({
@@ -32,6 +36,10 @@ app.use(cors());
 app.use(cookieParser());
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: true, limit: "100kb", parameterLimit: 1000 }));
+
+// Limit public OIDC endpoints before session lookups run.
+app.get("/api/login", authRateLimit);
+app.get("/api/callback", authRateLimit);
 
 // Public file delivery stays unauthenticated and keeps the static-looking URL.
 app.use("/files", publicContentRouter);

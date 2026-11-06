@@ -11,23 +11,15 @@ import {
   SESSION_COOKIE,
   SESSION_TTL,
   type SessionData,
+  getTrustedAppOrigin,
 } from "../lib/auth";
 
 const router: IRouter = Router();
 const OIDC_COOKIE_TTL = 10 * 60 * 1000;
 const DEFAULT_RETURN_TO = "/admin-console/";
 
-function getOrigin(req: Request): string {
-  const proto = String(req.headers["x-forwarded-proto"] ?? req.protocol)
-    .split(",")[0]
-    .trim();
-  const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "")
-    .split(",")[0]
-    .trim();
-  if (!host || !["http", "https"].includes(proto)) {
-    throw new Error("Unable to determine the public origin for authentication.");
-  }
-  return `${proto}://${host}`;
+function rejectUntrustedOrigin(res: Response): void {
+  res.status(400).json({ error: "This sign-in request did not use an approved app address." });
 }
 
 function setSecureCookie(res: Response, name: string, value: string, maxAge: number) {
@@ -43,6 +35,7 @@ function setSecureCookie(res: Response, name: string, value: string, maxAge: num
 function getSafeReturnTo(value: unknown): string {
   if (
     typeof value !== "string" ||
+    value.length > 2048 ||
     (!value.startsWith("/admin-console/") && value !== "/admin-console") ||
     value.startsWith("//") ||
     value.includes("\\") ||
@@ -52,6 +45,8 @@ function getSafeReturnTo(value: unknown): string {
   }
 
   try {
+    const decoded = decodeURIComponent(value);
+    if (/[\u0000-\u001f\u007f]/.test(decoded)) return DEFAULT_RETURN_TO;
     const parsed = new URL(value, "https://internal.invalid");
     if (
       parsed.origin !== "https://internal.invalid" ||
@@ -130,8 +125,13 @@ router.get("/auth/user", (req: Request, res: Response) => {
 });
 
 router.get("/login", async (req: Request, res: Response) => {
+  const origin = getTrustedAppOrigin(req);
+  if (!origin) {
+    rejectUntrustedOrigin(res);
+    return;
+  }
   const config = await getOidcConfig();
-  const callbackUrl = `${getOrigin(req)}/api/callback`;
+  const callbackUrl = `${origin}/api/callback`;
   const returnTo = getSafeReturnTo(req.query.returnTo);
   const state = oidc.randomState();
   const nonce = oidc.randomNonce();
@@ -156,8 +156,13 @@ router.get("/login", async (req: Request, res: Response) => {
 });
 
 router.get("/callback", async (req: Request, res: Response) => {
+  const origin = getTrustedAppOrigin(req);
+  if (!origin) {
+    rejectUntrustedOrigin(res);
+    return;
+  }
   const config = await getOidcConfig();
-  const callbackUrl = `${getOrigin(req)}/api/callback`;
+  const callbackUrl = `${origin}/api/callback`;
   const codeVerifier = req.cookies?.code_verifier;
   const nonce = req.cookies?.nonce;
   const expectedState = req.cookies?.state;
@@ -169,7 +174,7 @@ router.get("/callback", async (req: Request, res: Response) => {
     return;
   }
 
-  const currentUrl = new URL(req.originalUrl, `${getOrigin(req)}/`);
+  const currentUrl = new URL(req.originalUrl, `${origin}/`);
   let tokens: oidc.TokenEndpointResponse & oidc.TokenEndpointResponseHelpers;
   try {
     tokens = await oidc.authorizationCodeGrant(config, currentUrl, {
@@ -215,8 +220,12 @@ router.get("/callback", async (req: Request, res: Response) => {
 });
 
 router.get("/logout", async (req: Request, res: Response) => {
+  const origin = getTrustedAppOrigin(req);
+  if (!origin) {
+    rejectUntrustedOrigin(res);
+    return;
+  }
   const returnTo = getSafeReturnTo(req.query.returnTo);
-  const origin = getOrigin(req);
   const sid = getSessionId(req);
   await clearSession(res, sid);
 
