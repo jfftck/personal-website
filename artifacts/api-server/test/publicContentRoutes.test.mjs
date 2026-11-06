@@ -1,11 +1,28 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { Readable } from "node:stream";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import express from "express";
 import test from "node:test";
 import { createManifestEtag } from "../src/lib/contentManifestCache.ts";
 import { ContentError } from "../src/lib/contentErrors.ts";
+import {
+  createStorageObjectPath,
+  deleteStoredObject,
+  getStoredObject,
+  getStoredObjectMetadata,
+  saveStoredObject,
+} from "../src/lib/objectStorage.ts";
 import { createPublicContentRouter } from "../src/routes/publicContentRouter.ts";
+
+const appStorageIntegrationSkipReason =
+  process.env.RUN_APP_STORAGE_INTEGRATION !== "1"
+    ? "Set RUN_APP_STORAGE_INTEGRATION=1 in an App Storage-enabled environment to run this integration test."
+    : !process.env.PRIVATE_OBJECT_DIR?.trim()
+      ? "App Storage is unavailable because PRIVATE_OBJECT_DIR is not configured."
+      : undefined;
 
 const objectBytes = new Map([
   ["/objects/photo", Buffer.from("image-bytes")],
@@ -215,6 +232,127 @@ test("public object responses set safe headers and support HEAD and byte ranges"
   assert.equal(invalidRange.status, 416);
   assert.equal(invalidRange.headers.get("content-range"), "bytes */11");
 });
+
+test(
+  "App Storage adapter metadata and public file delivery support HEAD and byte ranges",
+  { skip: appStorageIntegrationSkipReason },
+  async () => {
+    const bytes = Buffer.from(
+      "App Storage public delivery integration check.",
+      "utf8",
+    );
+    const contentType = "text/plain";
+    const objectPath = createStorageObjectPath();
+    const fileName = "storage-integration-check.txt";
+    let uploaded = false;
+    let temporaryDirectory;
+    let testServer;
+
+    try {
+      temporaryDirectory = await mkdtemp(
+        path.join(os.tmpdir(), "app-storage-integration-"),
+      );
+      const localFilePath = path.join(temporaryDirectory, fileName);
+      await writeFile(localFilePath, bytes);
+      await saveStoredObject(objectPath, localFilePath, contentType);
+      uploaded = true;
+
+      const { metadata } = await getStoredObjectMetadata(objectPath);
+      assert.equal(Number(metadata.size), bytes.length);
+      assert.equal(metadata.contentType, contentType);
+
+      const fileRow = {
+        name: fileName,
+        folderPath: "integration",
+        isPublished: true,
+        deletedAt: null,
+        sourceUrl: null,
+        objectPath,
+        contentType,
+        sizeBytes: bytes.length,
+        updatedAt: new Date(),
+      };
+      const app = express();
+      app.use(
+        "/files",
+        createPublicContentRouter({
+          async ensureRootFolders() {},
+          async getManifest() {
+            return {
+              manifest: [],
+              etag: createManifestEtag([]),
+              folderCount: 0,
+            };
+          },
+          async getPublishedFile(folderPath, requestedName) {
+            return folderPath === "integration" && requestedName === fileName
+              ? fileRow
+              : undefined;
+          },
+          getStoredObject,
+          async createStoredObjectReadUrl() {
+            throw new Error("A text-file integration test must not request a signed video URL.");
+          },
+        }),
+      );
+      testServer = createServer(app);
+      await new Promise((resolve, reject) => {
+        testServer.once("error", reject);
+        testServer.listen(0, "127.0.0.1", resolve);
+      });
+      const address = testServer.address();
+      assert.ok(address && typeof address !== "string");
+      const fileUrl = `http://127.0.0.1:${address.port}/files/integration/${fileName}`;
+
+      const full = await fetch(fileUrl);
+      assert.equal(full.status, 200);
+      assert.equal(full.headers.get("content-type"), contentType);
+      assert.equal(full.headers.get("content-length"), String(bytes.length));
+      assert.deepEqual(Buffer.from(await full.arrayBuffer()), bytes);
+
+      const head = await fetch(fileUrl, { method: "HEAD" });
+      assert.equal(head.status, 200);
+      assert.equal(head.headers.get("content-length"), String(bytes.length));
+      assert.equal(head.headers.get("content-type"), contentType);
+      assert.equal(await head.text(), "");
+
+      const rangeStart = 5;
+      const rangeEnd = 18;
+      const range = await fetch(fileUrl, {
+        headers: { Range: `bytes=${rangeStart}-${rangeEnd}` },
+      });
+      assert.equal(range.status, 206);
+      assert.equal(
+        range.headers.get("content-range"),
+        `bytes ${rangeStart}-${rangeEnd}/${bytes.length}`,
+      );
+      assert.equal(
+        range.headers.get("content-length"),
+        String(rangeEnd - rangeStart + 1),
+      );
+      assert.deepEqual(
+        Buffer.from(await range.arrayBuffer()),
+        bytes.subarray(rangeStart, rangeEnd + 1),
+      );
+    } finally {
+      try {
+        if (testServer?.listening) {
+          await new Promise((resolve, reject) => {
+            testServer.close((error) => error ? reject(error) : resolve());
+          });
+        }
+      } finally {
+        try {
+          if (uploaded) await deleteStoredObject(objectPath);
+        } finally {
+          if (temporaryDirectory) {
+            await rm(temporaryDirectory, { recursive: true, force: true });
+          }
+        }
+      }
+    }
+  },
+);
 
 test("unsafe active content is downloaded and video GETs redirect to signed storage URLs", async () => {
   const script = await fetch(`${baseUrl}/files/scripts/mark%22up.svg`);
