@@ -410,6 +410,62 @@ test(
         sessionId: nonOwnerSessionId,
       });
       assert.equal(otherAccountTree.status, 403);
+      const assertUnpublished = async (message) => {
+        const { rows: [file] } = await pool.query(
+          "SELECT is_published FROM content_files WHERE id = $1",
+          [publishingFileId],
+        );
+        assert.equal(file?.is_published, false, message);
+      };
+      const nonOwnerPatch = await adminRequest(
+        firstServer,
+        `/content/files/${publishingFileId}`,
+        {
+          method: "PATCH",
+          sessionId: nonOwnerSessionId,
+          body: JSON.stringify({ isPublished: true }),
+        },
+      );
+      assert.equal(nonOwnerPatch.status, 403);
+      await assertUnpublished("a signed-in non-owner must not publish the file");
+
+      const missingCredentialPatch = await adminRequest(
+        firstServer,
+        `/content/files/${publishingFileId}`,
+        {
+          method: "PATCH",
+          sessionId: null,
+          body: JSON.stringify({ isPublished: true }),
+        },
+      );
+      assert.equal(missingCredentialPatch.status, 401);
+      await assertUnpublished("a PATCH without credentials must not publish the file");
+
+      const invalidBearerPatch = await adminRequest(
+        firstServer,
+        `/content/files/${publishingFileId}`,
+        {
+          method: "PATCH",
+          sessionId: null,
+          headers: { Authorization: "Bearer invalid-test-token" },
+          body: JSON.stringify({ isPublished: true }),
+        },
+      );
+      assert.equal(invalidBearerPatch.status, 401);
+      await assertUnpublished("a PATCH with an invalid bearer token must not publish the file");
+
+      const invalidSessionPatch = await adminRequest(
+        firstServer,
+        `/content/files/${publishingFileId}`,
+        {
+          method: "PATCH",
+          sessionId: "missing-session",
+          body: JSON.stringify({ isPublished: true }),
+        },
+      );
+      assert.equal(invalidSessionPatch.status, 401);
+      await assertUnpublished("a PATCH with an invalid sign-in session must not publish the file");
+
       const authStatusResponse = await adminRequest(firstServer, "/auth/user");
       assert.equal(authStatusResponse.status, 200);
       assert.equal(authStatusResponse.headers.get("cache-control"), "no-store");
