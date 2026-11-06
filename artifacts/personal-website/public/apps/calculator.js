@@ -4,8 +4,27 @@ import { enhanceSelect, refreshCustomSelect } from './custom-select.js';
 import { NOTE_COLORS } from './sticky-notes-data.js';
 import { wrapAppButton } from '../shared/app-controls.js';
 import { SETTINGS_ICON } from './toolbar.js';
-import { readRaw, readRawResult, removeData, writeRaw } from '../data-handler.js';
+import { readRaw, writeRaw } from '../data-handler.js';
 import { convertExpressionRadix, evaluateExpression, formatRadixNumber } from './calculator-math.js';
+import {
+  clearGraphSettings,
+  createGraphSettingsDefaults,
+  DEFAULT_GRAPH_RANGES,
+  GRAPH_GRID_SPACINGS,
+  GRAPH_GRID_STYLES,
+  GRAPH_GRID_TARGETS,
+  GRAPH_MODES,
+  GRAPH_SETTINGS_KEY,
+  GRAPH_SETTINGS_VERSION,
+  graphSettingsSnapshot,
+  graphSettingsSnapshotFromSaved,
+  readSavedGraphSettings,
+  saveGraphSettings,
+  serializeGraphFunctionsByMode,
+  serializeGraphSettings,
+  validRangePair,
+  VIEW_RANGE_KEYS,
+} from './calculator-graph-settings.js';
 
 export { evaluateExpression };
 
@@ -73,31 +92,7 @@ const GRAPH_KEY_TOOLTIPS = Object.freeze({
   ')': 'Close parenthesis · type )',
 });
 const HISTORY_LIMIT = 24;
-const GRAPH_SETTINGS_KEY = 'personal-desktop-calculator-graph-v1';
 const CALCULATOR_MODE_KEY = 'personal-desktop-calculator-mode-v1';
-const GRAPH_SETTINGS_VERSION = 2;
-const GRAPH_MODES = ['cartesian', 'polar', 'parametric'];
-const GRAPH_DISPLAY_DEFAULTS = Object.freeze({
-  axisLabels: true,
-  xAxisLine: true,
-  yAxisLine: true,
-  gridStyle: 'solid',
-  gridSpacing: 'standard',
-});
-const GRAPH_GRID_STYLES = ['solid', 'dashed', 'dotted', 'none'];
-const GRAPH_GRID_SPACINGS = ['fine', 'standard', 'coarse'];
-const GRAPH_GRID_TARGETS = Object.freeze({ fine: 12, standard: 7, coarse: 4 });
-const RANGE_KEYS = ['xMin', 'xMax', 'yMin', 'yMax', 'thetaMin', 'thetaMax', 'rMin', 'rMax', 'tMin', 'tMax'];
-const DEFAULT_GRAPH_RANGES = {
-  xMin: '-10', xMax: '10', yMin: '-10', yMax: '10',
-  thetaMin: '0', thetaMax: '6.283', rMin: '0', rMax: '10',
-  tMin: '0', tMax: '6.283',
-};
-const VIEW_RANGE_KEYS = {
-  cartesian: ['xMin', 'xMax', 'yMin', 'yMax'],
-  polar: ['thetaMin', 'thetaMax', 'rMin', 'rMax'],
-  parametric: ['tMin', 'tMax', 'xMin', 'xMax', 'yMin', 'yMax'],
-};
 const PLOT_FRAME = Object.freeze({
   left: 48, right: 616, top: 26, bottom: 374,
   width: 568, height: 348, centerX: 332, centerY: 200, polarRadius: 174,
@@ -105,119 +100,6 @@ const PLOT_FRAME = Object.freeze({
 const FIT_SAMPLE_COUNT = 8000;
 let nextFunctionId = 1;
 const calculatorGraphSubscribers = new Set();
-
-function readGraphDisplay(value) {
-  if (value === undefined) return { ...GRAPH_DISPLAY_DEFAULTS };
-  if (!value || typeof value !== 'object' || Array.isArray(value) ||
-      typeof value.axisLabels !== 'boolean' || typeof value.xAxisLine !== 'boolean' ||
-      typeof value.yAxisLine !== 'boolean' || !GRAPH_GRID_STYLES.includes(value.gridStyle) ||
-      !GRAPH_GRID_SPACINGS.includes(value.gridSpacing)) return null;
-  return {
-    axisLabels: value.axisLabels,
-    xAxisLine: value.xAxisLine,
-    yAxisLine: value.yAxisLine,
-    gridStyle: value.gridStyle,
-    gridSpacing: value.gridSpacing,
-  };
-}
-
-function validRangePair(min, max) {
-  return Number.isFinite(Number(min)) && Number.isFinite(Number(max)) &&
-    Number.isFinite(Number(max) - Number(min)) && Number(min) < Number(max);
-}
-
-function readSavedGraphSettings(rawOverride) {
-  let raw;
-  if (arguments.length) raw = rawOverride;
-  else {
-    const result = readRawResult(GRAPH_SETTINGS_KEY);
-    if (!result.ok && result.value === null) return { status: 'unavailable' };
-    raw = result.value;
-  }
-  if (raw === null) return { status: 'empty' };
-
-  try {
-    const saved = JSON.parse(raw);
-    const display = readGraphDisplay(saved?.display);
-    const legacyFunctions = saved?.version === 1 && Array.isArray(saved.functions);
-    const hasModeFunctions = saved?.version === GRAPH_SETTINGS_VERSION &&
-      saved.functionsByMode && typeof saved.functionsByMode === 'object' && !Array.isArray(saved.functionsByMode);
-    if (!saved || !display || (!legacyFunctions && !hasModeFunctions) || !GRAPH_MODES.includes(saved.graphMode) ||
-        !saved.ranges || typeof saved.ranges !== 'object' || Array.isArray(saved.ranges) ||
-        (legacyFunctions && saved.functions.length > 20)) {
-      return { status: 'invalid' };
-    }
-
-    const ranges = {};
-    for (const key of RANGE_KEYS) {
-      const value = saved.ranges[key];
-      if ((typeof value !== 'string' && typeof value !== 'number') || !String(value).trim() || !Number.isFinite(Number(value))) {
-        return { status: 'invalid' };
-      }
-      ranges[key] = String(value);
-    }
-    const rangePairs = [
-      ['xMin', 'xMax'], ['yMin', 'yMax'], ['thetaMin', 'thetaMax'],
-      ['rMin', 'rMax'], ['tMin', 'tMax'],
-    ];
-    if (rangePairs.some(([min, max]) => !validRangePair(ranges[min], ranges[max]))) return { status: 'invalid' };
-
-    const serializedFunctions = legacyFunctions
-      ? Object.fromEntries(GRAPH_MODES.map(mode => [mode, mode === saved.graphMode ? saved.functions : []]))
-      : saved.functionsByMode;
-    if (GRAPH_MODES.some(mode => !Array.isArray(serializedFunctions[mode]) || serializedFunctions[mode].length > 20)) {
-      return { status: 'invalid' };
-    }
-    const ids = new Set();
-    const functionsByMode = Object.fromEntries(GRAPH_MODES.map(mode => [mode, serializedFunctions[mode].map(fn => {
-      if (!fn || typeof fn !== 'object' || typeof fn.id !== 'string' || !/^fn-\d+$/.test(fn.id) || ids.has(fn.id) ||
-          typeof fn.expression !== 'string' || (mode !== 'parametric' && !fn.expression.trim()) || fn.expression.length > 180 ||
-          typeof fn.xExpression !== 'string' || !fn.xExpression.trim() || fn.xExpression.length > 180 ||
-          typeof fn.yExpression !== 'string' || !fn.yExpression.trim() || fn.yExpression.length > 180 ||
-          typeof fn.visible !== 'boolean' || !NOTE_COLORS.some(color => color.hex === fn.color)) return null;
-      ids.add(fn.id);
-      return { id: fn.id, expression: fn.expression, xExpression: fn.xExpression, yExpression: fn.yExpression, color: fn.color, visible: fn.visible, path: '' };
-    })]));
-    if (GRAPH_MODES.some(mode => functionsByMode[mode].some(fn => !fn))) return { status: 'invalid' };
-    const acceptsExpression = (expression, variable) => {
-      for (const probe of [0, 1, -1, 2, 0.5]) {
-        try { evaluateExpression(expression, { [variable]: probe }); return true; } catch {}
-      }
-      return false;
-    };
-    if (GRAPH_MODES.some(mode => functionsByMode[mode].some(fn => mode === 'parametric'
-      ? !acceptsExpression(fn.xExpression, 't') || !acceptsExpression(fn.yExpression, 't')
-      : !acceptsExpression(fn.expression, mode === 'polar' ? 'theta' : 'x')))) return { status: 'invalid' };
-
-    const viewRanges = {};
-    if (saved.viewRanges !== null && saved.viewRanges !== undefined) {
-      if (!saved.viewRanges || typeof saved.viewRanges !== 'object' || Array.isArray(saved.viewRanges)) return { status: 'invalid' };
-      for (const graphMode of GRAPH_MODES) {
-        const view = saved.viewRanges[graphMode];
-        if (view === undefined) continue;
-        if (!view || typeof view !== 'object' || Array.isArray(view)) return { status: 'invalid' };
-        const validated = {};
-        if (view.fit !== undefined && typeof view.fit !== 'boolean') return { status: 'invalid' };
-        for (const key of VIEW_RANGE_KEYS[graphMode]) {
-          const value = view[key];
-          if (typeof value !== 'number' || !Number.isFinite(value)) return { status: 'invalid' };
-          validated[key] = value;
-        }
-        if (view.fit) validated.fit = true;
-        const pairs = graphMode === 'polar'
-          ? [['thetaMin', 'thetaMax'], ['rMin', 'rMax']]
-          : graphMode === 'parametric'
-            ? [['tMin', 'tMax'], ['xMin', 'xMax'], ['yMin', 'yMax']]
-            : [['xMin', 'xMax'], ['yMin', 'yMax']];
-        if (pairs.some(([min, max]) => !validRangePair(validated[min], validated[max]))) return { status: 'invalid' };
-        viewRanges[graphMode] = validated;
-      }
-    }
-    return { status: 'valid', graphMode: saved.graphMode, ranges, functions: functionsByMode[saved.graphMode], functionsByMode, viewRanges, display };
-  } catch {
-    return { status: 'invalid' };
-  }
-}
 
 export function buildCalculator(id, ctx) {
   const root = document.createElement('section');
@@ -539,17 +421,18 @@ export function buildCalculator(id, ctx) {
   let radix = 10;
   let memoryValue = null;
   let resultFresh = false;
-  let graphMode = 'cartesian';
+  const graphDefaults = createGraphSettingsDefaults();
+  let graphMode = graphDefaults.graphMode;
   let settingsMode = graphMode;
-  let graphDisplay = { ...GRAPH_DISPLAY_DEFAULTS };
-  let ranges = { ...DEFAULT_GRAPH_RANGES };
-  let viewRanges = null;
+  let graphDisplay = graphDefaults.display;
+  let ranges = graphDefaults.ranges;
+  let viewRanges = graphDefaults.viewRanges;
   let viewRatio = 'auto';
   let customRatioX = 1;
   let customRatioY = 1;
   let viewScaleFactor = 1;
   let logAxes = { x: false, y: false };
-  let functionsByMode = Object.fromEntries(GRAPH_MODES.map(plotMode => [plotMode, []]));
+  let functionsByMode = graphDefaults.functionsByMode;
   let functions = functionsByMode[graphMode];
   let activeFunctionId = null;
   let editorDraft = [];
@@ -617,12 +500,13 @@ export function buildCalculator(id, ctx) {
     }
 
     if (saved.status === 'empty') {
-      graphMode = 'cartesian';
+      const defaults = createGraphSettingsDefaults();
+      graphMode = defaults.graphMode;
       settingsMode = graphMode;
-      ranges = { ...DEFAULT_GRAPH_RANGES };
-      graphDisplay = { ...GRAPH_DISPLAY_DEFAULTS };
-      viewRanges = null;
-      functionsByMode = Object.fromEntries(GRAPH_MODES.map(plotMode => [plotMode, []]));
+      ranges = defaults.ranges;
+      graphDisplay = defaults.display;
+      viewRanges = defaults.viewRanges;
+      functionsByMode = defaults.functionsByMode;
       functions = functionsByMode[graphMode];
       activeFunctionId = null;
       recoveryNotice.hidden = true;
@@ -647,12 +531,12 @@ export function buildCalculator(id, ctx) {
   }
 
   function broadcastGraphSettings() {
-    const saved = readSavedGraphSettings(JSON.stringify({
-      version: GRAPH_SETTINGS_VERSION,
+    const saved = readSavedGraphSettings(serializeGraphSettings({
       graphMode,
       ranges,
       display: graphDisplay,
-      functionsByMode: serializeFunctionsByMode(),
+      functionsByMode,
+      functions,
       viewRanges,
     }));
     if (saved.status === 'valid') {
@@ -677,60 +561,7 @@ export function buildCalculator(id, ctx) {
 
   function serializeFunctionsByMode() {
     functionsByMode[graphMode] = functions;
-    return Object.fromEntries(GRAPH_MODES.map(plotMode => [plotMode, functionsByMode[plotMode].map(({ id: functionId, expression, xExpression, yExpression, color, visible }) => ({
-      id: functionId, expression, xExpression, yExpression, color, visible,
-    }))]));
-  }
-
-  function graphSettingsSnapshot(state) {
-    const normalizedFunctions = Object.fromEntries(GRAPH_MODES.map(plotMode => [
-      plotMode,
-      (state.functionsByMode[plotMode] || []).map(fn => ({
-        id: fn.id,
-        expression: fn.expression,
-        xExpression: fn.xExpression,
-        yExpression: fn.yExpression,
-        color: fn.color,
-        visible: fn.visible,
-      })),
-    ]));
-    const normalizedViewRanges = {};
-    for (const plotMode of GRAPH_MODES) {
-      const view = state.viewRanges?.[plotMode];
-      if (!view) continue;
-      const normalizedView = Object.fromEntries(
-        VIEW_RANGE_KEYS[plotMode].map(key => [key, view[key]]),
-      );
-      if (view.fit) normalizedView.fit = true;
-      normalizedViewRanges[plotMode] = normalizedView;
-    }
-    return JSON.stringify({
-      graphMode: state.graphMode,
-      ranges: Object.fromEntries(RANGE_KEYS.map(key => [key, state.ranges[key]])),
-      display: {
-        axisLabels: state.display.axisLabels,
-        xAxisLine: state.display.xAxisLine,
-        yAxisLine: state.display.yAxisLine,
-        gridStyle: state.display.gridStyle,
-        gridSpacing: state.display.gridSpacing,
-      },
-      functionsByMode: normalizedFunctions,
-      viewRanges: normalizedViewRanges,
-    });
-  }
-
-  function graphSettingsSnapshotFromSaved(saved) {
-    if (saved.status === 'valid') return graphSettingsSnapshot(saved);
-    if (saved.status === 'empty') {
-      return graphSettingsSnapshot({
-        graphMode: 'cartesian',
-        ranges: DEFAULT_GRAPH_RANGES,
-        display: GRAPH_DISPLAY_DEFAULTS,
-        functionsByMode: Object.fromEntries(GRAPH_MODES.map(plotMode => [plotMode, []])),
-        viewRanges: {},
-      });
-    }
-    return null;
+    return serializeGraphFunctionsByMode(functionsByMode, graphMode, functions);
   }
 
   function currentGraphSettingsSnapshot() {
@@ -756,15 +587,15 @@ export function buildCalculator(id, ctx) {
 
   function persistGraphSettings() {
     try {
-      const serialized = JSON.stringify({
-        version: GRAPH_SETTINGS_VERSION,
+      const { saved: didSave, serialized } = saveGraphSettings({
         graphMode,
         ranges,
         display: graphDisplay,
-        functionsByMode: serializeFunctionsByMode(),
+        functionsByMode,
+        functions,
         viewRanges,
       });
-      if (!writeRaw(GRAPH_SETTINGS_KEY, serialized)) {
+      if (!didSave) {
         showStorageWarning('write');
         return;
       }
@@ -782,7 +613,7 @@ export function buildCalculator(id, ctx) {
 
   function resetSavedGraph() {
     try {
-      if (!removeData(GRAPH_SETTINGS_KEY)) {
+      if (!clearGraphSettings()) {
         showStorageWarning('write');
         recoveryMessage.textContent = 'Saved graph settings could not be cleared. Check this browser’s storage access, then retry the reset.';
         recoveryNotice.hidden = false;
@@ -790,12 +621,13 @@ export function buildCalculator(id, ctx) {
         return;
       }
       storageWarning.hidden = true;
-      graphMode = 'cartesian';
+      const defaults = createGraphSettingsDefaults();
+      graphMode = defaults.graphMode;
       settingsMode = graphMode;
-      ranges = { ...DEFAULT_GRAPH_RANGES };
-      graphDisplay = { ...GRAPH_DISPLAY_DEFAULTS };
-      viewRanges = null;
-      functionsByMode = Object.fromEntries(GRAPH_MODES.map(plotMode => [plotMode, []]));
+      ranges = defaults.ranges;
+      graphDisplay = defaults.display;
+      viewRanges = defaults.viewRanges;
+      functionsByMode = defaults.functionsByMode;
       functions = functionsByMode[graphMode];
       activeFunctionId = null;
       $('.calc-mode-label').textContent = graphMode.toUpperCase();
