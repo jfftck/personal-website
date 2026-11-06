@@ -8,9 +8,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-const { createManifestEtag, ifNoneMatchMatches } = await import(
-  "../src/lib/contentManifestCache.ts"
-);
+const {
+  createManifestCacheFolderKey,
+  createManifestEtag,
+  ifNoneMatchMatches,
+  PUBLIC_MANIFEST_CACHE_KEY,
+  PUBLIC_MANIFEST_CACHE_FORMAT_VERSION,
+} = await import("../src/lib/contentManifestCache.ts");
 
 test("manifest ETags are stable for equivalent serialized content", () => {
   const manifest = [{ filename: "20261030_note.md", sizeBytes: 42 }];
@@ -28,6 +32,32 @@ test("If-None-Match supports strong, weak, and wildcard validators", () => {
   assert.equal(ifNoneMatchMatches("*", etag), true);
   assert.equal(ifNoneMatchMatches('"other"', etag), false);
   assert.equal(ifNoneMatchMatches(undefined, etag), false);
+});
+
+test("root and nested manifest cache entries are isolated by response format version", () => {
+  const previousVersion = PUBLIC_MANIFEST_CACHE_FORMAT_VERSION - 1;
+
+  for (const [folderPath, legacyCacheKey] of [
+    ["", "__root_manifest_wallpapers_v2__"],
+    ["posts/weekly", "posts/weekly"],
+  ]) {
+    assert.notEqual(
+      createManifestCacheFolderKey(folderPath, previousVersion),
+      createManifestCacheFolderKey(folderPath),
+      `format version ${PUBLIC_MANIFEST_CACHE_FORMAT_VERSION} must bypass the prior cache for ${folderPath || "root"}`,
+    );
+    assert.notEqual(
+      createManifestCacheFolderKey(folderPath),
+      legacyCacheKey,
+      `the versioned cache key must bypass the previously persisted entry for ${folderPath || "root"}`,
+    );
+  }
+
+  assert.notEqual(
+    createManifestCacheFolderKey(""),
+    createManifestCacheFolderKey("posts/weekly"),
+    "root and nested manifests must use different persisted cache entries",
+  );
 });
 
 test("content mutations keep calling shared manifest invalidation", async () => {
@@ -489,6 +519,71 @@ test(
         destinationFolder?.url,
         `/files/${encodeURIComponent(destinationPath)}/manifest.json`,
       );
+
+      const currentRootCacheKey = createManifestCacheFolderKey("");
+      const currentNestedCacheKey = createManifestCacheFolderKey("posts");
+      const legacyRootCacheKey = "__root_manifest_wallpapers_v2__";
+      const legacyNestedCacheKey = "posts";
+      const { rows: [manifestState] } = await pool.query(
+        "SELECT generation FROM content_manifest_state WHERE key = $1",
+        [PUBLIC_MANIFEST_CACHE_KEY],
+      );
+      assert.ok(manifestState, "the root manifest request should initialize cache state");
+      await pool.query(
+        "DELETE FROM content_manifest_cache WHERE folder_path = ANY($1::text[])",
+        [[
+          currentRootCacheKey,
+          currentNestedCacheKey,
+          legacyRootCacheKey,
+          legacyNestedCacheKey,
+        ]],
+      );
+      for (const folderPath of [legacyRootCacheKey, legacyNestedCacheKey]) {
+        await pool.query(
+          `INSERT INTO content_manifest_cache
+             (folder_path, generation, manifest, etag, folder_count)
+           VALUES ($1, $2, $3::jsonb, '"legacy-stale"', 0)`,
+          [folderPath, manifestState.generation, JSON.stringify({ stale: true })],
+        );
+      }
+
+      const rebuiltRoot = await readManifest(firstServer.manifestUrl);
+      assert.equal(rebuiltRoot.response.status, 200);
+      assert.deepEqual(Object.keys(rebuiltRoot.manifest).sort(), [
+        "files",
+        "folders",
+        "path",
+        "wallpapers",
+      ]);
+      const rebuiltNested = await readManifest(
+        firstServer.folderManifestUrl("posts"),
+      );
+      assert.equal(rebuiltNested.response.status, 200);
+      assert.ok(Array.isArray(rebuiltNested.manifest));
+      assert.equal(
+        (await pool.query(
+          "SELECT generation FROM content_manifest_state WHERE key = $1",
+          [PUBLIC_MANIFEST_CACHE_KEY],
+        )).rows[0]?.generation,
+        manifestState.generation,
+        "format-only cache rebuilding must not require a content-generation change",
+      );
+      const { rows: rebuiltCacheRows } = await pool.query(
+        "SELECT folder_path, manifest FROM content_manifest_cache WHERE folder_path = ANY($1::text[])",
+        [[currentRootCacheKey, currentNestedCacheKey]],
+      );
+      assert.equal(rebuiltCacheRows.length, 2);
+      assert.deepEqual(
+        Object.keys(rebuiltCacheRows.find(
+          (row) => row.folder_path === currentRootCacheKey,
+        )?.manifest ?? {}).sort(),
+        ["files", "folders", "path", "wallpapers"],
+      );
+      assert.ok(Array.isArray(
+        rebuiltCacheRows.find(
+          (row) => row.folder_path === currentNestedCacheKey,
+        )?.manifest,
+      ));
 
       secondServer = await startServer();
       const persistedOwnerAccess = await adminRequest(secondServer, "/content/tree");

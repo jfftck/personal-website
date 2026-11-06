@@ -7,6 +7,7 @@ import {
   db,
 } from "@workspace/db";
 import {
+  createManifestCacheFolderKey,
   createManifestEtag,
   PUBLIC_MANIFEST_CACHE_KEY,
 } from "../lib/contentManifestCache";
@@ -34,7 +35,7 @@ function formatSize(bytes: number): string {
 }
 
 async function getCachedPublicManifest(folderPath: string) {
-  const cacheFolderPath = folderPath === "" ? "__root_manifest_wallpapers_v2__" : folderPath;
+  const cacheFolderPath = createManifestCacheFolderKey(folderPath);
   const [state] = await db
     .select({ generation: contentManifestStateTable.generation })
     .from(contentManifestStateTable)
