@@ -241,6 +241,7 @@ function toContentFile(file: DbContentFile) {
     sizeBytes: file.sizeBytes,
     posterUrl: file.posterUrl,
     isWallpaper: file.isWallpaper,
+    isPublished: file.isPublished,
     stylesheetId: file.stylesheetId ?? null,
     url: normalizePublicUrl(file.folderPath, file.name),
     updatedAt: file.updatedAt.toISOString(),

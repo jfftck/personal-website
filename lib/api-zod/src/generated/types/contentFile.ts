@@ -21,6 +21,7 @@ export interface ContentFile {
   /** @nullable */
   posterUrl?: string | null;
   isWallpaper: boolean;
+  isPublished: boolean;
   /** @nullable */
   stylesheetId: string | null;
   url: string;

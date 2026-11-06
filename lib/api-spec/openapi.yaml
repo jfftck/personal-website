@@ -387,7 +387,7 @@ components:
         createdAt: { type: string, format: date-time }
     ContentFile:
       type: object
-      required: [id, name, originalFileName, title, description, folderPath, date, contentType, sizeBytes, isWallpaper, stylesheetId, url, updatedAt]
+      required: [id, name, originalFileName, title, description, folderPath, date, contentType, sizeBytes, isWallpaper, isPublished, stylesheetId, url, updatedAt]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -400,6 +400,7 @@ components:
         sizeBytes: { type: integer }
         posterUrl: { type: ["string", "null"], format: uri }
         isWallpaper: { type: boolean }
+        isPublished: { type: boolean }
         stylesheetId: { type: ["string", "null"], format: uuid }
         url: { type: string }
         updatedAt: { type: string, format: date-time }

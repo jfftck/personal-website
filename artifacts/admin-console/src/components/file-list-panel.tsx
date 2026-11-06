@@ -52,7 +52,7 @@ export function FileListPanel({
           tabIndex={0}
           onClick={() => onSelectFile(file)}
           onKeyDown={(event) => handleRowKeyDown(event, file)}
-          aria-label={`Select ${file.title}`}
+          aria-label={`Select ${file.title}. ${file.isPublished ? 'Published' : 'Unpublished'}.`}
           data-testid={`file-row-${file.id}`}
         >
           <FileName file={file} />
@@ -105,7 +105,15 @@ export function FileName({ file }: { file: ContentFile }) {
     <div className="file-name-cell">
       <div className="file-icon">{fileIcon(file)}</div>
       <div className="file-name-wrap">
-        <span className="file-name" title={file.title} data-testid={`text-file-name-${file.id}`}>{file.title}</span>
+        <div className="file-name-line">
+          <span className="file-name" title={file.title} data-testid={`text-file-name-${file.id}`}>{file.title}</span>
+          <span
+            className={`publication-badge ${file.isPublished ? 'is-published' : 'is-unpublished'}`}
+            data-testid={`file-publication-state-${file.id}`}
+          >
+            {file.isPublished ? 'Published' : 'Unpublished'}
+          </span>
+        </div>
         <span className="file-sub" title={`${file.name} · ${file.folderPath || 'Root'} · ${file.contentType}`}>
           {file.name} · {file.folderPath || 'Root'} · {file.contentType}
         </span>

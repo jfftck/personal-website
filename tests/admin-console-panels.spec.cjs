@@ -35,6 +35,7 @@ const files = [
     contentType: 'text/markdown',
     sizeBytes: 128,
     isWallpaper: false,
+    isPublished: false,
     stylesheetId: null,
     url: 'https://example.test/files/20260101_notes.md',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -50,6 +51,7 @@ const files = [
     contentType: 'image/jpeg',
     sizeBytes: 1024,
     isWallpaper: true,
+    isPublished: true,
     stylesheetId: null,
     url: 'https://example.test/files/20260202_mountain.jpg',
     updatedAt: '2026-02-02T00:00:00.000Z',
@@ -65,6 +67,7 @@ const files = [
     contentType: 'text/markdown',
     sizeBytes: 24,
     isWallpaper: false,
+    isPublished: true,
     stylesheetId: 'file-style',
     url: 'https://example.test/files/documents/20260303_Styled_document.md',
     updatedAt: '2026-03-03T00:00:00.000Z',
@@ -80,6 +83,7 @@ const files = [
     contentType: 'text/markdown',
     sizeBytes: 24,
     isWallpaper: false,
+    isPublished: true,
     stylesheetId: 'file-style',
     url: 'https://example.test/files/documents/20260304_Another_document.md',
     updatedAt: '2026-03-04T00:00:00.000Z',
@@ -95,6 +99,7 @@ const files = [
     contentType: 'text/css',
     sizeBytes: 32,
     isWallpaper: false,
+    isPublished: true,
     stylesheetId: null,
     url: 'https://example.test/files/stylesheets/20260301_Ocean.css',
     updatedAt: '2026-03-01T00:00:00.000Z',
@@ -157,8 +162,13 @@ test.afterAll(async () => {
   await stop(adminProcess);
 });
 
-async function mockConsoleApi(page, treeHandler = route => fulfillJson(route, tree)) {
+async function mockConsoleApi(page, treeHandler) {
   const requests = [];
+  const currentTree = {
+    folders: folders.map(folder => ({ ...folder })),
+    files: files.map(file => ({ ...file })),
+  };
+  const respondTree = treeHandler ?? (route => fulfillJson(route, currentTree));
   await page.route('**/api/auth/user', route => fulfillJson(route, {
     user: {
       id: 'test-owner',
@@ -179,7 +189,10 @@ async function mockConsoleApi(page, treeHandler = route => fulfillJson(route, tr
         body: path.endsWith('/file-style/content') ? 'p { color: navy; }' : '# Styled document',
       });
     }
-    if (path === '/api/content/tree') return treeHandler(route);
+    if (path === '/api/content/tree') {
+      requests.push({ method, path });
+      return respondTree(route);
+    }
     if (path === '/api/content/trash') return fulfillJson(route, []);
     if (/^\/api\/content\/files\/[^/]+\/versions$/.test(path)) return fulfillJson(route, []);
     if (path === '/api/content/uploads' && method === 'POST') {
@@ -203,13 +216,16 @@ async function mockConsoleApi(page, treeHandler = route => fulfillJson(route, tr
       const fileId = path.split('/').at(-1);
       const body = route.request().postDataJSON();
       requests.push({ method, path, body });
-      const existing = files.find(file => file.id === fileId) || {};
-      return fulfillJson(route, {
+      const fileIndex = currentTree.files.findIndex(file => file.id === fileId);
+      const existing = currentTree.files[fileIndex] || {};
+      const updated = {
         ...existing,
         ...body,
         updatedAt: '2026-03-05T00:00:00.000Z',
         url: existing.url || 'https://example.test/files/updated.md',
-      });
+      };
+      if (fileIndex >= 0) currentTree.files[fileIndex] = updated;
+      return fulfillJson(route, updated);
     }
     if (/^\/api\/content\/files\/[^/]+$/.test(path) && method === 'DELETE') {
       requests.push({ method, path });
@@ -321,6 +337,35 @@ test('selecting a file opens and closes the mobile details panel', async ({ page
 
   await details.getByTestId('close-file-details').click();
   await expect(details).toBeHidden();
+});
+
+test('publishing a file updates its details, list state, and refreshed tree', async ({ page }) => {
+  const { requests } = await mockConsoleApi(page);
+  await page.goto(adminUrl);
+
+  const fileRow = page.getByTestId('file-row-file-root');
+  await fileRow.click();
+  const details = page.locator('.detail-panel');
+  await expect(details.getByTestId('publication-status-file-root')).toHaveText('Unpublished');
+  await expect(details.getByTestId('toggle-publication-file-root')).toHaveText('Publish');
+  const initialTreeRequests = requests.filter(request => request.method === 'GET' && request.path === '/api/content/tree').length;
+
+  await details.getByTestId('toggle-publication-file-root').click();
+  await expect(details.getByTestId('publication-status-file-root')).toHaveText('Published');
+  await expect(fileRow.getByTestId('file-publication-state-file-root')).toHaveText('Published');
+  await expect(details.getByTestId('toggle-publication-file-root')).toHaveText('Unpublish');
+  await expect.poll(() => requests.some(request =>
+    request.method === 'PATCH' &&
+    request.path.endsWith('/file-root') &&
+    request.body.isPublished === true,
+  )).toBe(true);
+  await expect.poll(() =>
+    requests.filter(request => request.method === 'GET' && request.path === '/api/content/tree').length,
+  ).toBeGreaterThan(initialTreeRequests);
+
+  await details.getByTestId('toggle-publication-file-root').click();
+  await expect(details.getByTestId('publication-status-file-root')).toHaveText('Unpublished');
+  await expect(fileRow.getByTestId('file-publication-state-file-root')).toHaveText('Unpublished');
 });
 
 test('file list shows its loading placeholder until folder and file data arrives', async ({ page }) => {

@@ -87,6 +87,7 @@ export const GetContentTreeResponse = zod.object({
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
   "isWallpaper": zod.boolean(),
+  "isPublished": zod.boolean(),
   "stylesheetId": zod.string().uuid().nullable(),
   "url": zod.string(),
   "updatedAt": zod.coerce.date()
@@ -114,6 +115,7 @@ export const GetContentTrashResponseItem = zod.object({
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
   "isWallpaper": zod.boolean(),
+  "isPublished": zod.boolean(),
   "stylesheetId": zod.string().uuid().nullable(),
   "url": zod.string(),
   "updatedAt": zod.coerce.date()
@@ -255,6 +257,7 @@ export const CreateContentFileResponse = zod.object({
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
   "isWallpaper": zod.boolean(),
+  "isPublished": zod.boolean(),
   "stylesheetId": zod.string().uuid().nullable(),
   "url": zod.string(),
   "updatedAt": zod.coerce.date()
@@ -314,6 +317,7 @@ export const UpdateContentFileResponse = zod.object({
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
   "isWallpaper": zod.boolean(),
+  "isPublished": zod.boolean(),
   "stylesheetId": zod.string().uuid().nullable(),
   "url": zod.string(),
   "updatedAt": zod.coerce.date()
@@ -399,6 +403,7 @@ export const RestoreContentFileVersionResponse = zod.object({
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
   "isWallpaper": zod.boolean(),
+  "isPublished": zod.boolean(),
   "stylesheetId": zod.string().uuid().nullable(),
   "url": zod.string(),
   "updatedAt": zod.coerce.date()
@@ -429,6 +434,7 @@ export const RestoreContentFileResponse = zod.object({
   "sizeBytes": zod.number().int(),
   "posterUrl": zod.string().url().nullish(),
   "isWallpaper": zod.boolean(),
+  "isPublished": zod.boolean(),
   "stylesheetId": zod.string().uuid().nullable(),
   "url": zod.string(),
   "updatedAt": zod.coerce.date()

@@ -263,6 +263,10 @@ test(
         },
       );
       assert.equal(mutationResponse.status, 200);
+      if (typeof body.isPublished === "boolean") {
+        const updatedFile = await mutationResponse.json();
+        assert.equal(updatedFile.isPublished, body.isPublished);
+      }
 
       const secondServerManifestUrl = manifestUrl.replace(
         new URL(manifestUrl).origin,

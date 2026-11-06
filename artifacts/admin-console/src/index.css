@@ -141,8 +141,13 @@
 .file-icon { width:36px; height:36px; flex:none; display:grid; place-items:center; border:1px solid hsl(var(--border)); background:hsl(var(--background)); color:hsl(var(--primary)); border-radius:9px; }
 .file-icon svg { width:17px; height:17px; }
 .file-name-wrap { min-width:0; }
+.file-name-line { display:flex; align-items:center; gap:7px; min-width:0; }
+.file-name-line .file-name { flex:1; min-width:0; }
 .file-name { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:600; color:hsl(var(--foreground)); }
 .file-sub { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:4px; color:hsl(var(--muted-foreground)); font:10px var(--app-font-mono); }
+.publication-badge { display:inline-flex; align-items:center; width:max-content; max-width:100%; margin-top:5px; padding:3px 7px; border:1px solid hsl(var(--border)); border-radius:999px; background:hsl(var(--muted) / .7); color:hsl(var(--muted-foreground)); font:9px var(--app-font-mono); line-height:1.2; white-space:nowrap; }
+.file-name-line .publication-badge { flex:none; margin-top:0; }
+.publication-badge.is-published { border-color:hsl(var(--primary) / .4); background:hsl(var(--primary) / .12); color:hsl(var(--primary)); }
 .table-meta { color:hsl(var(--muted-foreground)); font:10px var(--app-font-mono); white-space:nowrap; }
 .row-actions { display:flex; align-items:center; justify-content:flex-end; gap:3px; }
 .detail-panel { min-width:0; padding:18px; position:sticky; top:16px; }

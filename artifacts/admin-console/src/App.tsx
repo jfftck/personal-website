@@ -479,6 +479,25 @@ function Console() {
     } catch (error) { setToastMessage(errorMessage(error)); }
   };
 
+  const togglePublication = async (file: ContentFile) => {
+    const isPublished = !file.isPublished;
+    try {
+      const updated = await updateFile.mutateAsync({
+        fileId: file.id,
+        data: { isPublished },
+      });
+      setSelectedFile((current) => current?.id === file.id ? updated : current);
+      patchTreeCache((tree) => ({
+        ...tree,
+        files: tree.files.map((item) => item.id === updated.id ? updated : item),
+      }));
+      await Promise.all([refreshTree(), refreshFileVersions(file.id)]);
+      setToastMessage(isPublished ? 'File published.' : 'File unpublished.');
+    } catch (error) {
+      setToastMessage(errorMessage(error));
+    }
+  };
+
   const removeFile = async (file: ContentFile): Promise<boolean> => {
     const assignedDocuments = isStylesheetFile(file)
       ? allFiles.filter((item) => item.stylesheetId === file.id)
@@ -1003,9 +1022,29 @@ function Console() {
                         <div><span className="stat-label">Type</span><span className="stat-value" title={selectedFile.contentType}>{selectedFile.contentType}</span></div>
                         <div><span className="stat-label">Size</span><span className="stat-value">{displaySize(selectedFile.sizeBytes)}</span></div>
                         <div><span className="stat-label">Updated</span><span className="stat-value">{new Date(selectedFile.updatedAt).toLocaleDateString()}</span></div>
-                        <div><span className="stat-label">Published at</span><a className="stat-value" href={selectedFile.url} target="_blank" rel="noreferrer" title={selectedFile.url} data-testid={`file-public-url-${selectedFile.id}`}>{selectedFile.url}</a></div>
+                        <div>
+                          <span className="stat-label">Publication</span>
+                          <span
+                            className={`publication-badge ${selectedFile.isPublished ? 'is-published' : 'is-unpublished'}`}
+                            role="status"
+                            data-testid={`publication-status-${selectedFile.id}`}
+                          >
+                            {selectedFile.isPublished ? 'Published' : 'Unpublished'}
+                          </span>
+                        </div>
+                        <div><span className="stat-label">File URL</span><a className="stat-value" href={selectedFile.url} target="_blank" rel="noreferrer" title={selectedFile.url} data-testid={`file-public-url-${selectedFile.id}`}>{selectedFile.url}</a></div>
                       </div>
                       <div className="detail-actions">
+                        <button
+                          className={`button ${selectedFile.isPublished ? 'button-quiet' : 'button-primary'}`}
+                          type="button"
+                          onClick={() => void togglePublication(selectedFile)}
+                          disabled={updateFile.isPending}
+                          aria-label={`${selectedFile.isPublished ? 'Unpublish' : 'Publish'} ${selectedFile.title}`}
+                          data-testid={`toggle-publication-${selectedFile.id}`}
+                        >
+                          {selectedFile.isPublished ? 'Unpublish' : 'Publish'}
+                        </button>
                         <button className="button button-primary" type="submit" disabled={updateFile.isPending} data-testid="save-file-details"><Check /> Save Details</button>
                         {isEditableText(selectedFile) ? <button className="button button-quiet" type="button" onClick={() => void openTextEditor(selectedFile)} data-testid="open-text-editor"><FileText /> Edit Text</button> : null}
                       </div>
