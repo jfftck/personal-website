@@ -125,6 +125,8 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
   let folderId;
   let childFolderId;
   let correctedFolderId;
+  let activeFileFolderId;
+  let activeFileId;
   try {
     expect(await waitForHttp(api, `${apiBaseUrl}/api/healthz`)).toBe(true);
     expect(await waitForHttp(secondApi, `${secondApiBaseUrl}/api/healthz`)).toBe(true);
@@ -342,7 +344,72 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
     expect((await readManifest(
       `${secondApiBaseUrl}/files/${encodeURIComponent(movedPath)}/manifest.json`,
     )).response.status).toBe(404);
+
+    // A leaf folder with an active file must remain intact when deletion is rejected.
+    await page.getByTestId(`select-folder-${correctedFolderId}`).click();
+    const activeFolderName = `active-file-${suffix}`;
+    const activeFolderPath = `${correctedPath}/${activeFolderName}`;
+    const activeFolderCreatePromise = page.waitForResponse(response =>
+      response.url().includes('/api/content/folders') &&
+      response.request().method() === 'POST',
+    );
+    await page.getByTestId('new-folder').click();
+    await page.getByTestId('input-folder-name').fill(activeFolderName);
+    await page.getByTestId('save-folder').click();
+    const activeFolderCreateResponse = await activeFolderCreatePromise;
+    expect(activeFolderCreateResponse.status()).toBe(201);
+    const activeFolder = await activeFolderCreateResponse.json();
+    activeFileFolderId = activeFolder.id;
+    expect(activeFolder.path).toBe(activeFolderPath);
+    await expect(page.getByTestId(`select-folder-${activeFileFolderId}`)).toHaveText(activeFolderName);
+
+    await page.getByTestId(`select-folder-${activeFileFolderId}`).click();
+    await page.getByTestId('new-markdown-document').click();
+    await page.getByTestId('select-upload-destination').click();
+    await page.getByRole('option', { name: activeFolderPath, exact: true }).click();
+    await page.getByTestId('input-upload-title').fill(`Active file ${suffix}`);
+    const activeFileCreatePromise = page.waitForResponse(response =>
+      response.url().includes('/api/content/files') &&
+      response.request().method() === 'POST',
+    );
+    await page.getByTestId('submit-upload').click();
+    const activeFileCreateResponse = await activeFileCreatePromise;
+    expect(activeFileCreateResponse.status()).toBe(201);
+    const activeFile = await activeFileCreateResponse.json();
+    activeFileId = activeFile.id;
+    expect(activeFile.folderPath).toBe(activeFolderPath);
+    await page.getByTestId('close-text-editor').click();
+    await expect(page.getByTestId(`file-row-${activeFileId}`)).toBeVisible();
+
+    page.once('dialog', dialog => dialog.accept());
+    const activeFileFolderDeletePromise = page.waitForResponse(response =>
+      response.url().includes(`/api/content/folders/${activeFileFolderId}`) &&
+      response.request().method() === 'DELETE',
+    );
+    await page.getByTestId(`delete-folder-${activeFileFolderId}`).click();
+    const rejectedActiveFileFolderDelete = await activeFileFolderDeletePromise;
+    expect(rejectedActiveFileFolderDelete.status()).toBe(409);
+    expect((await rejectedActiveFileFolderDelete.json()).error).toBe(
+      'Move or remove this folder’s contents first.',
+    );
+    await expect(page.getByTestId(`select-folder-${activeFileFolderId}`)).toHaveText(activeFolderName);
+    await expect(page.getByTestId(`file-row-${activeFileId}`)).toBeVisible();
+    await expect(page.getByTestId('status-toast')).toHaveText(
+      'Move or remove this folder’s contents first.',
+    );
   } finally {
+    if (activeFileId) {
+      await fetch(`${apiBaseUrl}/api/content/files/${activeFileId}`, {
+        method: 'DELETE',
+        headers: { Cookie: `sid=${sessionId}` },
+      }).catch(() => {});
+    }
+    if (activeFileFolderId) {
+      await fetch(`${apiBaseUrl}/api/content/folders/${activeFileFolderId}`, {
+        method: 'DELETE',
+        headers: { Cookie: `sid=${sessionId}` },
+      }).catch(() => {});
+    }
     if (childFolderId) {
       await fetch(`${apiBaseUrl}/api/content/folders/${childFolderId}`, {
         method: 'DELETE',
