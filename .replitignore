@@ -4,4 +4,5 @@
 # No need to store the pnpm store twice.
 .local
 /generated-artifacts/
+# Archived migration snapshot retained for reference, excluded from deployment.
 /.migration-backup/
