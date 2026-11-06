@@ -53,6 +53,44 @@ async function expectInsideAppWindow(app, element) {
   expect(elementBox.x + elementBox.width).toBeLessThanOrEqual(appBox.x + appBox.width + 1);
 }
 
+async function mockCompactViewerFiles(page) {
+  await page.route('**/documents/manifest.json', route => route.fulfill({
+    json: [
+      { filename: '20261106_Compact_First_Document.md', url: '/files/documents/compact-list-first.md' },
+      { filename: '20261106_Compact_Second_Document.md', url: '/files/documents/compact-list-second.md' },
+    ],
+  }));
+  await page.route('**/posts/manifest.json', route => route.fulfill({ json: [] }));
+  await page.route('**/files/documents/compact-list-first.md', route => route.fulfill({
+    contentType: 'text/markdown',
+    body: '# Compact First Document',
+  }));
+  await page.route('**/files/documents/compact-list-second.md', route => route.fulfill({
+    contentType: 'text/markdown',
+    body: '# Compact Second Document',
+  }));
+  await page.route('**/pictures/manifest.json', route => route.fulfill({
+    json: [
+      { filename: '20261106_Compact_First_Photo.svg', url: '/files/pictures/compact-list-first.svg' },
+      { filename: '20261106_Compact_Second_Photo.svg', url: '/files/pictures/compact-list-second.svg' },
+    ],
+  }));
+  await page.route('**/files/pictures/compact-list-*.svg', route => route.fulfill({
+    contentType: 'image/svg+xml',
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><rect width="120" height="80" fill="#357"/></svg>',
+  }));
+  await page.route('**/videos/manifest.json', route => route.fulfill({
+    json: [
+      { filename: '20261106_Compact_First_Video.mp4', url: '/files/videos/compact-list-first.mp4' },
+      { filename: '20261106_Compact_Second_Video.mp4', url: '/files/videos/compact-list-second.mp4' },
+    ],
+  }));
+  await page.route('**/files/videos/compact-list-*.mp4', route => route.fulfill({
+    contentType: 'video/mp4',
+    body: '',
+  }));
+}
+
 test('Calculator selectors stay out of the desktop shell stylesheet', () => {
   expect(desktopStylesheet).not.toMatch(/\.calc(?:[-_a-zA-Z0-9]*)/);
 });
@@ -3835,6 +3873,96 @@ test('media player remains visible and video browsing stays reachable in narrow 
     await expectInsideAppWindow(app, content);
     await expectInsideAppWindow(app, browse);
   }
+});
+
+test('Document Viewer can open and close a file from its compact browse list', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockCompactViewerFiles(page);
+  const app = await openUtility(page, 'doc-viewer');
+  const browse = app.locator('.doc-toolbar [data-action="open"]');
+  const zoomIn = app.locator('.doc-toolbar [data-action="zoom-in"]');
+  const sidebar = app.locator('.doc-sidebar');
+  await expect(sidebar.locator('.doc-sidebar-item')).toHaveCount(2);
+  await expect(app.locator('.doc-body h1')).toHaveText('Compact First Document');
+  await setAppWindowWidth(app, 320);
+
+  await browse.click();
+  await expect(sidebar).toBeVisible();
+  const secondDocument = sidebar.locator('.doc-sidebar-item').filter({ hasText: 'Compact Second Document' });
+  await expect(secondDocument).toBeVisible();
+  await secondDocument.click();
+  await expect(app.locator('.doc-body h1')).toHaveText('Compact Second Document');
+  await expect(secondDocument).toHaveClass(/active/);
+  await expectInsideAppWindow(app, browse);
+  await expectInsideAppWindow(app, zoomIn);
+
+  await browse.click();
+  await expect(sidebar).toBeHidden();
+  await expectInsideAppWindow(app, app.locator('.doc-scroll'));
+  await expectInsideAppWindow(app, browse);
+});
+
+test('Image Viewer can select a photo from its compact browse list', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockCompactViewerFiles(page);
+  const app = await openUtility(page, 'img-viewer');
+  const browse = app.locator('.img-toolbar [data-action="open"]');
+  const fit = app.locator('.img-toolbar [data-action="fit"]');
+  const sidebar = app.locator('.doc-sidebar');
+  const viewport = app.locator('.img-viewport');
+  const image = viewport.locator('img');
+  await expect(sidebar.locator('.doc-sidebar-item')).toHaveCount(2);
+  await expect(image).toHaveAttribute('src', '/files/pictures/compact-list-first.svg');
+  await setAppWindowWidth(app, 320);
+
+  await browse.click();
+  await expect(sidebar).toBeVisible();
+  const secondPhoto = sidebar.locator('.doc-sidebar-item').filter({ hasText: 'Compact Second Photo' });
+  await expect(secondPhoto).toBeVisible();
+  await secondPhoto.click();
+  await expect(image).toHaveAttribute('src', '/files/pictures/compact-list-second.svg');
+  await expect(image).toHaveAttribute('alt', 'Compact Second Photo');
+  await expect(secondPhoto).toHaveClass(/active/);
+  await expectInsideAppWindow(app, viewport);
+  await expectInsideAppWindow(app, browse);
+  await expectInsideAppWindow(app, fit);
+
+  await browse.click();
+  await expect(sidebar).toBeHidden();
+  await expectInsideAppWindow(app, viewport);
+  await expectInsideAppWindow(app, browse);
+  await expectInsideAppWindow(app, fit);
+});
+
+test('Media Player can select a video from its compact browse list', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockCompactViewerFiles(page);
+  const app = await openUtility(page, 'media-player');
+  const browse = app.locator('.media-toolbar [data-action="open"]');
+  const external = app.locator('.media-toolbar [data-action="external"]');
+  const sidebar = app.locator('.doc-sidebar');
+  const player = app.locator('.media-player-wrapper');
+  const video = app.locator('.media-video');
+  await expect(sidebar.locator('.doc-sidebar-item')).toHaveCount(2);
+  await expect(video).toHaveAttribute('src', '/files/videos/compact-list-first.mp4');
+  await setAppWindowWidth(app, 320);
+
+  await browse.click();
+  await expect(sidebar).toBeVisible();
+  const secondVideo = sidebar.locator('.doc-sidebar-item').filter({ hasText: 'Compact Second Video' });
+  await expect(secondVideo).toBeVisible();
+  await secondVideo.click();
+  await expect(video).toHaveAttribute('src', '/files/videos/compact-list-second.mp4');
+  await expect(secondVideo).toHaveClass(/active/);
+  await expectInsideAppWindow(app, player);
+  await expectInsideAppWindow(app, browse);
+  await expectInsideAppWindow(app, external);
+
+  await browse.click();
+  await expect(sidebar).toBeHidden();
+  await expectInsideAppWindow(app, player);
+  await expectInsideAppWindow(app, browse);
+  await expectInsideAppWindow(app, external);
 });
 
 test('File Manager navigation, views, and refresh fit narrow windows', async ({ page }) => {
