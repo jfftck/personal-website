@@ -237,6 +237,155 @@ async function mockConsoleApi(page, treeHandler) {
   return { requests };
 }
 
+async function mockUploadRevisionApi(page) {
+  const requests = [];
+  const currentTree = {
+    folders: folders.map(folder => ({ ...folder })),
+    files: files.map(file => ({ ...file })),
+  };
+  const versions = [];
+  let currentBytes = Buffer.alloc(0);
+  let rejectNextUpload = false;
+  let rejectNextMetadataSave = false;
+  let rejectNextRestore = false;
+  let timestampCounter = 0;
+
+  const nextTimestamp = () => `2026-11-06T12:${String(++timestampCounter).padStart(2, '0')}:00.000Z`;
+  const makeVersion = (file, action, bytes) => {
+    const versionNumber = Math.max(0, ...versions.map(version => version.versionNumber)) + 1;
+    const gitCommitSha = String(versionNumber).padStart(40, '0');
+    const version = {
+      id: `revision-${versionNumber}`,
+      versionNumber,
+      action,
+      name: file.name,
+      originalFileName: file.originalFileName,
+      title: file.title,
+      description: file.description,
+      folderPath: file.folderPath,
+      date: file.date,
+      contentType: file.contentType,
+      sizeBytes: file.sizeBytes,
+      isWallpaper: file.isWallpaper ?? false,
+      stylesheetId: file.stylesheetId ?? null,
+      isDeleted: false,
+      createdAt: nextTimestamp(),
+      gitCommitSha,
+      gitUrl: `https://github.com/jfftck/personal-files/commit/${gitCommitSha}`,
+      savedFile: { ...file },
+      savedBytes: Buffer.from(bytes),
+    };
+    versions.unshift(version);
+    return version;
+  };
+  const versionResponse = () => versions.map(({ savedFile, savedBytes, ...version }) => version);
+
+  await page.route('**/api/auth/user', route => fulfillJson(route, {
+    user: {
+      id: 'test-owner',
+      username: 'test-owner',
+      email: 'owner@example.test',
+      firstName: 'Test',
+      lastName: null,
+      profileImageUrl: null,
+    },
+    isOwner: true,
+  }));
+  await page.route('**/api/content/**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    const method = route.request().method();
+    if (path === '/api/content/tree' && method === 'GET') {
+      requests.push({ method, path });
+      return fulfillJson(route, {
+        folders: currentTree.folders.map(folder => ({ ...folder })),
+        files: currentTree.files.map(file => ({ ...file })),
+      });
+    }
+    if (path === '/api/content/trash' && method === 'GET') return fulfillJson(route, []);
+    if (path === '/api/content/uploads' && method === 'POST') {
+      requests.push({ method, path, body: route.request().postDataJSON() });
+      return fulfillJson(route, {
+        uploadUrl: `${adminUrl}/test-upload`,
+        objectPath: '/objects/uploads/test-upload-object',
+      });
+    }
+    if (path === '/api/content/files' && method === 'POST') {
+      const body = route.request().postDataJSON();
+      const file = {
+        id: 'file-upload-test',
+        ...body,
+        posterUrl: null,
+        isPublished: true,
+        stylesheetId: null,
+        url: `https://example.test/files/${body.folderPath ? `${body.folderPath}/` : ''}${body.name}`,
+        updatedAt: nextTimestamp(),
+      };
+      currentTree.files = [...currentTree.files.filter(item => item.id !== file.id), file];
+      makeVersion(file, 'created', currentBytes);
+      requests.push({ method, path, body });
+      return fulfillJson(route, file, 201);
+    }
+    if (path === '/api/content/files/file-upload-test/content' && method === 'GET') {
+      return route.fulfill({ status: 200, contentType: 'text/plain; charset=utf-8', body: currentBytes });
+    }
+    if (path === '/api/content/files/file-upload-test/versions' && method === 'GET') {
+      return fulfillJson(route, versionResponse());
+    }
+    if (path === '/api/content/files/file-upload-test' && method === 'PATCH') {
+      const body = route.request().postDataJSON();
+      requests.push({ method, path, body });
+      if (rejectNextMetadataSave) {
+        rejectNextMetadataSave = false;
+        return fulfillJson(route, { error: 'Temporary metadata save failure.' }, 503);
+      }
+      const current = currentTree.files.find(file => file.id === 'file-upload-test');
+      const updated = {
+        ...current,
+        ...body,
+        updatedAt: nextTimestamp(),
+        url: current.url,
+      };
+      currentTree.files = currentTree.files.map(file => file.id === updated.id ? updated : file);
+      makeVersion(updated, 'updated', currentBytes);
+      return fulfillJson(route, updated);
+    }
+    const restoreMatch = path.match(/^\/api\/content\/files\/file-upload-test\/versions\/(revision-\d+)\/restore$/);
+    if (restoreMatch && method === 'POST') {
+      if (rejectNextRestore) {
+        rejectNextRestore = false;
+        requests.push({ method, path, failed: true });
+        return fulfillJson(route, { error: 'Temporary revision restore failure.' }, 503);
+      }
+      const revision = versions.find(version => version.id === restoreMatch[1]);
+      if (!revision) return fulfillJson(route, { error: 'The requested revision is missing.' }, 404);
+      currentBytes = Buffer.from(revision.savedBytes);
+      const restored = { ...revision.savedFile, updatedAt: nextTimestamp() };
+      currentTree.files = currentTree.files.map(file => file.id === restored.id ? restored : file);
+      makeVersion(restored, 'restored', currentBytes);
+      requests.push({ method, path });
+      return fulfillJson(route, restored);
+    }
+    return fulfillJson(route, { error: 'Unexpected test request.' }, 404);
+  });
+  await page.route('**/test-upload', async route => {
+    if (rejectNextUpload) {
+      rejectNextUpload = false;
+      return route.fulfill({ status: 503, body: 'Temporary upload failure.' });
+    }
+    currentBytes = Buffer.from(route.request().postDataBuffer() ?? Buffer.alloc(0));
+    return route.fulfill({ status: 200, body: '' });
+  });
+
+  return {
+    requests,
+    getCurrentFile: () => currentTree.files.find(file => file.id === 'file-upload-test'),
+    getCurrentBytes: () => Buffer.from(currentBytes),
+    rejectNextUpload: () => { rejectNextUpload = true; },
+    rejectNextMetadataSave: () => { rejectNextMetadataSave = true; },
+    rejectNextRestore: () => { rejectNextRestore = true; },
+  };
+}
+
 function fulfillJson(route, body, status = 200) {
   return route.fulfill({
     status,
@@ -366,6 +515,117 @@ test('publishing a file updates its details, list state, and refreshed tree', as
   await details.getByTestId('toggle-publication-file-root').click();
   await expect(details.getByTestId('publication-status-file-root')).toHaveText('Unpublished');
   await expect(fileRow.getByTestId('file-publication-state-file-root')).toHaveText('Unpublished');
+});
+
+test('signed-in upload, metadata edits, and revision restore keep file bytes paired with metadata', async ({ page }) => {
+  const api = await mockUploadRevisionApi(page);
+  const originalBytes = Buffer.from('Original uploaded document bytes.\n');
+  const originalMetadata = {
+    title: 'Original Upload',
+    description: 'Original description.',
+    date: '2026-10-30',
+  };
+  const editedMetadata = {
+    title: 'Revised Upload',
+    description: 'Revised description.',
+    date: '2026-11-02',
+  };
+
+  await page.goto(adminUrl);
+  await page.getByTestId('open-upload').click();
+  await page.getByTestId('input-upload-file').setInputFiles({
+    name: 'source-notes.txt',
+    mimeType: 'text/plain',
+    buffer: originalBytes,
+  });
+  await page.getByTestId('input-upload-title').fill(originalMetadata.title);
+  await page.getByTestId('input-upload-description').fill(originalMetadata.description);
+  await page.getByTestId('input-upload-date').fill(originalMetadata.date);
+
+  api.rejectNextUpload();
+  await page.getByTestId('submit-upload').click();
+  await expect(page.getByTestId('status-toast')).toHaveText('File upload failed (503).');
+  await expect(page.getByTestId('input-upload-title')).toHaveValue(originalMetadata.title);
+  await expect(page.getByTestId('input-upload-description')).toHaveValue(originalMetadata.description);
+  await expect(page.getByTestId('input-upload-date')).toHaveValue(originalMetadata.date);
+  await expect(page.getByTestId('input-upload-original-name')).toHaveValue('source-notes.txt');
+
+  const uploadResponse = page.waitForResponse(response =>
+    response.url().includes('/api/content/files') &&
+    response.request().method() === 'POST',
+  );
+  await page.getByTestId('submit-upload').click();
+  const uploaded = await (await uploadResponse).json();
+  expect(uploaded.id).toBe('file-upload-test');
+  await expect(page.getByTestId('input-file-title')).toHaveValue(originalMetadata.title);
+  await expect(page.getByTestId('input-file-description')).toHaveValue(originalMetadata.description);
+  await expect(page.getByTestId('input-file-date')).toHaveValue(originalMetadata.date);
+  await expect(page.getByTestId('revision-1')).toBeVisible();
+  expect(api.getCurrentBytes().equals(originalBytes)).toBe(true);
+
+  await page.getByTestId('input-file-title').fill(editedMetadata.title);
+  await page.getByTestId('input-file-description').fill(editedMetadata.description);
+  await page.getByTestId('input-file-date').fill(editedMetadata.date);
+  api.rejectNextMetadataSave();
+  await page.getByTestId('save-file-details').click();
+  await expect(page.getByTestId('status-toast')).toHaveText('Temporary metadata save failure.');
+  await expect(page.getByTestId('input-file-title')).toHaveValue(editedMetadata.title);
+  await expect(page.getByTestId('input-file-description')).toHaveValue(editedMetadata.description);
+  await expect(page.getByTestId('input-file-date')).toHaveValue(editedMetadata.date);
+  await expect(page.locator('.detail-file h3')).toHaveText(originalMetadata.title);
+  expect(api.getCurrentFile().title).toBe(originalMetadata.title);
+  expect(api.getCurrentBytes().equals(originalBytes)).toBe(true);
+
+  await page.getByTestId('save-file-details').click();
+  await expect(page.getByTestId('input-file-title')).toHaveValue(editedMetadata.title);
+  await expect(page.getByTestId('input-file-description')).toHaveValue(editedMetadata.description);
+  await expect(page.getByTestId('input-file-date')).toHaveValue(editedMetadata.date);
+  await expect(page.getByTestId('revision-2')).toBeVisible();
+
+  await page.reload();
+  await page.getByTestId('file-row-file-upload-test').click();
+  await expect(page.getByTestId('input-file-title')).toHaveValue(editedMetadata.title);
+  await expect(page.getByTestId('input-file-description')).toHaveValue(editedMetadata.description);
+  await expect(page.getByTestId('input-file-date')).toHaveValue(editedMetadata.date);
+  const readStoredBytes = () => page.evaluate(async fileId => {
+    const response = await fetch(`/api/content/files/${fileId}/content`);
+    if (!response.ok) throw new Error(`Could not read stored file bytes (${response.status}).`);
+    return response.text();
+  }, uploaded.id);
+  expect(await readStoredBytes()).toBe(originalBytes.toString());
+
+  api.rejectNextRestore();
+  const failedRestoreDialog = page.waitForEvent('dialog');
+  const failedRestoreClick = page.getByTestId('restore-revision-1').click();
+  const failedRestoreConfirmation = await failedRestoreDialog;
+  await failedRestoreConfirmation.accept();
+  await failedRestoreClick;
+  await expect(page.getByTestId('status-toast')).toHaveText('Temporary revision restore failure.');
+  await expect(page.getByTestId('input-file-title')).toHaveValue(editedMetadata.title);
+  await expect(page.getByTestId('input-file-description')).toHaveValue(editedMetadata.description);
+  await expect(page.getByTestId('input-file-date')).toHaveValue(editedMetadata.date);
+  expect(api.getCurrentFile().title).toBe(editedMetadata.title);
+  expect(api.getCurrentBytes().equals(originalBytes)).toBe(true);
+
+  const confirmRestore = page.waitForEvent('dialog');
+  const restoreClick = page.getByTestId('restore-revision-1').click();
+  const dialog = await confirmRestore;
+  expect(dialog.message()).toContain('Restore version 1');
+  await dialog.accept();
+  await restoreClick;
+  await expect(page.getByTestId('input-file-title')).toHaveValue(originalMetadata.title);
+  await expect(page.getByTestId('input-file-description')).toHaveValue(originalMetadata.description);
+  await expect(page.getByTestId('input-file-date')).toHaveValue(originalMetadata.date);
+  expect(await readStoredBytes()).toBe(originalBytes.toString());
+
+  await page.reload();
+  await page.getByTestId('file-row-file-upload-test').click();
+  await expect(page.getByTestId('input-file-title')).toHaveValue(originalMetadata.title);
+  await expect(page.getByTestId('input-file-description')).toHaveValue(originalMetadata.description);
+  await expect(page.getByTestId('input-file-date')).toHaveValue(originalMetadata.date);
+  expect(await readStoredBytes()).toBe(originalBytes.toString());
+  expect(api.getCurrentFile().title).toBe(originalMetadata.title);
+  expect(api.getCurrentBytes().equals(originalBytes)).toBe(true);
 });
 
 test('file list shows its loading placeholder until folder and file data arrives', async ({ page }) => {
