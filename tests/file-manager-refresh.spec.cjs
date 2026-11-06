@@ -287,3 +287,69 @@ test('refresh announces failure and keeps the last available files', async ({ pa
   await expect(status).toHaveText('Refresh failed. Showing the last available files.');
   await expect(fileTileName(fileManager, 'Old Post')).toBeVisible();
 });
+
+test('refreshing one window updates root folder totals in another window', async ({ page }) => {
+  const firstWindow = page.locator('.app-window[data-type="file-manager"]').first();
+  await expect(rootFolderTile(firstWindow, 'Posts').locator('.fm-tile-date')).toHaveText('2');
+
+  await page.locator('#app-menu-btn').click();
+  await page.locator('#app-list .app-launcher[data-type="file-manager"]').click();
+  const windows = page.locator('.app-window[data-type="file-manager"]');
+  await expect(windows).toHaveCount(2);
+  const secondWindow = windows.nth(1);
+  await expect(rootFolderTile(secondWindow, 'Posts').locator('.fm-tile-date')).toHaveText('2');
+
+  manifests.posts.push({ filename: '20261007_Latest_Post.md' });
+  await firstWindow.locator('.fm-sidebar-btn[data-path="posts"]').click();
+  const refreshStatus = firstWindow.locator('.fm-refresh-status');
+  await firstWindow.getByRole('button', { name: 'Refresh current folder' }).click();
+
+  await expect(refreshStatus).toHaveText('Folder refreshed.');
+  await expect(rootFolderTile(secondWindow, 'Posts').locator('.fm-tile-date')).toHaveText('3');
+  await expect(rootFolderTile(secondWindow, 'Posts')).toBeVisible();
+  await expect(secondWindow.locator('.fm-sidebar-btn[data-path="/"]')).toHaveClass(/active/);
+
+  await secondWindow.locator('.fm-sidebar-btn[data-path="documents"]').click();
+  await expect(fileTileName(secondWindow, 'Existing Document')).toBeVisible();
+  manifests.pictures.push({ filename: '20261010_New_Photo.jpg' });
+  await firstWindow.locator('.fm-sidebar-btn[data-path="pictures"]').click();
+  await firstWindow.getByRole('button', { name: 'Refresh current folder' }).click();
+  await expect(firstWindow.locator('.fm-refresh-status')).toHaveText('Folder refreshed.');
+  await expect(fileTileName(secondWindow, 'Existing Document')).toBeVisible();
+  await expect(secondWindow.locator('.fm-sidebar-btn[data-path="documents"]')).toHaveClass(/active/);
+});
+
+test('shared refresh waits for an in-progress load and preserves the other window view', async ({ page }) => {
+  const firstWindow = page.locator('.app-window[data-type="file-manager"]').first();
+  await expect(rootFolderTile(firstWindow, 'Posts').locator('.fm-tile-date')).toHaveText('2');
+
+  holdInitialPostsRequest = true;
+  await page.locator('#app-menu-btn').click();
+  await page.locator('#app-list .app-launcher[data-type="file-manager"]').click();
+  const windows = page.locator('.app-window[data-type="file-manager"]');
+  await expect(windows).toHaveCount(2);
+  const secondWindow = windows.nth(1);
+  try {
+    await initialPostsRequestStarted;
+    await secondWindow.locator('.fm-sidebar-btn[data-path="posts"]').click();
+
+    const loadingMessage = secondWindow.locator('.fm-scroll .fm-empty-msg');
+    await expect(loadingMessage).toHaveText('Loading…');
+    manifests.posts = [
+      { filename: '20261002_Keep_Post.md' },
+      { filename: '20261007_Latest_Post.md' },
+    ];
+    await firstWindow.locator('.fm-sidebar-btn[data-path="posts"]').click();
+
+    await firstWindow.getByRole('button', { name: 'Refresh current folder' }).click();
+    await expect(firstWindow.locator('.fm-refresh-status')).toHaveText('Folder refreshed.');
+    await expect(loadingMessage).toHaveText('Loading…');
+    await expect(secondWindow.locator('.fm-sidebar-btn[data-path="posts"]')).toHaveClass(/active/);
+  } finally {
+    releaseInitialPostsRequest();
+  }
+
+  await expect(fileTileName(secondWindow, 'Latest Post')).toBeVisible();
+  await expect(fileTileName(secondWindow, 'Old Post')).toHaveCount(0);
+  await expect(secondWindow.locator('.fm-sidebar-btn[data-path="posts"]')).toHaveClass(/active/);
+});

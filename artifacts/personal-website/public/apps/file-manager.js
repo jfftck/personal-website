@@ -2,6 +2,9 @@
 
 import { initResponsiveToolbar } from './toolbar.js';
 
+const FOLDER_REFRESH_EVENT = 'niri:file-manager-folder-refreshed';
+let manifestSequence = 0;
+
 export function buildFileManager(id, ctx) {
   const FOLDERS_DEF = [
     { id: 'posts',     label: 'Posts',     color: '#10b981' },
@@ -31,6 +34,10 @@ export function buildFileManager(id, ctx) {
   const fileCache       = {};
   const fileCacheMeta   = {};
   const _fetching       = {};
+  const _fetchSequence  = {};
+  const cacheSequence   = {};
+  const deferredRefresh = {};
+  const refreshingFolders = new Set();
   const MANIFEST_RECHECK_MS = 5_000;
   const MANIFEST_RETRY_MS = 5_000;
   const collapsedGroups = new Set();
@@ -73,7 +80,9 @@ export function buildFileManager(id, ctx) {
       await pendingRequest;
       return ensureFolder(folder, { force: true });
     }
-    _fetching[folder] = (async () => {
+    const requestSequence = ++manifestSequence;
+    _fetchSequence[folder] = requestSequence;
+    const request = (async () => {
       try {
         const headers = metadata?.etag
           ? { 'If-None-Match': metadata.etag }
@@ -88,6 +97,7 @@ export function buildFileManager(id, ctx) {
             checkedAt: Date.now(),
             error: false,
           };
+          cacheSequence[folder] = requestSequence;
           return cached;
         }
         if (!r.ok) throw new Error(r.status);
@@ -99,6 +109,7 @@ export function buildFileManager(id, ctx) {
           checkedAt: Date.now(),
           error: false,
         };
+        cacheSequence[folder] = requestSequence;
       } catch {
         if (fileCache[folder] === undefined) fileCache[folder] = [];
         fileCacheMeta[folder] = {
@@ -109,8 +120,10 @@ export function buildFileManager(id, ctx) {
       }
       return fileCache[folder];
     })();
-    _fetching[folder] = _fetching[folder].finally(() => {
+    _fetching[folder] = request.finally(() => {
       delete _fetching[folder];
+      delete _fetchSequence[folder];
+      if (!refreshingFolders.has(folder)) flushDeferredFolderRefresh(folder);
     });
     return _fetching[folder];
   }
@@ -358,6 +371,68 @@ export function buildFileManager(id, ctx) {
     });
   }
 
+  function applySharedFolderRefresh(detail) {
+    if (detail.sequence <= (cacheSequence[detail.folder] || 0)) return;
+    fileCache[detail.folder] = detail.entries.slice();
+    fileCacheMeta[detail.folder] = { ...detail.metadata };
+    cacheSequence[detail.folder] = detail.sequence;
+    updateSidebarCounts();
+    if (currentPath === '/' || currentPath === detail.folder) renderContent();
+  }
+
+  function deferSharedFolderRefresh(detail) {
+    const pending = deferredRefresh[detail.folder];
+    if (!pending || detail.sequence > pending.sequence) {
+      deferredRefresh[detail.folder] = detail;
+    }
+  }
+
+  function flushDeferredFolderRefresh(folder) {
+    const detail = deferredRefresh[folder];
+    if (!detail || _fetching[folder] || refreshingFolders.has(folder)) return;
+    delete deferredRefresh[folder];
+    applySharedFolderRefresh(detail);
+  }
+
+  function handleSharedFolderRefresh(event) {
+    const detail = event.detail;
+    if (
+      !detail ||
+      detail.sourceId === id ||
+      !FOLDERS_DEF.some(folder => folder.id === detail.folder) ||
+      !Array.isArray(detail.entries) ||
+      !detail.metadata ||
+      !Number.isSafeInteger(detail.sequence)
+    ) return;
+
+    const activeRequestSequence = _fetchSequence[detail.folder];
+    if (activeRequestSequence !== undefined || refreshingFolders.has(detail.folder)) {
+      const localSequence = activeRequestSequence ?? cacheSequence[detail.folder] ?? 0;
+      if (localSequence < detail.sequence) {
+        deferSharedFolderRefresh(detail);
+      }
+      return;
+    }
+    applySharedFolderRefresh(detail);
+  }
+
+  function broadcastFolderRefresh(folder) {
+    const entries = fileCache[folder];
+    const metadata = fileCacheMeta[folder];
+    if (!Array.isArray(entries) || !metadata || metadata.error) return;
+    const sequence = cacheSequence[folder];
+    if (!Number.isSafeInteger(sequence)) return;
+    window.dispatchEvent(new CustomEvent(FOLDER_REFRESH_EVENT, {
+      detail: {
+        sourceId: id,
+        folder,
+        entries,
+        metadata: { ...metadata },
+        sequence,
+      },
+    }));
+  }
+
   function loadFolderCountsInBackground({ force = false } = {}) {
     Promise.all(FOLDERS_DEF.map(fd => ensureFolder(fd.id, { force }))).then(() => {
       updateSidebarCounts();
@@ -430,21 +505,28 @@ export function buildFileManager(id, ctx) {
   });
 
   async function refreshCurrentFolder() {
+    const requestedPath = currentPath;
     const paths = currentPath === '/'
       ? FOLDERS_DEF.map(folder => folder.id)
       : [currentPath];
+    paths.forEach(folder => refreshingFolders.add(folder));
     const refreshButton = toolbar.querySelector('.fm-refresh-btn');
     refreshButton.disabled = true;
     refreshButton.setAttribute('aria-busy', 'true');
     refreshStatus.textContent = 'Refreshing…';
     try {
       await Promise.all(paths.map(folder => ensureFolder(folder, { force: true })));
+      paths.forEach(broadcastFolderRefresh);
       updateSidebarCounts();
-      renderContent();
+      if (currentPath === requestedPath) renderContent();
       refreshStatus.textContent = paths.some(folder => fileCacheMeta[folder]?.error)
         ? 'Refresh failed. Showing the last available files.'
         : 'Folder refreshed.';
     } finally {
+      paths.forEach(folder => {
+        refreshingFolders.delete(folder);
+        flushDeferredFolderRefresh(folder);
+      });
       refreshButton.disabled = false;
       refreshButton.removeAttribute('aria-busy');
     }
@@ -456,7 +538,14 @@ export function buildFileManager(id, ctx) {
     navigateTo(btn.dataset.path);
   });
 
-  ctx.appApis[id] = { openFile: null };
+  window.addEventListener(FOLDER_REFRESH_EVENT, handleSharedFolderRefresh);
+  ctx.appApis[id] = {
+    openFile: null,
+    destroy: () => {
+      window.removeEventListener(FOLDER_REFRESH_EVENT, handleSharedFolderRefresh);
+      FOLDERS_DEF.forEach(folder => delete deferredRefresh[folder.id]);
+    },
+  };
   ctx.setAppTitle(id, '/home');
 
   main.appendChild(scroll);
