@@ -43,6 +43,7 @@ export type MetadataFormValues = {
 
 type FileDetailsPanelProps = {
   file: ContentFile | null;
+  assignedDocuments: ContentFile[];
   folders: ContentFolder[];
   metadataForm: UseFormReturn<MetadataFormValues>;
   revisions: ContentFileVersion[] | undefined;
@@ -61,6 +62,7 @@ type FileDetailsPanelProps = {
 
 export function FileDetailsPanel({
   file,
+  assignedDocuments,
   folders,
   metadataForm,
   revisions,
@@ -400,6 +402,53 @@ export function FileDetailsPanel({
               </form>
             </Form>
             <p className="status-line">Choose the destination folder above.</p>
+            {file.contentType.toLowerCase() === "text/css" && /\.css$/i.test(file.name) ? (
+              <section
+                className="stylesheet-assigned-documents"
+                aria-labelledby="stylesheet-assigned-documents-title"
+                data-testid="stylesheet-assigned-documents"
+              >
+                <div className="stylesheet-assigned-documents-heading">
+                  <div>
+                    <h3 id="stylesheet-assigned-documents-title">Assigned Documents</h3>
+                    <p>Markdown documents that use this stylesheet.</p>
+                  </div>
+                  <span
+                    className="count-pill"
+                    aria-label={`${assignedDocuments.length} ${assignedDocuments.length === 1 ? "document" : "documents"}`}
+                  >
+                    {assignedDocuments.length}
+                  </span>
+                </div>
+                {assignedDocuments.length ? (
+                  <ul className="stylesheet-assigned-document-list">
+                    {assignedDocuments.map((document) => (
+                      <li key={document.id}>
+                        <button
+                          className="stylesheet-assigned-document"
+                          type="button"
+                          aria-label={`Edit ${document.title}`}
+                          onClick={() => onEditText(document)}
+                          data-testid={`stylesheet-assigned-document-${document.id}`}
+                        >
+                          <FileText aria-hidden="true" />
+                          <span className="stylesheet-assigned-document-copy">
+                            <strong title={document.title}>{document.title}</strong>
+                            <small title={document.folderPath || "Root folder"}>
+                              {document.folderPath || "Root folder"}
+                            </small>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="stylesheet-assigned-document-empty" role="status">
+                    No Markdown documents currently use this stylesheet.
+                  </p>
+                )}
+              </section>
+            ) : null}
             <section
               className="revision-history"
               aria-labelledby="revision-history-title"

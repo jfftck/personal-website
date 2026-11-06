@@ -183,10 +183,18 @@ async function mockConsoleApi(page, treeHandler) {
   await page.route('**/api/content/**', async route => {
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
-    if (path === '/api/content/files/file-doc/content' || path === '/api/content/files/file-style/content') {
+    if (
+      path === '/api/content/files/file-doc/content'
+      || path === '/api/content/files/file-doc-two/content'
+      || path === '/api/content/files/file-style/content'
+    ) {
       return route.fulfill({
         contentType: 'text/plain',
-        body: path.endsWith('/file-style/content') ? 'p { color: navy; }' : '# Styled document',
+        body: path.endsWith('/file-style/content')
+          ? 'p { color: navy; }'
+          : path.endsWith('/file-doc-two/content')
+            ? '# Another document'
+            : '# Styled document',
       });
     }
     if (path === '/api/content/tree') {
@@ -507,6 +515,53 @@ test('Markdown documents can select a saved stylesheet or reset to the default',
   await expect.poll(() => requests.find(request => request.method === 'PATCH' && request.path.endsWith('/file-doc'))?.body.stylesheetId).toBeNull();
 });
 
+test('stylesheet details list assigned Markdown documents and open them', async ({ page }) => {
+  await mockConsoleApi(page);
+  await page.goto(adminUrl);
+  await page.getByTestId('file-row-file-style').click();
+
+  const assignedDocuments = page.getByTestId('stylesheet-assigned-documents');
+  await expect(assignedDocuments).toBeVisible();
+  await expect(assignedDocuments).toContainText('Assigned Documents');
+  await expect(assignedDocuments.locator('.count-pill')).toHaveAttribute('aria-label', '2 documents');
+  await expect(assignedDocuments).toContainText('Another document');
+  await expect(assignedDocuments).toContainText('Styled document');
+  await expect(page.getByTestId('stylesheet-assigned-document-file-doc-two')).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(assignedDocuments).toBeVisible();
+  await page.getByTestId('stylesheet-assigned-document-file-doc').click();
+  await expect(page.getByTestId('textarea-text-content')).toHaveValue('# Styled document');
+});
+
+test('unused stylesheet details explain that no documents are assigned', async ({ page }) => {
+  const unassignedFiles = files.map(file => ({ ...file, stylesheetId: null }));
+  await mockConsoleApi(page, route => fulfillJson(route, { folders, files: unassignedFiles }));
+  await page.goto(adminUrl);
+  await page.getByTestId('file-row-file-style').click();
+
+  await expect(page.getByTestId('stylesheet-assigned-documents').locator('.count-pill')).toHaveAttribute('aria-label', '0 documents');
+  await expect(page.getByTestId('stylesheet-assigned-documents')).toContainText('0');
+  await expect(page.getByText('No Markdown documents currently use this stylesheet.')).toBeVisible();
+});
+
+test('changing a document assignment updates the stylesheet assigned list', async ({ page }) => {
+  const { requests } = await mockConsoleApi(page);
+  await page.goto(adminUrl);
+  await page.getByTestId('file-row-file-style').click();
+  await expect(page.getByTestId('stylesheet-assigned-document-file-doc')).toBeVisible();
+
+  await page.getByTestId('stylesheet-assigned-document-file-doc').click();
+  await page.getByTestId('select-document-stylesheet').click();
+  await page.getByRole('option', { name: 'Default' }).click();
+  await page.getByTestId('save-text-file').click();
+  await expect.poll(() => requests.find(request => request.method === 'PATCH' && request.path.endsWith('/file-doc'))?.body.stylesheetId).toBeNull();
+
+  await page.getByTestId('file-row-file-style').click();
+  await expect(page.getByTestId('stylesheet-assigned-document-file-doc')).toHaveCount(0);
+  await expect(page.getByTestId('stylesheet-assigned-document-file-doc-two')).toBeVisible();
+});
+
 test('document editor can create a CSS stylesheet and assign it to the document', async ({ page }) => {
   const { requests } = await mockConsoleApi(page);
   await page.goto(adminUrl);
@@ -578,6 +633,9 @@ test('stylesheet editor previews unsaved CSS in isolated desktop and mobile fram
 test('deleting a stylesheet confirms affected documents and resets them to default', async ({ page }) => {
   await mockConsoleApi(page);
   await page.goto(adminUrl);
+  await page.getByTestId('file-row-file-style').click();
+  await expect(page.getByTestId('stylesheet-assigned-document-file-doc')).toBeVisible();
+  await expect(page.getByTestId('stylesheet-assigned-document-file-doc-two')).toBeVisible();
   await page.getByTestId('edit-text-file-style').click();
   await expect(page.getByTestId('textarea-stylesheet-content')).toBeVisible();
 
@@ -591,6 +649,9 @@ test('deleting a stylesheet confirms affected documents and resets them to defau
 
   await expect(page.getByTestId('file-row-file-style')).toHaveCount(0);
   await page.getByTestId('edit-text-file-doc').click();
+  await expect(page.getByTestId('select-document-stylesheet')).toContainText('Default');
+  await page.getByTestId('cancel-text-edit').click();
+  await page.getByTestId('edit-text-file-doc-two').click();
   await expect(page.getByTestId('select-document-stylesheet')).toContainText('Default');
 });
 

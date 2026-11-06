@@ -200,6 +200,20 @@
 .stat-value { display:block; overflow:hidden; margin-top:5px; font:11px var(--app-font-mono); text-overflow:ellipsis; white-space:nowrap; }
 .detail-actions { display:flex; flex-wrap:wrap; gap:8px; }
 .status-line { margin:13px 0 0; color:hsl(var(--muted-foreground)); font:10px var(--app-font-mono); }
+.stylesheet-assigned-documents { margin-top:22px; padding-top:18px; border-top:1px solid hsl(var(--border)); }
+.stylesheet-assigned-documents-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.stylesheet-assigned-documents-heading h3 { margin:0; font:500 18px 'Newsreader',serif; }
+.stylesheet-assigned-documents-heading p,.stylesheet-assigned-document-empty { margin:5px 0 0; color:hsl(var(--muted-foreground)); font-size:11px; line-height:1.5; }
+.stylesheet-assigned-document-list { display:grid; gap:7px; margin:12px 0 0; padding:0; list-style:none; }
+.stylesheet-assigned-document { width:100%; min-width:0; min-height:48px; display:flex; align-items:center; gap:10px; border:1px solid hsl(var(--border)); border-radius:9px; padding:8px 10px; background:hsl(var(--background)); color:hsl(var(--foreground)); cursor:pointer; text-align:left; font:inherit; }
+.stylesheet-assigned-document:hover { border-color:hsl(var(--primary) / .55); background:hsl(var(--primary) / .06); }
+.stylesheet-assigned-document:focus-visible { outline:2px solid hsl(var(--ring)); outline-offset:2px; }
+.stylesheet-assigned-document > svg { width:16px; height:16px; flex:none; color:hsl(var(--primary)); }
+.stylesheet-assigned-document-copy { display:block; min-width:0; flex:1; }
+.stylesheet-assigned-document-copy strong,.stylesheet-assigned-document-copy small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stylesheet-assigned-document-copy strong { font-size:12px; font-weight:600; }
+.stylesheet-assigned-document-copy small { margin-top:3px; color:hsl(var(--muted-foreground)); font:9px var(--app-font-mono); }
+.stylesheet-assigned-document-empty { margin-top:12px; padding:11px; border-radius:9px; background:hsl(var(--muted) / .35); }
 .revision-history { margin-top:22px; padding-top:18px; border-top:1px solid hsl(var(--border)); }
 .revision-history-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
 .revision-history-heading h3 { margin:0; font:500 18px 'Newsreader',serif; }

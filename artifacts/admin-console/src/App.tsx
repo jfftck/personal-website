@@ -315,6 +315,14 @@ function Console() {
     () => allFiles.filter(isStylesheetFile).sort((left, right) => left.title.localeCompare(right.title)),
     [allFiles],
   );
+  const stylesheetAssignedDocuments = useMemo(
+    () => selectedFile && isStylesheetFile(selectedFile)
+      ? allFiles
+        .filter((file) => file.stylesheetId === selectedFile.id && isMarkdownDocument(file))
+        .sort((left, right) => left.title.localeCompare(right.title))
+      : [],
+    [allFiles, selectedFile],
+  );
   const trash = trashQuery.data ?? [];
   const folderByPath = useMemo(() => new Map(folders.map((folder) => [folder.path, folder])), [folders]);
   const folderParentOptions = useMemo(
@@ -951,6 +959,7 @@ function Console() {
 
               <FileDetailsPanel
                 file={selectedFile}
+                assignedDocuments={stylesheetAssignedDocuments}
                 folders={folders}
                 metadataForm={metadataForm}
                 revisions={fileVersionsQuery.data}
