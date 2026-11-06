@@ -1,5 +1,6 @@
 - [Preview overlay compatibility](website-preservation.md) — template banners can cover the desktop launcher and intercept clicks.
 - [Preview routing checks](preview-routing.md) — verify the actual development domain before treating localhost:80 errors as broken artifact routes.
+- [Popover state synchronization](popover-state-synchronization.md) — custom select state should follow the popover’s current state, not delayed toggle events.
 - [Playwright browser runtime](playwright-runtime.md) — browser downloads may succeed while local Chromium remains incompatible with the Nix system libraries.
 - [Reminder behavior](reminder-behavior.md) — keep reminders page-open only; do not rely on background execution or a server.
 - [Calculator keyboard shortcuts](calculator-keyboard-shortcuts.md) — global shortcuts must leave native controls’ Enter and Space activation to the browser.

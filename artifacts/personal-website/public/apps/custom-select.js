@@ -404,8 +404,9 @@ export function enhanceSelect(select) {
       typeaheadSelect(event.key);
     }
   });
-  popup.addEventListener('toggle', event => {
-    if (hasPopover) setOpenState(event.newState === 'open');
+  popup.addEventListener('toggle', () => {
+    const shouldBeOpen = popup.matches(':popover-open');
+    if (hasPopover && isOpen !== shouldBeOpen) setOpenState(shouldBeOpen);
   });
   select.addEventListener('change', syncValue);
   select.addEventListener('input', syncValue);

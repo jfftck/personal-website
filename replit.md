@@ -6,7 +6,8 @@ Personal website with a tiling desktop, document and media viewers, and browser 
 
 - Start the managed `artifacts/personal-website: web` and `artifacts/api-server: API Server` workflows to preview the site.
 - `pnpm test` — original game and server unit tests
-- `pnpm test:browser` — original browser regression tests (uses `REPLIT_DEV_DOMAIN` by default)
+- `pnpm test:browser` — browser regression tests, including shared-control keyboard and responsive checks (uses `REPLIT_DEV_DOMAIN` by default)
+- `pnpm test:shared-controls` — focused shared-button, select, animation-picker, and responsive regressions
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec

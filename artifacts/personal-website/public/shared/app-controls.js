@@ -1,4 +1,6 @@
-class AppButton extends HTMLElement {
+const HTMLElementBase = globalThis.HTMLElement || class {};
+
+class AppButton extends HTMLElementBase {
   connectedCallback() {
     const button = this.querySelector(':scope > button');
     if (!button) return;
@@ -9,18 +11,18 @@ class AppButton extends HTMLElement {
   }
 }
 
-if (!customElements.get('app-button')) {
-  customElements.define('app-button', AppButton);
+if (globalThis.customElements && !globalThis.customElements.get('app-button')) {
+  globalThis.customElements.define('app-button', AppButton);
 }
 
 export function wrapAppButton(button, { size = 'standard', variant = 'standard' } = {}) {
-  if (!(button instanceof HTMLButtonElement)) {
+  if (!globalThis.HTMLButtonElement || !(button instanceof globalThis.HTMLButtonElement)) {
     throw new TypeError('app-button must wrap a native button.');
   }
 
   const parent = button.parentNode;
   const nextSibling = button.nextSibling;
-  const component = document.createElement('app-button');
+  const component = globalThis.document.createElement('app-button');
   component.setAttribute('size', size);
   component.setAttribute('variant', variant);
   component.append(button);
@@ -28,7 +30,7 @@ export function wrapAppButton(button, { size = 'standard', variant = 'standard' 
   return component;
 }
 
-class AppDialogActions extends HTMLElement {
+class AppDialogActions extends HTMLElementBase {
   connectedCallback() {
     if (this.dataset.cancelHandlerReady === 'true') return;
     this.dataset.cancelHandlerReady = 'true';
@@ -41,6 +43,6 @@ class AppDialogActions extends HTMLElement {
   }
 }
 
-if (!customElements.get('app-dialog-actions')) {
-  customElements.define('app-dialog-actions', AppDialogActions);
+if (globalThis.customElements && !globalThis.customElements.get('app-dialog-actions')) {
+  globalThis.customElements.define('app-dialog-actions', AppDialogActions);
 }
