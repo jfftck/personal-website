@@ -93,16 +93,28 @@ test(
     const createdTitle = `Created ${suffix}`;
     const createdFolderPath = `manifest-folder-created-${suffix}`;
     const renamedFolderPath = `manifest-folder-renamed-${suffix}`;
+    const moveParentPath = `manifest-move-parent-${suffix}`;
+    const movedFolderPath = `${moveParentPath}/${renamedFolderPath}`;
+    const collisionParentPath = `manifest-collision-parent-${suffix}`;
+    const collisionFolderPath = `${collisionParentPath}/${renamedFolderPath}`;
     const childFolderName = `manifest-child-${suffix}`;
     const createdChildFolderPath = `${createdFolderPath}/${childFolderName}`;
     const renamedChildFolderPath = `${renamedFolderPath}/${childFolderName}`;
+    const movedChildFolderPath = `${movedFolderPath}/${childFolderName}`;
+    const childStylesheetName = `manifest-child-style-${suffix}.css`;
+    const childDocumentName = `manifest-child-document-${suffix}.md`;
+    const childStylesheetSourceUrl = `https://example.test/${suffix}/${childStylesheetName}`;
+    const childDocumentSourceUrl = `https://example.test/${suffix}/${childDocumentName}`;
     let publishingFileId;
     let wallpaperFileId;
     let initialFileId;
     let createdFileId;
     let testFolderId;
+    let moveParentFolderId;
     let childFolderId;
     let childFileId;
+    let childStylesheetId;
+    let childDocumentId;
     let firstServer;
     let secondServer;
 
@@ -733,6 +745,27 @@ test(
           [childFileName, createdChildFolderPath, childFileSourceUrl],
         );
         childFileId = childFile.id;
+        const { rows: [stylesheet] } = await client.query(
+          `INSERT INTO content_files
+             (name, title, folder_path, content_date, content_type, size_bytes, is_published, source_url)
+           VALUES ($1, 'Child stylesheet', $2, '2026-10-31', 'text/css', 32, true, $3)
+           RETURNING id`,
+          [childStylesheetName, createdChildFolderPath, childStylesheetSourceUrl],
+        );
+        childStylesheetId = stylesheet.id;
+        const { rows: [document] } = await client.query(
+          `INSERT INTO content_files
+             (name, title, folder_path, content_date, content_type, size_bytes, is_published, source_url, stylesheet_id)
+           VALUES ($1, 'Child document', $2, '2026-10-31', 'text/markdown', 64, true, $3, $4)
+           RETURNING id`,
+          [
+            childDocumentName,
+            createdChildFolderPath,
+            childDocumentSourceUrl,
+            childStylesheetId,
+          ],
+        );
+        childDocumentId = document.id;
       });
       const createdChildManifest = await readManifest(
         secondServer.folderManifestUrl(createdChildFolderPath),
@@ -831,6 +864,197 @@ test(
         ),
         "the renamed child manifest should contain the published file at its new path",
       );
+      const createMoveParentResponse = await adminRequest(
+        firstServer,
+        "/content/folders",
+        {
+          method: "POST",
+          body: JSON.stringify({ name: moveParentPath, parentPath: "" }),
+        },
+      );
+      assert.equal(createMoveParentResponse.status, 201);
+      const moveParent = await createMoveParentResponse.json();
+      moveParentFolderId = moveParent.id;
+      const beforeMoveManifest = await readManifest(firstServer.manifestUrl);
+      const moveFolderResponse = await adminRequest(
+        firstServer,
+        `/content/folders/${testFolderId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ parentPath: moveParentPath }),
+        },
+      );
+      assert.equal(moveFolderResponse.status, 200);
+      const movedFolder = await moveFolderResponse.json();
+      assert.equal(movedFolder.path, movedFolderPath);
+      assert.equal(movedFolder.parentPath, moveParentPath);
+      adminTree = await readAdminTree(firstServer);
+      assert.ok(
+        adminTree.folders.some(
+          (folder) => folder.id === testFolderId && folder.path === movedFolderPath,
+        ),
+        "the admin tree should show the folder under its new parent",
+      );
+      assert.ok(
+        adminTree.folders.some(
+          (folder) => folder.id === childFolderId && folder.path === movedChildFolderPath,
+        ),
+        "descendant folders should retain their relative path after the move",
+      );
+      assert.equal(
+        adminTree.files.find((file) => file.id === childFileId)?.folderPath,
+        movedChildFolderPath,
+        "files should remain in their corresponding descendant folder",
+      );
+      publicRoot = await readManifest(
+        secondServer.manifestUrl,
+        beforeMoveManifest.response.headers.get("etag"),
+      );
+      assert.equal(publicRoot.response.status, 200);
+      assert.ok(
+        publicRoot.manifest.folders.some((folder) => folder.path === moveParentPath),
+        "the public root manifest should keep the new parent folder",
+      );
+      assert.ok(
+        !publicRoot.manifest.folders.some((folder) => folder.path === renamedFolderPath),
+        "the moved folder should no longer appear at the root",
+      );
+      const moveParentManifest = await readManifest(
+        secondServer.folderManifestUrl(moveParentPath),
+      );
+      assert.equal(moveParentManifest.response.status, 200);
+      assert.ok(
+        Array.isArray(moveParentManifest.manifest),
+        "the new parent folder should remain accessible through its public manifest",
+      );
+      assert.equal(
+        (await readManifest(secondServer.folderManifestUrl(movedFolderPath))).response.status,
+        200,
+        "the moved folder's new manifest path should be available",
+      );
+      assert.equal(
+        (await readManifest(secondServer.folderManifestUrl(renamedFolderPath))).response.status,
+        404,
+        "the former parent-level manifest path should no longer exist",
+      );
+      assert.equal(
+        (await readManifest(secondServer.folderManifestUrl(renamedChildFolderPath))).response.status,
+        404,
+        "the old descendant manifest path should no longer exist after moving the parent",
+      );
+      const movedChildManifest = await readManifest(
+        secondServer.folderManifestUrl(movedChildFolderPath),
+      );
+      assert.equal(movedChildManifest.response.status, 200);
+      const movedChildFileUrl = `/files/${[...movedFolderPath.split("/"), childFolderName, childFileName]
+        .map(encodeURIComponent)
+        .join("/")}`;
+      const movedStylesheetUrl = `/files/${[...movedFolderPath.split("/"), childFolderName, childStylesheetName]
+        .map(encodeURIComponent)
+        .join("/")}`;
+      assert.ok(
+        movedChildManifest.manifest.some(
+          (file) => file.filename === childFileName && file.url === movedChildFileUrl,
+        ),
+        "the descendant file should publish at its moved URL",
+      );
+      const movedDocument = movedChildManifest.manifest.find(
+        (file) => file.filename === childDocumentName,
+      );
+      assert.equal(movedDocument?.stylesheetUrl, movedStylesheetUrl);
+      assert.ok(
+        movedChildManifest.manifest.some(
+          (file) => file.filename === childStylesheetName && file.url === movedStylesheetUrl,
+        ),
+        "a stylesheet and its assigned document should keep their links after a folder move",
+      );
+
+      const cycleMoveResponse = await adminRequest(
+        firstServer,
+        `/content/folders/${testFolderId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ parentPath: movedChildFolderPath }),
+        },
+      );
+      assert.equal(cycleMoveResponse.status, 400);
+      assert.deepEqual(await cycleMoveResponse.json(), {
+        error: "A folder cannot be moved inside itself or one of its subfolders.",
+      });
+      const missingParentResponse = await adminRequest(
+        firstServer,
+        `/content/folders/${testFolderId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ parentPath: `missing-parent-${suffix}` }),
+        },
+      );
+      assert.equal(missingParentResponse.status, 404);
+      assert.deepEqual(await missingParentResponse.json(), {
+        error: "The destination folder no longer exists.",
+      });
+      const createCollisionParentResponse = await adminRequest(
+        firstServer,
+        "/content/folders",
+        {
+          method: "POST",
+          body: JSON.stringify({ name: collisionParentPath, parentPath: "" }),
+        },
+      );
+      assert.equal(createCollisionParentResponse.status, 201);
+      const collisionParent = await createCollisionParentResponse.json();
+      const createCollisionFolderResponse = await adminRequest(
+        firstServer,
+        "/content/folders",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: renamedFolderPath,
+            parentPath: collisionParentPath,
+          }),
+        },
+      );
+      assert.equal(createCollisionFolderResponse.status, 201);
+      const collisionFolder = await createCollisionFolderResponse.json();
+      const collisionMoveResponse = await adminRequest(
+        firstServer,
+        `/content/folders/${testFolderId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ parentPath: collisionParentPath }),
+        },
+      );
+      assert.equal(collisionMoveResponse.status, 409);
+      assert.deepEqual(await collisionMoveResponse.json(), {
+        error: "A folder with that name already exists in the destination.",
+      });
+      adminTree = await readAdminTree(firstServer);
+      assert.ok(
+        adminTree.folders.some(
+          (folder) => folder.id === testFolderId && folder.path === movedFolderPath,
+        ),
+        "a rejected name collision should not change the current path",
+      );
+      const deleteCollisionFolderResponse = await adminRequest(
+        firstServer,
+        `/content/folders/${collisionFolder.id}`,
+        { method: "DELETE" },
+      );
+      assert.equal(deleteCollisionFolderResponse.status, 204);
+      const deleteCollisionParentResponse = await adminRequest(
+        firstServer,
+        `/content/folders/${collisionParent.id}`,
+        { method: "DELETE" },
+      );
+      assert.equal(deleteCollisionParentResponse.status, 204);
+      adminTree = await readAdminTree(firstServer);
+      assert.ok(
+        adminTree.folders.some(
+          (folder) => folder.id === testFolderId && folder.path === movedFolderPath,
+        ),
+        "rejected moves should leave the folder at its valid existing path",
+      );
+
       const versionsResponse = await adminRequest(
         firstServer,
         `/content/files/${childFileId}/versions`,
@@ -852,13 +1076,13 @@ test(
       );
       assert.equal(restoreResponse.status, 200);
       const restoredChildFile = await restoreResponse.json();
-      assert.equal(restoredChildFile.folderPath, renamedChildFolderPath);
+      assert.equal(restoredChildFile.folderPath, movedChildFolderPath);
       assert.equal(
         restoredChildFile.url,
-        `/files/${encodeURIComponent(renamedFolderPath)}/${encodeURIComponent(childFolderName)}/${encodeURIComponent(childFileName)}`,
+        movedChildFileUrl,
       );
       const restoredChildManifest = await readManifest(
-        secondServer.folderManifestUrl(renamedChildFolderPath),
+        secondServer.folderManifestUrl(movedChildFolderPath),
       );
       assert.equal(restoredChildManifest.response.status, 200);
       assert.ok(
@@ -896,7 +1120,15 @@ test(
         await client.query("DELETE FROM content_files WHERE id = $1", [
           childFileId,
         ]);
+        await client.query("DELETE FROM content_files WHERE id = $1", [
+          childDocumentId,
+        ]);
+        await client.query("DELETE FROM content_files WHERE id = $1", [
+          childStylesheetId,
+        ]);
         childFileId = undefined;
+        childDocumentId = undefined;
+        childStylesheetId = undefined;
       });
       const deleteChildFolderResponse = await adminRequest(
         firstServer,
@@ -923,29 +1155,39 @@ test(
         secondServer.manifestUrl,
         beforeFolderManifest.response.headers.get("etag"),
       );
-      assert.equal(publicRoot.response.status, 200);
-      assert.ok(
-        !publicRoot.manifest.folders.some(
-          (folder) => folder.path === renamedFolderPath,
-        ),
-        "the second API instance should stop publishing the deleted folder",
-      );
       assert.equal(
-        (
-          await readManifest(
-            secondServer.manifestUrl,
-            publicRoot.response.headers.get("etag"),
-          )
-        ).response.status,
+        publicRoot.response.status,
         304,
+        "deleting a nested folder should not change the unchanged root manifest",
       );
       assert.equal(
         (
           await readManifest(
-            secondServer.folderManifestUrl(renamedFolderPath),
+            secondServer.folderManifestUrl(movedFolderPath),
           )
         ).response.status,
         404,
+      );
+      const remainingMoveParentManifest = await readManifest(
+        secondServer.folderManifestUrl(moveParentPath),
+      );
+      assert.equal(remainingMoveParentManifest.response.status, 200);
+      const deleteMoveParentResponse = await adminRequest(
+        firstServer,
+        `/content/folders/${moveParentFolderId}`,
+        { method: "DELETE" },
+      );
+      assert.equal(deleteMoveParentResponse.status, 204);
+      publicRoot = await readManifest(
+        secondServer.manifestUrl,
+        beforeFolderManifest.response.headers.get("etag"),
+      );
+      assert.equal(publicRoot.response.status, 200);
+      assert.ok(
+        !publicRoot.manifest.folders.some(
+          (folder) => folder.path === moveParentPath,
+        ),
+        "the second API instance should stop publishing the deleted destination folder",
       );
     } finally {
       await Promise.all([stopServer(firstServer), stopServer(secondServer)]);
@@ -984,12 +1226,27 @@ test(
             childFileId,
           ]);
         }
+        if (childDocumentId) {
+          await client.query("DELETE FROM content_files WHERE id = $1", [
+            childDocumentId,
+          ]);
+        }
+        if (childStylesheetId) {
+          await client.query("DELETE FROM content_files WHERE id = $1", [
+            childStylesheetId,
+          ]);
+        }
         await client.query("DELETE FROM content_folders WHERE path = $1", [
           destinationPath,
         ]);
         if (testFolderId) {
           await client.query("DELETE FROM content_folders WHERE id = $1", [
             testFolderId,
+          ]);
+        }
+        if (moveParentFolderId) {
+          await client.query("DELETE FROM content_folders WHERE id = $1", [
+            moveParentFolderId,
           ]);
         }
         await client.query(
@@ -1000,6 +1257,11 @@ test(
               renamedFolderPath,
               createdChildFolderPath,
               renamedChildFolderPath,
+              moveParentPath,
+              movedFolderPath,
+              movedChildFolderPath,
+              collisionParentPath,
+              collisionFolderPath,
             ],
           ],
         );

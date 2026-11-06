@@ -72,8 +72,8 @@ export function FolderNavigation({
               <button
                 className="mini-action"
                 type="button"
-                aria-label={`Rename ${folder.name}`}
-                title="Rename folder"
+                aria-label={`Move or rename ${folder.name}`}
+                title="Move or rename folder"
                 onClick={() => onRenameFolder(folder)}
                 data-testid={`rename-folder-${folder.id}`}
               >

@@ -90,7 +90,6 @@ async function getCachedPublicManifest(folderPath: string) {
         .from(contentFilesTable)
         .where(
           and(
-            eq(contentFilesTable.folderPath, "stylesheets"),
             isNull(contentFilesTable.deletedAt),
             eq(contentFilesTable.isPublished, true),
             eq(contentFilesTable.contentType, "text/css"),

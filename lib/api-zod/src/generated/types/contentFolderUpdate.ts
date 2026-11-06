@@ -12,4 +12,6 @@ export interface ContentFolderUpdate {
      * @maxLength 120
      */
   name?: string;
+  /** @maxLength 1000 */
+  parentPath?: string;
 }

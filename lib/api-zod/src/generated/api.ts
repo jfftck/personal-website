@@ -153,10 +153,13 @@ export const UpdateContentFolderParams = zod.object({
 
 export const updateContentFolderBodyNameMax = 120;
 
+export const updateContentFolderBodyParentPathMax = 1000;
+
 
 
 export const UpdateContentFolderBody = zod.object({
-  "name": zod.string().min(1).max(updateContentFolderBodyNameMax).optional()
+  "name": zod.string().min(1).max(updateContentFolderBodyNameMax).optional(),
+  "parentPath": zod.string().max(updateContentFolderBodyParentPathMax).optional()
 })
 
 export const UpdateContentFolderResponse = zod.object({

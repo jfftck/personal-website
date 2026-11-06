@@ -155,27 +155,24 @@ function isImageAsset(contentType: string, name: string): boolean {
   );
 }
 
-function isStylesheetFile(file: { folderPath: string; name: string; contentType: string }): boolean {
-  return file.folderPath === "stylesheets" &&
-    file.contentType.toLowerCase() === "text/css" &&
+function isStylesheetFile(file: { name: string; contentType: string }): boolean {
+  return file.contentType.toLowerCase() === "text/css" &&
     /\.css$/i.test(file.name);
 }
 
-function isDocumentFile(file: { folderPath: string; name: string; contentType: string }): boolean {
-  return /^(documents|posts)(\/|$)/.test(file.folderPath) &&
-    /\.(md|markdown)$/i.test(file.name) &&
+function isDocumentFile(file: { name: string; contentType: string }): boolean {
+  return /\.(md|markdown)$/i.test(file.name) &&
     /^text\/(markdown|plain)/i.test(file.contentType);
 }
 
 function validateStylesheetFile(
-  file: { folderPath: string; name: string; contentType: string; sizeBytes: number },
+  file: { name: string; contentType: string; sizeBytes: number },
 ): void {
   const looksLikeStylesheet =
-    file.folderPath === "stylesheets" ||
     file.contentType.toLowerCase().startsWith("text/css") ||
     /\.css$/i.test(file.name);
   if (looksLikeStylesheet && !isStylesheetFile(file)) {
-    throw new ContentError(400, "Stylesheets must be CSS files saved in the Stylesheets folder.");
+    throw new ContentError(400, "Stylesheets must be CSS files with a .css filename.");
   }
   if (isStylesheetFile(file) && file.sizeBytes > MAX_STYLESHEET_BYTES) {
     throw new ContentError(413, "Stylesheets must be 256 KB or smaller.");
@@ -192,7 +189,6 @@ async function getAvailableStylesheet(
     .where(
       and(
         eq(contentFilesTable.id, stylesheetId),
-        eq(contentFilesTable.folderPath, "stylesheets"),
         eq(contentFilesTable.contentType, "text/css"),
         eq(contentFilesTable.isPublished, true),
         isNull(contentFilesTable.deletedAt),
@@ -439,42 +435,69 @@ contentApiRouter.patch(
   apiHandler(async (req, res) => {
     const folderId = normalizeId(req.params.folderId);
     const input = UpdateContentFolderBody.parse(req.body);
-    const name = normalizeFolderName(input.name);
-    const [folder] = await db
-      .select()
-      .from(contentFoldersTable)
-      .where(eq(contentFoldersTable.id, folderId))
-      .limit(1);
-    if (!folder) throw new ContentError(404, "That folder could not be found.");
-
-    const newPath = folder.parentPath ? `${folder.parentPath}/${name}` : name;
-    if (newPath === folder.path) {
-      res.json(toContentFolder(folder));
-      return;
-    }
-    if (newPath.startsWith(`${folder.path}/`)) {
-      throw new ContentError(400, "A folder cannot be moved inside itself.");
-    }
-
     const updatedFolder = await withContentHistoryLock(() =>
       db.transaction(async (tx) => {
-      const [collision] = await tx
-        .select({ id: contentFoldersTable.id })
-        .from(contentFoldersTable)
-        .where(eq(contentFoldersTable.path, newPath))
-        .limit(1);
-      if (collision) throw new ContentError(409, "A folder with that name already exists.");
+        const [folder] = await tx
+          .select()
+          .from(contentFoldersTable)
+          .where(eq(contentFoldersTable.id, folderId))
+          .limit(1);
+        if (!folder) throw new ContentError(404, "That folder could not be found.");
 
-      const folders = await tx.select().from(contentFoldersTable);
-      const files = await tx.select().from(contentFilesTable);
-      const changedAt = new Date();
-      const changedFiles: Array<{
-        file: DbContentFile;
-        previous: DbContentFile;
-        action: "moved";
-      }> = [];
-      for (const child of folders) {
-        if (child.path === folder.path || child.path.startsWith(`${folder.path}/`)) {
+        const name = input.name === undefined ? folder.name : normalizeFolderName(input.name);
+        const parentPath = input.parentPath === undefined
+          ? folder.parentPath
+          : normalizeFolderPath(input.parentPath);
+        if (parentPath) {
+          const [parent] = await tx
+            .select({ id: contentFoldersTable.id })
+            .from(contentFoldersTable)
+            .where(eq(contentFoldersTable.path, parentPath))
+            .limit(1);
+          if (!parent) throw new ContentError(404, "The destination folder no longer exists.");
+        }
+        if (parentPath === folder.path || parentPath.startsWith(`${folder.path}/`)) {
+          throw new ContentError(400, "A folder cannot be moved inside itself or one of its subfolders.");
+        }
+
+        const newPath = parentPath ? `${parentPath}/${name}` : name;
+        if (newPath.length > 1000) {
+          throw new ContentError(400, "The destination folder path is too long.");
+        }
+        if (newPath === folder.path) return folder;
+
+        const folders = await tx.select().from(contentFoldersTable);
+        const files = await tx.select().from(contentFilesTable);
+        const movingFolders = folders.filter(
+          (child) => child.path === folder.path || child.path.startsWith(`${folder.path}/`),
+        );
+        const movingFiles = files.filter(
+          (file) => file.folderPath === folder.path || file.folderPath.startsWith(`${folder.path}/`),
+        );
+        const movingFolderIds = new Set(movingFolders.map((child) => child.id));
+        const occupiedPaths = new Set(
+          folders.filter((child) => !movingFolderIds.has(child.id)).map((child) => child.path),
+        );
+        const nextFolderPaths = movingFolders.map(
+          (child) => `${newPath}${child.path.slice(folder.path.length)}`,
+        );
+        const nextFilePaths = movingFiles.map(
+          (file) => `${newPath}${file.folderPath.slice(folder.path.length)}`,
+        );
+        if ([...nextFolderPaths, ...nextFilePaths].some((path) => path.length > 1000)) {
+          throw new ContentError(400, "The destination folder path is too long.");
+        }
+        if (nextFolderPaths.some((path) => occupiedPaths.has(path))) {
+          throw new ContentError(409, "A folder with that name already exists in the destination.");
+        }
+
+        const changedAt = new Date();
+        const changedFiles: Array<{
+          file: DbContentFile;
+          previous: DbContentFile;
+          action: "moved";
+        }> = [];
+        for (const child of movingFolders) {
           const suffix = child.path.slice(folder.path.length);
           const nextPath = `${newPath}${suffix}`;
           const nextParent = nextPath.includes("/")
@@ -482,12 +505,15 @@ contentApiRouter.patch(
             : "";
           await tx
             .update(contentFoldersTable)
-            .set({ name: child.path === folder.path ? name : child.name, path: nextPath, parentPath: nextParent })
+            .set({
+              name: child.path === folder.path ? name : child.name,
+              path: nextPath,
+              parentPath: nextParent,
+            })
             .where(eq(contentFoldersTable.id, child.id));
         }
-      }
-      for (const file of files) {
-        if (file.folderPath === folder.path || file.folderPath.startsWith(`${folder.path}/`)) {
+
+        for (const file of movingFiles) {
           const suffix = file.folderPath.slice(folder.path.length);
           const updatedFile = {
             ...file,
@@ -500,15 +526,14 @@ contentApiRouter.patch(
             .where(eq(contentFilesTable.id, file.id));
           changedFiles.push({ file: updatedFile, previous: file, action: "moved" });
         }
-      }
-      await recordFileHistory(tx, changedFiles);
-      await invalidatePublicManifestCache(tx);
-      const [updated] = await tx
-        .select()
-        .from(contentFoldersTable)
-        .where(eq(contentFoldersTable.id, folderId))
-        .limit(1);
-      return updated;
+        await recordFileHistory(tx, changedFiles);
+        await invalidatePublicManifestCache(tx);
+        const [updated] = await tx
+          .select()
+          .from(contentFoldersTable)
+          .where(eq(contentFoldersTable.id, folderId))
+          .limit(1);
+        return updated;
       }),
     );
     res.json(toContentFolder(updatedFolder));
@@ -597,8 +622,8 @@ contentApiRouter.post(
         (contentType.toLowerCase().startsWith("text/markdown") ? ".md" : ".bin");
       const name = normalizeFileName(standardFileName(title, date, extension));
       const stylesheetId = input.stylesheetId ?? null;
-      validateStylesheetFile({ folderPath, name, contentType, sizeBytes });
-      if (stylesheetId && !isDocumentFile({ folderPath, name, contentType })) {
+      validateStylesheetFile({ name, contentType, sizeBytes });
+      if (stylesheetId && !isDocumentFile({ name, contentType })) {
         throw new ContentError(400, "Only Markdown documents can use a stylesheet.");
       }
       if (input.isWallpaper && !isImageAsset(contentType, name)) {

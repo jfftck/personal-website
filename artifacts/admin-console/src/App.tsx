@@ -47,12 +47,11 @@ const CREATE_STYLESHEET_OPTION = '__create_stylesheet__';
 const MAX_STYLESHEET_BYTES = 256_000;
 
 function isStylesheetFile(file: ContentFile) {
-  return file.folderPath === 'stylesheets' && file.contentType.toLowerCase() === 'text/css' && /\.css$/i.test(file.name);
+  return file.contentType.toLowerCase() === 'text/css' && /\.css$/i.test(file.name);
 }
 
 function isMarkdownDocument(file: ContentFile) {
-  return /^(documents|posts)(\/|$)/.test(file.folderPath) &&
-    /\.(md|markdown)$/i.test(file.name) &&
+  return /\.(md|markdown)$/i.test(file.name) &&
     /^text\/(markdown|plain)/i.test(file.contentType);
 }
 
@@ -66,7 +65,7 @@ function savedThemeOverride(): ThemeOverride {
   return (saved === 'dark') === systemPrefersDark() ? null : saved;
 }
 
-type FolderFormValues = { name: string };
+type FolderFormValues = { name: string; parentPath: string };
 type UploadFormValues = { title: string; description: string; date: string; folderPath: string; isWallpaper: boolean };
 type MetadataFormValues = { title: string; description: string; date: string; folderPath: string; isWallpaper: boolean };
 type ContentTreeData = { folders: ContentFolder[]; files: ContentFile[] };
@@ -120,7 +119,6 @@ function Console() {
   const [selectedFile, setSelectedFile] = useState<ContentFile | null>(null);
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState<'folder' | 'upload' | null>(null);
-  const [folderParent, setFolderParent] = useState('');
   const [editingFolder, setEditingFolder] = useState<ContentFolder | null>(null);
   const [folderModalReturnTo, setFolderModalReturnTo] = useState<'upload' | 'edit' | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -161,7 +159,7 @@ function Console() {
   const deleteFile = useDeleteContentFile();
   const restoreFile = useRestoreContentFile();
   const restoreFileVersion = useRestoreContentFileVersion();
-  const folderForm = useForm<FolderFormValues>({ defaultValues: { name: '' } });
+  const folderForm = useForm<FolderFormValues>({ defaultValues: { name: '', parentPath: '' } });
   const uploadForm = useForm<UploadFormValues>({
     defaultValues: { title: '', description: '', date: UPLOAD_TODAY, folderPath: '', isWallpaper: false },
   });
@@ -254,7 +252,15 @@ function Console() {
   );
   const trash = trashQuery.data ?? [];
   const folderByPath = useMemo(() => new Map(folders.map((folder) => [folder.path, folder])), [folders]);
+  const folderParentOptions = useMemo(
+    () => folders
+      .filter((folder) => !editingFolder ||
+        (folder.path !== editingFolder.path && !folder.path.startsWith(`${editingFolder.path}/`)))
+      .sort((left, right) => left.path.localeCompare(right.path)),
+    [folders, editingFolder],
+  );
   const selectedFolderLabel = selectedFolder ? folderByPath.get(selectedFolder)?.name ?? selectedFolder : 'All files';
+  const folderParent = folderForm.watch('parentPath') ?? '';
   const uploadTitle = uploadForm.watch('title') ?? '';
   const uploadDate = uploadForm.watch('date') ?? '';
   const uploadDestination = uploadForm.watch('folderPath') ?? '';
@@ -280,9 +286,8 @@ function Console() {
 
   const openFolderModal = (parent: string, folder?: ContentFolder) => {
     setFolderModalReturnTo(null);
-    setFolderParent(parent);
     setEditingFolder(folder ?? null);
-    folderForm.reset({ name: folder?.name ?? '' });
+    folderForm.reset({ name: folder?.name ?? '', parentPath: folder?.parentPath ?? parent });
     setModal('folder');
   };
 
@@ -293,28 +298,33 @@ function Console() {
 
   const openFolderModalForUpload = () => {
     setFolderModalReturnTo('upload');
-    setFolderParent(uploadDestination);
     setEditingFolder(null);
-    folderForm.reset({ name: '' });
+    folderForm.reset({ name: '', parentPath: uploadDestination });
     setModal('folder');
   };
 
   const openFolderModalForEdit = () => {
     setFolderModalReturnTo('edit');
-    setFolderParent(metadataForm.getValues('folderPath'));
     setEditingFolder(null);
-    folderForm.reset({ name: '' });
+    folderForm.reset({ name: '', parentPath: metadataForm.getValues('folderPath') });
     setModal('folder');
   };
 
   const saveFolder = async (values: FolderFormValues) => {
     const name = values.name.trim();
     if (!name) return;
+    const parentPath = values.parentPath || '';
     try {
       let updated: ContentFolder | undefined;
       let created: ContentFolder | undefined;
-      if (editingFolder) updated = await updateFolder.mutateAsync({ folderId: editingFolder.id, data: { name } });
-      else created = await createFolder.mutateAsync({ data: { name, parentPath: folderParent } });
+      if (editingFolder) {
+        updated = await updateFolder.mutateAsync({
+          folderId: editingFolder.id,
+          data: { name, parentPath },
+        });
+      } else {
+        created = await createFolder.mutateAsync({ data: { name, parentPath } });
+      }
       if (editingFolder && updated && updated.path !== editingFolder.path) {
         const oldPath = editingFolder.path;
         const newPath = updated.path;
@@ -335,7 +345,17 @@ function Console() {
           folders: [...tree.folders.filter((folder) => folder.id !== created!.id), created!],
         }));
       }
-      setToastMessage(editingFolder ? 'Folder renamed.' : 'Folder created.');
+      if (editingFolder && updated) {
+        const moved = updated.parentPath !== editingFolder.parentPath;
+        const renamed = updated.name !== editingFolder.name;
+        setToastMessage(
+          moved && renamed ? 'Folder moved and renamed.' :
+            moved ? 'Folder moved.' :
+              renamed ? 'Folder renamed.' : 'Folder saved.',
+        );
+      } else {
+        setToastMessage('Folder created.');
+      }
       if (created && folderModalReturnTo === 'upload') {
         uploadForm.setValue('folderPath', created.path, { shouldDirty: true });
         setModal('upload');
@@ -347,7 +367,9 @@ function Console() {
       }
       setFolderModalReturnTo(null);
     } catch (error) {
-      folderForm.setError('name', { type: 'server', message: errorMessage(error) });
+      const message = errorMessage(error);
+      const field = /destination folder|moved inside/i.test(message) ? 'parentPath' : 'name';
+      folderForm.setError(field, { type: 'server', message });
     }
   };
 
@@ -1046,7 +1068,7 @@ function Console() {
         <div className="overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeFolderModal(); }}>
           <Form {...folderForm}>
           <form className="dialog" onSubmit={folderForm.handleSubmit(saveFolder)} aria-labelledby="folder-dialog-title">
-            <div className="dialog-head"><div><h2 id="folder-dialog-title">{editingFolder ? 'Rename folder' : 'Create folder'}</h2><p>{editingFolder ? editingFolder.path : folderParent ? `Inside ${folderParent}` : 'At the top level of your library'}</p></div><button className="mini-action" type="button" aria-label="Close dialog" onClick={closeFolderModal} data-testid="close-folder-dialog"><X /></button></div>
+            <div className="dialog-head"><div><h2 id="folder-dialog-title">{editingFolder ? 'Move or rename folder' : 'Create folder'}</h2><p>{editingFolder ? editingFolder.path : folderParent ? `Inside ${folderParent}` : 'At the top level of your library'}</p></div><button className="mini-action" type="button" aria-label="Close dialog" onClick={closeFolderModal} data-testid="close-folder-dialog"><X /></button></div>
             <FormField control={folderForm.control} name="name" rules={{ required: 'Enter a folder name.' }} render={({ field }) => (
               <FormItem>
                 <FormLabel className="field-label">Folder name</FormLabel>
@@ -1054,7 +1076,32 @@ function Console() {
                 <FormMessage role="alert" data-testid="error-folder-name" />
               </FormItem>
             )} />
-            <div className="dialog-footer"><button className="button button-quiet" type="button" onClick={closeFolderModal} data-testid="cancel-folder">Cancel</button><button className="button button-primary" type="submit" disabled={!folderForm.watch('name')?.trim() || createFolder.isPending || updateFolder.isPending} data-testid="save-folder">{editingFolder ? 'Save Name' : 'Create Folder'}</button></div>
+            <FormField control={folderForm.control} name="parentPath" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="field-label">{editingFolder ? 'Move to parent folder' : 'Parent folder'}</FormLabel>
+                <Select
+                  value={field.value || ROOT_FOLDER_OPTION}
+                  onValueChange={(value) => {
+                    field.onChange(value === ROOT_FOLDER_OPTION ? '' : value);
+                    folderForm.clearErrors('parentPath');
+                  }}
+                >
+                  <FormControl>
+                    <SelectTrigger className="field-control" data-testid="select-folder-parent" aria-label="Parent folder">
+                      <SelectValue placeholder="Choose a parent folder" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value={ROOT_FOLDER_OPTION}>Root folder</SelectItem>
+                    {folderParentOptions.map((folder) => (
+                      <SelectItem key={folder.id} value={folder.path}>{folder.path}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage role="alert" data-testid="error-folder-parent" />
+              </FormItem>
+            )} />
+            <div className="dialog-footer"><button className="button button-quiet" type="button" onClick={closeFolderModal} data-testid="cancel-folder">Cancel</button><button className="button button-primary" type="submit" disabled={!folderForm.watch('name')?.trim() || createFolder.isPending || updateFolder.isPending} data-testid="save-folder">{editingFolder ? 'Save Changes' : 'Create Folder'}</button></div>
           </form>
           </Form>
         </div>

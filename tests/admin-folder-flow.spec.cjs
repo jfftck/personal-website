@@ -68,6 +68,7 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
   const createdPath = `admin-folder-created-${suffix}`;
   const correctedPath = `admin-folder-corrected-${suffix}`;
   const renamedPath = `admin-folder-renamed-${suffix}`;
+  const movedPath = `${correctedPath}/${renamedPath}`;
   const ownerUsername = process.env.REPL_OWNER || `owner-${suffix}`;
   const sessionId = randomUUID();
   const requireFromDatabasePackage = createRequire(resolve(rootDir, 'lib/db/src/index.ts'));
@@ -251,6 +252,45 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
     childFolderId = (await childCreateResponse.json()).id;
     await expect(page.getByTestId(`select-folder-${childFolderId}`)).toHaveText(childPath);
 
+    const beforeMove = await readManifest(`${apiBaseUrl}/files/manifest.json`);
+    const moveResponsePromise = page.waitForResponse(response =>
+      response.url().includes(`/api/content/folders/${folderId}`) &&
+      response.request().method() === 'PATCH',
+    );
+    await page.getByTestId(`rename-folder-${folderId}`).click();
+    await page.getByTestId('select-folder-parent').click();
+    await page.getByRole('option', { name: correctedPath }).click();
+    await page.getByTestId('save-folder').click();
+    const moveResponse = await moveResponsePromise;
+    expect(moveResponse.status()).toBe(200);
+    expect((await moveResponse.json()).path).toBe(movedPath);
+    await expect(page.getByTestId(`select-folder-${folderId}`)).toHaveText(renamedPath);
+    await expect(page.getByTestId(`select-folder-${childFolderId}`)).toHaveText(childPath);
+    const movedTreeResponse = await fetch(`${apiBaseUrl}/api/content/tree`, {
+      headers: { Cookie: `sid=${sessionId}` },
+    });
+    expect(movedTreeResponse.status).toBe(200);
+    const movedTree = await movedTreeResponse.json();
+    expect(movedTree.folders.find(folder => folder.id === folderId).parentPath).toBe(correctedPath);
+    expect(movedTree.folders.find(folder => folder.id === childFolderId).path).toBe(`${movedPath}/${childPath}`);
+    let movedPublicRoot = await readManifest(
+      `${secondApiBaseUrl}/files/manifest.json`,
+      beforeMove.response.headers.get('etag'),
+    );
+    expect(movedPublicRoot.response.status).toBe(200);
+    expect(movedPublicRoot.manifest.folders.some(folder => folder.path === renamedPath)).toBe(false);
+    const correctedFolderManifest = await readManifest(
+      `${secondApiBaseUrl}/files/${encodeURIComponent(correctedPath)}/manifest.json`,
+    );
+    expect(correctedFolderManifest.response.status).toBe(200);
+    expect(Array.isArray(correctedFolderManifest.manifest)).toBe(true);
+    expect((await readManifest(
+      `${secondApiBaseUrl}/files/${encodeURIComponent(movedPath)}/manifest.json`,
+    )).response.status).toBe(200);
+    expect((await readManifest(
+      `${secondApiBaseUrl}/files/${encodeURIComponent(renamedPath)}/manifest.json`,
+    )).response.status).toBe(404);
+
     const beforeDelete = await readManifest(`${apiBaseUrl}/files/manifest.json`);
     page.once('dialog', dialog => dialog.accept());
     const deleteResponsePromise = page.waitForResponse(response =>
@@ -290,13 +330,17 @@ test('signed-in admin folder changes refresh the tree and public manifest', asyn
       beforeDelete.response.headers.get('etag'),
     );
     expect(publicRoot.response.status).toBe(200);
-    expect(publicRoot.manifest.folders.some(folder => folder.path === renamedPath)).toBe(false);
+    const updatedCorrectedManifest = await readManifest(
+      `${secondApiBaseUrl}/files/${encodeURIComponent(correctedPath)}/manifest.json`,
+    );
+    expect(updatedCorrectedManifest.response.status).toBe(200);
+    expect(updatedCorrectedManifest.manifest).toHaveLength(0);
     expect((await readManifest(
       `${secondApiBaseUrl}/files/manifest.json`,
       publicRoot.response.headers.get('etag'),
     )).response.status).toBe(304);
     expect((await readManifest(
-      `${secondApiBaseUrl}/files/${encodeURIComponent(renamedPath)}/manifest.json`,
+      `${secondApiBaseUrl}/files/${encodeURIComponent(movedPath)}/manifest.json`,
     )).response.status).toBe(404);
   } finally {
     if (childFolderId) {
