@@ -16,6 +16,25 @@ async function openGame(page, game) {
   return page.locator(`.app-window[data-type="${game}"]`).last();
 }
 
+async function openTouchGame(page, game) {
+  await page.locator('#app-menu-btn').tap();
+  await page.locator('#game-center-entry').tap();
+  await page.locator(`[data-game="${game}"]`).tap();
+  return page.locator(`.app-window[data-type="${game}"]`).last();
+}
+
+async function setTouchGameOption(page, app, label, value) {
+  await app.getByRole('button', { name: 'Settings', exact: true }).tap();
+  const dialog = app.locator('.game-settings-dialog');
+  const trigger = dialog.getByRole('combobox', { name: label, exact: true });
+  await trigger.tap();
+  const popupId = await trigger.getAttribute('aria-controls');
+  await page.locator(`[id="${popupId}"] [role="option"][data-value="${value}"]`).tap();
+  if (await dialog.isVisible()) {
+    await dialog.getByRole('button', { name: 'Close settings' }).tap();
+  }
+}
+
 async function openSettings(app) {
   await app.getByRole('button', { name: 'Settings', exact: true }).click();
   return app.locator('.game-settings-dialog');
@@ -2653,6 +2672,39 @@ test.describe('Minesweeper touch flag mode', () => {
     await revealCell.tap();
     await expect(revealCell).toHaveClass(/revealed/);
     await expect(revealCell).not.toHaveClass(/flagged/);
+  });
+});
+
+test.describe('Chess and Reversi touch moves', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test('touch selects a legal Chess piece and moves it to its destination', async ({ page }) => {
+    const app = await openTouchGame(page, 'chess');
+    await setTouchGameOption(page, app, 'Opponent', 'local');
+
+    const source = app.locator('[data-square="e2"]');
+    const destination = app.locator('[data-square="e4"]');
+    await source.tap();
+    await expect(source).toHaveClass(/selected/);
+    await expect(destination).toHaveClass(/legal/);
+
+    await destination.tap();
+    await expect(destination).toHaveAttribute('aria-label', /White Pawn/);
+    await expect(source).toHaveAttribute('aria-label', /empty/);
+    await expect(app.locator('.game-status')).toContainText('Black to move');
+  });
+
+  test('touch places a Reversi disc in a legal empty square', async ({ page }) => {
+    const app = await openTouchGame(page, 'reversi');
+    await setTouchGameOption(page, app, 'Opponent', 'local');
+
+    const destination = app.locator('[data-square="d6"]');
+    await expect(destination).toHaveClass(/legal/);
+    await destination.tap();
+
+    await expect(destination.locator('.disc')).toHaveClass(/black/);
+    await expect(app.locator('.disc')).toHaveCount(5);
+    await expect(app.locator('.game-status')).toContainText('White to move');
   });
 });
 
