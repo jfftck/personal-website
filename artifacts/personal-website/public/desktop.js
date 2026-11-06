@@ -9,6 +9,7 @@ import {
   readJSON, readRaw, readRawResult, removeData, restoreDataBackup, writeJSON, writeRaw,
 } from './data-handler.js';
 import { createWindowController, SESSION_KEY, SESSION_KEY_V1 } from './window-controller.js';
+import { createWindowShortcutRouter } from './window-shortcut-router.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -1196,14 +1197,6 @@ function focusApp(id) {
   return windowController.focusApp(id);
 }
 
-function getFocusableControls(container) {
-  return windowController.getFocusableControls(container);
-}
-
-function focusWindowInDirection(direction) {
-  return windowController.focusWindowInDirection(direction);
-}
-
 function scrollToApp(id) {
   return windowController.scrollToApp(id);
 }
@@ -1211,39 +1204,6 @@ function scrollToApp(id) {
 // ── Width presets ─────────────────────────────────────────────
 function setFocusedWidth(preset) {
   return windowController.setFocusedWidth(preset);
-}
-
-function cycleFocusedWidthWider() {
-  return windowController.cycleFocusedWidthWider();
-}
-
-function cycleFocusedWidthNarrower() {
-  return windowController.cycleFocusedWidthNarrower();
-}
-
-// ── Consume / Expel ───────────────────────────────────────────
-function consumeLeft() {
-  return windowController.consumeLeft();
-}
-
-function expelRight() {
-  return windowController.expelRight();
-}
-
-function expelLeft() {
-  return windowController.expelLeft();
-}
-
-function consumeRight() {
-  return windowController.consumeRight();
-}
-
-function moveWindowUp() {
-  return windowController.moveWindowUp();
-}
-
-function moveWindowDown() {
-  return windowController.moveWindowDown();
 }
 
 // ── Top-bar rendering ─────────────────────────────────────────
@@ -1379,10 +1339,6 @@ function focusNextApp() {
 
 function focusPrevApp() {
   return windowController.focusPrevApp();
-}
-
-function focusAppByIndex(n) {
-  return windowController.focusAppByIndex(n);
 }
 
 // ── App menu ──────────────────────────────────────────────────
@@ -2611,94 +2567,24 @@ document.addEventListener('click', e => {
   }
 });
 
-document.addEventListener('keydown', e => {
-  const menuOpen  = !appMenu.hasAttribute('hidden');
-  const helpOpen  = !helpOverlay.hasAttribute('hidden');
-  const inContent = e.target.closest('.app-content');
-  const isTyping  = ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName) || e.target.isContentEditable;
-  const inputType = e.target.tagName === 'INPUT' ? e.target.type : '';
-  const isTextEntry = e.target.isContentEditable
-    || e.target.tagName === 'TEXTAREA'
-    || e.target.tagName === 'SELECT'
-    || (e.target.tagName === 'INPUT' && !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(inputType));
-
-  if (e.key === 'Tab') {
-    const appWindow = e.target.closest('.app-window');
-    const focusScope = e.target.closest('dialog[open], [role="dialog"]')
-      || (appWindow?.dataset.id === S.focusedId ? appWindow : null);
-    const controls = getFocusableControls(focusScope);
-    if (controls.length) {
-      const first = controls[0];
-      const last = controls[controls.length - 1];
-      if (e.shiftKey && (document.activeElement === first || document.activeElement === focusScope)) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-    return;
-  }
-
-  if (e.key === 'Escape') {
-    if (!systemPanel.hidden) { closeSystemPanel(); systemTimeBtn.focus(); return; }
-    if (helpOpen) { closeHelp(); appMenuBtn.focus(); return; }
-    if (menuOpen) { closeAppMenu(); appMenuBtn.focus(); return; }
-    if (document.getElementById('win-menu-open')) { closeWinMenu(); return; }
-    if (document.body.classList.contains('mod-overview')) { exitOverview(); return; }
-    return;
-  }
-
-  if (e.key === '?' && !isTyping && !menuOpen) { e.preventDefault(); toggleHelp(); return; }
-
-  const directionByKey = {
-    arrowleft: 'left',
-    arrowright: 'right',
-    arrowup: 'up',
-    arrowdown: 'down',
-    h: 'left',
-    l: 'right',
-    k: 'up',
-    j: 'down',
-  };
-  const windowDirection = directionByKey[e.key.toLowerCase()];
-  if (e.ctrlKey && windowDirection && !isTextEntry && !helpOpen && !menuOpen
-    && systemPanel.hidden && !document.getElementById('win-menu-open')
-    && !e.target.closest('[role="dialog"], dialog[open]')) {
-    e.preventDefault();
-    focusWindowInDirection(windowDirection);
-    return;
-  }
-
-  if ((e.key === '[' || e.key === ']') && !isTyping && !helpOpen && !menuOpen) {
-    e.preventDefault();
-    const focusedCol  = S.focusedId ? getAppColumn(S.focusedId) : null;
-    const inSharedCol = focusedCol && focusedCol.appIds.length > 1;
-    if (e.key === '[') { inSharedCol ? expelLeft()  : consumeLeft();  }
-    else               { inSharedCol ? expelRight() : consumeRight(); }
-    return;
-  }
-
-  if (helpOpen || menuOpen || isTyping) return;
-
-  if ((e.metaKey || e.ctrlKey) && e.key === 'd') { e.preventDefault(); openAppMenu(); return; }
-  if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '9') {
-    e.preventDefault(); focusAppByIndex(parseInt(e.key, 10)); return;
-  }
-  if ((e.metaKey || e.ctrlKey) && e.key === '<') { e.preventDefault(); cycleFocusedWidthNarrower(); return; }
-  if ((e.metaKey || e.ctrlKey) && e.key === '>') { e.preventDefault(); cycleFocusedWidthWider();    return; }
-
-  if (!inContent) {
-    if (e.key === 'ArrowLeft')  { e.preventDefault(); focusPrevApp(); return; }
-    if (e.key === 'ArrowRight') { e.preventDefault(); focusNextApp(); return; }
-    const focusedCol  = S.focusedId ? getAppColumn(S.focusedId) : null;
-    const inSharedCol = focusedCol && focusedCol.appIds.length > 1;
-    if (inSharedCol && e.key === 'ArrowUp')   { e.preventDefault(); moveWindowUp();   return; }
-    if (inSharedCol && e.key === 'ArrowDown') { e.preventDefault(); moveWindowDown(); return; }
-  }
-
+const windowShortcutRouter = createWindowShortcutRouter({
+  document,
+  state: S,
+  windowController,
+  appMenu,
+  helpOverlay,
+  systemPanel,
+  systemTimeButton: systemTimeBtn,
+  appMenuButton: appMenuBtn,
+  closeSystemPanel,
+  closeHelp,
+  closeAppMenu,
+  closeWinMenu,
+  openAppMenu,
+  toggleHelp,
+  exitOverview,
 });
+document.addEventListener('keydown', windowShortcutRouter.handleKeyDown);
 
 helpCloseBtn.addEventListener('click', () => closeHelp());
 helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) closeHelp(); });

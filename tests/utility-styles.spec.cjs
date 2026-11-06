@@ -1108,7 +1108,7 @@ test('top bar tinting follows or overrides the window theme and exposes role-spe
   expect(customTopbarColors.foreground).toContain('oklch(');
 });
 
-test('Tab wraps through the focused window and Ctrl arrows or Vim keys move between windows', async ({ page }) => {
+test('Ctrl arrows or Vim keys move between windows', async ({ page }) => {
   const settings = await openUtility(page, 'settings');
   await expect(settings.locator('.settings-layout')).toBeVisible();
   const calculator = await openUtility(page, 'calculator');
@@ -1142,38 +1142,22 @@ test('Tab wraps through the focused window and Ctrl arrows or Vim keys move betw
 
   await page.keyboard.press(`Control+${reverseVimKey}`);
   await expect(page.locator('.app-window.focused')).toHaveAttribute('data-type', 'calculator');
+});
 
-  await page.evaluate(() => {
-    const app = document.querySelector('.app-window.focused');
-    const controls = [...app.querySelectorAll(
-      'a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]',
-    )].filter(element => !element.closest('[hidden], [inert], [aria-hidden="true"]')
-      && getComputedStyle(element).visibility !== 'hidden'
-      && element.getClientRects().length > 0);
-    controls.at(-1)?.focus();
-  });
-  await page.keyboard.press('Tab');
-  const tabForwardResult = await page.evaluate(() => {
-    const app = document.querySelector('.app-window.focused');
-    const controls = [...app.querySelectorAll(
-      'a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]',
-    )].filter(element => !element.closest('[hidden], [inert], [aria-hidden="true"]')
-      && getComputedStyle(element).visibility !== 'hidden'
-      && element.getClientRects().length > 0);
-    return { inApp: app.contains(document.activeElement), first: controls[0] === document.activeElement };
-  });
-  expect(tabForwardResult).toEqual({ inApp: true, first: true });
-  await page.keyboard.press('Shift+Tab');
-  await expect.poll(() => page.evaluate(() => {
-    const app = document.querySelector('.app-window.focused');
-    const controls = [...app.querySelectorAll(
-      'a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]',
-    )].filter(element => !element.closest('[hidden], [inert], [aria-hidden="true"]')
-      && getComputedStyle(element).visibility !== 'hidden'
-      && element.getClientRects().length > 0);
-    return controls.at(-1) === document.activeElement;
-  })).toBe(true);
-  await expect(page.locator('.app-window.focused')).toHaveAttribute('data-type', 'calculator');
+test('desktop window shortcuts do not interfere with calculator expression editing', async ({ page }) => {
+  await openUtility(page, 'settings');
+  const calculator = await openUtility(page, 'calculator');
+  const expression = calculator.locator('.calc-expression');
+  await expression.fill('12+3');
+  await expression.focus();
+
+  await page.keyboard.press('Control+ArrowLeft');
+  await expect(calculator).toHaveClass(/focused/);
+  await expect(expression).toBeFocused();
+  await page.keyboard.press('[');
+  await expect(page.locator('.app-col')).toHaveCount(2);
+  await page.keyboard.press('Control+Shift+Comma');
+  await expect(page.locator('.app-col').last()).toHaveAttribute('data-width', 'full');
 });
 
 test('version-two tint settings keep their light tint and use the new dark default', async ({ page }) => {

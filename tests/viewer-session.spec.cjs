@@ -11,6 +11,7 @@ const pictures = [
   { filename: '20261002_Two.svg', url: '/pictures/session-two.svg' },
   { filename: '20261003_Three.svg', url: '/pictures/session-three.svg' },
 ];
+const FOCUSABLE_CONTROL_SELECTOR = 'a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
 let errors;
 
 test.beforeEach(async ({ page }) => {
@@ -126,6 +127,99 @@ test('the selected window remains focused after a page refresh', async ({ page }
   await expect(restoredImage).not.toHaveClass(/focused/);
 });
 
+test('Ctrl+D opens the app menu and Ctrl+number focuses windows at desktop and phone widths', async ({ page }) => {
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const session = {
+      v: 2,
+      focused: { columnIndex: 0, appIndex: 0 },
+      columns: [{
+        widthPreset: 'half',
+        apps: [{ type: 'doc-viewer' }, { type: 'img-viewer' }],
+      }],
+    };
+    await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+      key: KEY,
+      value: session,
+    });
+    await page.reload();
+    await page.locator('#welcome-win-close').click();
+    const image = page.locator('.app-window[data-type="img-viewer"]');
+    await page.locator('#overview-btn').focus();
+
+    await page.keyboard.press('Control+d');
+    await expect(page.locator('#app-menu-btn')).toHaveAttribute('aria-expanded', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#app-menu-btn')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#app-menu-btn')).toBeFocused();
+
+    await page.keyboard.press('Control+2');
+    await expect(image).toHaveClass(/focused/);
+    await expect.poll(async () => (
+      await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY)
+    )?.focused).toEqual({ columnIndex: 0, appIndex: 1 });
+  }
+});
+
+test('Tab wraps within the focused window at desktop and phone widths', async ({ page }) => {
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const session = {
+      v: 2,
+      focused: { columnIndex: 0, appIndex: 0 },
+      columns: [{ widthPreset: 'half', apps: [{ type: 'doc-viewer' }] }],
+    };
+    await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+      key: KEY,
+      value: session,
+    });
+    await page.reload();
+    await page.locator('#welcome-win-close').click();
+
+    const doc = page.locator('.app-window[data-type="doc-viewer"]');
+    await expect(doc.locator('.doc-body')).toContainText('First document');
+    const controlCount = await doc.evaluate((app, selector) => {
+      const controls = [...app.querySelectorAll(selector)].filter(element => (
+        !element.disabled
+        && !element.closest('[hidden], [inert], [aria-hidden="true"]')
+        && getComputedStyle(element).visibility !== 'hidden'
+        && element.getClientRects().length > 0
+      ));
+      controls.at(-1)?.focus();
+      return controls.length;
+    }, FOCUSABLE_CONTROL_SELECTOR);
+    expect(controlCount).toBeGreaterThan(1);
+
+    await page.keyboard.press('Tab');
+    await expect.poll(() => doc.evaluate((app, selector) => {
+      const controls = [...app.querySelectorAll(selector)].filter(element => (
+        !element.disabled
+        && !element.closest('[hidden], [inert], [aria-hidden="true"]')
+        && getComputedStyle(element).visibility !== 'hidden'
+        && element.getClientRects().length > 0
+      ));
+      return controls[0] === document.activeElement;
+    }, FOCUSABLE_CONTROL_SELECTOR)).toBe(true);
+
+    await page.keyboard.press('Shift+Tab');
+    await expect.poll(() => doc.evaluate((app, selector) => {
+      const controls = [...app.querySelectorAll(selector)].filter(element => (
+        !element.disabled
+        && !element.closest('[hidden], [inert], [aria-hidden="true"]')
+        && getComputedStyle(element).visibility !== 'hidden'
+        && element.getClientRects().length > 0
+      ));
+      return controls.at(-1) === document.activeElement;
+    }, FOCUSABLE_CONTROL_SELECTOR)).toBe(true);
+  }
+});
+
 test('closing the focused window focuses and saves the remaining window', async ({ page }) => {
   await seed(page, [{ type: 'doc-viewer' }, { type: 'img-viewer' }]);
   const doc = page.locator('.app-window[data-type="doc-viewer"]');
@@ -178,6 +272,42 @@ test('window width presets persist on desktop and phone layouts', async ({ page 
   }
 });
 
+test('Ctrl width shortcuts cycle presets and persist at desktop and phone widths', async ({ page }) => {
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const session = {
+      v: 2,
+      focused: { columnIndex: 0, appIndex: 0 },
+      columns: [{ widthPreset: 'half', apps: [{ type: 'doc-viewer' }] }],
+    };
+    await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+      key: KEY,
+      value: session,
+    });
+    await page.reload();
+    await page.locator('#welcome-win-close').click();
+    const column = page.locator('.app-col');
+    await page.locator('#overview-btn').focus();
+
+    await page.keyboard.press('Control+Shift+Comma');
+    await expect(column).toHaveAttribute('data-width', 'third');
+    await page.keyboard.press('Control+Shift+Period');
+    await expect(column).toHaveAttribute('data-width', 'half');
+    await page.keyboard.press('Control+Shift+Period');
+    await expect(column).toHaveAttribute('data-width', 'full');
+
+    await expect.poll(async () => (
+      await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY)
+    )?.columns?.[0]?.widthPreset).toBe('full');
+    await page.reload();
+    await page.locator('#welcome-win-close').click();
+    await expect(page.locator('.app-col')).toHaveAttribute('data-width', 'full');
+  }
+});
+
 test('splitting and merging windows between columns persists the same order at desktop and phone widths', async ({ page }) => {
   for (const viewport of [
     { width: 1280, height: 800 },
@@ -219,6 +349,50 @@ test('splitting and merging windows between columns persists the same order at d
     const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
     expect(saved.columns[0].widthPreset).toBe('half');
     expect(saved.focused).toEqual({ columnIndex: 0, appIndex: 0 });
+    await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveClass(/focused/);
+  }
+});
+
+test('ArrowUp and ArrowDown reorder shared-column windows at desktop and phone widths', async ({ page }) => {
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const session = {
+      v: 2,
+      focused: { columnIndex: 0, appIndex: 0 },
+      columns: [{
+        widthPreset: 'half',
+        apps: [{ type: 'doc-viewer' }, { type: 'img-viewer' }],
+      }],
+    };
+    await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+      key: KEY,
+      value: session,
+    });
+    await page.reload();
+    await page.locator('#welcome-win-close').click();
+    await expect(page.locator('.app-window[data-type="doc-viewer"] .doc-body'))
+      .toContainText('First document');
+    await expect(page.locator('.app-window[data-type="img-viewer"] .img-viewport img'))
+      .toHaveAttribute('src', pictures[0].url);
+    await page.locator('#overview-btn').focus();
+
+    await page.keyboard.press('ArrowDown');
+    await expect.poll(async () => (
+      await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY)
+    )?.columns?.[0]?.apps?.map(app => app.type)).toEqual(['img-viewer', 'doc-viewer']);
+    expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY).then(saved => saved.focused))
+      .toEqual({ columnIndex: 0, appIndex: 1 });
+    await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveClass(/focused/);
+
+    await page.keyboard.press('ArrowUp');
+    await expect.poll(async () => (
+      await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY)
+    )?.columns?.[0]?.apps?.map(app => app.type)).toEqual(['doc-viewer', 'img-viewer']);
+    expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY).then(saved => saved.focused))
+      .toEqual({ columnIndex: 0, appIndex: 0 });
     await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveClass(/focused/);
   }
 });
