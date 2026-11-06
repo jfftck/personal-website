@@ -35,6 +35,24 @@ async function openGame(page, type) {
   return page.locator(`.app-window[data-type="${type}"]`).last();
 }
 
+async function setAppWindowWidth(app, width) {
+  await app.evaluate((element, targetWidth) => {
+    element.style.width = `${targetWidth}px`;
+    element.style.flex = `0 0 ${targetWidth}px`;
+  }, width);
+  await expect.poll(() => app.evaluate(element => Math.round(element.getBoundingClientRect().width))).toBe(width);
+}
+
+async function expectInsideAppWindow(app, element) {
+  await expect(element).toBeVisible();
+  await element.scrollIntoViewIfNeeded();
+  const [appBox, elementBox] = await Promise.all([app.boundingBox(), element.boundingBox()]);
+  expect(appBox).not.toBeNull();
+  expect(elementBox).not.toBeNull();
+  expect(elementBox.x).toBeGreaterThanOrEqual(appBox.x - 1);
+  expect(elementBox.x + elementBox.width).toBeLessThanOrEqual(appBox.x + appBox.width + 1);
+}
+
 test('Calculator selectors stay out of the desktop shell stylesheet', () => {
   expect(desktopStylesheet).not.toMatch(/\.calc(?:[-_a-zA-Z0-9]*)/);
 });
@@ -3761,6 +3779,89 @@ test('utility app layouts respond to their own narrow window width', async ({ pa
   const columns = await calendar.locator('.cal-week-grid').evaluate(element =>
     getComputedStyle(element).gridTemplateColumns.split(' ').length);
   expect(columns).toBe(2);
+});
+
+test('document viewer content and primary controls fit narrow windows', async ({ page }) => {
+  const app = await openUtility(page, 'doc-viewer');
+  await expectFamilyStylesheet(page, 'viewer-apps.css');
+  const content = app.locator('.doc-scroll');
+  const documentBody = app.locator('.doc-body');
+  const browse = app.locator('.doc-toolbar [data-action="open"]');
+  const zoomIn = app.locator('.doc-toolbar [data-action="zoom-in"]');
+  await expect(content).toBeVisible();
+  await expect(documentBody).toBeVisible();
+
+  for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await setAppWindowWidth(app, 320);
+    await expectInsideAppWindow(app, content);
+    await expectInsideAppWindow(app, documentBody);
+    await expectInsideAppWindow(app, browse);
+    await expectInsideAppWindow(app, zoomIn);
+  }
+});
+
+test('image viewer viewport and fit controls remain reachable in narrow windows', async ({ page }) => {
+  const app = await openUtility(page, 'img-viewer');
+  await expectFamilyStylesheet(page, 'viewer-apps.css');
+  const viewport = app.locator('.img-viewport');
+  const browse = app.locator('.img-toolbar [data-action="open"]');
+  const fit = app.locator('.img-toolbar [data-action="fit"]');
+  await expect(viewport).toBeVisible();
+
+  for (const screen of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(screen);
+    await setAppWindowWidth(app, 320);
+    await expectInsideAppWindow(app, viewport);
+    await expectInsideAppWindow(app, browse);
+    await expectInsideAppWindow(app, fit);
+  }
+});
+
+test('media player remains visible and video browsing stays reachable in narrow windows', async ({ page }) => {
+  const app = await openUtility(page, 'media-player');
+  await expectFamilyStylesheet(page, 'viewer-apps.css');
+  const content = app.locator('.media-player-wrapper');
+  const browse = app.locator('.media-toolbar [data-action="open"]');
+  await expect(content).toBeVisible();
+  await expect.poll(() => Promise.all([
+    app.locator('.media-player-empty').isVisible(),
+    app.locator('.media-video').isVisible(),
+  ]).then(states => states.some(Boolean))).toBe(true);
+
+  for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await setAppWindowWidth(app, 320);
+    await expectInsideAppWindow(app, content);
+    await expectInsideAppWindow(app, browse);
+  }
+});
+
+test('File Manager navigation, views, and refresh fit narrow windows', async ({ page }) => {
+  const app = await openUtility(page, 'file-manager');
+  await expectFamilyStylesheet(page, 'file-manager.css');
+  const sidebar = app.locator('.fm-sidebar');
+  const main = app.locator('.fm-main');
+  const scroll = app.locator('.fm-scroll');
+  const listView = app.locator('.fm-view-btn[data-view="list"]');
+  const refresh = app.locator('.fm-refresh-btn');
+  await expect(main).toBeVisible();
+  await expect(scroll).toBeVisible();
+  await expect(scroll.locator('.fm-tile').first()).toBeVisible();
+
+  for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await setAppWindowWidth(app, 320);
+    await expectInsideAppWindow(app, sidebar);
+    await expectInsideAppWindow(app, main);
+    await expectInsideAppWindow(app, listView);
+    await expectInsideAppWindow(app, refresh);
+    expect(await sidebar.evaluate(element => element.getBoundingClientRect().width)).toBeLessThan(60);
+    await listView.click();
+    await expect(listView).toHaveAttribute('aria-pressed', 'true');
+    await expect(scroll.locator('.fm-list-row').first()).toBeVisible();
+    expect(await scroll.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+  }
 });
 
 test('custom dropdown keeps working without Popover or CSS Anchor support', async ({ page }) => {
