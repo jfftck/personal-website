@@ -3840,3 +3840,55 @@ test('sticky notes expose accessible color choices that adapt to the system them
   expect(darkColors.text).not.toBe(lightColors.text);
   await expect(notes.locator('.note-select.active')).toHaveAttribute('aria-pressed', 'true');
 });
+
+test('desktop shell appearance baselines cover both themes at narrow and wide sizes', async ({ page }) => {
+  await page.route('https://jeffreytackett.us/ssl/resources/scripts/random_picture.php', route =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="#25485a"/></svg>',
+    }),
+  );
+  await page.addInitScript(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  const calculator = await openUtility(page, 'calculator');
+  await expect(calculator.locator('.calc-keys')).toBeVisible();
+
+  await page.addStyleTag({ content: `
+    *, *::before, *::after {
+      animation-duration: 0s !important;
+      animation-delay: 0s !important;
+      transition-duration: 0s !important;
+      caret-color: transparent !important;
+    }
+    #system-time-btn { visibility: hidden !important; }
+  ` });
+  await page.evaluate(() => {
+    document.body.style.backgroundImage = 'linear-gradient(135deg, #10283b 0%, #2e6473 100%)';
+    document.body.style.backgroundColor = '#10283b';
+    document.body.classList.remove('mod-overview', 'overview-exiting');
+  });
+
+  for (const viewport of [
+    { name: 'wide', width: 1280, height: 800 },
+    { name: 'narrow', width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    for (const theme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+      await page.evaluate(value => {
+        document.documentElement.dataset.theme = value;
+      }, theme);
+      await page.mouse.move(0, 0);
+      await expect(calculator).toBeVisible();
+      await expect(page).toHaveScreenshot(`desktop-shell-${viewport.name}-${theme}.png`, {
+        animations: 'disabled',
+        caret: 'hide',
+        maxDiffPixelRatio: 0.01,
+      });
+    }
+  }
+});

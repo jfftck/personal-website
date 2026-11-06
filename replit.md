@@ -8,6 +8,8 @@ Personal website with a tiling desktop, document and media viewers, and browser 
 - `pnpm test` — original game and server unit tests
 - `pnpm test:browser` — browser regression tests, including shared-control keyboard and responsive checks (uses `REPLIT_DEV_DOMAIN` by default)
 - `pnpm test:shared-controls` — focused shared-button, select, animation-picker, and responsive regressions
+- `pnpm test:visual` — compare stable desktop shell screenshots across themes and viewport sizes
+- `pnpm test:visual:update` — regenerate those baselines after an intentional visual change
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec

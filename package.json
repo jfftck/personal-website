@@ -6,6 +6,8 @@
     "test": "node --test tests/*.test.js",
     "test:browser": "playwright test --config=tests/playwright.config.cjs",
     "test:shared-controls": "playwright test --config=tests/playwright.config.cjs tests/shared-controls.spec.cjs",
+    "test:visual": "playwright test --config=tests/playwright.config.cjs tests/utility-styles.spec.cjs --grep=\"desktop shell appearance baselines\"",
+    "test:visual:update": "playwright test --config=tests/playwright.config.cjs tests/utility-styles.spec.cjs --grep=\"desktop shell appearance baselines\" --update-snapshots",
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
