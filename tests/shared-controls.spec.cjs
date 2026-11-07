@@ -53,8 +53,14 @@ test('shared button wrappers preserve names, focus, disabled behavior, and activ
     disabled.addEventListener('click', () => { window.sharedButtonActivationCount += 1; });
     const disabledWrapper = wrapAppButton(disabled, { variant: 'quiet' });
 
+    const unwrapped = document.createElement('button');
+    unwrapped.type = 'button';
+    unwrapped.className = 'util-action';
+    unwrapped.textContent = 'Unwrapped action';
+    unwrapped.id = 'unwrapped-action';
+
     window.sharedButtonActivationCount = 0;
-    fixture.append(start, standardWrapper, iconWrapper, disabledWrapper);
+    fixture.append(start, standardWrapper, iconWrapper, disabledWrapper, unwrapped);
     document.body.prepend(fixture);
   });
 
@@ -69,6 +75,18 @@ test('shared button wrappers preserve names, focus, disabled behavior, and activ
   await expect(icon).toHaveAttribute('data-app-button-variant', 'quiet');
   await expect(disabled).toBeDisabled();
   await expect(disabled).toHaveAttribute('data-app-button-variant', 'quiet');
+  const shadowStyles = await standard.evaluate(element => ({
+    hasShadowRoot: Boolean(element.parentElement.shadowRoot),
+    hasComponentStyles: Boolean(element.parentElement.shadowRoot.querySelector('style')),
+    radius: getComputedStyle(element).borderRadius,
+    minHeight: getComputedStyle(element).minHeight,
+    unwrappedRadius: getComputedStyle(document.getElementById('unwrapped-action')).borderRadius,
+  }));
+  expect(shadowStyles.hasShadowRoot).toBe(true);
+  expect(shadowStyles.hasComponentStyles).toBe(true);
+  expect(shadowStyles.radius).toBe('10.4px');
+  expect(shadowStyles.minHeight).toBe('38.4px');
+  expect(shadowStyles.unwrappedRadius).not.toBe(shadowStyles.radius);
 
   const iconBounds = await icon.boundingBox();
   expect(iconBounds.width).toBeCloseTo(38.4, 0);
