@@ -234,15 +234,6 @@ const RANGE_CONTROL_STYLES = `
       outline-offset: 3px;
     }
     .app-range-track input[type="range"]:disabled { cursor: not-allowed; opacity: .5; }
-    ::slotted(input[type="range"]) {
-      position: absolute !important;
-      width: 1px !important;
-      height: 1px !important;
-      overflow: hidden !important;
-      opacity: 0 !important;
-      pointer-events: none !important;
-      clip-path: inset(50%) !important;
-    }
     @media (pointer: coarse) {
       .app-range-track input[type="range"]::-webkit-slider-thumb {
         width: 1.55rem;
@@ -270,7 +261,6 @@ const RANGE_CONTROL_STYLES = `
   <label class="app-range-track">
     <input type="range">
   </label>
-  <slot hidden></slot>
 `;
 
 class AppFormControl extends HTMLElementBase {
@@ -319,6 +309,15 @@ class AppFormControl extends HTMLElementBase {
     source.tabIndex = -1;
     source.setAttribute('aria-hidden', 'true');
     copyAttributes();
+    this._sourceFocusHandler = () => {
+      if (root.activeElement !== control) control.focus({ preventScroll: true });
+    };
+    source.addEventListener('focus', this._sourceFocusHandler);
+    this._associatedLabel = source.id
+      ? document.querySelector(`label[for="${CSS.escape(source.id)}"]`)
+      : null;
+    this._associatedLabelHandler = () => requestAnimationFrame(() => control.focus({ preventScroll: true }));
+    this._associatedLabel?.addEventListener('click', this._associatedLabelHandler);
 
     const dispatchSourceEvent = type => {
       source.value = control.value;
@@ -341,6 +340,11 @@ class AppFormControl extends HTMLElementBase {
     this._rangeObserver = null;
     if (this._formResetHandler) this._sourceRange?.form?.removeEventListener('reset', this._formResetHandler);
     this._formResetHandler = null;
+    if (this._sourceFocusHandler) this._sourceRange?.removeEventListener('focus', this._sourceFocusHandler);
+    this._sourceFocusHandler = null;
+    if (this._associatedLabelHandler) this._associatedLabel?.removeEventListener('click', this._associatedLabelHandler);
+    this._associatedLabelHandler = null;
+    this._associatedLabel = null;
   }
 
   focus(options) {

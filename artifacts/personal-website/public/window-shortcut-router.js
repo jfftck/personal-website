@@ -29,13 +29,19 @@ function closest(target, selector) {
 }
 
 function isTypingTarget(target) {
-  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName) || Boolean(target?.isContentEditable);
+  const path = target?.composedPath?.() || [target];
+  return path.some(node =>
+    ['INPUT', 'TEXTAREA', 'SELECT'].includes(node?.tagName) || Boolean(node?.isContentEditable),
+  );
 }
 
 function isTextEntryTarget(target) {
-  if (!target) return false;
-  if (target.isContentEditable || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return true;
-  return target.tagName === 'INPUT' && !TEXT_INPUT_TYPES.has(target.type);
+  const path = target?.composedPath?.() || [target];
+  return path.some(node => {
+    if (!node) return false;
+    if (node.isContentEditable || node.tagName === 'TEXTAREA' || node.tagName === 'SELECT') return true;
+    return node.tagName === 'INPUT' && !TEXT_INPUT_TYPES.has(node.type);
+  });
 }
 
 export function createWindowShortcutRouter({
@@ -77,8 +83,8 @@ export function createWindowShortcutRouter({
     const target = event.target;
     const menuOpen = !appMenu.hasAttribute('hidden');
     const helpOpen = !helpOverlay.hasAttribute('hidden');
-    const isTyping = isTypingTarget(target);
-    const isTextEntry = isTextEntryTarget(target);
+    const isTyping = isTypingTarget(event);
+    const isTextEntry = isTextEntryTarget(event);
     const inContent = Boolean(closest(target, '.app-content'));
 
     if (event.key === 'Tab') {

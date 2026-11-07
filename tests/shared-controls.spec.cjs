@@ -101,12 +101,15 @@ test('shared checkbox, radio, and range components retain native keyboard behavi
   await checkbox.focus();
   await page.keyboard.press('Space');
   await expect(checkbox).toBeChecked();
+  await expect.poll(() => fixture.locator('app-checkbox').evaluate(element => element.checked)).toBe(true);
   await classic.focus();
   await page.keyboard.press('ArrowRight');
   await expect(ocean).toBeChecked();
+  await expect.poll(() => fixture.locator('app-radio').nth(1).evaluate(element => element.checked)).toBe(true);
   await range.focus();
   await page.keyboard.press('End');
   await expect(range).toHaveValue('10');
+  await expect.poll(() => fixture.locator('app-range').evaluate(element => element.value)).toBe('10');
   await expect(range).toBeFocused();
   await expect(range.evaluate(element => element.matches(':focus-visible'))).resolves.toBe(true);
 });
@@ -154,7 +157,9 @@ test('Settings renders checkboxes and sliders through shared components', async 
   await settings.locator('.settings-nav-item[data-page="appearance"]').click();
   const opacity = settings.getByRole('slider', { name: 'Window background opacity' });
   await expect.poll(() => opacity.evaluate(element => element.getRootNode().host.localName)).toBe('app-range');
-  await opacity.focus();
+  const opacityProxy = settings.locator('.settings-tint-slider[aria-label="Window background opacity"]');
+  const opacityLabel = settings.locator(`label[for="${await opacityProxy.getAttribute('id')}"]`);
+  await opacityLabel.click();
   await expect(opacity).toBeFocused();
   await expect(opacity).toHaveAttribute('aria-label', 'Window background opacity');
 });

@@ -35,6 +35,7 @@ Use the shared controls in `public/shared/` and the shared tokens in `public/des
 | Select/menu | `<app-select>` around a native `<select>`; `enhanceSelect()` / `enhanceSelects()` | The native select remains the value/form source; the custom component supplies the accessible listbox, keyboard handling, popover/anchor positioning, and fallback. Do not introduce a parallel dropdown for ordinary option lists. |
 | Popover list | `.menu-popover` and the standard select popover styles | Shared tinted/blurred surface and stacking behavior for app menus. Keep menu items and placement app-specific, and ensure the popover overlays nearby content. |
 | Dialog footer | `<app-dialog-actions>` inside a native `<dialog>` | Shared Cancel-before-primary ordering and Cancel behavior. Keep apply/save behavior in the owning app. Game overlays that must coexist with game screens remain a separate, explicitly managed pattern. |
+| Checkbox / radio / range | `<app-checkbox>`, `<app-radio>`, and `<app-range>` wrapping native inputs | Shared component-owned styling with native form values and accessible checkbox, radio, and slider semantics. Keep names, labels, checked/disabled state, and event handlers on the native input. |
 | Toggle / selected choice | Native checkbox or button with `aria-pressed` / `aria-checked` | Use the state that matches the control semantics. A selected item gets its selected appearance; `:focus-visible` alone gets the keyboard focus ring. |
 | Focus treatment | `--focus-color` and `:focus-visible` | Use the same focus color across apps. Do not add persistent focus rings to selected tiles or swatches. |
 
@@ -77,7 +78,21 @@ For markup strings, use the same custom element directly:
 
 The inner native button remains the actual control, so keep `type`, accessible names, `disabled`, `aria-pressed` / `aria-checked`, and event handlers on it. Use icon-only controls only when they have an accessible name and tooltip. Do not wrap board cells, card tiles, segmented-choice cards, or controls whose specialized visual treatment is part of the app.
 
-For fields, keep an explicit `<label>` and use `.util-field` on the native control. For menus, use `<app-select>` for option selection and the shared `.menu-popover` surface for other popovers. Use `<app-dialog-actions>` for native dialog footers rather than creating another footer layout.
+For fields, keep an explicit `<label>` and use `.util-field` on text inputs and textareas. Wrap checkbox, radio, and range inputs with `wrapAppControl()` or call `upgradeAppControls(container)` after rendering a page:
+
+```js
+import { upgradeAppControls, wrapAppControl } from '../shared/app-controls.js';
+
+const enabled = document.createElement('input');
+enabled.type = 'checkbox';
+enabled.setAttribute('aria-label', 'Enable feature');
+container.append(wrapAppControl(enabled));
+
+// For a rendered subtree, upgrade all native checkbox/radio/range inputs once.
+upgradeAppControls(container);
+```
+
+Checkbox and radio hosts expose `checked`, `value`, `disabled`, and `focus()`; range hosts expose `value`, `min`, `max`, `step`, `disabled`, and `focus()`. The checkbox and radio inputs remain in light DOM; range controls keep a form-value input and expose a styled native range input inside the component shadow root. Attach application listeners to the original input so its normal `input` and `change` events remain the source of truth. Keep a real label and accessible name on every control. For menus, use `<app-select>` for option selection and the shared `.menu-popover` surface for other popovers. Use `<app-dialog-actions>` for native dialog footers rather than creating another footer layout.
 
 ## Dialog actions
 

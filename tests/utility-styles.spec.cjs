@@ -841,7 +841,9 @@ test('window tints reverse with appearance, support keyboard lightness, and keep
       lightForeground: { tint: 'blue', lightness: 25 },
     },
   });
-  await expect.poll(() => lightness.evaluate(input => document.activeElement === input)).toBe(true);
+  await expect.poll(() => lightness.evaluate(input =>
+    input.matches(':focus') && input.getRootNode().host === document.activeElement,
+  )).toBe(true);
   await lightness.scrollIntoViewIfNeeded();
   await lightness.focus();
   const desktopScroller = settings.locator('.settings-main');
@@ -1062,12 +1064,11 @@ test('window background opacity previews, persists after interaction, and resets
   await page.keyboard.press('Home');
   const focusTreatment = await opacity.evaluate(slider => ({
     inputOutline: getComputedStyle(slider).outlineStyle,
-    thumbRing: [...slider.getRootNode().host.shadowRoot.styleSheets[0].cssRules]
-      .map(rule => rule.cssText)
-      .find(rule => rule.includes('focus-visible::-webkit-slider-thumb')),
+    thumbStyles: slider.getRootNode().host.shadowRoot.querySelector('style').textContent,
   }));
   expect(focusTreatment.inputOutline).toBe('none');
-  expect(focusTreatment.thumbRing).toContain('var(--focus-color)');
+  expect(focusTreatment.thumbStyles).toContain(':focus-visible::-webkit-slider-thumb');
+  expect(focusTreatment.thumbStyles).toContain('var(--focus-color)');
   await expect(opacity).toHaveValue('0');
   await expect.poll(() => page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--window-background-opacity').trim(),
