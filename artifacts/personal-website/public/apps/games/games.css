@@ -577,19 +577,26 @@
   gap: 0.2rem;
   min-width: 0;
 }
-.game-settings-dialog button.game-theme-choice {
+.game-theme-choice {
+  position: relative;
   display: grid;
   flex: 0 0 auto;
   justify-items: center;
   gap: 0.18rem;
   min-width: 4.25rem;
-  min-height: 0;
+  min-height: 2.1rem;
   padding: 0.38rem;
+  border: 1px solid var(--game-line);
   border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--app-bg) 72%, var(--app-text) 5%);
+  color: var(--game-ink);
+  cursor: pointer;
+  text-align: center;
   font-size: 0.72rem;
   line-height: 1.05;
 }
-.game-settings-dialog button.game-theme-choice[aria-checked="true"] {
+.game-theme-choice:hover { background: var(--btn-hover); }
+.game-theme-choice.is-selected {
   border-color: var(--focus-color);
   background: color-mix(in srgb, var(--accent) 19%, var(--app-bg));
 }

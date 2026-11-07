@@ -234,12 +234,12 @@
 
 /* --- Reset --- */
 *, *::before, *::after { box-sizing: border-box; }
-:root input[type="checkbox"],
-:root input[type="radio"] { accent-color: var(--focus-color); }
+:root input[type="checkbox"]:not(.app-control-native),
+:root input[type="radio"]:not(.app-control-native) { accent-color: var(--focus-color); }
 
 /* Keep native controls visually consistent with the borderless button palette. */
-:root input[type="checkbox"],
-:root input[type="radio"] {
+:root input[type="checkbox"]:not(.app-control-native),
+:root input[type="radio"]:not(.app-control-native) {
   appearance: none;
   -webkit-appearance: none;
   display: inline-grid;
@@ -252,16 +252,16 @@
   background: var(--btn-hover);
   cursor: pointer;
 }
-:root input[type="checkbox"] { border-radius: .25rem; }
-:root input[type="radio"] { border-radius: 50%; }
-:root input[type="checkbox"]:not(:checked):hover,
-:root input[type="radio"]:not(:checked):hover { background: var(--btn-active); }
-:root input[type="checkbox"]:checked,
-:root input[type="radio"]:checked {
+:root input[type="checkbox"]:not(.app-control-native) { border-radius: .25rem; }
+:root input[type="radio"]:not(.app-control-native) { border-radius: 50%; }
+:root input[type="checkbox"]:not(.app-control-native):not(:checked):hover,
+:root input[type="radio"]:not(.app-control-native):not(:checked):hover { background: var(--btn-active); }
+:root input[type="checkbox"]:not(.app-control-native):checked,
+:root input[type="radio"]:not(.app-control-native):checked {
   border-color: var(--focus-color);
   background-color: var(--focus-color);
 }
-:root input[type="checkbox"]::before {
+:root input[type="checkbox"]:not(.app-control-native)::before {
   content: "";
   width: .52rem;
   height: .3rem;
@@ -270,8 +270,8 @@
   opacity: 0;
   transform: translateY(-.08rem) rotate(-45deg);
 }
-:root input[type="checkbox"]:checked::before { opacity: 1; }
-:root input[type="radio"]::before {
+:root input[type="checkbox"]:not(.app-control-native):checked::before { opacity: 1; }
+:root input[type="radio"]:not(.app-control-native)::before {
   content: "";
   width: .38rem;
   height: .38rem;
@@ -280,17 +280,17 @@
   transform: scale(0);
   transition: transform 100ms ease-out;
 }
-:root input[type="radio"]:checked::before { transform: scale(1); }
-:root input[type="checkbox"]:focus-visible,
-:root input[type="radio"]:focus-visible {
+:root input[type="radio"]:not(.app-control-native):checked::before { transform: scale(1); }
+:root input[type="checkbox"]:not(.app-control-native):focus-visible,
+:root input[type="radio"]:not(.app-control-native):focus-visible {
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
 }
-:root input[type="checkbox"]:disabled,
-:root input[type="radio"]:disabled { cursor: not-allowed; opacity: .55; }
+:root input[type="checkbox"]:not(.app-control-native):disabled,
+:root input[type="radio"]:not(.app-control-native):disabled { cursor: not-allowed; opacity: .55; }
 
 /* Range controls use the same quiet surface as buttons and the shared accent. */
-:root input[type="range"]:not(.settings-tint-slider) {
+:root input[type="range"]:not(.settings-tint-slider):not(.app-control-native) {
   width: 100%;
   min-width: 4rem;
   height: 2.5rem;
@@ -302,13 +302,13 @@
   cursor: pointer;
   touch-action: pan-y;
 }
-:root input[type="range"]:not(.settings-tint-slider)::-webkit-slider-runnable-track {
+:root input[type="range"]:not(.settings-tint-slider):not(.app-control-native)::-webkit-slider-runnable-track {
   height: .4rem;
   border: 1px solid var(--app-border);
   border-radius: 999px;
   background: var(--btn-hover);
 }
-:root input[type="range"]:not(.settings-tint-slider)::-webkit-slider-thumb {
+:root input[type="range"]:not(.settings-tint-slider):not(.app-control-native)::-webkit-slider-thumb {
   width: 1.25rem;
   height: 1.25rem;
   margin-top: -.48rem;
@@ -319,13 +319,13 @@
   background: var(--accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-text) 35%, transparent), 0 .1rem .3rem #0005;
 }
-:root input[type="range"]:not(.settings-tint-slider)::-moz-range-track {
+:root input[type="range"]:not(.settings-tint-slider):not(.app-control-native)::-moz-range-track {
   height: .4rem;
   border: 1px solid var(--app-border);
   border-radius: 999px;
   background: var(--btn-hover);
 }
-:root input[type="range"]:not(.settings-tint-slider)::-moz-range-thumb {
+:root input[type="range"]:not(.settings-tint-slider):not(.app-control-native)::-moz-range-thumb {
   width: 1rem;
   height: 1rem;
   border: 2px solid var(--app-bg);
@@ -333,19 +333,19 @@
   background: var(--accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-text) 35%, transparent), 0 .1rem .3rem #0005;
 }
-:root input[type="range"]:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; border-radius: .5rem; }
-:root input[type="range"]:disabled { cursor: not-allowed; opacity: .5; }
+:root input[type="range"]:not(.app-control-native):focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; border-radius: .5rem; }
+:root input[type="range"]:not(.app-control-native):disabled { cursor: not-allowed; opacity: .5; }
 @media (pointer: coarse) {
-  :root input[type="range"]:not(.settings-tint-slider)::-webkit-slider-thumb { width: 1.55rem; height: 1.55rem; margin-top: -.63rem; }
-  :root input[type="range"]:not(.settings-tint-slider)::-moz-range-thumb { width: 1.25rem; height: 1.25rem; }
+  :root input[type="range"]:not(.settings-tint-slider):not(.app-control-native)::-webkit-slider-thumb { width: 1.55rem; height: 1.55rem; margin-top: -.63rem; }
+  :root input[type="range"]:not(.settings-tint-slider):not(.app-control-native)::-moz-range-thumb { width: 1.25rem; height: 1.25rem; }
 }
 @media (forced-colors: active) {
-  :root input[type="checkbox"],
-  :root input[type="radio"] { appearance: auto; accent-color: Highlight; }
-  :root input[type="range"]::-webkit-slider-runnable-track,
-  :root input[type="range"]::-moz-range-track { border-color: CanvasText; background: Canvas; }
-  :root input[type="range"]::-webkit-slider-thumb,
-  :root input[type="range"]::-moz-range-thumb { border-color: Canvas; background: Highlight; }
+  :root input[type="checkbox"]:not(.app-control-native),
+  :root input[type="radio"]:not(.app-control-native) { appearance: auto; accent-color: Highlight; }
+  :root input[type="range"]:not(.app-control-native)::-webkit-slider-runnable-track,
+  :root input[type="range"]:not(.app-control-native)::-moz-range-track { border-color: CanvasText; background: Canvas; }
+  :root input[type="range"]:not(.app-control-native)::-webkit-slider-thumb,
+  :root input[type="range"]:not(.app-control-native)::-moz-range-thumb { border-color: Canvas; background: Highlight; }
 }
 
 html, body {

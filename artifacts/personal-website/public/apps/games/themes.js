@@ -1,8 +1,10 @@
 import { chessPieceSvg } from './chess-piece-svg.js';
 import { cardFaceMarkup } from './card-artwork.js';
 import { readJSON, writeJSON } from '../../data-handler.js';
+import { wrapAppControl } from '../../shared/app-controls.js';
 
 const STORAGE_KEY = 'game-center-visual-themes-v1';
+let nextThemeGroupId = 1;
 
 const config = {
   cards: {
@@ -109,7 +111,8 @@ export function addGameThemeControl(root, container, key) {
   control.append(label);
   const choices = document.createElement('div');
   choices.className = 'game-theme-choices';
-  const buttons = new Map();
+  const radios = new Map();
+  const radioGroupName = `game-theme-${key}-${nextThemeGroupId++}`;
 
   function preview(value) {
     const sample = document.createElement('span');
@@ -142,29 +145,33 @@ export function addGameThemeControl(root, container, key) {
   }
 
   for (const [value, title] of theme.choices) {
-    const option = document.createElement('button');
-    option.type = 'button';
-    option.className = 'game-theme-choice';
-    option.setAttribute('role', 'radio');
-    option.setAttribute('aria-label', `${theme.label}: ${title}`);
-    option.dataset.themeValue = value;
-    option.append(preview(value));
+    const choice = document.createElement('label');
+    choice.className = 'game-theme-choice';
+    choice.dataset.themeValue = value;
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = radioGroupName;
+    radio.value = value;
+    radio.setAttribute('aria-label', `${theme.label}: ${title}`);
+    wrapAppControl(radio, { placement: 'overlay' });
+    choice.append(preview(value));
     const optionLabel = document.createElement('span');
     optionLabel.className = 'game-theme-choice-label';
     optionLabel.textContent = title;
-    option.append(optionLabel);
-    buttons.set(value, option);
-    choices.append(option);
+    choice.append(optionLabel, radio.parentElement);
+    radios.set(value, radio);
+    choices.append(choice);
   }
   control.append(choices);
 
   const apply = value => {
     const normalized = normalize(key, value);
     root.dataset[theme.dataset] = normalized;
-    for (const [choice, option] of buttons) {
+    for (const [choice, radio] of radios) {
       const selected = choice === normalized;
-      option.setAttribute('aria-checked', String(selected));
-      option.tabIndex = selected ? 0 : -1;
+      radio.checked = selected;
+      radio.setAttribute('aria-checked', String(selected));
+      radio.closest('.game-theme-choice')?.classList.toggle('is-selected', selected);
     }
   };
 
@@ -181,22 +188,9 @@ export function addGameThemeControl(root, container, key) {
     }));
   };
 
-  for (const [value, option] of buttons) {
-    option.addEventListener('click', () => choose(value));
-    option.addEventListener('keydown', event => {
-      const index = theme.choices.findIndex(([choice]) => choice === value);
-      let nextIndex;
-      if (event.key === 'Home') nextIndex = 0;
-      else if (event.key === 'End') nextIndex = theme.choices.length - 1;
-      else if (['ArrowRight', 'ArrowDown'].includes(event.key)) {
-        nextIndex = (index + 1) % theme.choices.length;
-      } else if (['ArrowLeft', 'ArrowUp'].includes(event.key)) {
-        nextIndex = (index - 1 + theme.choices.length) % theme.choices.length;
-      } else return;
-      event.preventDefault();
-      const next = theme.choices[nextIndex][0];
-      buttons.get(next).focus();
-      choose(next);
+  for (const [value, radio] of radios) {
+    radio.addEventListener('change', () => {
+      if (radio.checked) choose(value);
     });
   }
   container.hidden = false;

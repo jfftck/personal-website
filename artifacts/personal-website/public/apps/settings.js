@@ -2,7 +2,7 @@
 
 import { enhanceSelect } from './custom-select.js';
 import { createAnimationPickerController } from './animation-picker.js';
-import { wrapAppButton } from '../shared/app-controls.js';
+import { upgradeAppControls, wrapAppButton } from '../shared/app-controls.js';
 
 const PAGES = [
   { id: 'appearance', title: 'Appearance' },
@@ -335,6 +335,7 @@ export function buildSettings(id, ctx, initialState) {
     else if (activePage === 'time') renderTime(body);
     else if (activePage === 'notifications') renderNotifications(body);
     else if (activePage === 'wallpaper') renderWallpaper(body);
+    upgradeAppControls(page);
     if (preserveScroll && scrollContainer) scrollContainer.scrollTop = previousScrollTop;
   }
 
@@ -544,14 +545,15 @@ export function buildSettings(id, ctx, initialState) {
           previewTints();
         });
         slider.addEventListener('change', () => {
-          const restoreFocus = document.activeElement === slider;
+            const restoreFocus = document.activeElement === slider || slider.parentElement?.matches(':focus-within');
           cancelTintPreview();
           try {
             if (settings?.setWindowTints) settings.setWindowTints(windowTints);
             else settings?.previewWindowTints?.(windowTints);
             current = snapshot();
             if (restoreFocus) requestAnimationFrame(() => {
-              page.querySelector(`.settings-tint-slider[data-tint-type="${type}"]`)?.focus({ preventScroll: true });
+              const restoredControl = page.querySelector(`.settings-tint-slider[data-tint-type="${type}"]`);
+              (restoredControl?.parentElement || restoredControl)?.focus({ preventScroll: true });
             });
           } catch (error) {
             setMessage(page.querySelector('.settings-inline-status'), error?.message || 'The window tint could not be changed.', 'error');
@@ -591,14 +593,15 @@ export function buildSettings(id, ctx, initialState) {
         previewTints();
       });
       opacitySlider.addEventListener('change', () => {
-        const restoreFocus = document.activeElement === opacitySlider;
+        const restoreFocus = document.activeElement === opacitySlider || opacitySlider.parentElement?.matches(':focus-within');
         cancelTintPreview();
         try {
           if (settings?.setWindowTints) settings.setWindowTints(windowTints);
           else settings?.previewWindowTints?.(windowTints);
           current = snapshot();
           if (restoreFocus) requestAnimationFrame(() => {
-            page.querySelector('.settings-tint-slider[aria-label="Window background opacity"]')?.focus({ preventScroll: true });
+            const restoredControl = page.querySelector('.settings-tint-slider[aria-label="Window background opacity"]');
+            (restoredControl?.parentElement || restoredControl)?.focus({ preventScroll: true });
           });
         } catch (error) {
           setMessage(page.querySelector('.settings-inline-status'), error?.message || 'The window opacity could not be changed.', 'error');
