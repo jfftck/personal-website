@@ -842,6 +842,8 @@ function saveSession() {
 // ── Context-aware title ────────────────────────────────────────
 function setAppTitle(id, title) {
   S.appTitles[id] = title;
+  const app = S.apps.find(candidate => candidate.id === id);
+  app?.el.setAttribute('aria-label', title);
   if (id === S.focusedId) activeTitle.textContent = title;
 }
 
@@ -911,8 +913,12 @@ function ensureAppStyles(styles = [], onRetry) {
 }
 
 function createAppLoadSurface(title, mode = 'loading') {
-  const root = document.createElement('section');
+  const root = document.createElement('dialog');
   root.className = 'utility-app app-window app-load-state';
+  root.open = true;
+  root.tabIndex = -1;
+  root.setAttribute('aria-modal', 'false');
+  root.setAttribute('aria-label', title);
   root.dataset.loadState = mode;
   root.setAttribute('aria-live', 'polite');
   root.setAttribute('aria-busy', String(mode === 'loading'));
@@ -1067,13 +1073,20 @@ async function hydrateApp(record, def, initialState) {
       throw new TypeError(`The ${def.title} app did not return an element.`);
     }
 
-    appEl.classList.add('app-window');
-    appEl.dataset.id = record.id;
-    appEl.dataset.type = record.type;
-    transferWindowAnimation(record.el, appEl);
-    appEl.classList.toggle('focused', S.focusedId === record.id);
-    record.el.replaceWith(appEl);
-    record.el = appEl;
+    const windowEl = document.createElement('dialog');
+    windowEl.className = 'app-window';
+    windowEl.open = true;
+    windowEl.tabIndex = -1;
+    windowEl.setAttribute('aria-modal', 'false');
+    windowEl.setAttribute('aria-label', S.appTitles[record.id] || def.title);
+    windowEl.dataset.id = record.id;
+    windowEl.dataset.type = record.type;
+    appEl.classList.remove('app-window');
+    windowEl.append(appEl);
+    transferWindowAnimation(record.el, windowEl);
+    windowEl.classList.toggle('focused', S.focusedId === record.id);
+    record.el.replaceWith(windowEl);
+    record.el = windowEl;
     flushPendingAppActions(record);
     updateStripLayout();
     if (document.body.classList.contains('mod-overview')) positionOverview();

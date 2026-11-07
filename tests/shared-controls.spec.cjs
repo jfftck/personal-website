@@ -445,3 +445,52 @@ test('narrow and wide game toolbars retain flag mode and keep shared controls in
     await expect(app.locator('.mine-cell')).toHaveCount(81);
   }
 });
+
+test('desktop app windows are named non-modal dialogs and remain independently usable', async ({ page }) => {
+  const openApp = async type => {
+    await page.locator('#app-menu-btn').click();
+    await page.locator(`#app-list .app-launcher[data-type="${type}"]`).click();
+  };
+
+  await openApp('calculator');
+  const calculator = page.getByRole('dialog', { name: 'Calculator', exact: true });
+  await expect(calculator).toBeVisible();
+  await expect(calculator).toHaveJSProperty('open', true);
+
+  await openApp('settings');
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await expect(settings).toBeVisible();
+  await expect(settings).toHaveJSProperty('open', true);
+  await expect(calculator).toBeVisible();
+
+  const modalStates = await page.evaluate(() => [...document.querySelectorAll('.app-window')].map(windowEl => ({
+    isDialog: windowEl instanceof HTMLDialogElement,
+    modal: windowEl.matches(':modal'),
+    ariaModal: windowEl.getAttribute('aria-modal'),
+    hasName: Boolean(windowEl.getAttribute('aria-label')),
+  })));
+  expect(modalStates).toHaveLength(2);
+  for (const state of modalStates) {
+    expect(state).toEqual({
+      isDialog: true,
+      modal: false,
+      ariaModal: 'false',
+      hasName: true,
+    });
+  }
+
+  await settings.locator('.settings-nav-item[data-page="time"]').click();
+  const timeToggle = settings.getByRole('checkbox', { name: 'Use 24-hour time' });
+  const initialTimeState = await timeToggle.isChecked();
+  await timeToggle.focus();
+  await page.keyboard.press('Space');
+  if (initialTimeState) await expect(timeToggle).not.toBeChecked();
+  else await expect(timeToggle).toBeChecked();
+
+  await calculator.locator('button').first().focus();
+  await page.keyboard.press('Tab');
+  await expect.poll(() => page.evaluate(() => (
+    document.activeElement?.closest('.app-window')?.dataset.type
+  ))).toBe('calculator');
+  await expect(settings).toBeVisible();
+});

@@ -125,9 +125,11 @@ export function createWindowShortcutRouter({
     }
 
     const windowDirection = DIRECTION_BY_KEY[event.key.toLowerCase()];
+    const activeDialog = closest(target, 'dialog[open], [role="dialog"]');
+    const insideAppWindowDialog = activeDialog?.classList.contains('app-window');
     if (event.ctrlKey && windowDirection && !isTextEntry && !helpOpen && !menuOpen
       && systemPanel.hidden && !document.getElementById('win-menu-open')
-      && !closest(target, '[role="dialog"], dialog[open]')) {
+      && (!activeDialog || insideAppWindowDialog)) {
       event.preventDefault();
       windowController.focusWindowInDirection(windowDirection);
       return;

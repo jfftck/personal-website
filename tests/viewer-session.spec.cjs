@@ -72,11 +72,15 @@ test('browsing documents and photos saves the new selection and reloads both', a
   const doc = page.locator('[data-type="doc-viewer"].app-window');
   const image = page.locator('[data-type="img-viewer"].app-window');
   await expect(doc.locator('.doc-body')).toContainText('First document');
+  await expect(page.getByRole('dialog', { name: 'First', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'One', exact: true })).toBeVisible();
   await doc.locator('[data-action="open"]').click();
   await doc.locator('.doc-sidebar-item').filter({ hasText: 'Second' }).click();
   await expect(doc.locator('.doc-body')).toContainText('Second document');
+  await expect(page.getByRole('dialog', { name: 'Second', exact: true })).toBeVisible();
   await image.locator('[data-action="next"]').click();
   await expect(image.locator('.img-counter')).toHaveText('2 / 3');
+  await expect(page.getByRole('dialog', { name: 'Two', exact: true })).toBeVisible();
   await expect.poll(() => savedApps(page)).toEqual([
     { type: 'doc-viewer', state: { url: docs[1].url } },
     { type: 'img-viewer', state: { url: pictures[1].url, galleryIdx: 1 } },
