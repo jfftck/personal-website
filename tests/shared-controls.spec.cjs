@@ -277,6 +277,8 @@ test('custom select supports keyboard navigation, disabled options, Escape, and 
     label.append(document.createTextNode('Theme'));
     const select = document.createElement('select');
     select.id = 'shared-theme-select';
+    window.sharedSelectChangeCount = 0;
+    select.addEventListener('change', () => { window.sharedSelectChangeCount += 1; });
     for (const [value, text, disabled = false] of [
       ['blue', 'Blue'],
       ['gray', 'Gray', true],
@@ -289,11 +291,40 @@ test('custom select supports keyboard navigation, disabled options, Escape, and 
     label.append(select);
     fixture.append(label);
     document.body.prepend(fixture);
+    const leakingStyle = document.createElement('style');
+    leakingStyle.textContent = `
+      .standard-select-trigger { color: rgb(255, 0, 0) !important; background: rgb(255, 0, 0) !important; }
+      .standard-select-popup { background: rgb(255, 0, 0) !important; }
+    `;
+    document.head.append(leakingStyle);
     enhanceSelect(select);
   });
 
   const trigger = page.getByRole('combobox', { name: 'Theme', exact: true });
   const sourceSelect = page.locator('#shared-theme-select');
+  const styleBoundary = await sourceSelect.evaluate(select => {
+    const host = select.closest('app-select');
+    const triggerElement = host.shadowRoot.querySelector('.standard-select-trigger');
+    const popupElement = host.shadowRoot.querySelector('.standard-select-popup');
+    return {
+      hasComponentStyles: Boolean(host.shadowRoot.querySelector('style')),
+      triggerIsScoped: triggerElement.getRootNode() === host.shadowRoot,
+      popupIsScoped: popupElement.getRootNode() === host.shadowRoot,
+      nativeRemainsInLightDom: select.getRootNode() === document,
+      nativeSlot: select.slot,
+      triggerColor: getComputedStyle(triggerElement).color,
+      triggerBackground: getComputedStyle(triggerElement).backgroundColor,
+      popupBackground: getComputedStyle(popupElement).backgroundColor,
+    };
+  });
+  expect(styleBoundary.hasComponentStyles).toBe(true);
+  expect(styleBoundary.triggerIsScoped).toBe(true);
+  expect(styleBoundary.popupIsScoped).toBe(true);
+  expect(styleBoundary.nativeRemainsInLightDom).toBe(true);
+  expect(styleBoundary.nativeSlot).toBe('native');
+  expect(styleBoundary.triggerColor).not.toBe('rgb(255, 0, 0)');
+  expect(styleBoundary.triggerBackground).not.toBe('rgb(255, 0, 0)');
+  expect(styleBoundary.popupBackground).not.toBe('rgb(255, 0, 0)');
   await expect(trigger).toHaveAttribute('data-value', 'blue');
   await trigger.focus();
   await page.keyboard.press('ArrowDown');
@@ -304,6 +335,7 @@ test('custom select supports keyboard navigation, disabled options, Escape, and 
   await expect(popup.getByRole('option', { name: 'Gold' })).toHaveClass(/is-active/);
   await page.keyboard.press('Enter');
   await expect(sourceSelect).toHaveValue('gold');
+  await expect.poll(() => page.evaluate(() => window.sharedSelectChangeCount)).toBe(1);
   await expect(trigger).toHaveAttribute('aria-valuetext', 'Gold');
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
   await expect(trigger).toBeFocused();

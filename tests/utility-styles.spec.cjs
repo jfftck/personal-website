@@ -621,7 +621,7 @@ test('Wallpaper settings apply changes immediately without save or cancel action
   const timerLayout = await timerOption.evaluate(row => {
     const rowRect = row.getBoundingClientRect();
     const textRect = row.querySelector('.settings-timer-choice .settings-choice-copy').getBoundingClientRect();
-    const selectRect = row.querySelector('.standard-select-trigger').getBoundingClientRect();
+    const selectRect = row.querySelector('app-select').shadowRoot.querySelector('.standard-select-trigger').getBoundingClientRect();
     return { rowRight: rowRect.right, textRight: textRect.right, selectLeft: selectRect.left, selectRight: selectRect.right };
   });
   expect(timerLayout.selectLeft).toBeGreaterThan(timerLayout.textRight);
@@ -643,7 +643,7 @@ test('Wallpaper settings apply changes immediately without save or cancel action
   const mobileTimerLayout = await wallpaperPage.locator('.settings-timer-option').evaluate(row => {
     const rowRect = row.getBoundingClientRect();
     const textRect = row.querySelector('.settings-timer-choice .settings-choice-copy').getBoundingClientRect();
-    const selectRect = row.querySelector('.standard-select-trigger').getBoundingClientRect();
+    const selectRect = row.querySelector('app-select').shadowRoot.querySelector('.standard-select-trigger').getBoundingClientRect();
     return { rowRight: rowRect.right, textRight: textRect.right, selectLeft: selectRect.left, selectRight: selectRect.right };
   });
   expect(mobileTimerLayout.selectLeft).toBeGreaterThan(mobileTimerLayout.textRight);

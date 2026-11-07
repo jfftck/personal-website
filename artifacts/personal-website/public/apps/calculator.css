@@ -512,9 +512,14 @@
   .calc-function-summary { max-width:7rem; }
 }
 
-.calc-mode-select { flex:none; min-width:0; }
-.calc-mode-select .standard-select-field { width:min(10rem,30cqw); min-width:7.5rem; }
-.calc-mode-select .standard-select-trigger { min-height:2rem; padding:.3rem .55rem; }
+.calc-mode-select {
+  display: block;
+  flex: none;
+  width: min(10rem, 30cqw);
+  min-width: 7.5rem;
+  --select-trigger-min-height: 2rem;
+  --select-trigger-padding: .3rem .55rem;
+}
 .calc-backspace,.calc-editor-backspace {
   box-sizing:border-box; display:grid; place-items:center; line-height:1; text-align:center;
   width:2rem; min-width:2rem; padding:0;

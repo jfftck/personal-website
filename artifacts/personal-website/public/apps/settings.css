@@ -386,9 +386,12 @@
 }
 .settings-timer-choice:hover,
 .settings-timer-choice[aria-pressed="true"] { border-color: transparent; background: transparent; }
-.settings-timer-option .standard-select-field { flex: 0 0 auto; width: min(9rem, 43%); }
-.settings-timer-option .standard-select-control { width: 100%; }
-.settings-timer-option .standard-select-trigger { min-height: 2rem; padding: .35rem .5rem; font-size: .68rem; }
+.settings-timer-option .standard-select-field { display: block; flex: 0 0 auto; width: min(9rem, 43%); }
+.settings-timer-option .standard-select-control {
+  --select-trigger-min-height: 2rem;
+  --select-trigger-padding: .35rem .5rem;
+  --select-trigger-font-size: .68rem;
+}
 .settings-cycle-list { display: grid; gap: .35rem; margin: .75rem 0 0; padding: 0; list-style: none; }
 .settings-cycle-item { display: grid; grid-template-columns: 1.5rem 2rem minmax(0,1fr) auto; align-items: center; gap: .5rem; min-width: 0; padding: .35rem; border-radius: .5rem; background: var(--util-surface); }
 .settings-cycle-number { color: var(--accent); font-family: ui-monospace, monospace; font-size: .64rem; }
@@ -397,9 +400,21 @@
 .settings-cycle-actions { display: flex; gap: .15rem; }
 .settings-icon-button { display: grid; width: 1.75rem; height: 1.75rem; place-items: center; }
 .settings-cycle-empty { padding: .55rem; color: var(--util-detail); font-size: .68rem; }
-.settings-select-label { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: .7rem 0; color: var(--util-detail); font-size: .7rem; }
-.settings-select-label .standard-select-control { width: min(9rem, 55%); }
-.settings-select-label .standard-select-trigger { width: 100%; min-height: 2rem; padding: .35rem .5rem; font-size: .68rem; }
+.settings-select-label { margin: .7rem 0; color: var(--util-detail); font-size: .7rem; }
+.settings-select-label.standard-select-control {
+  display: block;
+  width: 100%;
+  --select-field-display: flex;
+  --select-field-align-items: center;
+  --select-field-justify-content: space-between;
+  --select-field-gap: .75rem;
+  --select-label-color: var(--util-detail);
+  --select-label-font-size: .7rem;
+  --select-trigger-width: min(9rem, 55%);
+  --select-trigger-min-height: 2rem;
+  --select-trigger-padding: .35rem .5rem;
+  --select-trigger-font-size: .68rem;
+}
 .settings-subheading { margin: .9rem 0 .25rem; color: var(--util-detail); font-size: .67rem; font-weight: 700; }
 .settings-animation-rows { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .85rem; margin-top: 1.25rem; }
 .settings-animation-row { min-width: 0; }

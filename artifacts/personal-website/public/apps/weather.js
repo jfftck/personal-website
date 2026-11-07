@@ -1,4 +1,4 @@
-import { enhanceSelects, focusCustomSelect, refreshCustomSelect } from './custom-select.js';
+import { enhanceSelects, focusCustomSelect, refreshCustomSelect, setCustomSelectInvalid } from './custom-select.js';
 import { SETTINGS_ICON } from './toolbar.js';
 import { wrapAppButton } from '../shared/app-controls.js';
 import { readJSON, writeJSON } from '../data-handler.js';
@@ -133,9 +133,8 @@ export function buildWeather(id, ctx) {
       const unit = unitSelect.value;
       if (!location) return;
       if (!unit) {
-        const unitControl = form.querySelector('.standard-select-trigger');
-        unitControl?.setAttribute('aria-invalid', 'true');
-        unitControl?.focus({ preventScroll: true });
+        setCustomSelectInvalid(unitSelect);
+        focusCustomSelect(unitSelect);
         form.querySelector('.weather-error').textContent = 'Choose a temperature unit.';
         return;
       }

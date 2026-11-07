@@ -6,6 +6,176 @@ let nextControlId = 1;
 let lifecycleObserver;
 let globalListenersReady = false;
 
+const SELECT_COMPONENT_STYLES = `
+  <style>
+    :host {
+      --select-field-display: grid;
+      --select-field-align-items: stretch;
+      --select-field-justify-content: initial;
+      --select-field-gap: .3rem;
+      --select-label-flex: none;
+      --select-label-color: var(--app-text, currentColor);
+      --select-label-font-size: inherit;
+      --select-trigger-width: 100%;
+      --select-trigger-flex: 0 1 auto;
+      --select-trigger-min-height: 2.4rem;
+      --select-trigger-padding: .5rem .75rem;
+      --select-trigger-border: 1px solid var(--app-border, currentColor);
+      --select-trigger-radius: .65rem;
+      --select-trigger-background: var(--util-surface, color-mix(in srgb, var(--app-bg, #171d22) 92%, var(--app-text, #fff) 8%));
+      --select-trigger-color: var(--app-text, currentColor);
+      --select-trigger-font-size: inherit;
+      --select-trigger-hover: var(--util-surface-strong, var(--btn-hover, color-mix(in srgb, var(--app-bg, #171d22) 82%, var(--app-text, #fff) 18%)));
+      --select-trigger-active: var(--btn-active, color-mix(in srgb, var(--app-bg, #171d22) 78%, var(--app-text, #fff) 22%));
+      display: block;
+      width: 100%;
+      min-width: 0;
+      color: var(--app-text, inherit);
+      font: inherit;
+    }
+    .standard-select-field {
+      display: var(--select-field-display, grid);
+      align-items: var(--select-field-align-items, stretch);
+      justify-content: var(--select-field-justify-content, initial);
+      gap: var(--select-field-gap, .3rem);
+      min-width: 0;
+    }
+    .standard-select-label {
+      display: block;
+      flex: var(--select-label-flex, none);
+      min-width: 0;
+      color: var(--select-label-color, var(--app-text, currentColor));
+      font-size: var(--select-label-font-size, inherit);
+    }
+    .standard-select-label[hidden] { display: none; }
+    .standard-select-control {
+      display: block;
+      flex: var(--select-trigger-flex, 0 1 auto);
+      width: var(--select-trigger-width, 100%);
+      min-width: 0;
+    }
+    .standard-select-trigger {
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .65rem;
+      width: 100%;
+      min-width: 0;
+      min-height: var(--select-trigger-min-height, 2.4rem);
+      padding: var(--select-trigger-padding, .5rem .75rem);
+      border: var(--select-trigger-border, 1px solid var(--app-border, currentColor));
+      border-radius: var(--select-trigger-radius, .65rem);
+      background: var(--select-trigger-background, var(--app-bg, transparent));
+      color: var(--select-trigger-color, var(--app-text, currentColor));
+      font: inherit;
+      font-size: var(--select-trigger-font-size, inherit);
+      text-align: left;
+      cursor: pointer;
+      transition: background-color 140ms ease, border-color 140ms ease;
+    }
+    .standard-select-trigger:hover { background: var(--select-trigger-hover, var(--btn-hover, transparent)); }
+    .standard-select-trigger:active { background: var(--select-trigger-active, var(--btn-active, transparent)); }
+    .standard-select-trigger:disabled { cursor: not-allowed; opacity: .45; }
+    .standard-select-trigger:focus-visible {
+      outline: 2px solid var(--focus-color, currentColor);
+      outline-offset: 2px;
+    }
+    .standard-select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .standard-select-chevron {
+      width: .9rem;
+      height: .9rem;
+      flex: none;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      transition: transform 140ms ease;
+    }
+    .standard-select-trigger[aria-expanded="true"] .standard-select-chevron { transform: rotate(180deg); }
+    .standard-select-popup {
+      position: fixed;
+      inset: auto;
+      z-index: 12000;
+      display: grid;
+      gap: 1px;
+      box-sizing: border-box;
+      width: min(14rem, calc(100vw - 1rem));
+      max-width: calc(100vw - 1rem);
+      max-height: min(19rem, 45dvh);
+      overflow: auto;
+      margin: .25rem 0 0;
+      padding: .25rem;
+      border: 1px solid var(--topbar-border, var(--app-border, currentColor));
+      border-radius: .625rem;
+      background: var(--overlay-card, var(--app-bg, Canvas));
+      color: var(--app-text, CanvasText);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, .45);
+      -webkit-backdrop-filter: var(--backdrop, blur(12px));
+      backdrop-filter: var(--backdrop, blur(12px));
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb, var(--accent, currentColor)) transparent;
+    }
+    .standard-select-popup[popover]:not(:popover-open),
+    .standard-select-popup[hidden] { display: none; }
+    .standard-select-popup[popover]:popover-open { display: grid; }
+    @supports (position-area: block-end span-inline-start) {
+      .standard-select-popup[data-anchor-positioned="true"] {
+        position-area: block-end span-inline-start;
+      }
+    }
+    @supports (position-try-fallbacks: flip-block, flip-inline) {
+      .standard-select-popup[data-anchor-positioned="true"] {
+        position-try-fallbacks: flip-block, flip-inline;
+      }
+    }
+    .standard-select-option {
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      width: 100%;
+      min-height: 2.35rem;
+      padding: .4375rem .625rem;
+      border: 0;
+      border-radius: .375rem;
+      background: transparent;
+      color: var(--app-text, CanvasText);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .standard-select-option:hover,
+    .standard-select-option.is-active { background: var(--btn-hover, transparent); }
+    .standard-select-option[aria-selected="true"] {
+      border: 1px solid var(--focus-color, currentColor);
+      background: var(--btn-active, transparent);
+    }
+    .standard-select-option[aria-disabled="true"] { opacity: .48; cursor: not-allowed; }
+    ::slotted(.standard-select-native) {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      clip-path: inset(50%) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+  </style>
+  <div class="standard-select-field">
+    <label class="standard-select-label" hidden></label>
+    <div class="standard-select-control">
+      <button type="button" class="standard-select-trigger" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-valuetext="" data-value="">
+        <span class="standard-select-value"></span>
+        <svg class="standard-select-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+      </button>
+    </div>
+  </div>
+  <div class="standard-select-popup" role="listbox"></div>
+  <slot name="native"></slot>
+`;
+
 function supportsAnchoring(anchorName) {
   return Boolean(window.CSS?.supports
     && CSS.supports('anchor-name', anchorName)
@@ -22,8 +192,9 @@ function ensureGlobalListeners() {
   globalListenersReady = true;
 
   document.addEventListener('pointerdown', event => {
+    const eventPath = event.composedPath();
     for (const control of openControls) {
-      if (!control.trigger.contains(event.target) && !control.popup.contains(event.target)) {
+      if (!eventPath.includes(control.host)) {
         control.close(false);
       }
     }
@@ -52,7 +223,7 @@ function labelTextFor(select) {
   if (!label) return { label, text: select.getAttribute('aria-label') || 'Choose an option' };
 
   const text = [...label.childNodes]
-    .filter(node => node !== select)
+    .filter(node => node !== select && !(node.nodeType === 1 && node.contains(select)))
     .map(node => node.textContent || '')
     .join(' ')
     .replace(/\s+/g, ' ')
@@ -64,16 +235,16 @@ export function enhanceSelect(select) {
   if (!(select instanceof HTMLSelectElement) || controls.has(select)) return controls.get(select) || null;
   if (!document.body) return null;
 
-  if (!select.closest('app-select')) {
+  let host = select.closest('app-select');
+  if (!host) {
     const source = select.closest('label') || select;
     const parent = source.parentNode;
-    if (parent) {
-      const component = document.createElement('app-select');
-      appSelectUpgradeGuard.add(select);
-      parent.insertBefore(component, source);
-      component.append(source);
-      appSelectUpgradeGuard.delete(select);
-    }
+    const nextSibling = source.nextSibling;
+    host = document.createElement('app-select');
+    appSelectUpgradeGuard.add(select);
+    host.append(source);
+    if (parent) parent.insertBefore(host, nextSibling);
+    appSelectUpgradeGuard.delete(select);
   }
 
   const { label, text: labelText } = labelTextFor(select);
@@ -83,36 +254,27 @@ export function enhanceSelect(select) {
   const labelId = `standard-select-label-${controlNumber}`;
   const anchorName = `--standard-select-anchor-${controlNumber}`;
 
-  const wrapper = document.createElement('span');
-  wrapper.className = 'standard-select-control';
-
-  const trigger = document.createElement('button');
-  trigger.type = 'button';
+  const root = host.shadowRoot;
+  const trigger = root.querySelector('.standard-select-trigger');
+  const valueDisplay = root.querySelector('.standard-select-value');
+  const popup = root.querySelector('.standard-select-popup');
+  const componentLabel = root.querySelector('.standard-select-label');
   trigger.id = triggerId;
-  trigger.className = 'util-action standard-select-trigger';
-  trigger.setAttribute('role', 'combobox');
-  trigger.setAttribute('aria-haspopup', 'listbox');
-  trigger.setAttribute('aria-expanded', 'false');
   trigger.setAttribute('aria-controls', popupId);
-  trigger.setAttribute('aria-valuetext', '');
-  trigger.dataset.value = '';
-
-  const valueDisplay = document.createElement('span');
-  valueDisplay.className = 'standard-select-value';
-  const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  chevron.setAttribute('viewBox', '0 0 24 24');
-  chevron.setAttribute('aria-hidden', 'true');
-  chevron.classList.add('standard-select-chevron');
-  const chevronPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  chevronPath.setAttribute('d', 'm6 9 6 6 6-6');
-  chevron.append(chevronPath);
-  trigger.append(valueDisplay, chevron);
-
-  const popup = document.createElement('div');
   popup.id = popupId;
-  popup.className = 'menu-popover standard-select-popup';
-  popup.setAttribute('role', 'listbox');
   popup.setAttribute('aria-label', labelText);
+  componentLabel.id = labelId;
+  componentLabel.textContent = labelText;
+  componentLabel.hidden = !label;
+  componentLabel.htmlFor = triggerId;
+  if (label) {
+    trigger.setAttribute('aria-labelledby', labelId);
+    if (label.id && !host.id) host.id = label.id;
+    for (const className of label.classList) host.classList.add(className);
+  } else {
+    trigger.setAttribute('aria-label', labelText);
+  }
+  host.classList.add('standard-select-field', 'standard-select-control');
 
   const hasPopover = typeof popup.showPopover === 'function'
     && typeof popup.hidePopover === 'function';
@@ -126,23 +288,19 @@ export function enhanceSelect(select) {
     popup.dataset.anchorPositioned = 'true';
   }
 
-  const field = document.createElement('div');
-  field.className = `standard-select-field${label?.className ? ` ${label.className}` : ''}`;
   if (label) {
-    const labelElement = document.createElement('label');
-    labelElement.id = labelId;
-    labelElement.className = 'standard-select-label';
-    labelElement.htmlFor = triggerId;
-    labelElement.textContent = labelText;
-    trigger.setAttribute('aria-labelledby', labelId);
-    label.replaceWith(field);
-    field.append(labelElement);
-  } else {
-    trigger.setAttribute('aria-label', labelText);
-    select.parentElement?.replaceChild(field, select);
+    if (label.closest('app-select') === host) {
+      label.replaceWith(select);
+    } else if (label.contains(host)) {
+      const parent = label.parentNode;
+      if (parent) {
+        parent.insertBefore(host, label);
+        label.remove();
+      }
+    }
   }
-  wrapper.append(trigger);
-  field.append(wrapper);
+  if (select.parentElement !== host) host.append(select);
+  select.slot = 'native';
 
   select.classList.remove('util-select');
   select.classList.add('standard-select-native');
@@ -156,10 +314,6 @@ export function enhanceSelect(select) {
     select.removeAttribute('required');
     trigger.setAttribute('aria-required', 'true');
   }
-
-  field.append(select);
-  const popupHost = select.closest('dialog') || document.body;
-  popupHost.append(popup);
 
   let optionElements = [];
   let activeIndex = -1;
@@ -343,7 +497,8 @@ export function enhanceSelect(select) {
 
   const control = {
     select,
-    field,
+    field: host,
+    host,
     trigger,
     popup,
     anchorSupported,
@@ -448,7 +603,19 @@ export function focusCustomSelect(select) {
   (control?.trigger || select)?.focus({ preventScroll: true });
 }
 
+export function setCustomSelectInvalid(select, invalid = true) {
+  const trigger = controls.get(select)?.trigger;
+  if (!trigger) return;
+  if (invalid) trigger.setAttribute('aria-invalid', 'true');
+  else trigger.removeAttribute('aria-invalid');
+}
+
 class AppSelectElement extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' }).innerHTML = SELECT_COMPONENT_STYLES;
+  }
+
   connectedCallback() {
     const select = this.querySelector('select');
     if (select && !appSelectUpgradeGuard.has(select)) enhanceSelect(select);

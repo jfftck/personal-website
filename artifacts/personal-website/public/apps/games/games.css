@@ -377,7 +377,7 @@
   text-transform: uppercase;
 }
 
-.game-toolbar button:not(.util-action):not(.standard-select-trigger),
+.game-toolbar button:not(.util-action),
 .game-toolbar select,
 .game-settings-dialog button,
 .game-settings-dialog select,
@@ -394,13 +394,13 @@
 
 .game-toolbar button[hidden] { display: none !important; }
 
-.game-toolbar button:not(.util-action):not(.standard-select-trigger),
+.game-toolbar button:not(.util-action),
 .game-settings-dialog button,
 .game-promotion button { cursor: pointer; }
-.game-toolbar button:not(.util-action):not(.standard-select-trigger):hover,
+.game-toolbar button:not(.util-action):hover,
 .game-settings-dialog button:hover,
 .game-promotion button:hover { background: var(--btn-hover); }
-.game-toolbar button:not(.util-action):not(.standard-select-trigger):active,
+.game-toolbar button:not(.util-action):active,
 .game-settings-dialog button:active,
 .game-promotion button:active { background: var(--btn-active); }
 .game-toolbar button:not(.util-action):disabled { cursor: not-allowed; opacity: 0.42; }
@@ -419,25 +419,31 @@
   accent-color: var(--accent);
 }
 
-.game-toolbar .standard-select-trigger,
-.game-settings-dialog .standard-select-trigger,
-.game-new-game-option .standard-select-trigger {
-  min-height: 2.4rem;
-  padding: 0.5rem 0.7rem;
-  border: 1px solid transparent;
-  border-radius: 0.65rem;
-  background: color-mix(in srgb, var(--app-bg) 92%, var(--app-text) 8%);
-  color: var(--app-text);
+.game-toolbar app-select {
+  display: block;
+  width: auto;
+  flex: 0 1 auto;
+  --select-trigger-min-height: 2.4rem;
+  --select-trigger-padding: 0.5rem 0.7rem;
+  --select-trigger-border: 1px solid transparent;
+  --select-trigger-background: transparent;
+  --select-trigger-color: var(--game-ink);
+  --select-trigger-hover: var(--btn-hover);
+  --select-trigger-active: var(--btn-active);
 }
-.game-toolbar button:not(.util-action):not(.standard-select-trigger) {
+.game-settings-dialog app-select,
+.game-new-game-option {
+  display: block;
+  --select-trigger-min-height: 2.4rem;
+  --select-trigger-padding: 0.5rem 0.7rem;
+  --select-trigger-border: 1px solid transparent;
+  --select-trigger-radius: 0.65rem;
+  --select-trigger-background: color-mix(in srgb, var(--app-bg) 92%, var(--app-text) 8%);
+  --select-trigger-color: var(--app-text);
+}
+.game-toolbar button:not(.util-action) {
   border-color: transparent;
   background: transparent;
-}
-.game-toolbar .standard-select-trigger { background: transparent; }
-.game-toolbar .standard-select-trigger:hover,
-.game-settings-dialog .standard-select-trigger:hover,
-.game-new-game-option .standard-select-trigger:hover {
-  background: var(--btn-hover);
 }
 
 .game-toolbar button:focus-visible,
@@ -517,31 +523,28 @@
   min-width: 0;
   color: var(--game-ink);
   font-weight: 650;
+  --select-field-display: flex;
+  --select-field-align-items: center;
+  --select-field-justify-content: space-between;
+  --select-field-gap: 1rem;
+  --select-label-flex: 1 1 auto;
+  --select-trigger-flex: 0 1 14rem;
+  --select-trigger-width: min(14rem, 100%);
 }
 .game-settings-option[hidden],
 .game-new-game-option[hidden] { display: none; }
-.game-settings-option .standard-select-field {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+.game-settings-option.standard-select-field {
+  display: block;
   width: 100%;
-}
-.game-settings-option .standard-select-label { flex: 1 1 auto; min-width: 0; }
-.game-settings-option .standard-select-control {
-  flex: 0 1 14rem;
-  width: min(14rem, 100%);
   min-width: 0;
 }
 @container game-settings-panel (width < 24rem) {
-  .game-settings-option .standard-select-field {
-    display: grid;
-    align-items: start;
-    gap: 0.35rem;
-  }
-  .game-settings-option .standard-select-control {
-    flex: 0 1 auto;
-    width: min(14rem, 100%);
+  .game-settings-option.standard-select-field {
+    --select-field-display: grid;
+    --select-field-align-items: start;
+    --select-field-justify-content: stretch;
+    --select-field-gap: 0.35rem;
+    --select-trigger-flex: 0 1 auto;
   }
 }
 .game-settings-dialog .game-theme-control {

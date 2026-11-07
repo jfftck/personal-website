@@ -184,7 +184,7 @@
 .weather-skeleton-meta { width:80%;height:.8rem; }
 @keyframes weather-shimmer { from { opacity:.38; } to { opacity:.78; } }
 .weather-setup { width:min(100%,420px);margin:auto;display:grid;gap:.8rem;padding:1.25rem;border:1px solid var(--app-border);border-radius:1rem;background:var(--util-surface); }
-.weather-setup label,.weather-setup .standard-select-field { display:grid;gap:.3rem;text-align:left;font-size:.88rem; }
+.weather-setup label,.weather-setup .standard-select-field { display:block;text-align:left;font-size:.88rem; }
 .weather-remove { flex:none;border-color:color-mix(in srgb,#d96868 52%,var(--app-border));color:color-mix(in srgb,#ff8b8b 78%,var(--app-text)); }
 .weather-setup-actions { display:flex;flex-wrap:wrap;gap:.5rem; }
 .weather-setup-actions .weather-submit { flex:1 1 100%; }
@@ -195,10 +195,10 @@
 .weather-settings-heading h2 { margin:0;font-size:1.25rem; }
 .weather-settings-close { font-size:1.2rem;line-height:1; }
 .weather-settings-form > label,.weather-settings-form > .standard-select-field,
-.weather-settings-form > app-select > .standard-select-field { display:grid;gap:.35rem;font-size:.88rem; }
+.weather-settings-form > app-select { display:block;font-size:.88rem; }
 .weather-settings-hint { margin:-.65rem 0 0;color:var(--util-detail);font-size:.8rem; }
 .weather-add-location-row { display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:end;gap:.5rem; }
-.weather-add-location-row label,.weather-add-location-row .standard-select-field { display:grid;gap:.35rem;min-width:0;font-size:.88rem; }
+.weather-add-location-row label,.weather-add-location-row .standard-select-field { display:block;min-width:0;font-size:.88rem; }
 .weather-settings-new-unit { min-width:4.5rem; }
 .weather-settings-add-location { min-height:2.4rem; }
 .weather-settings-add-location:disabled { opacity:.65;cursor:wait; }
