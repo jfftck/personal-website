@@ -43,6 +43,11 @@ export function buildImgViewer(id, ctx, initialState = null) {
   } : null;
 
   const el = document.createElement('div');
+  const selectionStatus = document.createElement('span');
+  selectionStatus.className = 'sr-only viewer-selection-status';
+  selectionStatus.setAttribute('role', 'status');
+  selectionStatus.setAttribute('aria-live', 'polite');
+  selectionStatus.setAttribute('aria-atomic', 'true');
 
   const toolbar = document.createElement('div');
   toolbar.className = 'app-toolbar img-toolbar';
@@ -156,7 +161,10 @@ export function buildImgViewer(id, ctx, initialState = null) {
 
   function updateSidebarActive() {
     sidebarList.querySelectorAll('.doc-sidebar-item').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.url === currentFile?.url);
+      const active = btn.dataset.url === currentFile?.url;
+      btn.classList.toggle('active', active);
+      if (active) btn.setAttribute('aria-current', 'true');
+      else btn.removeAttribute('aria-current');
     });
     thumbnails.querySelectorAll('.img-thumbnail').forEach(btn => {
       const active = btn.dataset.url === currentFile?.url;
@@ -203,6 +211,7 @@ export function buildImgViewer(id, ctx, initialState = null) {
     galleryIdx  = ((idx % gallery.length) + gallery.length) % gallery.length;
     const item  = gallery[galleryIdx];
     currentFile = { url: item.url, name: item.displayName };
+    selectionStatus.textContent = `Selected picture: ${item.displayName}`;
     ctx.setAppTitle(id, item.displayName);
     setImageSource(item.url, item.displayName);
     resetTransform();
@@ -278,6 +287,7 @@ export function buildImgViewer(id, ctx, initialState = null) {
         showGalleryItem(gIdx);
       } else {
         currentFile = { url, name };
+        selectionStatus.textContent = `Selected picture: ${name}`;
         ctx.setAppTitle(id, name);
         setImageSource(url, name);
         resetTransform();
@@ -371,6 +381,7 @@ export function buildImgViewer(id, ctx, initialState = null) {
   stage.appendChild(thumbnails);
   content.appendChild(stage);
   el.appendChild(toolbar);
+  el.appendChild(selectionStatus);
   el.appendChild(content);
 
   loadGallery();

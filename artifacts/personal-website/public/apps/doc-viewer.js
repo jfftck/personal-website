@@ -110,6 +110,11 @@ export function buildDocViewer(id, ctx, initialState = null) {
   let pendingState = typeof initialState?.url === 'string' ? { url: initialState.url } : null;
 
   const el = document.createElement('div');
+  const selectionStatus = document.createElement('span');
+  selectionStatus.className = 'sr-only viewer-selection-status';
+  selectionStatus.setAttribute('role', 'status');
+  selectionStatus.setAttribute('aria-live', 'polite');
+  selectionStatus.setAttribute('aria-atomic', 'true');
 
   const toolbar = document.createElement('div');
   toolbar.className = 'app-toolbar doc-toolbar';
@@ -176,7 +181,10 @@ export function buildDocViewer(id, ctx, initialState = null) {
 
   function updateSidebarActive() {
     sidebarList.querySelectorAll('.doc-sidebar-item').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.url === currentFile?.url);
+      const active = btn.dataset.url === currentFile?.url;
+      btn.classList.toggle('active', active);
+      if (active) btn.setAttribute('aria-current', 'true');
+      else btn.removeAttribute('aria-current');
     });
   }
 
@@ -208,6 +216,7 @@ export function buildDocViewer(id, ctx, initialState = null) {
     const matchedDocument = allDocs.find(doc => doc.url === url);
     stylesheetUrl = stylesheetUrl || matchedDocument?.stylesheetUrl || null;
     currentFile = { url, name, stylesheetUrl };
+    selectionStatus.textContent = `Selected document: ${name}`;
     ctx.setAppTitle(id, name);
     updateSidebarActive();
     ctx.saveSession?.();
@@ -405,6 +414,7 @@ export function buildDocViewer(id, ctx, initialState = null) {
   content.appendChild(sidebar);
   content.appendChild(docScroll);
   el.appendChild(toolbar);
+  el.appendChild(selectionStatus);
   el.appendChild(content);
 
   loadManifests();

@@ -30,6 +30,11 @@ export function buildMediaPlayer(id, ctx) {
   let sidebarOpen = false;
 
   const el = document.createElement('div');
+  const selectionStatus = document.createElement('span');
+  selectionStatus.className = 'sr-only viewer-selection-status';
+  selectionStatus.setAttribute('role', 'status');
+  selectionStatus.setAttribute('aria-live', 'polite');
+  selectionStatus.setAttribute('aria-atomic', 'true');
 
   const toolbar = document.createElement('div');
   toolbar.className = 'app-toolbar media-toolbar';
@@ -76,12 +81,16 @@ export function buildMediaPlayer(id, ctx) {
   // ── Helpers ────────────────────────────────────────────────────
   function updateSidebarActive() {
     sidebarList.querySelectorAll('.doc-sidebar-item').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.url === currentFile?.url);
+      const active = btn.dataset.url === currentFile?.url;
+      btn.classList.toggle('active', active);
+      if (active) btn.setAttribute('aria-current', 'true');
+      else btn.removeAttribute('aria-current');
     });
   }
 
   function playFile(url, name, poster) {
     currentFile = { url, name, poster };
+    selectionStatus.textContent = `Selected video: ${name}`;
     ctx.setAppTitle(id, name);
     video.poster = poster || '';
     video.src    = url;
@@ -166,6 +175,7 @@ export function buildMediaPlayer(id, ctx) {
   content.appendChild(sidebar);
   content.appendChild(wrapper);
   el.appendChild(toolbar);
+  el.appendChild(selectionStatus);
   el.appendChild(content);
 
   loadManifest();

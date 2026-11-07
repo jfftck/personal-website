@@ -3917,6 +3917,10 @@ test('Document Viewer can open and close a file from its compact browse list', a
   await secondDocument.click();
   await expect(app.locator('.doc-body h1')).toHaveText('Compact Second Document');
   await expect(secondDocument).toHaveClass(/active/);
+  await expect(secondDocument).toHaveAttribute('aria-current', 'true');
+  await expect(sidebar.locator('.doc-sidebar-item').filter({ hasText: 'Compact First Document' }))
+    .not.toHaveAttribute('aria-current', 'true');
+  await expect(app.locator('.viewer-selection-status')).toHaveText('Selected document: Compact Second Document');
   await expectInsideAppWindow(app, browse);
   await expectInsideAppWindow(app, zoomIn);
 
@@ -3947,6 +3951,12 @@ test('Image Viewer can select a photo from its compact browse list', async ({ pa
   await expect(image).toHaveAttribute('src', '/files/pictures/compact-list-second.svg');
   await expect(image).toHaveAttribute('alt', 'Compact Second Photo');
   await expect(secondPhoto).toHaveClass(/active/);
+  await expect(secondPhoto).toHaveAttribute('aria-current', 'true');
+  await expect(sidebar.locator('.doc-sidebar-item').filter({ hasText: 'Compact First Photo' }))
+    .not.toHaveAttribute('aria-current', 'true');
+  await expect(app.locator('.img-thumbnail:has(img[src="/files/pictures/compact-list-second.svg"])'))
+    .toHaveAttribute('aria-current', 'true');
+  await expect(app.locator('.viewer-selection-status')).toHaveText('Selected picture: Compact Second Photo');
   await expectInsideAppWindow(app, viewport);
   await expectInsideAppWindow(app, browse);
   await expectInsideAppWindow(app, fit);
@@ -3978,6 +3988,10 @@ test('Media Player can select a video from its compact browse list', async ({ pa
   await secondVideo.click();
   await expect(video).toHaveAttribute('src', '/files/videos/compact-list-second.mp4');
   await expect(secondVideo).toHaveClass(/active/);
+  await expect(secondVideo).toHaveAttribute('aria-current', 'true');
+  await expect(sidebar.locator('.doc-sidebar-item').filter({ hasText: 'Compact First Video' }))
+    .not.toHaveAttribute('aria-current', 'true');
+  await expect(app.locator('.viewer-selection-status')).toHaveText('Selected video: Compact Second Video');
   await expectInsideAppWindow(app, player);
   await expectInsideAppWindow(app, browse);
   await expectInsideAppWindow(app, external);
