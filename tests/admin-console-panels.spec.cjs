@@ -162,11 +162,11 @@ test.afterAll(async () => {
   await stop(adminProcess);
 });
 
-async function mockConsoleApi(page, treeHandler) {
+async function mockConsoleApi(page, treeHandler, revisionOptions = {}) {
   const requests = [];
   const currentTree = {
-    folders: folders.map(folder => ({ ...folder })),
-    files: files.map(file => ({ ...file })),
+    folders: (revisionOptions.initialTree?.folders ?? folders).map(folder => ({ ...folder })),
+    files: (revisionOptions.initialTree?.files ?? files).map(file => ({ ...file })),
   };
   const respondTree = treeHandler ?? (route => fulfillJson(route, currentTree));
   await page.route('**/api/auth/user', route => fulfillJson(route, {
@@ -202,7 +202,18 @@ async function mockConsoleApi(page, treeHandler) {
       return respondTree(route);
     }
     if (path === '/api/content/trash') return fulfillJson(route, []);
-    if (/^\/api\/content\/files\/[^/]+\/versions$/.test(path)) return fulfillJson(route, []);
+    const versionsMatch = path.match(/^\/api\/content\/files\/([^/]+)\/versions$/);
+    if (versionsMatch) {
+      return fulfillJson(route, revisionOptions.versions?.[versionsMatch[1]] ?? []);
+    }
+    const restoreRevisionMatch = path.match(/^\/api\/content\/files\/([^/]+)\/versions\/([^/]+)\/restore$/);
+    if (restoreRevisionMatch && method === 'POST' && revisionOptions.restoreRevision) {
+      const [, fileId, versionId] = restoreRevisionMatch;
+      const restored = revisionOptions.restoreRevision({ fileId, versionId, currentTree });
+      currentTree.files = currentTree.files.map(file => file.id === restored.id ? restored : file);
+      requests.push({ method, path });
+      return fulfillJson(route, restored);
+    }
     if (path === '/api/content/folders' && method === 'POST') {
       const body = route.request().postDataJSON();
       const folder = {
@@ -255,7 +266,7 @@ async function mockConsoleApi(page, treeHandler) {
     return fulfillJson(route, { error: 'Unexpected test request.' }, 404);
   });
   await page.route('**/test-upload', route => route.fulfill({ status: 200, body: '' }));
-  return { requests };
+  return { requests, currentTree };
 }
 
 async function mockUploadRevisionApi(page) {
@@ -560,6 +571,87 @@ test('changing a document assignment updates the stylesheet assigned list', asyn
   await page.getByTestId('file-row-file-style').click();
   await expect(page.getByTestId('stylesheet-assigned-document-file-doc')).toHaveCount(0);
   await expect(page.getByTestId('stylesheet-assigned-document-file-doc-two')).toBeVisible();
+});
+
+test('restoring document revisions immediately updates assigned stylesheet lists', async ({ page }) => {
+  const documentFile = files.find(file => file.id === 'file-doc');
+  const alternateStylesheet = {
+    ...files.find(file => file.id === 'file-style'),
+    id: 'file-style-alt',
+    name: '20260302_Paper.css',
+    title: 'Paper',
+    url: 'https://example.test/files/stylesheets/20260302_Paper.css',
+  };
+  const revision = (id, versionNumber, stylesheetId, createdAt) => ({
+    id,
+    versionNumber,
+    action: versionNumber === 3 ? 'created' : 'updated',
+    name: documentFile.name,
+    originalFileName: documentFile.originalFileName,
+    title: documentFile.title,
+    description: documentFile.description,
+    folderPath: documentFile.folderPath,
+    date: documentFile.date,
+    contentType: documentFile.contentType,
+    sizeBytes: documentFile.sizeBytes,
+    isWallpaper: false,
+    stylesheetId,
+    isDeleted: false,
+    createdAt,
+    gitCommitSha: String(versionNumber).padStart(40, '0'),
+    gitUrl: `https://github.com/jfftck/personal-files/commit/${String(versionNumber).padStart(40, '0')}`,
+  });
+  const revisions = [
+    revision('revision-current', 3, 'file-style', '2026-03-05T00:00:00.000Z'),
+    revision('revision-paper', 2, 'file-style-alt', '2026-03-04T00:00:00.000Z'),
+    revision('revision-default', 1, null, '2026-03-03T00:00:00.000Z'),
+  ];
+  const api = await mockConsoleApi(page, undefined, {
+    initialTree: { folders, files: [...files, alternateStylesheet] },
+    versions: { 'file-doc': revisions },
+    restoreRevision: ({ fileId, versionId, currentTree }) => {
+      const restoredRevision = revisions.find(item => item.id === versionId);
+      const current = currentTree.files.find(item => item.id === fileId);
+      return {
+        ...current,
+        stylesheetId: restoredRevision.stylesheetId,
+        updatedAt: `2026-03-06T00:00:0${restoredRevision.versionNumber}.000Z`,
+      };
+    },
+  });
+  await page.goto(adminUrl);
+
+  await page.getByTestId('file-row-file-doc').click();
+  const confirmAlternate = page.waitForEvent('dialog');
+  const restoreAlternate = page.getByTestId('restore-revision-2').click();
+  await (await confirmAlternate).accept();
+  await restoreAlternate;
+  expect(api.currentTree.files.find(file => file.id === 'file-doc').stylesheetId).toBe('file-style-alt');
+  await expect(page.getByTestId('status-toast')).toHaveText('Restored version 2.');
+
+  await page.getByTestId('file-row-file-style-alt').click();
+  let assigned = page.getByTestId('stylesheet-assigned-documents');
+  await expect(assigned.locator('.count-pill')).toHaveAttribute('aria-label', '1 document');
+  await expect(page.getByTestId('stylesheet-assigned-document-file-doc')).toBeVisible();
+
+  await page.getByTestId('file-row-file-style').click();
+  assigned = page.getByTestId('stylesheet-assigned-documents');
+  await expect(assigned.locator('.count-pill')).toHaveAttribute('aria-label', '1 document');
+  await expect(page.getByTestId('stylesheet-assigned-document-file-doc')).toHaveCount(0);
+  await expect(page.getByTestId('stylesheet-assigned-document-file-doc-two')).toBeVisible();
+
+  await page.getByTestId('file-row-file-doc').click();
+  const confirmDefault = page.waitForEvent('dialog');
+  const restoreDefault = page.getByTestId('restore-revision-1').click();
+  await (await confirmDefault).accept();
+  await restoreDefault;
+  expect(api.currentTree.files.find(file => file.id === 'file-doc').stylesheetId).toBeNull();
+
+  await page.getByTestId('file-row-file-style-alt').click();
+  assigned = page.getByTestId('stylesheet-assigned-documents');
+  await expect(assigned.locator('.count-pill')).toHaveAttribute('aria-label', '0 documents');
+  await expect(page.getByTestId('stylesheet-assigned-document-file-doc')).toHaveCount(0);
+  await expect(assigned).toContainText('No Markdown documents currently use this stylesheet.');
 });
 
 test('document editor can create a CSS stylesheet and assign it to the document', async ({ page }) => {
