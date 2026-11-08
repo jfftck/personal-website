@@ -2,7 +2,7 @@
 
 import { readRawResult, removeData, writeRaw } from '../data-handler.js';
 import { evaluateExpression } from './calculator-math.js';
-import { NOTE_COLORS } from './sticky-notes-data.js';
+import { NOTE_COLORS } from '../shared/note-colors.js';
 
 export const GRAPH_SETTINGS_KEY = 'personal-desktop-calculator-graph-v1';
 export const GRAPH_SETTINGS_VERSION = 2;

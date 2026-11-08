@@ -1,5 +1,4 @@
-import './animation-picker.css';
-import { wrapAppButton } from '../shared/app-controls.js';
+import { wrapAppButton } from './app-controls.js';
 
 let activeController = null;
 let nextPanelId = 0;

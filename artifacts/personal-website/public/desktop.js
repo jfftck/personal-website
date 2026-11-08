@@ -2,9 +2,9 @@
 
 import { S }               from './desktop-state.js';
 import { loadStickyNotes } from './apps/sticky-notes-data.js';
-import { SETTINGS_ICON } from './shared/app-icons.js';
 import { retryWithBackoff, responseLoadError } from './shared/retry.js';
-import { GAMES, initGameMenu } from './apps/game-catalog.js';
+import { APP_LAUNCHERS, APP_REGISTRY, GAME_CENTER_DESCRIPTOR } from './apps/app-registry.js';
+import { GAMES, initGameMenu } from './apps/games/catalog.js';
 import {
   readJSON, readRaw, readRawResult, removeData, restoreDataBackup, writeJSON, writeRaw,
 } from './data-handler.js';
@@ -1037,6 +1037,12 @@ function queueAppAction(id, method, ...args) {
   record.pendingActions.push({ method, args });
 }
 
+function disposeAppApi(type, id) {
+  const disposeMethod = APP_REGISTRY[type]?.state?.disposeMethod;
+  if (disposeMethod) S.appApis[id]?.[disposeMethod]?.();
+  delete S.appApis[id];
+}
+
 function flushPendingAppActions(record) {
   const actions = record.pendingActions || [];
   record.pendingActions = [];
@@ -1062,8 +1068,7 @@ async function hydrateApp(record, def, initialState) {
     loadCtx.reportLoadingRetry = onRetry;
     const appEl = await def.build(module, record.id, initialState, loadCtx);
     if (!isCurrent()) {
-      S.appApis[record.id]?.destroy?.();
-      delete S.appApis[record.id];
+      disposeAppApi(record.type, record.id);
       return;
     }
     if (!(appEl instanceof HTMLElement)) {
@@ -1090,8 +1095,7 @@ async function hydrateApp(record, def, initialState) {
   } catch (error) {
     if (!isCurrent()) return;
     console.error(`Could not load ${def.title}.`, error);
-    S.appApis[record.id]?.destroy?.();
-    delete S.appApis[record.id];
+    disposeAppApi(record.type, record.id);
     const failed = createAppLoadSurface(def.title, 'error');
     failed.dataset.id = record.id;
     failed.dataset.type = record.type;
@@ -1197,8 +1201,8 @@ function closeApp(id) {
 
 function removeAppImmediately(id) {
   if (!S.apps.some(app => app.id === id)) return;
-  S.appApis[id]?.destroy?.();
-  delete S.appApis[id];
+  const record = S.apps.find(app => app.id === id);
+  if (record) disposeAppApi(record.type, id);
   delete S.appTitles[id];
   windowController.removeApp(id);
 }
@@ -1257,6 +1261,7 @@ function updateStripLayout() {
 
 const windowController = createWindowController({
   state: S,
+  appDefinitions: APP_REGISTRY,
   document,
   window,
   appStrip,
@@ -2030,126 +2035,7 @@ const appCtx = {
 };
 
 // ── App registry ──────────────────────────────────────────────
-function lazyApp(title, iconSvg, modulePath, loadModule, exportName, styles = []) {
-  return {
-    title,
-    iconSvg,
-    modulePath,
-    loadModule,
-    styles,
-    build: (module, id, state, ctx) => module[exportName](id, ctx, state),
-  };
-}
-
-const GAME_MODULE_PATH = './apps/game-center.js';
-const GAME_STYLE_PATHS = [
-  './apps/games/games.css',
-  './apps/games/artwork.css',
-  './apps/games/glass.css',
-];
-const APP_DEFS = {
-  ...Object.fromEntries(GAMES.map(game => [game.type, {
-    title: game.title,
-    iconSvg: game.iconSvg,
-    modulePath: GAME_MODULE_PATH,
-    loadModule: (attempt, loadId) => {
-      if (attempt === 0) return import('./apps/game-center.js');
-      const moduleUrl = new URL('./apps/game-center.js', import.meta.url);
-      moduleUrl.searchParams.set('retry', `${loadId}-${attempt}`);
-      return import(/* @vite-ignore */ moduleUrl.href);
-    },
-    styles: GAME_STYLE_PATHS,
-    build: (module, id, state, ctx) => module.buildGame(game.type, id, ctx, state),
-  }])),
-  'doc-viewer': lazyApp(
-    'Document Viewer',
-    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
-    </svg>`,
-    './apps/doc-viewer.js',
-    () => import('./apps/doc-viewer.js'),
-    'buildDocViewer',
-    ['./apps/viewer-apps.css'],
-  ),
-  'img-viewer': lazyApp(
-    'Image Viewer',
-    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
-    </svg>`,
-    './apps/img-viewer.js',
-    () => import('./apps/img-viewer.js'),
-    'buildImgViewer',
-    ['./apps/viewer-apps.css'],
-  ),
-  'file-manager': lazyApp(
-    'File Manager',
-    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
-    </svg>`,
-    './apps/file-manager.js',
-    () => import('./apps/file-manager.js'),
-    'buildFileManager',
-    ['./apps/file-manager.css'],
-  ),
-  'media-player': lazyApp(
-    'Media Player',
-    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M21 3H3c-1.11 0-2 .89-2 2v14c0 1.11.89 2 2 2h18c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 16H3V5h18v14zM8 15l7-4-7-4v8z"/>
-    </svg>`,
-    './apps/media-player.js',
-    () => import('./apps/media-player.js'),
-    'buildMediaPlayer',
-    ['./apps/viewer-apps.css'],
-  ),
-  calendar: lazyApp(
-    'Calendar',
-    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 2h2v2h6V2h2v2h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3V2zm13 8H4v10h16V10z"/></svg>`,
-    './apps/calendar.js',
-    () => import('./apps/calendar.js'),
-    'buildCalendar',
-    ['./apps/utility-apps.css'],
-  ),
-  'world-clock': lazyApp(
-    'World Clock',
-    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 10.4 4 2.4-1 1.7-5-3V6h2v6.4z"/></svg>`,
-    './apps/world-clock.js',
-    () => import('./apps/world-clock.js'),
-    'buildWorldClock',
-    ['./apps/utility-apps.css'],
-  ),
-  calculator: lazyApp(
-    'Calculator',
-    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 2h14a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm1 3v4h12V5H6z"/></svg>`,
-    './apps/calculator.js',
-    () => import('./apps/calculator.js'),
-    'buildCalculator',
-    ['./apps/calculator.css'],
-  ),
-  'sticky-notes': lazyApp(
-    'Sticky Notes',
-    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 3h14a2 2 0 0 1 2 2v11l-5 5H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/></svg>`,
-    './apps/sticky-notes.js',
-    () => import('./apps/sticky-notes.js'),
-    'buildStickyNotes',
-    ['./apps/utility-apps.css'],
-  ),
-  weather: lazyApp(
-    'Weather',
-    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 18a5 5 0 1 1 .8-9.9A6 6 0 0 1 19 10a4 4 0 0 1 0 8H7z"/></svg>`,
-    './apps/weather.js',
-    () => import('./apps/weather.js'),
-    'buildWeather',
-    ['./apps/utility-apps.css'],
-  ),
-  settings: lazyApp(
-    'Settings',
-    SETTINGS_ICON,
-    './apps/settings.js',
-    () => import('./apps/settings.js'),
-    'buildSettings',
-    ['./apps/settings.css'],
-  ),
-};
+const APP_DEFS = APP_REGISTRY;
 
 // ── Session restore ───────────────────────────────────────────
 function restoreSession() {
@@ -2249,10 +2135,41 @@ function wireColEvents(colEl) {
 // ── Global event listeners ────────────────────────────────────
 appMenuBtn.addEventListener('click', e => { e.stopPropagation(); toggleAppMenu(); });
 
+function renderAppLaunchers() {
+  const list = $('app-list');
+  const welcomeButton = list.querySelector('[data-type="welcome"]');
+  const gameCenterButton = $('game-center-entry');
+  const fragment = document.createDocumentFragment();
+  if (welcomeButton) fragment.append(welcomeButton);
+
+  for (const descriptor of APP_LAUNCHERS) {
+    if (!descriptor.window) continue;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'app-launcher';
+    button.dataset.type = descriptor.type;
+
+    const icon = document.createElement('span');
+    icon.className = 'app-launcher-icon';
+    icon.innerHTML = descriptor.launcherIconSvg;
+    icon.setAttribute('aria-hidden', 'true');
+    const name = document.createElement('span');
+    name.className = 'app-launcher-name';
+    name.textContent = descriptor.title;
+    button.append(icon, name);
+    fragment.append(button);
+  }
+
+  if (gameCenterButton) fragment.append(gameCenterButton);
+  list.replaceChildren(fragment);
+}
+
+renderAppLaunchers();
+
 const gameMenu = initGameMenu(appMenu, type => {
   openApp(type);
   closeAppMenu();
-});
+}, GAME_CENTER_DESCRIPTOR);
 
 document.querySelectorAll('#app-list .app-launcher[data-type]').forEach(button => {
   button.addEventListener('click', () => {

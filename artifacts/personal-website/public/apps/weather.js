@@ -1,5 +1,5 @@
-import { enhanceSelects, focusCustomSelect, refreshCustomSelect, setCustomSelectInvalid } from './custom-select.js';
-import { SETTINGS_ICON } from './toolbar.js';
+import { enhanceSelects, focusCustomSelect, refreshCustomSelect, setCustomSelectInvalid } from '../shared/app-select.js';
+import { SETTINGS_ICON } from '../shared/app-icons.js';
 import { wrapAppButton } from '../shared/app-controls.js';
 import { readJSON, writeJSON } from '../data-handler.js';
 

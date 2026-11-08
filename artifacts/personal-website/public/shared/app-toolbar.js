@@ -1,7 +1,7 @@
 'use strict';
 
-import '../shared/app-controls.js';
-import { SETTINGS_ICON } from '../shared/app-icons.js';
+import './app-controls.js';
+import { SETTINGS_ICON } from './app-icons.js';
 
 export { SETTINGS_ICON };
 

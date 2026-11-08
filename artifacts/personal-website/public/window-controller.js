@@ -5,6 +5,7 @@ export const SESSION_KEY_V1 = 'desktop-session-v1';
 
 export function createWindowController({
   state,
+  appDefinitions = {},
   document,
   window,
   appStrip,
@@ -53,7 +54,10 @@ export function createWindowController({
           widthPreset: column.widthPreset,
           apps: column.appIds.map(appId => {
             const app = state.apps.find(candidate => candidate.id === appId);
-            const appState = state.appApis[appId]?.getSessionState?.();
+            const snapshotMethod = appDefinitions[app.type]?.state?.snapshotMethod || 'getSessionState';
+            const appState = snapshotMethod
+              ? state.appApis[appId]?.[snapshotMethod]?.()
+              : undefined;
             return { type: app.type, ...(appState ? { state: appState } : {}) };
           }),
         })),

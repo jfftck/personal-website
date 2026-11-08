@@ -212,9 +212,9 @@ async function restoreGame(page, session, game = 'klondike') {
 
 test('root menu restores app and file entries; all nine game tiles stay nested with back/Escape navigation', async ({ page }) => {
   await page.locator('#app-menu-btn').click();
-  await expect(page.locator('#app-list .app-launcher')).toHaveCount(6);
-  await expect(page.locator('#app-list .app-launcher[data-type]')).toHaveCount(5);
-  await expect(page.locator('#doc-files-list .app-file-btn')).toHaveCount(9);
+  await expect(page.locator('#app-list .app-launcher')).toHaveCount(12);
+  await expect(page.locator('#app-list .app-launcher[data-type]')).toHaveCount(11);
+  await expect(page.locator('#doc-files-list .app-file-btn')).toHaveCount(10);
   await expect(page.locator('#game-submenu')).toBeHidden();
   await page.locator('#game-center-entry').click();
   await expect(page.locator('#launcher-root')).toBeHidden();
@@ -277,7 +277,7 @@ test('game and game UI module failures can be retried without duplicate windows 
   await page.locator('#welcome-win-close').click();
 
   const game = page.locator('.app-window[data-type="minesweeper"]');
-  const calculator = page.locator('.app-window.calc-wrap[data-type="calculator"]');
+  const calculator = page.locator('.app-window[data-type="calculator"] .calc-wrap');
   await expect(game).toHaveAttribute('data-load-state', 'error', { timeout: 15_000 });
   await expect(game).toContainText('Minesweeper couldn’t be loaded');
   await expect(game.getByRole('button', { name: 'Retry' })).toBeVisible();

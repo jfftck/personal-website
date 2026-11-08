@@ -37,13 +37,20 @@ export const GAMES = [
   },
 ];
 
-export function initGameMenu(menu, openGame) {
+export function initGameMenu(menu, openGame, gameCenterDescriptor = null) {
   const root = menu.querySelector('#launcher-root');
   const submenu = menu.querySelector('#game-submenu');
   const entry = menu.querySelector('#game-center-entry');
   const back = menu.querySelector('#game-menu-back');
   const heading = menu.querySelector('#app-menu-title');
   const games = menu.querySelector('#game-list');
+  if (gameCenterDescriptor) {
+    const icon = entry.querySelector('.app-launcher-icon');
+    const name = entry.querySelector('.app-launcher-name');
+    if (icon) icon.innerHTML = gameCenterDescriptor.launcherIconSvg;
+    if (name) name.textContent = gameCenterDescriptor.title;
+    entry.setAttribute('aria-label', gameCenterDescriptor.title);
+  }
   for (const game of GAMES) {
     const btn = document.createElement('button');
     btn.type = 'button'; btn.className = 'app-launcher';

@@ -5,7 +5,7 @@ import {
 import { createGameSession, inspectGameSession } from './game-state.js';
 import { addGameThemeControl, addGameThemeResetControl } from './themes.js';
 import { createMinesweeperCelebration } from './game-celebrations.js';
-import { refreshCustomSelect } from '../custom-select.js';
+import { refreshCustomSelect } from '../../shared/app-select.js';
 
 export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
   const { el, toolbarLeft, toolbarCenter, status, area, settings } = gameShell(id, 'Minesweeper',

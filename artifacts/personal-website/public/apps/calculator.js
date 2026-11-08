@@ -1,9 +1,9 @@
 'use strict';
 
-import { enhanceSelect, refreshCustomSelect } from './custom-select.js';
-import { NOTE_COLORS } from './sticky-notes-data.js';
+import { enhanceSelect, refreshCustomSelect } from '../shared/app-select.js';
+import { NOTE_COLORS } from '../shared/note-colors.js';
 import { wrapAppButton } from '../shared/app-controls.js';
-import { SETTINGS_ICON } from './toolbar.js';
+import { SETTINGS_ICON } from '../shared/app-icons.js';
 import { readRaw, writeRaw } from '../data-handler.js';
 import { convertExpressionRadix, evaluateExpression, formatRadixNumber } from './calculator-math.js';
 import { createCalculatorSession } from './calculator-session.js';

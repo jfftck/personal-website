@@ -1,6 +1,6 @@
 'use strict';
 
-import { toolBtn, initResponsiveToolbar } from './toolbar.js';
+import { toolBtn, initResponsiveToolbar } from '../shared/app-toolbar.js';
 
 async function fetchPicturesManifest() {
   try {

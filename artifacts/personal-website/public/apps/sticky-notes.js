@@ -1,8 +1,10 @@
 'use strict';
 
-import { NOTE_COLORS, loadStickyNotes, saveStickyNotes } from './sticky-notes-data.js';
+import { NOTE_COLORS } from '../shared/note-colors.js';
+import { loadStickyNotes, saveStickyNotes } from './sticky-notes-data.js';
 import { wrapAppButton } from '../shared/app-controls.js';
-export { NOTE_COLORS, loadStickyNotes } from './sticky-notes-data.js';
+export { NOTE_COLORS } from '../shared/note-colors.js';
+export { loadStickyNotes } from './sticky-notes-data.js';
 
 export function buildStickyNotes(id, ctx, initialState = null) {
   const root = document.createElement('section');

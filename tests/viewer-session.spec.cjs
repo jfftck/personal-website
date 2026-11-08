@@ -40,7 +40,7 @@ test('desktop defers optional help and app controls until they are opened', asyn
   const loadedModulePaths = () => page.evaluate(() => performance.getEntriesByType('resource')
     .map(entry => new URL(entry.name).pathname));
   const initialModules = await loadedModulePaths();
-  expect(initialModules.some(path => path.endsWith('/apps/toolbar.js'))).toBe(false);
+  expect(initialModules.some(path => path.endsWith('/shared/app-toolbar.js'))).toBe(false);
   expect(initialModules.some(path => path.endsWith('/shared/app-controls.js'))).toBe(false);
   expect(initialModules.some(path => path.endsWith('/shared/desktop-help.js'))).toBe(false);
 
@@ -60,7 +60,7 @@ test('desktop defers optional help and app controls until they are opened', asyn
   await page.locator('#app-list .app-launcher[data-type="calculator"]').click();
   await expect(page.locator('.app-window[data-type="calculator"] .calc')).toBeVisible();
   const appModules = await loadedModulePaths();
-  expect(appModules.some(path => path.endsWith('/apps/toolbar.js'))).toBe(true);
+  expect(appModules.some(path => path.endsWith('/shared/app-toolbar.js'))).toBe(false);
   expect(appModules.some(path => path.endsWith('/shared/app-controls.js'))).toBe(true);
 });
 

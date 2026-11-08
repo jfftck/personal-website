@@ -69,7 +69,7 @@ test('desktop startup keeps app-only controls and optional shell modules out of 
   const sourceBytes = [...modules].reduce((total, file) => total + fs.statSync(file).size, 0);
 
   assert.ok(sourceBytes < 170_000, `Expected the initial graph below 170 KB, received ${sourceBytes} bytes`);
-  assert.ok(!modulePaths.includes('apps/toolbar.js'));
+  assert.ok(!modulePaths.includes('shared/app-toolbar.js'));
   assert.ok(!modulePaths.includes('shared/app-controls.js'));
   assert.ok(!modulePaths.includes('shared/desktop-help.js'));
   assert.ok(!modulePaths.includes('shared/desktop-wallpaper.js'));

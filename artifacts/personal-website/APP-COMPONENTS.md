@@ -14,7 +14,7 @@ Use the shared controls in `public/shared/` and the shared tokens in `public/des
 | Settings | `public/apps/settings.css` | Uses the desktop theme with a distinct sidebar, section headings, and card hierarchy. Preserve that information architecture; routine buttons and fields should still use shared controls. |
 | Game surfaces and boards | `public/apps/games/games.css` | Game toolbar and board layouts with per-game rules, board colors, and tactile table treatments. Reuse the common toolbar button base, but retain game-specific board geometry, status, and rules. |
 | Game material and artwork | `public/apps/games/glass.css`, `public/apps/games/artwork.css` | Glass is a board/piece material overlay. Artwork selects card faces/backs and chess/reversi piece styles. These are intentionally independent from the app/window color theme. Do not flatten them into utility-app colors. |
-| Animation picker | `public/apps/animation-picker.css` | A shared right-side drawer used by desktop and game animation settings. It inherits the active window/game theme and keeps its own overlay, drawer, and animation behavior. Its trigger and Done action use the shared button base. |
+| Animation picker | `public/shared/animation-picker.css` | A shared right-side drawer used by desktop and game animation settings. It inherits the active window/game theme and keeps its own overlay, drawer, and animation behavior. Its trigger and Done action use the shared button base. |
 | Legacy landing page | `public/index-legacy.html`, `public/index.css` | Separate editorial landing-page styling; it is not the desktop app stylesheet. Keep it separate unless the landing page itself is being redesigned. |
 
 ### Intentional differences
@@ -32,7 +32,7 @@ Use the shared controls in `public/shared/` and the shared tokens in `public/des
 | Standard action button | `<app-button><button …></button></app-button>` and `.util-action` | Settings navigation/reset/order actions, animation-picker trigger/Done, viewer and File Manager toolbars, calendar navigation, and routine Weather, World Clock, Sticky Notes, and Calculator actions. Native buttons remain the semantic and event target. Variants: `size="icon"` or `size="compact"`; `variant="primary"` or `variant="quiet"` when needed. A specific app may add layout classes, but should not restyle the common border, surface, focus, or disabled state. |
 | Game toolbar action | Native button with `.util-action` | Game toolbar controls share the action surface and focus behavior while `games.css` supplies the game palette and icon dimensions. Preserve game-specific pressed states such as Minesweeper Flag mode. |
 | Text input | `.util-field` on the native input/textarea | Shared border, surface, text, and placeholder styling. Keep labels and descriptions in the app so the visible and accessible names remain meaningful. Sticky-note title/body fields use the shared field focus behavior with a transparent paper-like surface. Calculator expression, function, and graph-range inputs remain specialized. |
-| Select/menu | `<app-select>` around a native `<select>`; `enhanceSelect()` / `enhanceSelects()` | The native select remains the value/form source; the custom component supplies the accessible listbox, keyboard handling, popover/anchor positioning, and fallback. Do not introduce a parallel dropdown for ordinary option lists. |
+| Select/menu | `public/shared/app-select.js`; `<app-select>` around a native `<select>` | The native select remains the value/form source; the shared component supplies the accessible listbox, keyboard handling, popover/anchor positioning, and fallback. Do not introduce a parallel dropdown for ordinary option lists. |
 | Popover list | `.menu-popover` and the standard select popover styles | Shared tinted/blurred surface and stacking behavior for app menus. Keep menu items and placement app-specific, and ensure the popover overlays nearby content. |
 | Dialog footer | `<app-dialog-actions>` inside a native `<dialog>` | Shared Cancel-before-primary ordering and Cancel behavior. Keep apply/save behavior in the owning app. Game overlays that must coexist with game screens remain a separate, explicitly managed pattern. |
 | Checkbox / radio / range | `<app-checkbox>`, `<app-radio>`, and `<app-range>` wrapping native inputs | Shared component-owned styling with native form values and accessible checkbox, radio, and slider semantics. Keep names, labels, checked/disabled state, and event handlers on the native input. |
@@ -51,11 +51,13 @@ Use the shared controls in `public/shared/` and the shared tokens in `public/des
 
 ## Stylesheet loading and cascade
 
-`desktop.css` and `desktop-windows.css` load with the desktop shell. App family styles are registered on their lazy app definitions and loaded before that app is built. The loader deduplicates stylesheet links, appends them after the shell styles, and prefetches registered app styles during idle time. Keep each family's base rules and container/media-query overrides together in source order; do not depend on the order in which unrelated apps are opened.
+`desktop.css` and `desktop-windows.css` load with the desktop shell. App family styles are registered on lightweight app descriptors and loaded before that app is built. The loader deduplicates stylesheet links, appends them after the shell styles, and prefetches registered app styles during idle time. Keep each family's base rules and container/media-query overrides together in source order; do not depend on the order in which unrelated apps are opened.
 
 Settings remains in `public/apps/settings.css`. Game boards and artwork remain in their separate game stylesheets; these are not part of the utility, viewer, or File Manager families.
 
 ## Using shared controls
+
+Import shared behavior from `public/shared/`: `app-select.js` owns the standard select enhancer, `app-toolbar.js` owns toolbar buttons and responsive overflow, and `animation-picker.js` plus its descriptor-loaded stylesheet owns the shared animation drawer. Shared UI modules must not import app implementation modules.
 
 Import `wrapAppButton` from `public/shared/app-controls.js` when creating a standard button in JavaScript. It wraps a native button without moving its event listeners or changing its accessible name:
 

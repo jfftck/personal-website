@@ -1,6 +1,6 @@
-import { GAMES } from './game-catalog.js';
+import { GAMES } from './games/catalog.js';
 import { retryWithBackoff } from '../shared/retry.js';
-export { GAMES, initGameMenu } from './game-catalog.js';
+export { GAMES, initGameMenu } from './games/catalog.js';
 
 const SOLITAIRE_GAMES = new Set([
   'klondike', 'spider', 'freecell', 'pyramid', 'tripeaks', 'golf',

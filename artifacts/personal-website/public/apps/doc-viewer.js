@@ -1,6 +1,6 @@
 'use strict';
 
-import { toolBtn, initResponsiveToolbar } from './toolbar.js';
+import { toolBtn, initResponsiveToolbar } from '../shared/app-toolbar.js';
 import { renderMarkdown, esc } from '../shared/markdown.js';
 import { retryWithBackoff, responseLoadError } from '../shared/retry.js';
 

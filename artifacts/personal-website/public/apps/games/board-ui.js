@@ -1,4 +1,4 @@
-import { refreshCustomSelect } from '../custom-select.js';
+import { refreshCustomSelect } from '../../shared/app-select.js';
 
 import { Chess, chessStatus } from './chess.js';
 import { createReversi, reversiMoves, playReversi, reversiScore } from './reversi.js';

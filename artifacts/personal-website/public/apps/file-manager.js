@@ -1,6 +1,6 @@
 'use strict';
 
-import { initResponsiveToolbar } from './toolbar.js';
+import { initResponsiveToolbar } from '../shared/app-toolbar.js';
 
 const FOLDER_REFRESH_EVENT = 'niri:file-manager-folder-refreshed';
 let manifestSequence = 0;

@@ -1,6 +1,6 @@
-import { enhanceSelect } from '../custom-select.js';
-import { SETTINGS_ICON } from '../toolbar.js';
-import { createAnimationPickerController } from '../animation-picker.js';
+import { enhanceSelect } from '../../shared/app-select.js';
+import { SETTINGS_ICON } from '../../shared/app-icons.js';
+import { createAnimationPickerController } from '../../shared/animation-picker.js';
 
 const TOOLBAR_ICONS = {
   settings: SETTINGS_ICON,

@@ -1,15 +1,7 @@
 import { readJSON, writeJSON } from '../data-handler.js';
+import { NOTE_COLORS } from '../shared/note-colors.js';
 
 const KEY = 'personal-desktop-sticky-notes-v1';
-
-export const NOTE_COLORS = [
-  { value: 'yellow', label: 'Yellow', hex: '#e5bb22' },
-  { value: 'orange', label: 'Orange', hex: '#e47b27' },
-  { value: 'red', label: 'Red', hex: '#d94a4a' },
-  { value: 'purple', label: 'Purple', hex: '#9a69d4' },
-  { value: 'blue', label: 'Blue', hex: '#3689cf' },
-  { value: 'green', label: 'Green', hex: '#48945a' },
-];
 
 export function loadStickyNotes() {
   const data = readJSON(KEY, [], { validate: Array.isArray });

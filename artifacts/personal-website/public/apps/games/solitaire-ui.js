@@ -10,7 +10,7 @@ import {
 } from './ui.js';
 import { createGameSession, inspectGameSession } from './game-state.js';
 import { addGameThemeControl, addGameThemeResetControl } from './themes.js';
-import { refreshCustomSelect } from '../custom-select.js';
+import { refreshCustomSelect } from '../../shared/app-select.js';
 import { getWinAnimationPreferences, setWinAnimationPreferences, solitaireWinAnimationChoices } from './win-animation-settings.js';
 
 const rules = {

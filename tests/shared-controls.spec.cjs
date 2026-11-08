@@ -270,7 +270,7 @@ test('shared button wrappers preserve names, focus, disabled behavior, and activ
 
 test('custom select supports keyboard navigation, disabled options, Escape, and typeahead', async ({ page }) => {
   await page.evaluate(async () => {
-    const { enhanceSelect } = await import(new URL('apps/custom-select.js', document.baseURI).href);
+    const { enhanceSelect } = await import(new URL('shared/app-select.js', document.baseURI).href);
     const fixture = document.createElement('div');
     fixture.id = 'shared-select-fixture';
     const label = document.createElement('label');
@@ -355,7 +355,7 @@ test('custom select supports keyboard navigation, disabled options, Escape, and 
 test('animation picker supports keyboard selection, focus trapping, and focus restoration', async ({ page }) => {
   await page.evaluate(async () => {
     const { createAnimationPickerController } =
-      await import(new URL('apps/animation-picker.js', document.baseURI).href);
+      await import(new URL('shared/animation-picker.js', document.baseURI).href);
     const host = document.createElement('div');
     host.id = 'shared-animation-fixture';
     document.body.prepend(host);

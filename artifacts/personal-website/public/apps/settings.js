@@ -1,7 +1,7 @@
 'use strict';
 
-import { enhanceSelect } from './custom-select.js';
-import { createAnimationPickerController } from './animation-picker.js';
+import { enhanceSelect } from '../shared/app-select.js';
+import { createAnimationPickerController } from '../shared/animation-picker.js';
 import { upgradeAppControls, wrapAppButton } from '../shared/app-controls.js';
 
 const PAGES = [
