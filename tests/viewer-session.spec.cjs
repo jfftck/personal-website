@@ -34,6 +34,36 @@ test.beforeEach(async ({ page }) => {
 });
 test.afterEach(() => expect(errors).toEqual([]));
 
+test('desktop defers optional help and app controls until they are opened', async ({ page }) => {
+  await page.locator('#welcome-win-close').click();
+
+  const loadedModulePaths = () => page.evaluate(() => performance.getEntriesByType('resource')
+    .map(entry => new URL(entry.name).pathname));
+  const initialModules = await loadedModulePaths();
+  expect(initialModules.some(path => path.endsWith('/apps/toolbar.js'))).toBe(false);
+  expect(initialModules.some(path => path.endsWith('/shared/app-controls.js'))).toBe(false);
+  expect(initialModules.some(path => path.endsWith('/shared/desktop-help.js'))).toBe(false);
+
+  await page.locator('#app-menu-btn').click();
+  await page.locator('#app-menu-help-btn').click();
+  await expect(page.locator('#help-overlay')).toBeVisible();
+  await expect.poll(async () => (
+    (await loadedModulePaths()).some(path => path.endsWith('/shared/desktop-help.js'))
+  )).toBe(true);
+
+  await page.getByRole('tab', { name: 'Touch & Mouse' }).click();
+  await expect(page.locator('#help-panel-pointer')).toBeVisible();
+  await page.locator('#help-close-btn').click();
+  await expect(page.locator('#help-overlay')).toBeHidden();
+
+  await page.locator('#app-menu-btn').click();
+  await page.locator('#app-list .app-launcher[data-type="calculator"]').click();
+  await expect(page.locator('.app-window[data-type="calculator"] .calc')).toBeVisible();
+  const appModules = await loadedModulePaths();
+  expect(appModules.some(path => path.endsWith('/apps/toolbar.js'))).toBe(true);
+  expect(appModules.some(path => path.endsWith('/shared/app-controls.js'))).toBe(true);
+});
+
 async function seed(page, apps, key = KEY) {
   await page.evaluate(({ apps, key }) => {
     localStorage.removeItem('desktop-session-v2');
