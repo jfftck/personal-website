@@ -37,7 +37,7 @@ export const GAMES = [
   },
 ];
 
-export function initGameMenu(menu, openGame, gameCenterDescriptor = null) {
+export function initGameMenu(menu, openGame, gameCenterDescriptor = null, bindIntentPrefetch = null) {
   const root = menu.querySelector('#launcher-root');
   const submenu = menu.querySelector('#game-submenu');
   const entry = menu.querySelector('#game-center-entry');
@@ -62,6 +62,7 @@ export function initGameMenu(menu, openGame, gameCenterDescriptor = null) {
     const name = document.createElement('span'); name.className = 'app-launcher-name';
     name.textContent = game.title;
     btn.append(icon, name);
+    bindIntentPrefetch?.(btn, game.type);
     btn.addEventListener('click', () => openGame(game.type));
     games.append(btn);
   }

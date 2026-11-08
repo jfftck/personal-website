@@ -863,6 +863,7 @@ function getAppOrder() {
 
 const loadedAppModules = new Map();
 const loadedAppStyles = new Map();
+const prefetchedAppModules = new Set();
 let nextAppModuleLoadId = 0;
 
 function loadAppModule(def, onRetry) {
@@ -881,25 +882,25 @@ function loadAppModule(def, onRetry) {
 }
 
 function loadAppStylesheet(path) {
-    const href = new URL(path, import.meta.url).href;
-    let loading = loadedAppStyles.get(href);
-    if (!loading) {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = href;
-      link.dataset.appStylesheet = 'true';
-      loading = new Promise((resolve, reject) => {
-        link.addEventListener('load', resolve, { once: true });
-        link.addEventListener('error', () => {
-          link.remove();
-          loadedAppStyles.delete(href);
-          reject(new Error(`Could not load app stylesheet: ${path}`));
-        }, { once: true });
-      });
-      loadedAppStyles.set(href, loading);
-      document.head.append(link);
-    }
-    return loading;
+  const href = new URL(path, import.meta.url).href;
+  let loading = loadedAppStyles.get(href);
+  if (loading) return loading;
+
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = href;
+  link.dataset.appStylesheet = 'true';
+  loading = new Promise((resolve, reject) => {
+    link.addEventListener('load', resolve, { once: true });
+    link.addEventListener('error', () => {
+      link.remove();
+      loadedAppStyles.delete(href);
+      reject(new Error(`Could not load app stylesheet: ${path}`));
+    }, { once: true });
+  });
+  loadedAppStyles.set(href, loading);
+  document.head.append(link);
+  return loading;
 }
 
 function ensureAppStyles(styles = [], onRetry) {
@@ -907,6 +908,68 @@ function ensureAppStyles(styles = [], onRetry) {
     () => loadAppStylesheet(path),
     { onRetry },
   )));
+}
+
+function canPrefetchAppResources() {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType)) return false;
+  if (Number.isFinite(connection?.downlink) && connection.downlink > 0 && connection.downlink < 1) return false;
+  if (Number.isFinite(connection?.rtt) && connection.rtt > 1200) return false;
+  return true;
+}
+
+function prefetchAppResources(type) {
+  if (!canPrefetchAppResources()) return;
+  const descriptor = APP_REGISTRY[type];
+  if (!descriptor) return;
+
+  const moduleUrl = new URL(descriptor.modulePath, import.meta.url).href;
+  if (!loadedAppModules.has(descriptor.modulePath) && !prefetchedAppModules.has(moduleUrl)) {
+    const link = document.createElement('link');
+    link.rel = 'modulepreload';
+    link.href = moduleUrl;
+    link.fetchPriority = 'low';
+    link.dataset.appModulePrefetch = type;
+    prefetchedAppModules.add(moduleUrl);
+    document.head.append(link);
+  }
+}
+
+function bindAppIntentPrefetch(button, type) {
+  let pointerIntent = false;
+  let focusIntent = false;
+  let timer = 0;
+  const cancel = () => {
+    if (timer && !pointerIntent && !focusIntent) {
+      clearTimeout(timer);
+      timer = 0;
+    }
+  };
+  const schedule = () => {
+    if (timer || !canPrefetchAppResources()) return;
+    timer = window.setTimeout(() => {
+      timer = 0;
+      if (pointerIntent || focusIntent) prefetchAppResources(type);
+    }, 140);
+  };
+
+  button.addEventListener('pointerenter', event => {
+    if (event.pointerType === 'touch') return;
+    pointerIntent = true;
+    schedule();
+  });
+  button.addEventListener('pointerleave', () => {
+    pointerIntent = false;
+    cancel();
+  });
+  button.addEventListener('focus', () => {
+    focusIntent = true;
+    schedule();
+  });
+  button.addEventListener('blur', () => {
+    focusIntent = false;
+    cancel();
+  });
 }
 
 function createAppLoadSurface(title, mode = 'loading') {
@@ -974,55 +1037,6 @@ function reportAppLoadRetry(record, { attempt, maxRetries, delayMs }) {
   if (detail) {
     detail.textContent = `Temporary load issue. Retrying ${attempt} of ${maxRetries} in ${(delayMs / 1000).toFixed(1)}s…`;
   }
-}
-
-function scheduleAppAssetPrefetch() {
-  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-  if (connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType)) return;
-
-  const modulePaths = new Set([
-    ...Object.values(APP_DEFS).map(def => def.modulePath),
-    './shared/markdown.js',
-    './apps/games/solitaire-ui.js',
-    './apps/games/minesweeper-ui.js',
-    './apps/games/board-ui.js',
-  ]);
-  const stylePaths = new Set(Object.values(APP_DEFS).flatMap(def => def.styles || []));
-  const assets = [
-    ...[...modulePaths].map(path => ({ path, kind: 'module' })),
-    ...[...stylePaths].map(path => ({ path, kind: 'style' })),
-  ];
-  const requested = new Set();
-  let index = 0;
-
-  const addHint = asset => {
-    const href = new URL(asset.path, import.meta.url).href;
-    if (requested.has(href)) return;
-    requested.add(href);
-    const link = document.createElement('link');
-    link.rel = asset.kind === 'module' ? 'modulepreload' : 'prefetch';
-    if (asset.kind === 'style') link.as = 'style';
-    link.href = href;
-    link.fetchPriority = 'low';
-    link.dataset.appAssetPrefetch = asset.kind;
-    document.head.append(link);
-  };
-  const schedule = callback => {
-    if (typeof window.requestIdleCallback === 'function') {
-      window.requestIdleCallback(callback, { timeout: 2500 });
-    } else {
-      window.setTimeout(() => callback({ timeRemaining: () => 0, didTimeout: true }), 1200);
-    }
-  };
-  const prefetchBatch = deadline => {
-    let added = 0;
-    while (index < assets.length && added < 3 && (deadline.didTimeout || deadline.timeRemaining() > 8)) {
-      addHint(assets[index++]);
-      added += 1;
-    }
-    if (index < assets.length) schedule(prefetchBatch);
-  };
-  schedule(prefetchBatch);
 }
 
 function queueAppAction(id, method, ...args) {
@@ -2157,6 +2171,7 @@ function renderAppLaunchers() {
     name.className = 'app-launcher-name';
     name.textContent = descriptor.title;
     button.append(icon, name);
+    bindAppIntentPrefetch(button, descriptor.type);
     fragment.append(button);
   }
 
@@ -2169,7 +2184,7 @@ renderAppLaunchers();
 const gameMenu = initGameMenu(appMenu, type => {
   openApp(type);
   closeAppMenu();
-}, GAME_CENTER_DESCRIPTOR);
+}, GAME_CENTER_DESCRIPTOR, bindAppIntentPrefetch);
 
 document.querySelectorAll('#app-list .app-launcher[data-type]').forEach(button => {
   button.addEventListener('click', () => {
@@ -2893,4 +2908,3 @@ openWelcomeWindow();   // show on every visit / refresh
 updateTopBar();
 updateEmptyState();
 updateStripLayout();
-scheduleAppAssetPrefetch();
