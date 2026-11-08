@@ -25,21 +25,7 @@ if (!basePath) {
 
 export default defineConfig({
   base: basePath,
-  plugins: [],
-  resolve: {
-    alias: {
-      '@': path.resolve(import.meta.dirname, 'src'),
-      '@assets': path.resolve(
-        import.meta.dirname,
-        '..',
-        '..',
-        'attached_assets',
-      ),
-    },
-    dedupe: ['react', 'react-dom'],
-  },
-  // Preserve the vanilla site's HTML, modules, and styles without React
-  // wrappers or scaffold CSS.
+  // Serve and build the vanilla desktop directly from its static source.
   root: path.resolve(import.meta.dirname, 'public'),
   publicDir: false,
   build: {
