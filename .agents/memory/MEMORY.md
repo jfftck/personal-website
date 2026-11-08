@@ -19,3 +19,4 @@
 - [Settings scroll restoration](settings-scroll-restoration.md) — preserve the active scroll container when shared settings updates redraw the current page.
 - [Refactor task tracking](refactor-task-tracking.md) — create a project task before planned refactors to reduce complexity or improve maintainability.
 - [Toolbar button style](toolbar-button-style.md) — keep app toolbar actions borderless like File Manager while preserving focus and selected states.
+- [Native browser components](native-web-components.md) — prefer browser-native UI and Shadow DOM components over framework runtimes for shared controls.
