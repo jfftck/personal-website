@@ -23,7 +23,10 @@ test.beforeEach(async ({ page }, testInfo) => {
   manifestRequests = { posts: 0, documents: 0, pictures: 0, videos: 0 };
   failedFolders = new Set();
   errors = [];
-  holdInitialPostsRequest = false;
+  holdInitialPostsRequest = [
+    'refresh revalidates after the initial folder request settles',
+    'refresh updates home folder totals while initial counts are loading',
+  ].includes(testInfo.title);
   initialPostsRequestHeld = false;
   initialPostsRequestStarted = new Promise(resolve => {
     signalInitialPostsRequest = resolve;
@@ -54,19 +57,13 @@ test.beforeEach(async ({ page }, testInfo) => {
   await page.goto('/');
   await page.locator('#welcome-win-close').click();
   await page.locator('#app-menu-btn').click();
-  holdInitialPostsRequest = [
-    'refresh revalidates after the initial folder request settles',
-    'refresh updates home folder totals while initial counts are loading',
-  ].includes(testInfo.title);
   await page.locator('#app-list .app-launcher[data-type="file-manager"]').click();
 });
 
 test.afterEach(() => expect(errors).toEqual([]));
 
 function rootFolderTile(page, label) {
-  return page.locator('.fm-scroll .fm-tile').filter({
-    has: page.locator('.fm-tile-name', { hasText: new RegExp(`^${label}$`) }),
-  });
+  return page.locator('.fm-scroll .fm-tile').filter({ hasText: new RegExp(`\\b${label}\\b`) });
 }
 
 function fileTileName(fileManager, name) {
@@ -323,6 +320,10 @@ test('shared refresh waits for an in-progress load and preserves the other windo
   const firstWindow = page.locator('.app-window[data-type="file-manager"]').first();
   await expect(rootFolderTile(firstWindow, 'Posts').locator('.fm-tile-date')).toHaveText('2');
 
+  await page.evaluate(() => {
+    const nativeNow = Date.now;
+    Date.now = () => nativeNow() + 6000;
+  });
   holdInitialPostsRequest = true;
   await page.locator('#app-menu-btn').click();
   await page.locator('#app-list .app-launcher[data-type="file-manager"]').click();

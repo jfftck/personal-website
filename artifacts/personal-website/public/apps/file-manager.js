@@ -84,28 +84,10 @@ export function buildFileManager(id, ctx) {
     _fetchSequence[folder] = requestSequence;
     const request = (async () => {
       try {
-        const headers = metadata?.etag
-          ? { 'If-None-Match': metadata.etag }
-          : {};
-        const r = await fetch(`/files/${folder}/manifest.json`, {
-          headers,
-          cache: 'no-store',
-        });
-        if (r.status === 304 && cached !== undefined) {
-          fileCacheMeta[folder] = {
-            etag: r.headers.get('ETag') || metadata?.etag || null,
-            checkedAt: Date.now(),
-            error: false,
-          };
-          cacheSequence[folder] = requestSequence;
-          return cached;
-        }
-        if (!r.ok) throw new Error(r.status);
-        const entries = await r.json();
+        const entries = await ctx.ensureFileManifest(folder, { force });
         if (!Array.isArray(entries)) throw new Error('Invalid manifest');
-        fileCache[folder] = entries.map(e => parseEntry(folder, e)).filter(Boolean);
-        fileCacheMeta[folder] = {
-          etag: r.headers.get('ETag'),
+        fileCache[folder] = entries.map(entry => parseEntry(folder, entry)).filter(Boolean);
+        fileCacheMeta[folder] = ctx.getFileManifestMeta(folder) || {
           checkedAt: Date.now(),
           error: false,
         };

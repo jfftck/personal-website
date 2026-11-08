@@ -1452,6 +1452,8 @@ function requestOpenFile(file) {
 const _launcherCache = {};
 const _launcherCacheMeta = {};
 const _launcherFetching = {};
+const _launcherForceFetching = {};
+const LAUNCHER_MANIFEST_FOLDERS = ['posts', 'documents', 'pictures', 'videos'];
 const LAUNCHER_MANIFEST_RECHECK_MS = 5_000;
 const LAUNCHER_MANIFEST_RETRY_MS = 5_000;
 const appFilesSection = $('app-files-section');
@@ -1464,6 +1466,10 @@ const videoFilesCount = $('video-files-count');
 const launcherFileSearch = $('launcher-file-search');
 const launcherFileSearchEmpty = $('launcher-file-search-empty');
 const launcherFileSearchStatus = $('launcher-file-search-status');
+const launcherFileLoadStatus = $('launcher-file-load-status');
+const launcherFileLoadError = $('launcher-file-load-error');
+const launcherFileLoadErrorText = $('launcher-file-load-error-text');
+const launcherFileRetryButton = $('launcher-file-retry');
 const docFilesHeading = $('doc-files-heading');
 const picFilesHeading = $('pic-files-heading');
 const videoFilesHeading = $('video-files-heading');
@@ -1471,7 +1477,7 @@ let launcherSearchAnnouncementTimer;
 
 function parseManifestForLauncher(folder, entries) {
   return entries.map(entry => {
-    const { filename, url: manifestUrl } = entry;
+    const { filename, url: manifestUrl, date, size } = entry;
     if (typeof filename !== 'string') return null;
     const match = filename.match(/^(\d{4})(\d{2})(\d{2})_(.+)$/);
     if (!match) return null;
@@ -1495,25 +1501,40 @@ function parseManifestForLauncher(folder, entries) {
       isWallpaper: entry.isWallpaper === true,
       title: typeof entry.title === 'string' ? entry.title : displayName,
       filename,
+      date: typeof date === 'string' ? date : null,
+      size: size || '—',
     };
   }).filter(Boolean);
 }
 
-async function ensureLauncherManifest(folder, { force = false } = {}) {
+function launcherManifestIsStale(folder) {
   const cached = _launcherCache[folder];
   const metadata = _launcherCacheMeta[folder];
   const freshnessMs = metadata?.error
     ? LAUNCHER_MANIFEST_RETRY_MS
     : LAUNCHER_MANIFEST_RECHECK_MS;
-  if (
-    !force &&
-    cached !== undefined &&
-    Date.now() - (metadata?.checkedAt ?? 0) < freshnessMs
-  ) {
-    return cached;
-  }
-  if (_launcherFetching[folder]) return _launcherFetching[folder];
+  return cached === undefined || Date.now() - (metadata?.checkedAt ?? 0) >= freshnessMs;
+}
 
+function getLauncherManifestMeta(folder) {
+  const metadata = _launcherCacheMeta[folder];
+  return metadata ? { ...metadata } : null;
+}
+
+function notifyLauncherManifestConsumers(folder) {
+  if (!LAUNCHER_MANIFEST_FOLDERS.includes(folder)) return;
+
+  if (!appMenu.hasAttribute('hidden')) renderLauncherFiles();
+  else {
+    desktopSearchItems = buildDesktopSearchItems();
+    desktopSearchItemsReady = LAUNCHER_MANIFEST_FOLDERS.every(name => _launcherCache[name] !== undefined);
+  }
+  if (!desktopSearchSuggestions.hidden) renderDesktopSearchResults();
+}
+
+function startLauncherManifestFetch(folder, { priority = 'auto' } = {}) {
+  const cached = _launcherCache[folder];
+  const metadata = _launcherCacheMeta[folder];
   const request = (async () => {
     try {
       const headers = metadata?.etag
@@ -1522,31 +1543,30 @@ async function ensureLauncherManifest(folder, { force = false } = {}) {
       const manifestUrl = folder === 'wallpapers'
         ? '/files/manifest.json'
         : `/files/${folder}/manifest.json`;
-      const response = await fetch(manifestUrl, {
-        headers,
-        cache: 'no-store',
-      });
+      const options = { headers, cache: 'no-store' };
+      if (priority === 'low') options.priority = 'low';
+      const response = await fetch(manifestUrl, options);
       if (response.status === 304 && cached !== undefined) {
         _launcherCacheMeta[folder] = {
           etag: response.headers.get('ETag') || metadata?.etag || null,
           checkedAt: Date.now(),
           error: false,
         };
-        return cached;
+      } else {
+        if (!response.ok) throw new Error(`Could not load ${folder} manifest`);
+        const manifest = await response.json();
+        const entries = folder === 'wallpapers' ? manifest?.wallpapers : manifest;
+        if (!Array.isArray(entries)) throw new Error(`Invalid ${folder} manifest`);
+        _launcherCache[folder] = parseManifestForLauncher(
+          folder === 'wallpapers' ? 'pictures' : folder,
+          entries,
+        );
+        _launcherCacheMeta[folder] = {
+          etag: response.headers.get('ETag'),
+          checkedAt: Date.now(),
+          error: false,
+        };
       }
-      if (!response.ok) throw new Error(`Could not load ${folder} manifest`);
-      const manifest = await response.json();
-      const entries = folder === 'wallpapers' ? manifest?.wallpapers : manifest;
-      if (!Array.isArray(entries)) throw new Error(`Invalid ${folder} manifest`);
-      _launcherCache[folder] = parseManifestForLauncher(
-        folder === 'wallpapers' ? 'pictures' : folder,
-        entries,
-      );
-      _launcherCacheMeta[folder] = {
-        etag: response.headers.get('ETag'),
-        checkedAt: Date.now(),
-        error: false,
-      };
     } catch {
       if (_launcherCache[folder] === undefined) _launcherCache[folder] = [];
       _launcherCacheMeta[folder] = {
@@ -1555,15 +1575,108 @@ async function ensureLauncherManifest(folder, { force = false } = {}) {
         error: true,
       };
     }
+    notifyLauncherManifestConsumers(folder);
     return _launcherCache[folder];
   })();
-  _launcherFetching[folder] = request;
-  try {
-    return await request;
-  } finally {
-    if (_launcherFetching[folder] === request) delete _launcherFetching[folder];
-  }
+  const trackedRequest = request.finally(() => {
+    if (_launcherFetching[folder] === trackedRequest) delete _launcherFetching[folder];
+  });
+  _launcherFetching[folder] = trackedRequest;
+  return trackedRequest;
 }
+
+function ensureLauncherManifest(folder, { force = false, background = false, priority = 'auto' } = {}) {
+  const cached = _launcherCache[folder];
+  if (!force && cached !== undefined && !launcherManifestIsStale(folder)) {
+    return Promise.resolve(cached);
+  }
+
+  if (background && cached !== undefined) {
+    if (!_launcherFetching[folder]) void startLauncherManifestFetch(folder, { priority });
+    return Promise.resolve(cached);
+  }
+  if (_launcherFetching[folder]) {
+    if (!force) return _launcherFetching[folder];
+    if (!_launcherForceFetching[folder]) {
+      const pendingRequest = _launcherFetching[folder];
+      const forcedRequest = pendingRequest.then(() => (
+        _launcherFetching[folder] || startLauncherManifestFetch(folder, { priority })
+      )).finally(() => {
+        if (_launcherForceFetching[folder] === forcedRequest) {
+          delete _launcherForceFetching[folder];
+        }
+      });
+      _launcherForceFetching[folder] = forcedRequest;
+    }
+    return _launcherForceFetching[folder];
+  }
+  return startLauncherManifestFetch(folder, { priority });
+}
+
+function canPrefetchLauncherManifests() {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (navigator.onLine === false || connection?.saveData) return false;
+  if (['slow-2g', '2g'].includes(connection?.effectiveType)) return false;
+  if (Number.isFinite(connection?.downlink) && connection.downlink > 0 && connection.downlink < 1) return false;
+  if (Number.isFinite(connection?.rtt) && connection.rtt > 1200) return false;
+  return true;
+}
+
+let launcherManifestPrefetchScheduled = false;
+function scheduleLauncherManifestPrefetch() {
+  if (launcherManifestPrefetchScheduled || !canPrefetchLauncherManifests()) return;
+  launcherManifestPrefetchScheduled = true;
+  let nextIndex = 0;
+  let active = 0;
+  let idleScheduled = false;
+  const folders = [...LAUNCHER_MANIFEST_FOLDERS];
+
+  const pump = () => {
+    if (!canPrefetchLauncherManifests()) {
+      launcherManifestPrefetchScheduled = false;
+      return;
+    }
+    while (active < 2 && nextIndex < folders.length) {
+      const folder = folders[nextIndex++];
+      active += 1;
+      void ensureLauncherManifest(folder, { priority: 'low' }).finally(() => {
+        active -= 1;
+        scheduleNextBatch();
+      });
+    }
+  };
+  const scheduleNextBatch = () => {
+    if (idleScheduled || nextIndex >= folders.length) return;
+    idleScheduled = true;
+    const run = () => {
+      idleScheduled = false;
+      pump();
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(run, { timeout: 1800 });
+    } else {
+      window.setTimeout(run, 800);
+    }
+  };
+  scheduleNextBatch();
+}
+
+function retryFailedLauncherManifests() {
+  const failed = LAUNCHER_MANIFEST_FOLDERS.filter(folder => _launcherCacheMeta[folder]?.error);
+  if (!failed.length) return Promise.resolve();
+  return Promise.all(failed.map(folder => ensureLauncherManifest(folder, { force: true })));
+}
+
+window.addEventListener('online', () => {
+  launcherManifestPrefetchScheduled = false;
+  scheduleLauncherManifestPrefetch();
+});
+const launcherManifestConnection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+launcherManifestConnection?.addEventListener?.('change', () => {
+  if (!canPrefetchLauncherManifests()) return;
+  launcherManifestPrefetchScheduled = false;
+  scheduleLauncherManifestPrefetch();
+});
 
 // ── Desktop wallpaper service (loaded after the first desktop frame) ──
 let desktopWallpaperControllerPromise = null;
@@ -1642,15 +1755,13 @@ function buildFileLauncherBtn(file, iconSvg, iconColor) {
   return button;
 }
 
-async function populateLauncherFiles() {
+function renderLauncherFiles() {
   const DOC_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>';
   const IMG_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>';
-  const [docs, posts, pictures, videos] = await Promise.all([
-    ensureLauncherManifest('documents'),
-    ensureLauncherManifest('posts'),
-    ensureLauncherManifest('pictures'),
-    ensureLauncherManifest('videos'),
-  ]);
+  const docs = _launcherCache.documents || [];
+  const posts = _launcherCache.posts || [];
+  const pictures = _launcherCache.pictures || [];
+  const videos = _launcherCache.videos || [];
   const allDocuments = [...docs, ...posts];
   const allVideos = [...allDocuments, ...pictures, ...videos].filter(file => file.type === 'video');
   const allDocs = allDocuments.filter(file => file.type !== 'video');
@@ -1667,12 +1778,52 @@ async function populateLauncherFiles() {
   videoFilesList.replaceChildren(...sortByDisplayName(allVideos).map(file =>
     buildFileLauncherBtn(file, VIDEO_ICON, '#f87171')));
   videoFilesCount.textContent = allVideos.length ? String(allVideos.length) : '';
-  appFilesSection.hidden = allDocs.length === 0 && allPictures.length === 0 && allVideos.length === 0;
+  const loading = LAUNCHER_MANIFEST_FOLDERS.filter(folder => _launcherCache[folder] === undefined);
+  const failed = LAUNCHER_MANIFEST_FOLDERS.filter(folder => _launcherCacheMeta[folder]?.error);
+  const hasFiles = allDocs.length > 0 || allPictures.length > 0 || allVideos.length > 0;
+  launcherFileLoadStatus.hidden = loading.length === 0;
+  launcherFileLoadStatus.textContent = loading.length
+    ? (hasFiles ? 'Loading more files…' : 'Loading files…')
+    : '';
+  launcherFileLoadError.hidden = failed.length === 0;
+  launcherFileLoadErrorText.textContent = failed.length
+    ? `Couldn’t load ${failed.map(folder => ({
+      posts: 'posts',
+      documents: 'documents',
+      pictures: 'pictures',
+      videos: 'videos',
+    })[folder]).join(', ')}.`
+    : '';
+  appFilesSection.hidden = !hasFiles && loading.length === 0 && failed.length === 0;
   updateLauncherFileSearch();
   desktopSearchItems = buildDesktopSearchItems();
-  desktopSearchItemsReady = true;
+  desktopSearchItemsReady = LAUNCHER_MANIFEST_FOLDERS.every(folder => _launcherCache[folder] !== undefined);
   if (!desktopSearchSuggestions.hidden) renderDesktopSearchResults();
 }
+
+function populateLauncherFiles() {
+  renderLauncherFiles();
+  return Promise.all(LAUNCHER_MANIFEST_FOLDERS.map(folder => ensureLauncherManifest(folder, {
+    background: true,
+  }))).then(() => {
+    if (!appMenu.hasAttribute('hidden')) renderLauncherFiles();
+  });
+}
+
+launcherFileRetryButton.addEventListener('click', async () => {
+  if (!LAUNCHER_MANIFEST_FOLDERS.some(folder => _launcherCacheMeta[folder]?.error)) return;
+  launcherFileRetryButton.disabled = true;
+  launcherFileRetryButton.setAttribute('aria-busy', 'true');
+  launcherFileRetryButton.textContent = 'Retrying…';
+  try {
+    await retryFailedLauncherManifests();
+  } finally {
+    launcherFileRetryButton.disabled = false;
+    launcherFileRetryButton.removeAttribute('aria-busy');
+    launcherFileRetryButton.textContent = 'Retry';
+    renderLauncherFiles();
+  }
+});
 
 function updateLauncherFileSearch() {
   const query = launcherFileSearch.value.trim().toLocaleLowerCase();
@@ -1719,8 +1870,10 @@ function updateLauncherFileSearch() {
   videoFilesHeading.hidden = !hasVideos;
   videoFilesList.hidden = !hasVideos;
   const fileCount = documentCount + pictureCount + videoCount;
-  appFilesSection.hidden = fileCount === 0;
-  launcherFileSearchEmpty.hidden = !query || appCount + fileCount > 0;
+  const loading = LAUNCHER_MANIFEST_FOLDERS.some(folder => _launcherCache[folder] === undefined);
+  const failed = LAUNCHER_MANIFEST_FOLDERS.some(folder => _launcherCacheMeta[folder]?.error);
+  appFilesSection.hidden = fileCount === 0 && !loading && !failed;
+  launcherFileSearchEmpty.hidden = !query || appCount + fileCount > 0 || loading || failed;
   return { query, appCount, documentCount, pictureCount, videoCount };
 }
 
@@ -1921,16 +2074,16 @@ function renderDesktopSearchResults() {
 
 async function loadDesktopSearchItems() {
   if (desktopSearchLoadPromise) return desktopSearchLoadPromise;
+  desktopSearchItems = buildDesktopSearchItems();
+  desktopSearchItemsReady = LAUNCHER_MANIFEST_FOLDERS.every(folder => _launcherCache[folder] !== undefined);
+  renderDesktopSearchResults();
   if (!desktopSearchItemsReady) desktopSearchStatus.textContent = 'Loading suggestions…';
   desktopSearchLoadPromise = (async () => {
-    await Promise.all([
-      ensureLauncherManifest('posts'),
-      ensureLauncherManifest('documents'),
-      ensureLauncherManifest('pictures'),
-      ensureLauncherManifest('videos'),
-    ]);
+    await Promise.all(LAUNCHER_MANIFEST_FOLDERS.map(folder => ensureLauncherManifest(folder, {
+      background: true,
+    })));
     desktopSearchItems = buildDesktopSearchItems();
-    desktopSearchItemsReady = true;
+    desktopSearchItemsReady = LAUNCHER_MANIFEST_FOLDERS.every(folder => _launcherCache[folder] !== undefined);
     renderDesktopSearchResults();
   })();
   try {
@@ -2017,6 +2170,8 @@ const appCtx = {
   setAppTitle,
   toast,
   requestOpenFile,
+  ensureFileManifest: ensureLauncherManifest,
+  getFileManifestMeta: getLauncherManifestMeta,
   saveSession,
   openGameMenu: () => openAppMenu(true),
   updateDesktopNotes,
@@ -2908,3 +3063,4 @@ openWelcomeWindow();   // show on every visit / refresh
 updateTopBar();
 updateEmptyState();
 updateStripLayout();
+scheduleLauncherManifestPrefetch();
