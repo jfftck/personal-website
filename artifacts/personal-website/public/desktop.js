@@ -1667,15 +1667,10 @@ function retryFailedLauncherManifests() {
   return Promise.all(failed.map(folder => ensureLauncherManifest(folder, { force: true })));
 }
 
-window.addEventListener('online', () => {
-  launcherManifestPrefetchScheduled = false;
-  scheduleLauncherManifestPrefetch();
-});
+window.addEventListener('online', scheduleLauncherManifestPrefetch);
 const launcherManifestConnection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
 launcherManifestConnection?.addEventListener?.('change', () => {
-  if (!canPrefetchLauncherManifests()) return;
-  launcherManifestPrefetchScheduled = false;
-  scheduleLauncherManifestPrefetch();
+  if (canPrefetchLauncherManifests()) scheduleLauncherManifestPrefetch();
 });
 
 // ── Desktop wallpaper service (loaded after the first desktop frame) ──

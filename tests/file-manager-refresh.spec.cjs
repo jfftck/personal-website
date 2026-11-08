@@ -343,13 +343,15 @@ test('shared refresh waits for an in-progress load and preserves the other windo
     await firstWindow.locator('.fm-sidebar-btn[data-path="posts"]').click();
 
     await firstWindow.getByRole('button', { name: 'Refresh current folder' }).click();
-    await expect(firstWindow.locator('.fm-refresh-status')).toHaveText('Folder refreshed.');
+    await expect(firstWindow.locator('.fm-refresh-status')).toHaveText('Refreshing…');
     await expect(loadingMessage).toHaveText('Loading…');
     await expect(secondWindow.locator('.fm-sidebar-btn[data-path="posts"]')).toHaveClass(/active/);
   } finally {
     releaseInitialPostsRequest();
   }
 
+  await expect(firstWindow.locator('.fm-refresh-status')).toHaveText('Folder refreshed.');
+  await expect.poll(() => manifestRequests.posts).toBeGreaterThan(2);
   await expect(fileTileName(secondWindow, 'Latest Post')).toBeVisible();
   await expect(fileTileName(secondWindow, 'Old Post')).toHaveCount(0);
   await expect(secondWindow.locator('.fm-sidebar-btn[data-path="posts"]')).toHaveClass(/active/);
