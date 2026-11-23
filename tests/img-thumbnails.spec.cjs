@@ -30,7 +30,7 @@ test('thumbnail selection updates the photo, counter, active state and saved sel
   await expect(strip.locator('button')).toHaveCount(18);
   await page.getByRole('button', { name: 'View Photo 8', exact: true }).click();
   await expect(page.locator('.img-viewport img')).toHaveAttribute('src', pictures[7].url);
-  await expect(page.locator('.img-counter')).toHaveText('8 / 18');
+  await expect(page.locator('.img-counter')).toHaveText('Image 8 of 18');
   await expect(strip.locator('[aria-current="true"]')).toHaveAccessibleName('View Photo 8');
   await expect(strip.locator('.active')).toHaveCount(1);
   await page.reload();
@@ -58,6 +58,15 @@ test('navigation keeps the active thumbnail visible in an overflowing strip', as
   await expect(strip.locator('.active')).toHaveAccessibleName('View Photo 4');
 });
 
+test('live counter announces the current image and total when navigating', async ({ page }) => {
+  await openViewer(page);
+  const counter = page.locator('.img-counter');
+  await expect(counter).toHaveAttribute('role', 'status');
+  await expect(counter).toHaveText('Image 1 of 18');
+  await page.locator('.img-toolbar [data-action="next"]').click();
+  await expect(counter).toHaveText('Image 2 of 18');
+});
+
 test('thumbnail buttons work with the keyboard in a narrow viewer', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openViewer(page);
@@ -73,6 +82,6 @@ for (const count of [0, 1]) {
   test(`thumbnail strip auto-hides for ${count} photos`, async ({ page }) => {
     await openViewer(page, pictures.slice(0, count));
     await expect(page.locator('.img-thumbnails')).toBeHidden();
-    await expect(page.locator('.img-counter')).toHaveText(count ? '1 / 1' : '');
+    await expect(page.locator('.img-counter')).toHaveText(count ? 'Image 1 of 1' : '');
   });
 }

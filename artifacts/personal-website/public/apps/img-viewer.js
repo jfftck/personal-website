@@ -55,7 +55,7 @@ export function buildImgViewer(id, ctx, initialState = null) {
     ${toolBtn('open',     'open',     'Browse pictures')}
     <span class="toolbar-sep"></span>
     ${toolBtn('prev',     'prev',     'Previous image')}
-    <span class="img-counter" aria-live="polite"></span>
+    <span class="img-counter" role="status" aria-live="polite" aria-atomic="true"></span>
     ${toolBtn('next',     'next',     'Next image')}
     <span class="toolbar-sep"></span>
     ${toolBtn('fit',      'fit',      'Fit Image')}
@@ -151,7 +151,7 @@ export function buildImgViewer(id, ctx, initialState = null) {
 
   // ── Gallery navigation ────────────────────────────────────────
   function updateCounter() {
-    counterEl.textContent = gallery.length ? `${galleryIdx + 1} / ${gallery.length}` : '';
+    counterEl.textContent = gallery.length ? `Image ${galleryIdx + 1} of ${gallery.length}` : '';
   }
 
   function updateNavButtons() {

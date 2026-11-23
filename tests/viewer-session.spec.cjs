@@ -109,7 +109,7 @@ test('browsing documents and photos saves the new selection and reloads both', a
   await expect(doc.locator('.doc-body')).toContainText('Second document');
   await expect(page.getByRole('dialog', { name: 'Second', exact: true })).toBeVisible();
   await image.locator('[data-action="next"]').click();
-  await expect(image.locator('.img-counter')).toHaveText('2 / 3');
+  await expect(image.locator('.img-counter')).toHaveText('Image 2 of 3');
   await expect(page.getByRole('dialog', { name: 'Two', exact: true })).toBeVisible();
   await expect.poll(() => savedApps(page)).toEqual([
     { type: 'doc-viewer', state: { url: docs[1].url } },
@@ -118,7 +118,7 @@ test('browsing documents and photos saves the new selection and reloads both', a
   await page.reload();
   await expect(doc.locator('.doc-body')).toContainText('Second document');
   await expect(image.locator('.img-viewport img')).toHaveAttribute('src', pictures[1].url);
-  await expect(image.locator('.img-counter')).toHaveText('2 / 3');
+  await expect(image.locator('.img-counter')).toHaveText('Image 2 of 3');
   await expect(page.locator('.app-col')).toHaveAttribute('data-width', 'half');
 });
 
@@ -648,7 +648,7 @@ test('reordered gallery restores the photo by URL and updates its index', async 
   await page.route('**/pictures/manifest.json', route => route.fulfill({ json: [...pictures].reverse() }));
   await seed(page, [{ type: 'img-viewer', state: { url: pictures[2].url, galleryIdx: 2 } }]);
   await expect(page.locator('.img-viewport img')).toHaveAttribute('src', pictures[2].url);
-  await expect(page.locator('.img-counter')).toHaveText('1 / 3');
+  await expect(page.locator('.img-counter')).toHaveText('Image 1 of 3');
 });
 
 test('valid index-only state restores, while invalid state falls back safely', async ({ page }) => {
@@ -685,7 +685,7 @@ test('saved selection survives other session saves while manifests are delayed',
     release();
   }
   await expect(page.locator('.app-window .doc-body')).toContainText('Second document');
-  await expect(page.locator('.img-counter')).toHaveText('3 / 3');
+  await expect(page.locator('.img-counter')).toHaveText('Image 3 of 3');
 });
 
 test('empty manifests clear stale selections without errors', async ({ page }) => {
@@ -703,7 +703,7 @@ test('empty manifests clear stale selections without errors', async ({ page }) =
 test('legacy v1 sessions still restore the default files and migrate to v2', async ({ page }) => {
   await seed(page, [{ type: 'doc-viewer' }, { type: 'img-viewer' }], 'desktop-session-v1');
   await expect(page.locator('.app-window .doc-body')).toContainText('First document');
-  await expect(page.locator('.img-counter')).toHaveText('1 / 3');
+  await expect(page.locator('.img-counter')).toHaveText('Image 1 of 3');
   await expect.poll(async () => (await savedApps(page)).map(app => app.type))
     .toEqual(['doc-viewer', 'img-viewer']);
 });
@@ -715,14 +715,14 @@ test('files opened from the launcher persist and photo navigation starts at the 
   await expect(page.locator('.app-window .doc-body')).toContainText('Second document');
   await page.locator('#app-menu-btn').click();
   await page.locator('#pic-files-list .app-file-btn').filter({ hasText: 'Two' }).click();
-  await expect(page.locator('.img-counter')).toHaveText('2 / 3');
+  await expect(page.locator('.img-counter')).toHaveText('Image 2 of 3');
   await expect.poll(() => savedApps(page)).toEqual([
     { type: 'doc-viewer', state: { url: docs[1].url } },
     { type: 'img-viewer', state: { url: pictures[1].url, galleryIdx: 1 } },
   ]);
   await page.reload();
   await expect(page.locator('.app-window .doc-body')).toContainText('Second document');
-  await expect(page.locator('.img-counter')).toHaveText('2 / 3');
+  await expect(page.locator('.img-counter')).toHaveText('Image 2 of 3');
   await page.locator('#welcome-win-close').click();
   await page.locator('.app-window[data-type="img-viewer"] [data-action="next"]').click();
   await expect(page.locator('.img-viewport img')).toHaveAttribute('src', pictures[2].url);
