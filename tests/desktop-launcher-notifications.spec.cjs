@@ -1,5 +1,48 @@
 const { test, expect } = require('@playwright/test');
 
+const savedReminderHistory = {
+  id: 'saved-reminder-history',
+  type: 'reminder',
+  title: 'Saved reminder history',
+  message: 'This previously saved reminder stays in history.',
+  createdAt: new Date().toISOString(),
+  seen: true,
+  dismissed: false,
+};
+
+async function seedDueSystemReminder(page, reminderEnabled) {
+  await page.clock.install();
+  await page.addInitScript(({ reminderEnabled, savedHistory }) => {
+    const dueAt = new Date(Date.now() + 1000).toISOString();
+    localStorage.setItem('desktop-reminders', JSON.stringify([{
+      id: 'due-system-reminder',
+      text: 'Check the deployment status',
+      when: dueAt,
+      dueAt,
+    }]));
+    localStorage.setItem('desktop-reminder-background', 'true');
+    localStorage.setItem('desktop-notification-preferences-v1', JSON.stringify({
+      enabledTypes: { reminder: reminderEnabled },
+      retentionDays: 90,
+    }));
+    localStorage.setItem('desktop-notifications-v1', JSON.stringify([savedHistory]));
+
+    window.__systemNotifications = [];
+    class TestNotification extends EventTarget {
+      static permission = 'granted';
+
+      constructor(title, options = {}) {
+        super();
+        window.__systemNotifications.push({ title, body: options.body || '' });
+      }
+    }
+    Object.defineProperty(window, 'Notification', {
+      configurable: true,
+      value: TestNotification,
+    });
+  }, { reminderEnabled, savedHistory: savedReminderHistory });
+}
+
 test('welcome preference controls startup and offers a notification when hidden', async ({ page }) => {
   await page.goto('/');
   const preference = page.locator('#welcome-show-on-startup');
@@ -126,6 +169,40 @@ test('notification categories can be muted and remain saved across reloads', asy
   await page.locator('[data-notification-category="reminder"]').check();
   await expect(page.locator('#notification-list')).toContainText('Saved reminder');
   await expect(page.locator('#notification-list')).toContainText('Saved welcome tip');
+});
+
+test('muted due reminders do not alert and preserve saved history', async ({ page }) => {
+  await seedDueSystemReminder(page, true);
+  await page.goto('/');
+  await page.locator('#welcome-win-close').click();
+  await page.locator('#notifications-btn').click();
+
+  const reminderToggle = page.locator('[data-notification-category="reminder"]');
+  await reminderToggle.uncheck();
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('desktop-notifications-v1'))
+      .find(item => item.id === 'saved-reminder-history'),
+  )).toEqual(savedReminderHistory);
+
+  await page.clock.runFor(1100);
+  await expect.poll(() => page.evaluate(() => window.__systemNotifications)).toEqual([]);
+  await expect(page.locator('#notification-list')).not.toContainText('Check the deployment status');
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('desktop-notifications-v1'))
+      .find(item => item.id === 'saved-reminder-history'),
+  )).toEqual(savedReminderHistory);
+});
+
+test('enabled due reminders can show an operating-system notification', async ({ page }) => {
+  await seedDueSystemReminder(page, true);
+  await page.goto('/');
+  await page.locator('#welcome-win-close').click();
+
+  await page.clock.runFor(1100);
+  await expect.poll(() => page.evaluate(() => window.__systemNotifications)).toEqual([{
+    title: 'Reminder',
+    body: 'Check the deployment status',
+  }]);
 });
 
 test('read and dismissed notifications follow the selected retention period', async ({ page }) => {
