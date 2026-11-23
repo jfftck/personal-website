@@ -2679,6 +2679,7 @@ let _ovNatColRects = null;
 let _ovNatWinRects = null;
 let _ovStripRect   = null;
 let _ovTX = 0, _ovTY = 0;
+let _ovPositionVersion = 0;
 let _ovEntryViewport = null;
 
 // Apply a translate+scale transform and rebuild the controls overlay.
@@ -2756,6 +2757,7 @@ function animateOverviewWindows(direction) {
 }
 
 function exitOverview({ animate = true } = {}) {
+  _ovPositionVersion += 1;
   window.clearTimeout(overviewAnimationTimer);
   if (animate) animateOverviewWindows('exiting');
   else {
@@ -2813,6 +2815,7 @@ function toggleOverview() {
 // Call this when the column layout changes (open/close/resize/swap).
 function positionOverview() {
   if (!document.body.classList.contains('mod-overview')) return;
+  const positionVersion = ++_ovPositionVersion;
   document.getElementById('overview-controls')?.remove();
   if (S.apps.length === 0) return;
 
@@ -2845,7 +2848,13 @@ function positionOverview() {
 
   // Apply via _ovRender (saves tX/tY, applies transform, builds controls).
   // Use requestAnimationFrame so the CSS transition plays from the reset state.
-  requestAnimationFrame(() => _ovRender(tX, tY));
+  requestAnimationFrame(() => {
+    if (
+      positionVersion !== _ovPositionVersion ||
+      !document.body.classList.contains('mod-overview')
+    ) return;
+    _ovRender(tX, tY);
+  });
 }
 
 function _ovRect(natRect, stripRect, tX, tY, scale) {

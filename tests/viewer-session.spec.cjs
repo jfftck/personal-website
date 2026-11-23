@@ -593,6 +593,17 @@ test('entering and leaving overview restores the same visible window position', 
     await expect(page.locator('body')).toHaveClass(/mod-overview/);
     await page.locator('#overview-btn').click();
     await expect(page.locator('body')).not.toHaveClass(/mod-overview/);
+    console.log('overview exit frame', await page.evaluate(() => ({
+      scrollLeft: document.querySelector('#app-strip-wrapper').scrollLeft,
+      restoring: document.querySelector('#app-strip-wrapper').classList.contains('ov-restoring-scroll'),
+      transform: getComputedStyle(document.querySelector('#app-strip')).transform,
+    })));
+    await page.waitForTimeout(350);
+    console.log('overview settled frame', await page.evaluate(() => ({
+      scrollLeft: document.querySelector('#app-strip-wrapper').scrollLeft,
+      restoring: document.querySelector('#app-strip-wrapper').classList.contains('ov-restoring-scroll'),
+      transform: getComputedStyle(document.querySelector('#app-strip')).transform,
+    })));
     await expect.poll(() => page.evaluate(() => {
       const rect = document.querySelector('.app-window.focused').getBoundingClientRect();
       return {
