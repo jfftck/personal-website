@@ -307,11 +307,13 @@ test('game and game UI module failures can be retried without duplicate windows 
   await page.keyboard.press('Enter');
 
   await expect(game).toHaveAttribute('data-load-state', 'loading');
+  await expect(game).toBeFocused();
   await expect(gameDialog).toBeVisible();
   await expect(gameDialog).toHaveAttribute('aria-modal', 'false');
   expect(await gameDialog.evaluate(dialog => dialog.matches(':modal'))).toBe(false);
   await expect(game).toHaveCount(1);
   await expect(game).toHaveAttribute('data-load-state', 'error', { timeout: 15_000 });
+  await expect(game).toBeFocused();
   await expect(gameDialog).toBeVisible();
   await expect(gameDialog).toHaveAttribute('aria-modal', 'false');
   expect(await gameDialog.evaluate(dialog => dialog.matches(':modal'))).toBe(false);
@@ -324,7 +326,10 @@ test('game and game UI module failures can be retried without duplicate windows 
   failGameUi = false;
   await game.getByRole('button', { name: 'Retry' }).click();
 
+  await expect(game).toHaveAttribute('data-load-state', 'loading');
+  await expect(game).toBeFocused();
   await expect(game.getByRole('button', { name: 'Resume saved game' })).toBeVisible({ timeout: 15_000 });
+  await expect(game).toBeFocused();
   await expect(gameDialog).toBeVisible();
   await expect(gameDialog).toHaveAttribute('aria-modal', 'false');
   expect(await gameDialog.evaluate(dialog => dialog.matches(':modal'))).toBe(false);

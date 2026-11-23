@@ -1064,6 +1064,14 @@ function flushPendingAppActions(record) {
   }
 }
 
+function replaceAppWindow(record, next, { focus = false } = {}) {
+  const previous = record.el;
+  const shouldRestoreFocus = focus || previous.contains(document.activeElement);
+  previous.replaceWith(next);
+  record.el = next;
+  if (shouldRestoreFocus) next.focus({ preventScroll: true });
+}
+
 async function hydrateApp(record, def, initialState) {
   const loadToken = (record.loadToken || 0) + 1;
   record.loadToken = loadToken;
@@ -1100,8 +1108,7 @@ async function hydrateApp(record, def, initialState) {
     transferWindowAnimation(record.el, windowEl);
     windowEl.classList.toggle('focused', S.focusedId === record.id);
     windowEl.setAttribute('aria-current', String(S.focusedId === record.id));
-    record.el.replaceWith(windowEl);
-    record.el = windowEl;
+    replaceAppWindow(record, windowEl);
     flushPendingAppActions(record);
     updateStripLayout();
     if (document.body.classList.contains('mod-overview')) positionOverview();
@@ -1123,12 +1130,10 @@ async function hydrateApp(record, def, initialState) {
       transferWindowAnimation(record.el, loading);
       loading.classList.toggle('focused', S.focusedId === record.id);
       loading.setAttribute('aria-current', String(S.focusedId === record.id));
-      record.el.replaceWith(loading);
-      record.el = loading;
+      replaceAppWindow(record, loading, { focus: true });
       void hydrateApp(record, def, initialState);
     });
-    record.el.replaceWith(failed);
-    record.el = failed;
+    replaceAppWindow(record, failed);
   }
 }
 
