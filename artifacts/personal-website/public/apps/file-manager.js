@@ -91,7 +91,7 @@ export function buildFileManager(id, ctx) {
           checkedAt: Date.now(),
           error: false,
         };
-        cacheSequence[folder] = requestSequence;
+        cacheSequence[folder] = Math.max(cacheSequence[folder] || 0, requestSequence);
       } catch {
         if (fileCache[folder] === undefined) fileCache[folder] = [];
         fileCacheMeta[folder] = {
@@ -398,6 +398,22 @@ export function buildFileManager(id, ctx) {
     applySharedFolderRefresh(detail);
   }
 
+  function handleHostManifestUpdate(event) {
+    const folder = event.detail?.folder;
+    if (!FOLDERS_DEF.some(item => item.id === folder) || !ctx.getFileManifestSnapshot) return;
+    const snapshot = ctx.getFileManifestSnapshot(folder);
+    if (!snapshot || !Array.isArray(snapshot.entries) || !snapshot.metadata) return;
+    handleSharedFolderRefresh(new CustomEvent(FOLDER_REFRESH_EVENT, {
+      detail: {
+        sourceId: 'desktop-manifest-loader',
+        folder,
+        entries: snapshot.entries.map(entry => parseEntry(folder, entry)).filter(Boolean),
+        metadata: snapshot.metadata,
+        sequence: ++manifestSequence,
+      },
+    }));
+  }
+
   function broadcastFolderRefresh(folder) {
     const entries = fileCache[folder];
     const metadata = fileCacheMeta[folder];
@@ -521,10 +537,12 @@ export function buildFileManager(id, ctx) {
   });
 
   window.addEventListener(FOLDER_REFRESH_EVENT, handleSharedFolderRefresh);
+  window.addEventListener('niri:launcher-manifest-updated', handleHostManifestUpdate);
   ctx.appApis[id] = {
     openFile: null,
     destroy: () => {
       window.removeEventListener(FOLDER_REFRESH_EVENT, handleSharedFolderRefresh);
+      window.removeEventListener('niri:launcher-manifest-updated', handleHostManifestUpdate);
       FOLDERS_DEF.forEach(folder => delete deferredRefresh[folder.id]);
     },
   };

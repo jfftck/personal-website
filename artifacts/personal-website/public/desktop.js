@@ -1521,8 +1521,19 @@ function getLauncherManifestMeta(folder) {
   return metadata ? { ...metadata } : null;
 }
 
+function getLauncherManifestSnapshot(folder) {
+  if (!LAUNCHER_MANIFEST_FOLDERS.includes(folder)) return null;
+  const entries = _launcherCache[folder];
+  const metadata = _launcherCacheMeta[folder];
+  if (!Array.isArray(entries) || !metadata) return null;
+  return { entries: entries.slice(), metadata: { ...metadata } };
+}
+
 function notifyLauncherManifestConsumers(folder) {
   if (!LAUNCHER_MANIFEST_FOLDERS.includes(folder)) return;
+  window.dispatchEvent(new CustomEvent('niri:launcher-manifest-updated', {
+    detail: { folder },
+  }));
 
   if (!appMenu.hasAttribute('hidden')) renderLauncherFiles();
   else {
@@ -2157,6 +2168,47 @@ launcherFileSearch.addEventListener('input', () => {
   }, 250);
 });
 
+let manifestChangeSyncPromise = null;
+let manifestChangeSyncAttempt = 0;
+
+function initializeManifestChangeSync() {
+  if (!manifestChangeSyncPromise) {
+    manifestChangeSyncPromise = retryWithBackoff(() => {
+      const moduleUrl = new URL('./shared/manifest-change-sync.js', import.meta.url);
+      if (manifestChangeSyncAttempt > 0) {
+        moduleUrl.searchParams.set('retry', `manifest-sync-${manifestChangeSyncAttempt}`);
+      }
+      manifestChangeSyncAttempt += 1;
+      return import(/* @vite-ignore */ moduleUrl.href);
+    }).then(({ subscribeToManifestChanges }) => subscribeToManifestChanges({
+      targetWindow: window,
+      getVisibleConsumers: () => ({
+        menu: !appMenu.hasAttribute('hidden'),
+        search: !desktopSearchSuggestions.hidden,
+        fileManager: S.apps.some(record => record.type === 'file-manager'),
+        wallpaperSettings: S.apps.some(record => record.type === 'settings'),
+      }),
+      markStale: folder => {
+        const metadata = _launcherCacheMeta[folder];
+        if (metadata) _launcherCacheMeta[folder] = { ...metadata, checkedAt: 0 };
+      },
+      renderMenu: renderLauncherFiles,
+      renderSearch: () => {
+        desktopSearchItems = buildDesktopSearchItems();
+        desktopSearchItemsReady = LAUNCHER_MANIFEST_FOLDERS.every(folder => _launcherCache[folder] !== undefined);
+        renderDesktopSearchResults();
+      },
+      refreshFolder: folder => ensureLauncherManifest(folder, { force: true }),
+    })).catch(error => {
+      manifestChangeSyncPromise = null;
+      console.warn('[manifest-sync] Could not listen for file changes in other tabs.', error);
+    });
+  }
+  return manifestChangeSyncPromise;
+}
+
+window.requestAnimationFrame(() => { void initializeManifestChangeSync(); });
+
 // ── App context (passed to all app builders) ──────────────────
 const appCtx = {
   appApis:        S.appApis,
@@ -2167,6 +2219,7 @@ const appCtx = {
   requestOpenFile,
   ensureFileManifest: ensureLauncherManifest,
   getFileManifestMeta: getLauncherManifestMeta,
+  getFileManifestSnapshot: getLauncherManifestSnapshot,
   saveSession,
   openGameMenu: () => openAppMenu(true),
   updateDesktopNotes,

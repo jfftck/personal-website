@@ -21,6 +21,7 @@ import {
   normalizeDateForApi,
   titleFromFilename,
 } from '@/lib/content-formatters';
+import { announceContentChanged } from '@/lib/content-change-bus.js';
 import { ErrorBoundary } from '@/components/error-boundary';
 import {
   FileDetailsPanel,
@@ -401,6 +402,10 @@ function Console() {
       } else {
         created = await createFolder.mutateAsync({ data: { name, parentPath } });
       }
+      announceContentChanged(
+        [editingFolder?.path, editingFolder?.parentPath, updated?.path, updated?.parentPath, created?.path, created?.parentPath],
+        { includeRootManifest: true },
+      );
       if (editingFolder && updated && updated.path !== editingFolder.path) {
         const oldPath = editingFolder.path;
         const newPath = updated.path;
@@ -453,6 +458,7 @@ function Console() {
     if (!window.confirm(`Delete the empty folder “${folder.name}”?`)) return;
     try {
       await deleteFolder.mutateAsync({ folderId: folder.id });
+      announceContentChanged([folder.path, folder.parentPath], { includeRootManifest: true });
       if (selectedFolder === folder.path) setSelectedFolder(folder.parentPath);
       patchTreeCache((tree) => ({
         ...tree,
@@ -499,6 +505,7 @@ function Console() {
           isWallpaper: !creatingMarkdown && isImageFile(sourceFile) && values.isWallpaper,
         },
       });
+      announceContentChanged([created.folderPath]);
       setSelectedFolder(uploadDestination);
       setSelectedFile(created);
       patchTreeCache((tree) => ({
@@ -544,6 +551,7 @@ function Console() {
           isWallpaper: isImageFile({ name: selectedFile.name, type: selectedFile.contentType }) && values.isWallpaper,
         },
       });
+      announceContentChanged([selectedFile.folderPath, updated.folderPath]);
       setSelectedFile(updated);
       if (updated.folderPath !== selectedFile.folderPath) setSelectedFolder(updated.folderPath);
       patchTreeCache((tree) => ({
@@ -562,6 +570,7 @@ function Console() {
         fileId: file.id,
         data: { isPublished },
       });
+      announceContentChanged([file.folderPath]);
       setSelectedFile((current) => current?.id === file.id ? updated : current);
       patchTreeCache((tree) => ({
         ...tree,
@@ -584,6 +593,7 @@ function Console() {
     if (!window.confirm(confirmation)) return false;
     try {
       await deleteFile.mutateAsync({ fileId: file.id });
+      announceContentChanged([file.folderPath]);
       if (selectedFile?.id === file.id) setSelectedFile(null);
       patchTreeCache((tree) => ({
         ...tree,
@@ -604,6 +614,7 @@ function Console() {
   const restore = async (file: ContentFile) => {
     try {
       const restored = await restoreFile.mutateAsync({ fileId: file.id });
+      announceContentChanged([restored.folderPath, file.folderPath]);
       patchTreeCache((tree) => ({
         ...tree,
         files: [...tree.files.filter((item) => item.id !== restored.id), restored],
@@ -622,6 +633,7 @@ function Console() {
         fileId: selectedFile.id,
         versionId: version.id,
       });
+      announceContentChanged([selectedFile.folderPath, updated.folderPath]);
       setSelectedFile(updated);
       patchTreeCache((tree) => ({
         ...tree,
@@ -722,6 +734,7 @@ function Console() {
         if (editorFile && isMarkdownDocument(editorFile)) setEditorStylesheetId(saved.id);
       }
 
+      announceContentChanged([saved.folderPath]);
       patchTreeCache((tree) => ({
         ...tree,
         files: [...tree.files.filter((item) => item.id !== saved.id), saved],
@@ -786,6 +799,7 @@ function Console() {
           ...(isMarkdownDocument(editorFile) ? { stylesheetId: editorStylesheetId || null } : {}),
         },
       });
+      announceContentChanged([editorFile.folderPath, updated.folderPath]);
       setSelectedFile(updated);
       patchTreeCache((tree) => ({
         ...tree,

@@ -120,6 +120,65 @@ test('menu, desktop search, and File Manager share requests already in flight', 
   expect(state.counts).toEqual({ posts: 1, documents: 1, pictures: 1, videos: 1 });
 });
 
+test('admin changes refresh only the affected folder in other desktop tabs', async ({ page }) => {
+  const state = createRequestState();
+  const newPost = {
+    filename: '20261105_Cross_tab_Post.md',
+    title: 'Cross-tab Post',
+    url: '/files/posts/20261105_Cross_tab_Post.md',
+  };
+  await installManifestRoutes(page, state, async (route, folder, count) => {
+    await route.fulfill({
+      json: folder === 'posts' && count > 1
+        ? [...manifests.posts, newPost]
+        : manifests[folder],
+      headers: { ETag: `"${folder}-v${count}"` },
+    });
+  });
+  await page.goto('/');
+  await waitForPrefetch(state);
+  await dismissWelcome(page);
+
+  await page.locator('#app-menu-btn').click();
+  await page.locator('#app-list .app-launcher[data-type="file-manager"]').click();
+  const fileManager = page.locator('.app-window[data-type="file-manager"]');
+  await expect(fileManager.locator('.fm-sidebar-count[data-folder="posts"]')).toHaveText('1');
+  const timeOrigin = await page.evaluate(() => performance.timeOrigin);
+
+  const adminTab = await page.context().newPage();
+  await adminTab.goto('/admin-console/');
+  const sent = await adminTab.evaluate(async () => {
+    const moduleUrl = new URL('/admin-console/src/lib/content-change-bus.js', location.origin);
+    const { announceContentChanged } = await import(moduleUrl.href);
+    return announceContentChanged(['posts/2026']);
+  });
+  expect(sent).toBe(true);
+
+  await expect(fileManager.locator('.fm-sidebar-count[data-folder="posts"]')).toHaveText('2');
+  await page.locator('#app-menu-btn').click();
+  await expect(page.locator('#doc-files-list')).toContainText('Cross tab Post');
+  await page.locator('#app-menu-btn').click();
+  await page.locator('#desktop-search-input').focus();
+  await expect(page.locator('#desktop-search-results')).toContainText('Cross tab Post');
+  await expect.poll(() => state.counts.posts).toBe(2);
+  expect(state.counts).toEqual({ posts: 2, documents: 1, pictures: 1, videos: 1 });
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+
+  await adminTab.evaluate(() => {
+    const channel = new BroadcastChannel('jmt-content-manifest-changes-v1');
+    channel.postMessage({
+      type: 'content-manifests-invalidated',
+      version: 1,
+      nonce: 'invalid-folder-test',
+      folders: ['https://example.invalid/files/posts/manifest.json'],
+    });
+    channel.close();
+  });
+  await page.waitForTimeout(100);
+  expect(state.counts.posts).toBe(2);
+  await adminTab.close();
+});
+
 test('menu renders stale cached files while ETag revalidation continues in the background', async ({ page }) => {
   const state = createRequestState();
   let revalidationStarted;
