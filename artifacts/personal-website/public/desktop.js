@@ -1296,16 +1296,6 @@ const windowController = createWindowController({
 
 // ── Sticky-note desktop widgets ───────────────────────────────
 let desktopWidgetNotes = [];
-let stickyNotesImportAttempt = 0;
-
-function importStickyNotesData() {
-  const url = new URL('./apps/sticky-notes-data.js', import.meta.url);
-  if (stickyNotesImportAttempt > 0) {
-    url.searchParams.set('retry', String(stickyNotesImportAttempt));
-  }
-  stickyNotesImportAttempt += 1;
-  return import(/* @vite-ignore */ url.href);
-}
 
 function setShowDesktop(show) {
   if (show && document.body.classList.contains('mod-overview')) exitOverview({ animate: false });
@@ -1372,18 +1362,13 @@ function openStickyNote(noteId) {
 }
 
 requestAnimationFrame(() => {
-  void retryWithBackoff(importStickyNotesData, {
-    maxRetries: 2,
-    initialDelayMs: 180,
-    maxDelayMs: 720,
-  }).then(({ loadStickyNotes }) => {
-    updateDesktopNotes(loadStickyNotes());
-  }).catch(() => {
-    const status = $('desktop-widget-load-status');
-    if (!status) return;
-    status.textContent = 'Pinned desktop notes could not be loaded. Refresh the page to try again.';
-    status.hidden = false;
-  });
+  void import('./apps/sticky-notes/desktop-loader.js')
+    .then(({ initializePinnedNotes }) => initializePinnedNotes(updateDesktopNotes))
+    .catch(() => {
+      $('desktop-widget-load-error-text').textContent = 'Pinned desktop notes could not start. Reload the page to try again.';
+      $('desktop-widget-load-status').hidden = false;
+      $('desktop-widget-retry').disabled = true;
+    });
 });
 
 // ── App navigation ────────────────────────────────────────────

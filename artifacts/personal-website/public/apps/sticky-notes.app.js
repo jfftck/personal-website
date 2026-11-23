@@ -14,5 +14,5 @@ export const stickyNotesApp = defineAppDescriptor({
     restoreArgument: 'initialState',
     commands: ['openNote'],
   },
-  modules: ['apps/sticky-notes.js', 'apps/sticky-notes-data.js'],
+  modules: ['apps/sticky-notes.js', 'apps/sticky-notes-data.js', 'apps/sticky-notes/**'],
 });

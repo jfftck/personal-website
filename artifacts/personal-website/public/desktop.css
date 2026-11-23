@@ -1001,6 +1001,16 @@ body {
   font-size: 0.8125rem;
 }
 
+.desktop-widget-load-error {
+  position: fixed;
+  z-index: 1800;
+  inset-block-end: 1rem;
+  inset-inline-end: 1rem;
+  width: min(28rem, calc(100vw - 2rem));
+  margin: 0;
+  box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.28);
+}
+
 .app-files-retry {
   flex: none;
   border: 0;
@@ -1011,6 +1021,11 @@ body {
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+
+.app-files-retry:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
 }
 
 .app-files-retry:disabled {

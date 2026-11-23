@@ -152,7 +152,7 @@ test('pinned desktop notes appear after their data module loads', async ({ page 
   await expect(page.locator('.desktop-note-widget')).toContainText('Deferred note contents');
 });
 
-test('pinned desktop notes recover after a temporary module load failure', async ({ page }) => {
+test('pinned notes show Retry after automatic attempts fail and recover without reloading', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('personal-desktop-sticky-notes-v1', JSON.stringify([{
       id: 'pinned-note-retry-test',
@@ -163,9 +163,10 @@ test('pinned desktop notes recover after a temporary module load failure', async
     }]));
   });
   let requests = 0;
+  let recover = false;
   await page.route('**/apps/sticky-notes-data.js*', async route => {
     requests += 1;
-    if (requests === 1) {
+    if (!recover) {
       await route.fulfill({
         status: 503,
         contentType: 'text/javascript',
@@ -176,9 +177,22 @@ test('pinned desktop notes recover after a temporary module load failure', async
     await route.continue();
   });
   await page.goto('/');
+  await page.locator('#welcome-win-close').click();
 
+  const status = page.locator('#desktop-widget-load-status');
+  const retryButton = page.locator('#desktop-widget-retry');
+  await expect(status).toBeVisible({ timeout: 8000 });
+  await expect(status).toContainText('could not be loaded');
+  expect(requests).toBe(3);
+
+  const timeOrigin = await page.evaluate(() => performance.timeOrigin);
+  recover = true;
+  await retryButton.focus();
+  await retryButton.press('Enter');
   await expect(page.locator('.desktop-note-widget')).toContainText('Recovered Note', { timeout: 8000 });
-  expect(requests).toBeGreaterThan(1);
+  await expect(status).toBeHidden();
+  expect(requests).toBe(4);
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
 });
 
 for (const { name, connection } of [

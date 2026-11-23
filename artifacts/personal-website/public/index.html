@@ -321,7 +321,6 @@
 
   <main id="desktop">
     <section id="desktop-widgets" aria-label="Desktop notes"></section>
-    <p id="desktop-widget-load-status" class="sr-only" role="status" aria-live="polite" hidden></p>
     <section id="desktop-search" aria-label="Search apps and files">
       <div class="desktop-search-control">
         <svg class="desktop-search-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -345,6 +344,12 @@
     </div>
     <div id="empty-state"></div>
   </main>
+
+  <div id="desktop-widget-load-status" class="app-files-load-error desktop-widget-load-error"
+       role="alert" aria-live="assertive" aria-atomic="true" hidden>
+    <span id="desktop-widget-load-error-text">Pinned desktop notes could not be loaded.</span>
+    <button id="desktop-widget-retry" class="app-files-retry" type="button">Retry</button>
+  </div>
 
   <!-- Welcome floating window — always on top, not part of the column strip -->
   <div id="welcome-overlay" hidden aria-hidden="true">
