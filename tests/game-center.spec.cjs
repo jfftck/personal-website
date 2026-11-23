@@ -589,19 +589,48 @@ test('Game Center game icons stay distinct and legible in both themes at desktop
   for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
     for (const theme of ['light', 'dark']) {
-      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+      await page.evaluate(value => {
+        document.documentElement.dataset.theme = value;
+        document.documentElement.dataset.topbarTheme = value;
+      }, theme);
       await page.locator('#app-menu-btn').click();
       await page.locator('#game-center-entry').click();
       const iconPaths = new Set();
+      const centerIcon = page.locator('#game-center-entry .app-launcher-icon');
+      const centerDetails = await centerIcon.evaluate(element => {
+        const getRgb = color => {
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = 1;
+          const context = canvas.getContext('2d');
+          context.fillStyle = color;
+          context.fillRect(0, 0, 1, 1);
+          const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
+          return `rgb(${red}, ${green}, ${blue})`;
+        };
+        return {
+          path: element.querySelector('svg path')?.getAttribute('d'),
+          color: getRgb(getComputedStyle(element).color),
+          background: getRgb(getComputedStyle(element).backgroundColor),
+        };
+      });
       for (const game of games) {
         const icon = page.locator(`#game-list [data-game="${game}"] .game-launcher-icon`);
         await expect(icon).toHaveAttribute('aria-hidden', 'true');
         await expect(icon.locator('svg')).toBeVisible();
         const details = await icon.evaluate(element => {
-          const style = getComputedStyle(element);
+          const getRgb = color => {
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 1;
+            const context = canvas.getContext('2d');
+            context.fillStyle = color;
+            context.fillRect(0, 0, 1, 1);
+            const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
+            return `rgb(${red}, ${green}, ${blue})`;
+          };
           return {
-            color: style.color,
-            background: style.backgroundColor,
+            color: getRgb(getComputedStyle(element).color),
+            launcherColor: getRgb(getComputedStyle(element.closest('.app-launcher')).color),
+            menuBackground: getRgb(getComputedStyle(document.querySelector('#app-menu')).backgroundColor),
             fill: getComputedStyle(element.querySelector('svg path')).fill,
             path: element.querySelector('svg path').getAttribute('d'),
           };
@@ -609,14 +638,59 @@ test('Game Center game icons stay distinct and legible in both themes at desktop
         const box = await icon.locator('svg').boundingBox();
         expect(box.width).toBeGreaterThanOrEqual(24);
         expect(box.height).toBeGreaterThanOrEqual(24);
-        expect(details.fill).toBe(details.color);
+        expect(details.color).toBe(details.launcherColor);
+        expect(details.fill).toBe(details.launcherColor);
+        expect(contrastRatio(details.color, details.menuBackground),
+          `${theme}: ${details.color} on ${details.menuBackground}`).toBeGreaterThanOrEqual(4.5);
         expect(details.path).toBeTruthy();
+        expect(details.path).not.toBe(centerDetails.path);
         iconPaths.add(details.path);
-        expect(contrastRatio(details.color, details.background)).toBeGreaterThanOrEqual(3);
       }
       expect(iconPaths.size).toBe(9);
-      await page.keyboard.press('Escape');
-      await page.keyboard.press('Escape');
+      expect(centerDetails.color).toBe('rgb(255, 255, 255)');
+      expect(centerDetails.background).not.toBe('rgba(0, 0, 0, 0)');
+      expect(contrastRatio(centerDetails.color, centerDetails.background)).toBeGreaterThanOrEqual(4.5);
+
+      await page.locator('#game-list [data-game="klondike"]').click();
+      const app = page.locator('.app-window[data-type="klondike"]').last();
+      const activeTab = page.locator('#open-apps-bar .app-tab-btn[aria-current="true"]');
+      const tabSvg = activeTab.locator('svg');
+      await expect(app).toBeVisible();
+      await expect(tabSvg).toBeVisible();
+      const tabGeometry = await page.evaluate(() => {
+        const icon = document.querySelector('#open-apps-bar .app-tab-btn[aria-current="true"] svg');
+        const getRgb = color => {
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = 1;
+          const context = canvas.getContext('2d');
+          context.fillStyle = color;
+          context.fillRect(0, 0, 1, 1);
+          const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
+          return `rgb(${red}, ${green}, ${blue})`;
+        };
+        const tab = icon.closest('.app-tab-btn').getBoundingClientRect();
+        const bar = document.querySelector('#open-apps-bar').getBoundingClientRect();
+        const topbar = document.querySelector('#topbar').getBoundingClientRect();
+        const svg = icon.getBoundingClientRect();
+        return {
+          iconInsideTab: svg.left >= tab.left && svg.right <= tab.right
+            && svg.top >= tab.top && svg.bottom <= tab.bottom,
+          iconInsideTopbar: svg.left >= topbar.left && svg.right <= topbar.right
+            && svg.top >= topbar.top && svg.bottom <= topbar.bottom,
+          iconInsideBar: svg.left >= bar.left && svg.right <= bar.right
+            && svg.top >= bar.top && svg.bottom <= bar.bottom,
+          color: getRgb(getComputedStyle(icon).fill),
+          tabColor: getRgb(getComputedStyle(icon.closest('.app-tab-btn')).color),
+          tabBackground: getRgb(getComputedStyle(icon.closest('.app-tab-btn')).backgroundColor),
+        };
+      });
+      expect(tabGeometry.iconInsideTab).toBe(true);
+      expect(tabGeometry.iconInsideTopbar).toBe(true);
+      expect(tabGeometry.iconInsideBar).toBe(true);
+      expect(tabGeometry.color).toBe(tabGeometry.tabColor);
+      expect(contrastRatio(tabGeometry.tabColor, tabGeometry.tabBackground)).toBeGreaterThanOrEqual(4.5);
+      await expect(page.locator('#app-menu')).toBeHidden();
+      await page.locator('#close-btn').click();
     }
   }
 });
