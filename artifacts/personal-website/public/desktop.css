@@ -1423,7 +1423,7 @@ body {
   width: 1.6rem;
   height: 1.6rem;
   flex-basis: 1.6rem;
-  color: var(--topbar-text);
+  color: var(--app-text);
 }
 .game-launcher-icon svg { width: 1.5rem; height: 1.5rem; }
 #game-center-entry .app-launcher-icon {
