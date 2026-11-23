@@ -173,19 +173,7 @@ export function createWindowShortcutRouter({
       return;
     }
 
-    const matched = shortcutManager.dispatchDesktop(event);
-    globalThis.window.__shortcutDebug = {
-      key: event.key,
-      code: event.code,
-      ctrl: event.ctrlKey,
-      alt: event.altKey,
-      shift: event.shiftKey,
-      matched,
-      focusedId: state.focusedId,
-      menusClosed: menusClosed(),
-      systemPanelHidden: systemPanel.hidden,
-      target: event.target?.outerHTML?.slice(0, 100),
-    };
+    shortcutManager.dispatchDesktop(event);
   }
 
   return { handleKeyDown };

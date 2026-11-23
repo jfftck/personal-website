@@ -996,8 +996,12 @@ export function buildSettings(id, ctx, initialState) {
     card.append(referenceHeading, reference);
     body.append(card);
 
-    if (!shortcuts) {
-      setMessage(editorStatus, 'Shortcut editing is unavailable right now.', 'error');
+    if (!shortcuts || shortcuts.status === 'loading') {
+      setMessage(editorStatus, 'Loading keyboard shortcuts…');
+      return;
+    }
+    if (shortcuts.status === 'error') {
+      setMessage(editorStatus, 'Keyboard shortcuts could not be loaded. Reload the desktop to try again.', 'error');
       return;
     }
 
@@ -1056,7 +1060,8 @@ export function buildSettings(id, ctx, initialState) {
     });
 
     function focusCapture(actionId) {
-      editorList.querySelector(`[data-shortcut-capture="${CSS.escape(actionId)}"]`)
+      [...editorList.querySelectorAll('[data-shortcut-capture]')]
+        .find(input => input.dataset.shortcutCapture === actionId)
         ?.focus({ preventScroll: true });
     }
 
@@ -1687,7 +1692,8 @@ export function buildSettings(id, ctx, initialState) {
   window.addEventListener('desktop-notification-preferences-change', handleNotificationPreferencesChange);
   if (ctx?.shortcuts?.subscribe) {
     unsubscribeShortcuts = ctx.shortcuts.subscribe(origin => {
-      if (origin === 'external' && activePage === 'keyboard' && !shortcutConflictDialog?.open) renderPage();
+      if (['external', 'ready', 'error'].includes(origin)
+        && activePage === 'keyboard' && !shortcutConflictDialog?.open) renderPage();
     });
   }
   buildNavigation();

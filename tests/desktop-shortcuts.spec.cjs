@@ -124,7 +124,7 @@ test('shortcut editor adds combinations without replacing them and persists them
   await expect(row.locator('.shortcut-binding-chip')).toHaveCount(2);
   await expect(settings.locator('.settings-shortcut-status')).toHaveText('Shortcut added to Open the app menu.');
 
-  await settings.locator('.settings-shortcut-editor-heading').click();
+  await page.locator('#app-menu-btn').focus();
   await page.keyboard.press('Alt+g');
   await expect(page.locator('#app-menu')).toBeVisible();
   await page.keyboard.press('Escape');
@@ -140,6 +140,15 @@ test('shortcut editor adds combinations without replacing them and persists them
   await expect(restoredRow.locator('.shortcut-binding-chip')).toHaveCount(2);
   await expect(restoredSettings.locator('.settings-shortcut-reference'))
     .toContainText('Alt+G');
+  await page.locator('#app-menu-btn').click();
+  await page.locator('#app-menu-help-btn').click();
+  await expect(page.locator('#help-shortcut-reference')).toContainText('Alt+G');
+  await page.locator('#help-close-btn').click();
+
+  const removeAltG = restoredRow.getByRole('button', { name: 'Remove Alt plus G from Open the app menu' });
+  await expect(removeAltG).toBeVisible();
+  await removeAltG.click();
+  await expect(restoredRow.locator('.shortcut-binding-chip')).toHaveCount(1);
 });
 
 test('shortcut conflicts can be canceled or moved with both actions identified', async ({ page }) => {
@@ -168,7 +177,7 @@ test('shortcut conflicts can be canceled or moved with both actions identified',
   expect(stored['desktop.focusApp1']).toEqual([]);
   expect(stored['desktop.openAppMenu']).toHaveLength(2);
 
-  await settings.locator('.settings-shortcut-editor-heading').click();
+  await page.locator('#app-menu-btn').focus();
   await page.keyboard.press('Control+Alt+1');
   await expect(page.locator('#app-menu')).toBeVisible();
 });
@@ -206,7 +215,7 @@ test('Minesweeper flag shortcut is editable and still works on focused board cel
   await row.locator('.shortcut-capture-input').press('Shift+g');
   await expect(row.locator('.shortcut-binding-chip')).toHaveCount(2);
 
-  await game.locator('.app-titlebar').click();
+  await page.locator('#open-apps-bar .app-tab-btn[aria-label="Minesweeper"]').click();
   const cell = game.locator('.mine-cell').first();
   await cell.focus();
   await page.keyboard.press('Shift+g');

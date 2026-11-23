@@ -462,7 +462,8 @@ export function createShortcutManager({
       const registration = findHandler(definition.id, ownerId);
       if (!registration) continue;
       const path = eventPath(event);
-      const inDialog = path.some(node => node?.matches?.('dialog[open], [role="dialog"]'));
+      const inDialog = path.some(node => node?.matches?.('dialog[open], [role="dialog"]')
+        && !node.classList?.contains('app-window'));
       if (inDialog && !definition.allowDialog) continue;
       const typing = isTextEntryTarget(event);
       if (typing && !definition.textEntryKeys.includes(event.key)) continue;
@@ -541,7 +542,8 @@ function appendKeyCombo(parent, binding, primaryLabel) {
 export function renderShortcutReference(container, manager) {
   if (!container) return;
   const primaryLabel = getPrimaryModifierLabel();
-  const groups = manager?.getGroups?.() || GROUP_ORDER.map(title => ({
+  const currentGroups = manager?.getGroups?.();
+  const groups = currentGroups?.length ? currentGroups : GROUP_ORDER.map(title => ({
     title,
     actions: ACTIONS.filter(item => item.group === title)
       .map(item => ({ ...item, bindings: item.defaultBindings })),

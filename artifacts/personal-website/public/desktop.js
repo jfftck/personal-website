@@ -8,11 +8,80 @@ import {
 } from './data-handler.js';
 import { createWindowController, SESSION_KEY, SESSION_KEY_V1 } from './window-controller.js';
 import { createWindowShortcutRouter } from './window-shortcut-router.js';
-import { createShortcutManager } from './shared/desktop-shortcuts.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const shortcutManager = createShortcutManager({ getFocusedAppId: () => S.focusedId });
+let shortcutManagerImplementation = null;
+let shortcutManagerStatus = 'loading';
+const queuedShortcutHandlers = new Set();
+const queuedShortcutListeners = new Set();
+let shortcutImportAttempt = 0;
+const loadShortcutModule = () => {
+  const moduleUrl = new URL('./shared/desktop-shortcuts.js', import.meta.url);
+  moduleUrl.searchParams.set('attempt', String(shortcutImportAttempt++));
+  return import(/* @vite-ignore */ moduleUrl.href);
+};
+const notifyShortcutListeners = origin => queuedShortcutListeners.forEach(item => item.listener(origin));
+const shortcutManager = {
+  registerHandler(actionId, ownerId, handler) {
+    const registration = { actionId, ownerId, handler, active: true, remove: null };
+    if (shortcutManagerImplementation) {
+      registration.remove = shortcutManagerImplementation.registerHandler(actionId, ownerId, handler);
+    } else {
+      queuedShortcutHandlers.add(registration);
+    }
+    return () => {
+      registration.active = false;
+      registration.remove?.();
+      queuedShortcutHandlers.delete(registration);
+    };
+  },
+  dispatchAppKeyDown: event => shortcutManagerImplementation?.dispatchAppKeyDown(event) || false,
+  dispatchDesktop: event => shortcutManagerImplementation?.dispatchDesktop(event) || false,
+  getGroups: () => shortcutManagerImplementation?.getGroups() || [],
+  getAction: actionId => shortcutManagerImplementation?.getAction(actionId) || null,
+  getBindings: actionId => shortcutManagerImplementation?.getBindings(actionId) || [],
+  getConflicts: (actionId, binding) => shortcutManagerImplementation?.getConflicts(actionId, binding) || [],
+  addBinding: (actionId, binding, options) => shortcutManagerImplementation
+    ? shortcutManagerImplementation.addBinding(actionId, binding, options)
+    : { status: 'loading' },
+  removeBinding: (actionId, binding) => shortcutManagerImplementation
+    ? shortcutManagerImplementation.removeBinding(actionId, binding)
+    : { status: 'loading' },
+  createBindingFromEvent: event => shortcutManagerImplementation?.createBindingFromEvent(event) || null,
+  formatBinding: binding => shortcutManagerImplementation?.formatBinding(binding) || [binding?.key || ''],
+  subscribe(listener) {
+    const registration = { listener, remove: null };
+    queuedShortcutListeners.add(registration);
+    if (shortcutManagerImplementation) registration.remove = shortcutManagerImplementation.subscribe(listener);
+    return () => {
+      queuedShortcutListeners.delete(registration);
+      registration.remove?.();
+    };
+  },
+  get status() { return shortcutManagerStatus; },
+};
+void retryWithBackoff(loadShortcutModule, {
+  onRetry: () => notifyShortcutListeners('retry'),
+}).then(({ createShortcutManager }) => {
+  shortcutManagerImplementation = createShortcutManager({ getFocusedAppId: () => S.focusedId });
+  queuedShortcutHandlers.forEach(registration => {
+    if (registration.active) {
+      registration.remove = shortcutManagerImplementation.registerHandler(
+        registration.actionId, registration.ownerId, registration.handler,
+      );
+    }
+  });
+  queuedShortcutListeners.forEach(registration => {
+    registration.remove = shortcutManagerImplementation.subscribe(registration.listener);
+  });
+  shortcutManagerStatus = 'ready';
+  notifyShortcutListeners('ready');
+}).catch(error => {
+  shortcutManagerStatus = 'error';
+  console.error('[shortcuts] Could not load keyboard shortcuts.', error);
+  notifyShortcutListeners('error');
+});
 document.addEventListener('keydown', shortcutManager.dispatchAppKeyDown, true);
 const appMenuBtn       = $('app-menu-btn');
 const appMenu          = $('app-menu');
