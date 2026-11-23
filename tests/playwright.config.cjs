@@ -2,7 +2,7 @@ const { defineConfig } = require('@playwright/test');
 
 module.exports = defineConfig({
   testDir: __dirname,
-  testMatch: ['launcher-manifests.spec.cjs', 'app-prefetch.spec.cjs', 'game-center.spec.cjs', 'admin-thumbnail.spec.cjs', 'admin-inline-edit.spec.cjs', 'admin-folder-flow.spec.cjs', 'admin-console-panels.spec.cjs', 'viewer-session.spec.cjs', 'img-thumbnails.spec.cjs', 'weather-locations.spec.cjs', 'world-clock.spec.cjs', 'utility-styles.spec.cjs', 'file-manager-refresh.spec.cjs', 'calculator-math.spec.cjs', 'shared-controls.spec.cjs'],
+  testMatch: ['launcher-manifests.spec.cjs', 'app-prefetch.spec.cjs', 'game-center.spec.cjs', 'desktop-launcher-notifications.spec.cjs', 'admin-thumbnail.spec.cjs', 'admin-inline-edit.spec.cjs', 'admin-folder-flow.spec.cjs', 'admin-console-panels.spec.cjs', 'viewer-session.spec.cjs', 'img-thumbnails.spec.cjs', 'weather-locations.spec.cjs', 'world-clock.spec.cjs', 'utility-styles.spec.cjs', 'file-manager-refresh.spec.cjs', 'calculator-math.spec.cjs', 'shared-controls.spec.cjs'],
   outputDir: '../generated-artifacts/browser-tests',
   workers: 1,
   timeout: 30000,

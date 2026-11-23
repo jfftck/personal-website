@@ -4,7 +4,7 @@ import { S }               from './desktop-state.js';
 import { retryWithBackoff, responseLoadError } from './shared/retry.js';
 import { APP_LAUNCHERS, APP_REGISTRY } from './apps/app-registry.js';
 import {
-  readJSON, readRaw, readRawResult, removeData, restoreDataBackup, writeJSON, writeRaw,
+  readJSON, readRaw, readRawResult, removeData, writeJSON, writeRaw,
 } from './data-handler.js';
 import { createWindowController, SESSION_KEY, SESSION_KEY_V1 } from './window-controller.js';
 import { createWindowShortcutRouter } from './window-shortcut-router.js';
@@ -22,19 +22,79 @@ const overviewBtn      = $('overview-btn');
 const winMenuBtn       = $('win-menu-btn');
 const systemTimeBtn    = $('system-time-btn');
 const systemPanel      = $('system-panel');
+const notificationsBtn = $('notifications-btn');
+const notificationPanel = $('notification-panel');
 const appStrip         = $('app-strip');
 const appStripWrapper  = $('app-strip-wrapper');
 const emptyState       = $('empty-state');
 const desktopWidgets   = $('desktop-widgets');
 const showDesktopBtn   = $('show-desktop-btn');
-window.addEventListener('desktop-data-error', showDataHandlerNotification);
-window.addEventListener('desktop-data-recovery-available', showDataRecoveryAvailable);
-window.addEventListener('desktop-data-recovery-restored', showDataRecoveryResult);
-window.addEventListener('desktop-data-recovery-saved', showDataRecoveryResult);
-window.addEventListener('desktop-data-recovery-error', showDataRecoveryResult);
-window.addEventListener('desktop-data-recovery-cleared', event => {
-  const notice = findDataRecoveryNotice(event.detail?.key);
-  notice?.remove();
+let notificationCenter = null;
+let notificationCenterPromise = null;
+let notificationModuleAttempt = 0;
+let pendingDataNotificationEvents = [];
+let welcomeReminderDismissPending = false;
+
+function loadNotificationCenter() {
+  if (notificationCenter) return Promise.resolve(notificationCenter);
+  if (!notificationCenterPromise) {
+    notificationCenterPromise = retryWithBackoff(() => {
+      const moduleUrl = new URL('./shared/notification-center.js', import.meta.url);
+      if (notificationModuleAttempt > 0) moduleUrl.searchParams.set('retry', `notifications-${notificationModuleAttempt}`);
+      notificationModuleAttempt += 1;
+      return import(/* @vite-ignore */ moduleUrl.href).then(({ createNotificationCenter }) => {
+        notificationCenter = createNotificationCenter({
+          button: notificationsBtn,
+          panel: notificationPanel,
+          list: $('notification-list'),
+          emptyState: $('notification-panel-empty'),
+          clearButton: $('notification-clear-btn'),
+          status: $('notification-panel-status'),
+          toastContainer: $('in-app-notifications'),
+          closeOtherPanels: () => {
+            closeSystemPanel();
+            closeAppMenu();
+            closeHelp();
+          },
+          onAction: action => {
+            if (action === 'open-welcome') openWelcomeWindow();
+          },
+        });
+        if (welcomeReminderDismissPending) notificationCenter.dismissWelcomeReminder();
+        const queuedEvents = pendingDataNotificationEvents;
+        pendingDataNotificationEvents = [];
+        for (const { type, detail } of queuedEvents) notificationCenter.handleDataEvent(type, detail);
+        return notificationCenter;
+      });
+    }, { maxRetries: 2, initialDelayMs: 300, maxDelayMs: 1200 }).catch(error => {
+      notificationCenterPromise = null;
+      notificationsBtn.setAttribute('aria-label', 'Notifications unavailable. Select to retry.');
+      console.error('Could not load notifications.', error);
+      throw error;
+    });
+  }
+  return notificationCenterPromise;
+}
+
+function forwardDataNotificationEvent(event) {
+  if (notificationCenter) {
+    notificationCenter.handleDataEvent(event.type, event.detail);
+    return;
+  }
+  pendingDataNotificationEvents.push({ type: event.type, detail: event.detail });
+  void loadNotificationCenter().catch(() => {});
+}
+
+[
+  'desktop-data-error',
+  'desktop-data-recovery-available',
+  'desktop-data-recovery-restored',
+  'desktop-data-recovery-saved',
+  'desktop-data-recovery-error',
+  'desktop-data-recovery-cleared',
+].forEach(type => window.addEventListener(type, forwardDataNotificationEvent));
+window.requestAnimationFrame(() => {
+  void loadNotificationCenter().catch(() => {});
 });
 
 // ── Width helpers ─────────────────────────────────────────────
@@ -92,14 +152,32 @@ const ANIMATION_EVENT_EFFECTS = {
 };
 const REMINDER_KEY = 'desktop-reminders';
 const REMINDER_BACKGROUND_KEY = 'desktop-reminder-background';
+const WELCOME_SHOW_ON_STARTUP_KEY = 'desktop-welcome-show-on-startup';
+const welcomeStartupToggle = $('welcome-show-on-startup');
 let calendarDate  = new Date();
 let selectedCalendarDate = new Date();
 let use24HourTime = readRaw(TIME_KEY) === 'true';
+let welcomeShowOnStartup = readRaw(WELCOME_SHOW_ON_STARTUP_KEY) !== 'false';
 let reminders = [];
 const reminderNotificationTimers = new Map();
 let systemNotificationsEnabled = readRaw(REMINDER_BACKGROUND_KEY) === 'true';
 const storedReminders = readJSON(REMINDER_KEY, [], { validate: Array.isArray });
 if (Array.isArray(storedReminders)) reminders = storedReminders;
+welcomeStartupToggle.checked = welcomeShowOnStartup;
+welcomeStartupToggle.addEventListener('change', () => {
+  welcomeShowOnStartup = welcomeStartupToggle.checked;
+  writeRaw(WELCOME_SHOW_ON_STARTUP_KEY, String(welcomeShowOnStartup));
+  if (welcomeShowOnStartup) {
+    welcomeReminderDismissPending = true;
+    notificationCenter?.dismissWelcomeReminder();
+  }
+});
+
+notificationsBtn.addEventListener('click', event => {
+  if (notificationCenter) return;
+  event.preventDefault();
+  void loadNotificationCenter().then(center => center.open()).catch(() => {});
+});
 
 function effectiveTheme() {
   return document.documentElement.dataset.theme || (themeMedia.matches ? 'dark' : 'light');
@@ -390,178 +468,23 @@ function clearReminderNotification(id) {
   reminderNotificationTimers.delete(id);
 }
 
-function showInAppReminderNotification(reminder) {
-  const container = $('in-app-notifications');
-  const existing = container.querySelector(`[data-reminder-id="${CSS.escape(reminder.id)}"]`);
-  if (existing) existing.remove();
-
-  const notice = document.createElement('article');
-  notice.className = 'in-app-notification';
-  notice.dataset.reminderId = reminder.id;
-  notice.setAttribute('role', 'alert');
-
-  const icon = document.createElement('span');
-  icon.className = 'in-app-notification-icon';
-  icon.setAttribute('aria-hidden', 'true');
-  icon.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6V11a7 7 0 0 0-6-6.92V2h-2v2.08A7 7 0 0 0 5 11v5l-2 2v1h18v-1z"/></svg>';
-
-  const copy = document.createElement('div');
-  copy.className = 'in-app-notification-copy';
-  const title = document.createElement('strong');
-  title.textContent = 'Reminder';
-  const body = document.createElement('span');
-  body.textContent = reminder.text;
-  copy.append(title, body);
-
-  const dismiss = document.createElement('button');
-  dismiss.className = 'in-app-notification-dismiss';
-  dismiss.type = 'button';
-  dismiss.setAttribute('aria-label', 'Dismiss reminder notification');
-  dismiss.textContent = '×';
-  dismiss.addEventListener('click', () => notice.remove());
-
-  notice.append(icon, copy, dismiss);
-  container.appendChild(notice);
-}
-
-function showDataHandlerNotification(event) {
-  const container = $('in-app-notifications');
-  const operation = event.detail?.operation;
-  const titleText = operation === 'read' ? 'Could not read saved data'
-    : operation === 'remove' ? 'Could not remove saved data'
-      : 'Could not save data';
-  const messageText = operation === 'read'
-    ? 'A saved item could not be read. Check the page before making more changes.'
-    : operation === 'remove'
-      ? 'A saved item could not be removed from this browser.'
-      : 'A change could not be saved in this browser. Try again before leaving this page.';
-  let notice = container.querySelector('[data-data-handler-notice]');
-  if (!notice) {
-    notice = document.createElement('article');
-    notice.className = 'in-app-notification';
-    notice.dataset.dataHandlerNotice = 'true';
-    notice.setAttribute('role', 'alert');
-    notice.setAttribute('aria-live', 'assertive');
-    notice.setAttribute('aria-atomic', 'true');
-    const icon = document.createElement('span');
-    icon.className = 'in-app-notification-icon';
-    icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = '!';
-    const copy = document.createElement('div');
-    copy.className = 'in-app-notification-copy';
-    const title = document.createElement('strong');
-    title.className = 'data-handler-notice-title';
-    const message = document.createElement('span');
-    message.className = 'data-handler-notice-message';
-    copy.append(title, message);
-    const dismiss = document.createElement('button');
-    dismiss.className = 'in-app-notification-dismiss';
-    dismiss.type = 'button';
-    dismiss.setAttribute('aria-label', 'Dismiss saved data notice');
-    dismiss.textContent = '×';
-    dismiss.addEventListener('click', () => notice.remove());
-    notice.append(icon, copy, dismiss);
-    container.appendChild(notice);
-  }
-  notice.querySelector('.data-handler-notice-title').textContent = titleText;
-  notice.querySelector('.data-handler-notice-message').textContent = messageText;
-}
-
-function recoveryKeyLabel(key) {
-  return String(key || 'desktop data')
-    .replace(/^personal-desktop-/, '')
-    .replace(/^desktop-/, '')
-    .replace(/-v\d+$/, '')
-    .replace(/[-_]+/g, ' ')
-    .trim();
-}
-
-function findDataRecoveryNotice(key) {
-  if (typeof key !== 'string') return null;
-  return [...$('in-app-notifications').querySelectorAll('[data-data-handler-recovery]')]
-    .find(notice => notice.dataset.dataHandlerRecovery === key) || null;
-}
-
-function showDataRecoveryAvailable(event) {
-  const key = event.detail?.key;
-  if (typeof key !== 'string' || !key) return;
-  const container = $('in-app-notifications');
-  if (findDataRecoveryNotice(key)) return;
-
-  const label = recoveryKeyLabel(key);
-  const notice = document.createElement('article');
-  notice.className = 'in-app-notification';
-  notice.dataset.dataHandlerRecovery = key;
-  notice.setAttribute('role', 'alert');
-  notice.setAttribute('aria-live', 'assertive');
-  notice.setAttribute('aria-atomic', 'true');
-  notice.tabIndex = -1;
-  const icon = document.createElement('span');
-  icon.className = 'in-app-notification-icon';
-  icon.setAttribute('aria-hidden', 'true');
-  icon.textContent = '↺';
-  const copy = document.createElement('div');
-  copy.className = 'in-app-notification-copy';
-  const title = document.createElement('strong');
-  title.className = 'data-handler-recovery-title';
-  title.textContent = 'Previous saved copy available';
-  const message = document.createElement('span');
-  message.className = 'data-handler-recovery-message';
-  message.textContent = `A previous copy of ${label} is available. The current stored value is unchanged; restoring will replace it with that copy.`;
-  const restore = document.createElement('button');
-  restore.type = 'button';
-  restore.className = 'data-handler-recovery-action';
-  restore.textContent = 'Restore Previous Copy';
-  restore.setAttribute('aria-label', `Restore previous copy for ${label}`);
-  restore.addEventListener('click', () => restoreDataBackup(key));
-  copy.append(title, message, restore);
-  notice.append(icon, copy);
-  container.appendChild(notice);
-}
-
-function showDataRecoveryResult(event) {
-  const key = event.detail?.key;
-  const notice = findDataRecoveryNotice(key);
-  if (!notice) return;
-  const title = notice.querySelector('.data-handler-recovery-title');
-  const message = notice.querySelector('.data-handler-recovery-message');
-  const restore = notice.querySelector('.data-handler-recovery-action');
-  const restored = event.type === 'desktop-data-recovery-restored';
-  const saved = event.type === 'desktop-data-recovery-saved';
-  const reason = event.detail?.reason;
-
-  if (restored || saved) {
-    notice.setAttribute('role', 'status');
-    notice.setAttribute('aria-live', 'polite');
-    title.textContent = restored ? 'Previous saved copy restored' : 'A new saved copy is available';
-    message.textContent = restored
-      ? 'The previous copy is now restored in this browser.'
-      : 'A newer copy was saved. This recovery prompt is no longer needed.';
-    restore?.remove();
-    if (restored) notice.focus({ preventScroll: true });
-    return;
-  }
-
-  notice.setAttribute('role', 'alert');
-  notice.setAttribute('aria-live', 'assertive');
-  title.textContent = 'Could not restore the saved copy';
-  message.textContent = reason === 'data-changed'
-    ? 'The saved value changed before recovery. Reload the page to check the latest copy.'
-    : reason === 'copy-invalid'
-      ? 'The previous copy is no longer valid. Your current stored value was not changed.'
-      : reason === 'copy-unavailable'
-        ? 'The previous copy is no longer available. Your current stored value was not changed.'
-        : 'Browser storage blocked recovery. Your current stored value was not changed; try again.';
-  if (reason === 'data-changed' || reason === 'copy-invalid' || reason === 'copy-unavailable') {
-    restore?.remove();
-    notice.focus({ preventScroll: true });
-  }
+function publishReminderNotification(reminder) {
+  const id = `reminder:${reminder.id}`;
+  const message = String(reminder.text || 'A reminder is due.');
+  void loadNotificationCenter().then(center => {
+    const added = center.add({ id, type: 'reminder', title: 'Reminder', message });
+    if (added) center.showToast({ id: `toast:${id}`, title: 'Reminder', message, icon: '⏰', role: 'alert' });
+  }).catch(() => {});
 }
 
 function scheduleReminderNotification(reminder) {
   clearReminderNotification(reminder.id);
   const delay = new Date(reminder.dueAt || reminder.when).getTime() - Date.now();
-  if (delay <= 0) return;
+  if (!Number.isFinite(delay)) return;
+  if (delay <= 0) {
+    publishReminderNotification(reminder);
+    return;
+  }
   const maxDelay = 2_147_483_647;
   const timer = setTimeout(() => {
     if (delay > maxDelay) {
@@ -576,13 +499,11 @@ function scheduleReminderNotification(reminder) {
       if (systemNotificationsAvailable) {
         const notification = new Notification('Reminder', { body: reminder.text });
         notification.addEventListener('click', () => window.focus());
-      } else {
-        showInAppReminderNotification(reminder);
       }
     } catch (error) {
       console.warn('[reminders] Local notification failed.', error);
-      showInAppReminderNotification(reminder);
     }
+    publishReminderNotification(reminder);
     reminderNotificationTimers.delete(reminder.id);
   }, Math.min(delay, maxDelay));
   reminderNotificationTimers.set(reminder.id, timer);
@@ -1537,10 +1458,169 @@ const launcherFileLoadStatus = $('launcher-file-load-status');
 const launcherFileLoadError = $('launcher-file-load-error');
 const launcherFileLoadErrorText = $('launcher-file-load-error-text');
 const launcherFileRetryButton = $('launcher-file-retry');
+const launcherLinksStatus = $('launcher-links-status');
+const launcherLinksStatusText = $('launcher-links-status-text');
+const launcherLinksRetryButton = $('launcher-links-retry');
+const launcherLinksList = $('launcher-links-list');
 const docFilesHeading = $('doc-files-heading');
 const picFilesHeading = $('pic-files-heading');
 const videoFilesHeading = $('video-files-heading');
+const docFilesEmpty = $('doc-files-empty');
+const picFilesEmpty = $('pic-files-empty');
+const videoFilesEmpty = $('video-files-empty');
+const launcherTabButtons = [...document.querySelectorAll('[data-launcher-tab]')];
+const launcherTabPanels = [...document.querySelectorAll('[data-launcher-panel]')];
+let activeLauncherTab = 'apps';
+let launcherLinks = null;
+let launcherLinksPromise = null;
 let launcherSearchAnnouncementTimer;
+let launcherSearchRestoreFocus = null;
+
+function selectLauncherTab(category, { focus = false } = {}) {
+  if (!launcherTabButtons.some(button => button.dataset.launcherTab === category)) return;
+  activeLauncherTab = category;
+  launcherTabButtons.forEach(button => {
+    const selected = button.dataset.launcherTab === category;
+    button.setAttribute('aria-selected', String(selected));
+    button.tabIndex = selected ? 0 : -1;
+    if (selected && focus) button.focus({ preventScroll: true });
+  });
+  launcherTabPanels.forEach(panel => {
+    panel.hidden = panel.dataset.launcherPanel !== category;
+  });
+  if (typeof updateLauncherFileSearch === 'function') updateLauncherFileSearch();
+}
+
+const launcherTabOrder = ['apps', 'documents', 'pictures', 'videos'];
+const launcherTabs = $('launcher-tabs');
+launcherTabs.addEventListener('click', event => {
+  const button = event.target.closest('[data-launcher-tab]');
+  if (button) selectLauncherTab(button.dataset.launcherTab);
+});
+launcherTabs.addEventListener('keydown', event => {
+  const current = event.target.closest('[data-launcher-tab]');
+  if (!current || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const index = launcherTabOrder.indexOf(current.dataset.launcherTab);
+  const nextIndex = event.key === 'Home' ? 0
+    : event.key === 'End' ? launcherTabOrder.length - 1
+      : (index + (event.key === 'ArrowRight' ? 1 : -1) + launcherTabOrder.length) % launcherTabOrder.length;
+  selectLauncherTab(launcherTabOrder[nextIndex], { focus: true });
+});
+
+function parseLauncherLinks(markdown) {
+  const links = [];
+  let group = 'Links';
+  for (const line of String(markdown || '').split(/\r?\n/)) {
+    const heading = line.match(/^#{2,3}\s+(.+?)\s*#*\s*$/);
+    if (heading) {
+      group = heading[1].trim();
+      continue;
+    }
+    const match = line.match(/^\s*[-*]\s+\[([^\]]{1,160})\]\(([^)\s]+)(?:\s+"[^"]*")?\)\s*$/);
+    if (!match) continue;
+    let url;
+    try { url = new URL(match[2], location.href); } catch { continue; }
+    if (!['http:', 'https:'].includes(url.protocol)) continue;
+    links.push({
+      id: `link:${url.href}`,
+      title: match[1].trim(),
+      url: url.href,
+      group,
+    });
+  }
+  return links;
+}
+
+function renderLauncherLinks() {
+  launcherLinksList.replaceChildren();
+  if (launcherLinks === null) return;
+  const groups = new Map();
+  for (const link of launcherLinks) {
+    if (!groups.has(link.group)) groups.set(link.group, []);
+    groups.get(link.group).push(link);
+  }
+  for (const [groupName, links] of groups) {
+    const section = document.createElement('section');
+    section.className = 'launcher-link-group';
+    section.dataset.linkGroup = groupName.toLocaleLowerCase();
+    const heading = document.createElement('h3');
+    heading.className = 'launcher-link-group-heading';
+    heading.textContent = groupName;
+    const list = document.createElement('ul');
+    list.className = 'launcher-link-group-list';
+    for (const link of links) {
+      const item = document.createElement('li');
+      const anchor = document.createElement('a');
+      anchor.className = 'launcher-link';
+      anchor.href = link.url;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      anchor.textContent = link.title;
+      anchor.title = link.title;
+      anchor.dataset.searchText = `${link.title} ${groupName} ${link.url}`.toLocaleLowerCase();
+      item.append(anchor);
+      list.append(item);
+    }
+    section.append(heading, list);
+    launcherLinksList.append(section);
+  }
+  updateLauncherFileSearch({ autoSelect: true });
+}
+
+function setLauncherLinksStatus(message = '', { retry = false } = {}) {
+  launcherLinksStatus.hidden = !message;
+  launcherLinksStatusText.textContent = message;
+  launcherLinksRetryButton.hidden = !retry;
+}
+
+function ensureLauncherLinks({ force = false } = {}) {
+  if (launcherLinks !== null && !force) return Promise.resolve(launcherLinks);
+  if (launcherLinksPromise && !force) return launcherLinksPromise;
+  launcherLinksPromise = (async () => {
+    setLauncherLinksStatus('Loading links…');
+    try {
+      await ensureLauncherManifest('posts', { background: true });
+      const sourceFile = (_launcherCache.posts || []).find(file =>
+        file.filename === '20240201_My_Sites.md'
+        || file.displayName.toLocaleLowerCase() === 'my sites');
+      const sourceUrl = sourceFile?.url
+        ? (sourceFile.url.startsWith('/') ? sourceFile.url : `/files/${sourceFile.url.replace(/^\/+/, '')}`)
+        : '/files/posts/20240201_My_Sites.md';
+      let attempt = 0;
+      const markdown = await retryWithBackoff(async () => {
+        const requestUrl = new URL(sourceUrl, location.href);
+        if (attempt > 0) requestUrl.searchParams.set('retry', `launcher-links-${attempt}`);
+        attempt += 1;
+        const response = await fetch(requestUrl.href, { cache: 'no-cache' });
+        if (!response.ok) throw responseLoadError(response, 'launcher links');
+        return response.text();
+      }, { maxRetries: 2, initialDelayMs: 250, maxDelayMs: 900 });
+      launcherLinks = parseLauncherLinks(markdown);
+      setLauncherLinksStatus(launcherLinks.length ? '' : 'No links are available.');
+    } catch (error) {
+      launcherLinks = [];
+      setLauncherLinksStatus('Couldn’t load links.', { retry: true });
+      console.warn('[launcher] Could not load the links list.', error);
+    }
+    renderLauncherLinks();
+    desktopSearchItems = buildDesktopSearchItems();
+    if (!desktopSearchSuggestions.hidden) renderDesktopSearchResults();
+    return launcherLinks;
+  })().finally(() => {
+    launcherLinksPromise = null;
+  });
+  return launcherLinksPromise;
+}
+
+launcherLinksRetryButton.addEventListener('click', () => {
+  launcherLinksRetryButton.disabled = true;
+  launcherLinksRetryButton.setAttribute('aria-busy', 'true');
+  void ensureLauncherLinks({ force: true }).finally(() => {
+    launcherLinksRetryButton.disabled = false;
+    launcherLinksRetryButton.removeAttribute('aria-busy');
+  });
+});
 
 function parseManifestForLauncher(folder, entries) {
   return entries.map(entry => {
@@ -1867,8 +1947,9 @@ function renderLauncherFiles() {
       videos: 'videos',
     })[folder]).join(', ')}.`
     : '';
-  appFilesSection.hidden = !hasFiles && loading.length === 0 && failed.length === 0;
-  updateLauncherFileSearch();
+  appFilesSection.hidden = !hasFiles && loading.length === 0 && failed.length === 0
+    && activeLauncherTab === 'apps';
+  updateLauncherFileSearch({ autoSelect: true });
   desktopSearchItems = buildDesktopSearchItems();
   desktopSearchItemsReady = LAUNCHER_MANIFEST_FOLDERS.every(folder => _launcherCache[folder] !== undefined);
   if (!desktopSearchSuggestions.hidden) renderDesktopSearchResults();
@@ -1876,6 +1957,7 @@ function renderLauncherFiles() {
 
 function populateLauncherFiles() {
   renderLauncherFiles();
+  void ensureLauncherLinks();
   return Promise.all(LAUNCHER_MANIFEST_FOLDERS.map(folder => ensureLauncherManifest(folder, {
     background: true,
   }))).then(() => {
@@ -1898,7 +1980,7 @@ launcherFileRetryButton.addEventListener('click', async () => {
   }
 });
 
-function updateLauncherFileSearch() {
+function updateLauncherFileSearch({ autoSelect = false } = {}) {
   const query = launcherFileSearch.value.trim().toLocaleLowerCase();
   const focusedFile = document.activeElement?.matches('.app-file-btn')
     ? document.activeElement
@@ -1923,7 +2005,25 @@ function updateLauncherFileSearch() {
   const documentCount = filterList(docFilesList);
   const pictureCount = filterList(picFilesList);
   const videoCount = filterList(videoFilesList);
-  if (focusedFile?.hidden) launcherFileSearch.focus({ preventScroll: true });
+  let linkCount = 0;
+  launcherLinksList.querySelectorAll('.launcher-link').forEach(link => {
+    const matched = !query || link.dataset.searchText.includes(query);
+    link.closest('li').hidden = !matched;
+    if (matched) linkCount += 1;
+  });
+  launcherLinksList.querySelectorAll('.launcher-link-group').forEach(group => {
+    const groupHasMatches = [...group.querySelectorAll('li')].some(item => !item.hidden);
+    group.hidden = !groupHasMatches;
+  });
+  if (focusedFile?.hidden) {
+    launcherSearchRestoreFocus = { element: focusedFile, tab: activeLauncherTab };
+    launcherFileSearch.focus({ preventScroll: true });
+  } else if (!query && launcherSearchRestoreFocus && document.activeElement === launcherFileSearch) {
+    const restore = launcherSearchRestoreFocus;
+    launcherSearchRestoreFocus = null;
+    if (activeLauncherTab !== restore.tab) selectLauncherTab(restore.tab);
+    if (restore.element.isConnected && !restore.element.hidden) restore.element.focus({ preventScroll: true });
+  }
   const hasVideos = videoCount > 0;
   docFilesCount.textContent = query
     ? String(documentCount)
@@ -1938,16 +2038,33 @@ function updateLauncherFileSearch() {
   const hasPictures = pictureCount > 0;
   docFilesHeading.hidden = !hasDocuments;
   docFilesList.hidden = !hasDocuments;
+  docFilesEmpty.hidden = hasDocuments;
+  docFilesEmpty.textContent = query ? 'No matching documents.' : 'No documents are available.';
   picFilesHeading.hidden = !hasPictures;
   picFilesList.hidden = !hasPictures;
+  picFilesEmpty.hidden = hasPictures;
+  picFilesEmpty.textContent = query ? 'No matching pictures.' : 'No pictures are available.';
   videoFilesHeading.hidden = !hasVideos;
   videoFilesList.hidden = !hasVideos;
+  videoFilesEmpty.hidden = hasVideos;
+  videoFilesEmpty.textContent = query ? 'No matching videos.' : 'No videos are available.';
   const fileCount = documentCount + pictureCount + videoCount;
   const loading = LAUNCHER_MANIFEST_FOLDERS.some(folder => _launcherCache[folder] === undefined);
   const failed = LAUNCHER_MANIFEST_FOLDERS.some(folder => _launcherCacheMeta[folder]?.error);
-  appFilesSection.hidden = fileCount === 0 && !loading && !failed;
-  launcherFileSearchEmpty.hidden = !query || appCount + fileCount > 0 || loading || failed;
-  return { query, appCount, documentCount, pictureCount, videoCount };
+  appFilesSection.hidden = fileCount === 0 && !loading && !failed && activeLauncherTab === 'apps';
+  const counts = {
+    apps: appCount + linkCount,
+    documents: documentCount,
+    pictures: pictureCount,
+    videos: videoCount,
+  };
+  if (autoSelect && query && counts[activeLauncherTab] === 0) {
+    const nextTab = launcherTabOrder.find(tab => counts[tab] > 0);
+    if (nextTab) selectLauncherTab(nextTab);
+  }
+  launcherFileSearchEmpty.hidden = !query || appCount + linkCount + fileCount > 0
+    || loading || failed || launcherLinks === null;
+  return { query, appCount, linkCount, documentCount, pictureCount, videoCount };
 }
 
 // ── Desktop quick search ──────────────────────────────────────
@@ -2224,16 +2341,20 @@ document.addEventListener('pointerdown', event => {
 });
 
 launcherFileSearch.addEventListener('input', () => {
-  const { query, appCount, documentCount, pictureCount, videoCount } = updateLauncherFileSearch();
+  const queryText = launcherFileSearch.value.trim();
+  if (queryText && gameMenu && !$('game-submenu').hidden) gameMenu.showRoot(false);
+  const { query, appCount, linkCount, documentCount, pictureCount, videoCount } =
+    updateLauncherFileSearch({ autoSelect: true });
   clearTimeout(launcherSearchAnnouncementTimer);
   launcherSearchAnnouncementTimer = setTimeout(() => {
     const apps = `${appCount} ${appCount === 1 ? 'app' : 'apps'}`;
+    const links = `${linkCount} ${linkCount === 1 ? 'link' : 'links'}`;
     const documents = `${documentCount} ${documentCount === 1 ? 'document' : 'documents'}`;
     const pictures = `${pictureCount} ${pictureCount === 1 ? 'picture' : 'pictures'}`;
     const videos = `${videoCount} ${videoCount === 1 ? 'video' : 'videos'}`;
     launcherFileSearchStatus.textContent = query
-      ? `Matching results: ${apps}, ${documents}, ${pictures}, and ${videos}.`
-      : `All ${apps}, ${documents}, ${pictures}, and ${videos} are shown.`;
+      ? `Matching results: ${apps}, ${links}, ${documents}, ${pictures}, and ${videos}.`
+      : `All ${apps}, ${links}, ${documents}, ${pictures}, and ${videos} are shown.`;
   }, 250);
 });
 
@@ -2524,9 +2645,11 @@ const windowShortcutRouter = createWindowShortcutRouter({
   appMenu,
   helpOverlay,
   systemPanel,
+  notificationPanel,
   systemTimeButton: systemTimeBtn,
   appMenuButton: appMenuBtn,
   closeSystemPanel,
+  closeNotifications: options => notificationCenter?.close(options),
   closeHelp,
   closeAppMenu,
   closeWinMenu,
@@ -2995,7 +3118,6 @@ function closeWinMenu() {
 const _welcomeTabs = {
   welcome: { url: '/files/posts/20240101_Welcome.md',  html: null, promise: null, message: '' },
   about:   { url: '/files/posts/20240115_About_Me.md', html: null, promise: null, message: '' },
-  links:   { url: '/files/posts/20240201_My_Sites.md', html: null, promise: null, message: '' },
 };
 let _welcomeActiveTab = 'welcome';
 
@@ -3113,6 +3235,8 @@ function _selectWelcomeTab(name) {
 function openWelcomeWindow() {
   const overlay = document.getElementById('welcome-overlay');
   if (!overlay) return;
+  welcomeReminderDismissPending = true;
+  notificationCenter?.dismissWelcomeReminder();
   overlay.removeAttribute('hidden');
   overlay.removeAttribute('aria-hidden');
   _selectWelcomeTab(_welcomeActiveTab);
@@ -3185,7 +3309,18 @@ document.getElementById('welcome-tabs')?.addEventListener('click', e => {
 // ── Init ──────────────────────────────────────────────────────
 populateEmptyState();
 restoreSession();
-openWelcomeWindow();   // show on every visit / refresh
+reminders.forEach(scheduleReminderNotification);
+if (welcomeShowOnStartup) openWelcomeWindow();
+else {
+  void loadNotificationCenter().then(center => center.add({
+    id: 'welcome-startup-reminder',
+    type: 'welcome',
+    title: 'Welcome is available',
+    message: 'You can open the Welcome dialog from the Apps menu whenever you need it.',
+    action: 'open-welcome',
+    actionLabel: 'Open Welcome',
+  })).catch(() => {});
+}
 updateTopBar();
 updateEmptyState();
 updateStripLayout();

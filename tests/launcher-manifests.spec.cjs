@@ -60,6 +60,7 @@ test('warms all file lists with bounded concurrency before opening the menu and 
 
   await dismissWelcome(page);
   await page.locator('#app-menu-btn').click();
+  await page.getByRole('tab', { name: 'Documents' }).click();
   await expect(page.locator('#app-files-section')).toBeVisible();
   await expect(page.locator('#doc-files-list')).toContainText('Recent Post');
   await expect(page.locator('#pic-files-list')).toContainText('Landscape');
@@ -70,6 +71,7 @@ test('warms all file lists with bounded concurrency before opening the menu and 
   await page.keyboard.press('Escape');
 
   await page.locator('#app-menu-btn').click();
+  await page.getByRole('tab', { name: 'Apps' }).click();
   await page.locator('#app-list .app-launcher[data-type="file-manager"]').click();
   const fileManager = page.locator('.app-window[data-type="file-manager"]');
   await expect(fileManager.locator('.fm-sidebar-count[data-folder="posts"]')).toHaveText('1');
@@ -96,6 +98,7 @@ test('menu, desktop search, and File Manager share requests already in flight', 
     await started;
     await dismissWelcome(page);
     await page.locator('#app-menu-btn').click();
+    await page.getByRole('tab', { name: 'Documents' }).click();
     await expect(page.locator('#app-files-section')).toBeVisible();
     await expect(page.locator('#launcher-file-load-status')).toContainText('Loading');
     await page.locator('#app-menu-btn').click();
@@ -105,6 +108,7 @@ test('menu, desktop search, and File Manager share requests already in flight', 
     await page.keyboard.press('Escape');
 
     await page.locator('#app-menu-btn').click();
+    await page.getByRole('tab', { name: 'Apps' }).click();
     await page.locator('#app-list .app-launcher[data-type="file-manager"]').click();
     await expect(page.locator('.app-window[data-type="file-manager"] .fm-sidebar')).toBeVisible();
     await expect.poll(() => FOLDERS.every(folder => state.counts[folder] === 1)).toBe(true);
@@ -213,6 +217,7 @@ test('menu renders stale cached files while ETag revalidation continues in the b
 
   await dismissWelcome(page);
   await page.locator('#app-menu-btn').click();
+  await page.getByRole('tab', { name: 'Documents' }).click();
   const cachedPost = page.locator('#doc-files-list .app-file-btn').filter({ hasText: 'Recent Post' });
   try {
     await started;

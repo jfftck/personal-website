@@ -51,9 +51,11 @@ export function createWindowShortcutRouter({
   appMenu,
   helpOverlay,
   systemPanel,
+  notificationPanel,
   systemTimeButton,
   appMenuButton,
   closeSystemPanel,
+  closeNotifications,
   closeHelp,
   closeAppMenu,
   closeWinMenu,
@@ -93,6 +95,10 @@ export function createWindowShortcutRouter({
     }
 
     if (event.key === 'Escape') {
+      if (notificationPanel && !notificationPanel.hidden) {
+        closeNotifications?.({ restoreFocus: true });
+        return;
+      }
       if (!systemPanel.hidden) {
         closeSystemPanel();
         systemTimeButton.focus();

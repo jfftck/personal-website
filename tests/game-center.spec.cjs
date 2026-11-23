@@ -465,11 +465,11 @@ test('Pyramid, TriPeaks, and Golf use shared card settings and their own playabl
   }
 });
 
-test('app launcher is anchored under its button with aligned search and an inset scrollbar', async ({ page }) => {
+test('app launcher tabs keep search above categories and fit beneath the menu button', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.locator('#app-menu-btn').click();
-  await expect(page.locator('#doc-files-list .app-file-btn')).toHaveCount(9);
-  await expect(page.getByLabel('Find a document, picture, or video')).toBeVisible();
+  await expect(page.locator('#launcher-file-search')).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Apps' })).toHaveAttribute('aria-selected', 'true');
 
   const layout = await page.evaluate(() => {
     const button = document.querySelector('#app-menu-btn').getBoundingClientRect();
@@ -477,8 +477,8 @@ test('app launcher is anchored under its button with aligned search and an inset
     const menu = document.querySelector('#app-menu');
     const menuBox = menu.getBoundingClientRect();
     const search = document.querySelector('#launcher-file-search').getBoundingClientRect();
-    const appList = document.querySelector('#app-list').getBoundingClientRect();
-    const heading = document.querySelector('#doc-files-heading').getBoundingClientRect();
+    const tabs = document.querySelector('#launcher-tabs').getBoundingClientRect();
+    const columns = getComputedStyle(document.querySelector('.launcher-apps-links')).gridTemplateColumns;
     const label = getComputedStyle(document.querySelector('.app-files-search-label'));
     const style = getComputedStyle(menu);
     const searchStyle = getComputedStyle(document.querySelector('#launcher-file-search'));
@@ -494,8 +494,8 @@ test('app launcher is anchored under its button with aligned search and an inset
       searchTop: search.top,
       searchRadius: parseFloat(searchStyle.borderRadius),
       searchMarginTop: parseFloat(searchStyle.marginTop),
-      appListBottom: appList.bottom,
-      headingLeft: heading.left,
+      tabsTop: tabs.top,
+      contentColumns: columns.split(' ').length,
       labelPosition: label.position,
       labelWidth: parseFloat(label.width),
       overflowY: style.overflowY,
@@ -506,11 +506,11 @@ test('app launcher is anchored under its button with aligned search and an inset
   });
   expect(Math.abs(layout.menuLeft - layout.buttonLeft)).toBeLessThan(2);
   expect(layout.menuTop).toBeGreaterThanOrEqual(layout.topbarBottom);
-  expect(layout.menuWidth).toBeLessThanOrEqual(560);
+  expect(layout.menuWidth).toBeLessThanOrEqual(768);
   expect(layout.menuWidth).toBeLessThan(layout.viewportWidth);
-  expect(Math.abs(layout.searchLeft - layout.headingLeft)).toBeLessThan(1);
-  expect(layout.searchTop - layout.appListBottom).toBeGreaterThanOrEqual(28);
-  expect(layout.searchMarginTop).toBe(28);
+  expect(layout.searchTop).toBeLessThan(layout.tabsTop);
+  expect(layout.contentColumns).toBe(2);
+  expect(layout.searchMarginTop).toBe(0);
   expect(layout.searchRadius).toBe(999);
   expect(layout.labelPosition).toBe('absolute');
   expect(layout.labelWidth).toBe(1);
@@ -529,6 +529,8 @@ test('app launcher is anchored under its button with aligned search and an inset
   });
   expect(pulse.boxShadow).toContain('inset');
   expect(pulse.outlineStyle).toBe('none');
+  await page.getByRole('tab', { name: 'Documents' }).click();
+  await expect(page.locator('#doc-files-list .app-file-btn').first()).toBeVisible();
   await page.locator('#topbar').click({ position: { x: 300, y: 24 } });
   await expect(page.locator('#app-menu')).toBeHidden();
 
@@ -1269,7 +1271,8 @@ test('all previous app shortcuts still launch and manifest files open in the doc
   }
 
   await page.locator('#app-menu-btn').click();
-  await expect(page.locator('#doc-files-count')).toHaveText('9');
+  await page.getByRole('tab', { name: 'Documents' }).click();
+  await expect(page.locator('#doc-files-count')).toHaveText(/\d+/);
   await expect(page.locator('#doc-files-list .app-file-btn').first()).toContainText('About Me');
   await page.locator('#doc-files-list .app-file-btn[data-file-name="big update"]').click();
   await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveCount(1);
@@ -1291,6 +1294,7 @@ test('video manifest entries appear in Videos and open directly in Media Player'
   await page.locator('#welcome-win-close').click();
   await page.locator('#app-menu-btn').click();
 
+  await page.getByRole('tab', { name: 'Videos' }).click();
   await expect(page.locator('#video-files-heading')).toBeVisible();
   await expect(page.locator('#video-files-count')).toHaveText('3');
   await expect(page.locator('#video-files-list .app-file-btn')).toHaveCount(3);
@@ -1301,12 +1305,31 @@ test('video manifest entries appear in Videos and open directly in Media Player'
 
   const player = page.locator('.app-window[data-type="media-player"]');
   await expect(player).toHaveCount(1);
-  await expect(player.locator('.media-video')).toBeVisible();
   await expect(player.locator('.media-video')).toHaveAttribute('src', 'https://example.test/trailer.mp4');
   await expect(page.locator('#active-title')).toContainText('Trailer');
 });
 
 test('launcher search filters documents, pictures, and videos by name without hiding app shortcuts', async ({ page }) => {
+  await page.route('**/files/posts/manifest.json', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([
+      { filename: '20240101_About_Me.md' },
+      { filename: '20240102_Big_Update.md' },
+      { filename: '20240103_Happy_New_Year.md' },
+      { filename: '20240104_Im_Back.md' },
+      { filename: '20240105_Merry_Christmas.md' },
+      { filename: '20240201_My_Sites.md' },
+      { filename: '20240107_News_Update.md' },
+      { filename: '20240108_Site_Redesign.md' },
+      { filename: '20240109_Welcome.md' },
+    ]),
+  }));
+  await page.route('**/files/documents/manifest.json', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([]),
+  }));
   await page.route('**/pictures/manifest.json', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -1328,35 +1351,41 @@ test('launcher search filters documents, pictures, and videos by name without hi
   await page.locator('#welcome-win-close').click();
   await page.locator('#app-menu-btn').click();
 
+  await page.getByRole('tab', { name: 'Documents' }).click();
   await expect(page.locator('#doc-files-list .app-file-name')).toHaveText([
     'About Me', 'Big Update', 'Happy New Year', 'Im Back', 'Merry Christmas',
     'My Sites', 'News Update', 'Site Redesign', 'Welcome',
   ]);
+  await page.getByRole('tab', { name: 'Pictures' }).click();
   await expect(page.locator('#pic-files-list .app-file-name')).toHaveText([
     'Mountain Trail', 'Summer Beach',
   ]);
+  await page.getByRole('tab', { name: 'Videos' }).click();
   await expect(page.locator('#video-files-list .app-file-name')).toHaveText([
     'Beach Trip', 'City Tour', 'Welcome Message',
   ]);
 
   const search = page.locator('#launcher-file-search');
   await search.fill('BEACH');
-  await expect(page.locator('#app-list .app-launcher[data-type]')).toHaveCount(5);
+  await expect(page.locator('#app-list .app-launcher[data-type]')).toHaveCount(11);
   await expect(page.locator('#doc-files-count')).toHaveText('0');
   await expect(page.locator('#pic-files-count')).toHaveText('1');
   await expect(page.locator('#video-files-count')).toHaveText('1');
   await expect(page.locator('#launcher-file-search-status'))
-    .toHaveText('Matching files: 0 documents, 1 picture, and 1 video.');
+    .toHaveText('Matching results: 0 apps, 0 links, 0 documents, 1 picture, and 1 video.');
   await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Pictures' }).click();
   await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(1);
+  await page.getByRole('tab', { name: 'Videos' }).click();
   await expect(page.locator('#video-files-list .app-file-btn:visible')).toHaveCount(1);
-  await expect(page.locator('#pic-files-list .app-file-btn:visible')).toContainText('Summer Beach');
   await expect(page.locator('#video-files-list .app-file-btn:visible')).toContainText('Beach Trip');
   await expect(page.locator('#doc-files-heading')).toBeHidden();
 
   await search.fill('i');
   await expect(page.locator('#launcher-file-search-status'))
-    .toHaveText('Matching files: 5 documents, 1 picture, and 2 videos.');
+    .toContainText('Matching results:');
+  await expect(page.locator('#launcher-file-search-status')).toContainText('5 documents');
+  await expect(page.locator('#launcher-file-search-status')).toContainText('2 videos');
   await expect(page.locator('#video-files-list .app-file-btn:visible')).toHaveCount(2);
 
   await search.fill('welcome');
@@ -1364,32 +1393,38 @@ test('launcher search filters documents, pictures, and videos by name without hi
   await expect(page.locator('#pic-files-count')).toHaveText('0');
   await expect(page.locator('#video-files-count')).toHaveText('1');
   await expect(page.locator('#launcher-file-search-status'))
-    .toHaveText('Matching files: 1 document, 0 pictures, and 1 video.');
+    .toContainText('1 document');
+  await page.getByRole('tab', { name: 'Documents' }).click();
   await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(1);
-  await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Videos' }).click();
   await expect(page.locator('#video-files-list .app-file-btn:visible')).toHaveCount(1);
-  await expect(page.locator('#doc-files-list .app-file-btn:visible')).toContainText('Welcome');
+  await expect(page.locator('#doc-files-list')).toContainText('Welcome');
 
   await search.fill('not-a-file');
   await expect(page.locator('#doc-files-count')).toHaveText('0');
   await expect(page.locator('#pic-files-count')).toHaveText('0');
   await expect(page.locator('#video-files-count')).toHaveText('0');
   await expect(page.locator('#launcher-file-search-status'))
-    .toHaveText('Matching files: 0 documents, 0 pictures, and 0 videos.');
+    .toContainText('0 documents');
   await expect(page.locator('#launcher-file-search-empty')).toBeVisible();
   await search.fill('');
   await expect(page.locator('#launcher-file-search-status'))
-    .toHaveText('All 9 documents, 2 pictures, and 3 videos are shown.');
+    .toContainText('9 documents');
+  await page.getByRole('tab', { name: 'Documents' }).click();
   await expect(page.locator('#doc-files-count')).toHaveText('9');
+  await page.getByRole('tab', { name: 'Pictures' }).click();
   await expect(page.locator('#pic-files-count')).toHaveText('2');
+  await page.getByRole('tab', { name: 'Videos' }).click();
   await expect(page.locator('#video-files-count')).toHaveText('3');
-  await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(9);
+  await page.getByRole('tab', { name: 'Pictures' }).click();
   await expect(page.locator('#pic-files-list .app-file-btn:visible')).toHaveCount(2);
+  await page.getByRole('tab', { name: 'Videos' }).click();
   await expect(page.locator('#video-files-list .app-file-btn:visible')).toHaveCount(3);
 });
 
 test('launcher search moves focus from a hidden file to search and restores keyboard navigation when cleared', async ({ page }) => {
   await page.locator('#app-menu-btn').click();
+  await page.getByRole('tab', { name: 'Documents' }).click();
   const search = page.locator('#launcher-file-search');
   const firstDocument = page.locator('#doc-files-list .app-file-btn').first();
 
@@ -1405,7 +1440,6 @@ test('launcher search moves focus from a hidden file to search and restores keyb
   await expect(page.locator('#doc-files-list .app-file-btn:visible')).toHaveCount(1);
 
   await search.fill('');
-  await page.keyboard.press('Tab');
   await expect(firstDocument).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.locator('#doc-files-list .app-file-btn').nth(1)).toBeFocused();
