@@ -308,6 +308,35 @@
 .settings-note { display: flex; align-items: center; gap: .55rem; margin-top: 1rem; color: var(--util-detail); font-size: .72rem; }
 .settings-note-dot { display: inline-grid; min-width: 2rem; height: 1.35rem; place-items: center; padding: 0 .35rem; border: 1px solid color-mix(in srgb,var(--accent) 35%,transparent); border-radius: 10rem; color: var(--accent); font-size: .53rem; font-weight: 800; letter-spacing: .07em; }
 .settings-setting-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 1.2rem; }
+.settings-notification-preferences { display: grid; gap: .85rem; }
+.settings-notification-category-list { display: grid; gap: .5rem; margin-top: .25rem; }
+.settings-notification-category {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .75rem .8rem;
+  border: 1px solid var(--settings-rule);
+  border-radius: .7rem;
+  background: var(--util-surface);
+}
+.settings-notification-category-copy { display: grid; gap: .18rem; min-width: 0; }
+.settings-notification-category-copy strong { color: var(--app-text); font-size: .76rem; font-weight: 650; }
+.settings-notification-category-copy small { color: var(--util-detail); font-size: .67rem; line-height: 1.4; }
+.settings-notification-retention-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding-top: .3rem;
+  border-top: 1px solid var(--settings-rule);
+}
+.settings-notification-retention-row .settings-select-label { margin: 0; }
+.settings-notification-retention-row app-select { width: min(12rem, 50%); }
+.settings-notification-retention-note { margin: -.45rem 0 0; }
+.settings-notification-status { min-height: 1em; }
+.settings-notification-retry { width: max-content; }
 .settings-setting-copy h2 { margin-top: .35rem; }
 .settings-switch { display: inline-flex; position: relative; flex: none; align-items: center; cursor: pointer; }
 .settings-switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }

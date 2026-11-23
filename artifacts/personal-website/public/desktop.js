@@ -2435,6 +2435,11 @@ const appCtx = {
     setAnimationPreferences: setAnimationPreference,
     set24HourTime: setTimeFormat,
     setNotificationsEnabled: setSystemNotificationsEnabled,
+    getNotificationPreferences: async () => (await loadNotificationCenter()).getPreferences(),
+    setNotificationCategoryEnabled: async (type, enabled) =>
+      (await loadNotificationCenter()).setCategoryEnabled(type, enabled),
+    setNotificationRetentionDays: async days =>
+      (await loadNotificationCenter()).setRetentionDays(days),
     loadWallpaper: loadWallpaperForSettings,
     saveWallpaper: saveWallpaperPreferences,
     useDefaultWallpaper,

@@ -66,7 +66,6 @@ export function createNotificationCenter({
   list,
   emptyState,
   clearButton,
-  preferencesPanel = panel.querySelector('.notification-preferences'),
   status,
   toastContainer,
   onAction = () => {},
@@ -82,6 +81,55 @@ export function createNotificationCenter({
 
   function categoryEnabled(type) {
     return preferences.enabledTypes[type] !== false;
+  }
+
+  function getPreferences() {
+    return {
+      enabledTypes: { ...preferences.enabledTypes },
+      retentionDays: preferences.retentionDays,
+    };
+  }
+
+  function notifyPreferencesChanged() {
+    window.dispatchEvent(new CustomEvent('desktop-notification-preferences-change', {
+      detail: getPreferences(),
+    }));
+  }
+
+  function setCategoryEnabled(type, enabled) {
+    if (typeof type !== 'string' || !type || type.length > 48 || typeof enabled !== 'boolean') {
+      throw new TypeError('A notification category and enabled state are required.');
+    }
+    const next = {
+      enabledTypes: { ...preferences.enabledTypes, [type]: enabled },
+      retentionDays: preferences.retentionDays,
+    };
+    if (!writeJSON(PREFERENCES_KEY, next, { validate: validPreferences })) {
+      throw new Error('The notification preference could not be saved in this browser.');
+    }
+    preferences = next;
+    render();
+    notifyPreferencesChanged();
+    return getPreferences();
+  }
+
+  function setRetentionDays(days) {
+    const retentionDays = Number(days);
+    if (!RETENTION_OPTIONS.has(retentionDays)) {
+      throw new TypeError('Choose a valid notification retention period.');
+    }
+    const next = {
+      enabledTypes: { ...preferences.enabledTypes },
+      retentionDays,
+    };
+    if (!writeJSON(PREFERENCES_KEY, next, { validate: validPreferences })) {
+      throw new Error('The notification preference could not be saved in this browser.');
+    }
+    preferences = next;
+    pruneExpiredNotifications();
+    render();
+    notifyPreferencesChanged();
+    return getPreferences();
   }
 
   function pruneExpiredNotifications() {
@@ -406,35 +454,6 @@ export function createNotificationCenter({
     showDataRecoveryResult(type, detail);
   }
 
-  if (preferencesPanel) {
-    const controls = [...preferencesPanel.querySelectorAll('[data-notification-category]')];
-    for (const input of controls) {
-      const type = input.dataset.notificationCategory;
-      input.checked = categoryEnabled(type);
-      input.addEventListener('change', () => {
-        preferences.enabledTypes[type] = input.checked;
-        if (!writeJSON(PREFERENCES_KEY, preferences, { validate: validPreferences }) && status) {
-          status.textContent = 'The notification preference could not be saved in this browser.';
-        }
-        render();
-      });
-    }
-    const retention = preferencesPanel.querySelector('#notification-retention');
-    if (retention) {
-      retention.value = String(preferences.retentionDays);
-      retention.addEventListener('change', () => {
-        const days = Number(retention.value);
-        if (!RETENTION_OPTIONS.has(days)) return;
-        preferences.retentionDays = days;
-        if (!writeJSON(PREFERENCES_KEY, preferences, { validate: validPreferences }) && status) {
-          status.textContent = 'The notification preference could not be saved in this browser.';
-        }
-        pruneExpiredNotifications();
-        render();
-      });
-    }
-  }
-
   button.addEventListener('click', toggle);
   clearButton.addEventListener('click', clearAll);
   list.addEventListener('click', event => {
@@ -465,9 +484,12 @@ export function createNotificationCenter({
     close,
     dismiss,
     dismissWelcomeReminder,
+    getPreferences,
     handleDataEvent,
     isCategoryEnabled: categoryEnabled,
     open,
+    setCategoryEnabled,
+    setRetentionDays,
     showToast,
     toggle,
   };

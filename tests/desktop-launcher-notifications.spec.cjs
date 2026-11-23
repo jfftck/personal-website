@@ -43,6 +43,21 @@ async function seedDueSystemReminder(page, reminderEnabled) {
   }, { reminderEnabled, savedHistory: savedReminderHistory });
 }
 
+async function openNotificationSettings(page) {
+  await page.locator('#app-menu-btn').click();
+  await page.locator('#app-list .app-launcher[data-type="settings"]').click();
+  const settings = page.locator('.app-window[data-type="settings"]').last();
+  await settings.locator('.settings-nav-item[data-page="notifications"]').click();
+  await expect(settings.locator('.settings-page h1')).toHaveText('Notifications');
+  await expect(settings.locator('[data-notification-category="reminder"]')).toBeVisible();
+  return settings;
+}
+
+async function setCheckboxState(input, checked) {
+  if (await input.isChecked() !== checked) await input.evaluate(element => element.click());
+  await expect(input).toBeChecked({ checked });
+}
+
 test('welcome preference controls startup and offers a notification when hidden', async ({ page }) => {
   await page.goto('/');
   const preference = page.locator('#welcome-show-on-startup');
@@ -140,17 +155,21 @@ test('notification categories can be muted and remain saved across reloads', asy
   });
   await page.goto('/');
   await page.locator('#welcome-win-close').click();
-  await page.locator('#notifications-btn').click();
+  const settings = await openNotificationSettings(page);
 
   expect(await page.evaluate(() =>
     localStorage.getItem('desktop-notification-preferences-v1'),
   )).toBeNull();
-  const welcomeToggle = page.locator('[data-notification-category="welcome"]');
-  const reminderToggle = page.locator('[data-notification-category="reminder"]');
+  await page.locator('#notifications-btn').click();
+  await expect(page.locator('#notification-panel .notification-preferences')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  const welcomeToggle = settings.locator('[data-notification-category="welcome"]');
+  const reminderToggle = settings.locator('[data-notification-category="reminder"]');
   await expect(welcomeToggle).toBeChecked();
   await expect(reminderToggle).toBeChecked();
-  await welcomeToggle.uncheck();
-  await reminderToggle.uncheck();
+  await setCheckboxState(welcomeToggle, false);
+  await setCheckboxState(reminderToggle, false);
+  await page.locator('#notifications-btn').click();
   await expect(page.locator('#notification-list')).not.toContainText('Saved reminder');
   await expect(page.locator('#notification-list')).not.toContainText('Saved welcome tip');
   await expect(page.locator('#notifications-btn')).toHaveAttribute('aria-label', 'Notifications');
@@ -160,13 +179,16 @@ test('notification categories can be muted and remain saved across reloads', asy
 
   await page.reload();
   await page.locator('#welcome-win-close').click();
+  const settingsAfterReload = await openNotificationSettings(page);
   await page.locator('#notifications-btn').click();
-  await expect(page.locator('[data-notification-category="welcome"]')).not.toBeChecked();
-  await expect(page.locator('[data-notification-category="reminder"]')).not.toBeChecked();
+  await expect(settingsAfterReload.locator('[data-notification-category="welcome"]')).not.toBeChecked();
+  await expect(settingsAfterReload.locator('[data-notification-category="reminder"]')).not.toBeChecked();
   await expect(page.locator('#notification-list')).not.toContainText('Saved reminder');
   await expect(page.locator('#notification-list')).not.toContainText('Saved welcome tip');
-  await page.locator('[data-notification-category="welcome"]').check();
-  await page.locator('[data-notification-category="reminder"]').check();
+  await page.keyboard.press('Escape');
+  await setCheckboxState(settingsAfterReload.locator('[data-notification-category="welcome"]'), true);
+  await setCheckboxState(settingsAfterReload.locator('[data-notification-category="reminder"]'), true);
+  await page.locator('#notifications-btn').click();
   await expect(page.locator('#notification-list')).toContainText('Saved reminder');
   await expect(page.locator('#notification-list')).toContainText('Saved welcome tip');
 });
@@ -175,10 +197,10 @@ test('muted due reminders do not alert and preserve saved history', async ({ pag
   await seedDueSystemReminder(page, true);
   await page.goto('/');
   await page.locator('#welcome-win-close').click();
-  await page.locator('#notifications-btn').click();
+  const settings = await openNotificationSettings(page);
 
-  const reminderToggle = page.locator('[data-notification-category="reminder"]');
-  await reminderToggle.uncheck();
+  const reminderToggle = settings.locator('[data-notification-category="reminder"]');
+  await setCheckboxState(reminderToggle, false);
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('desktop-notifications-v1'))
       .find(item => item.id === 'saved-reminder-history'),
@@ -246,15 +268,21 @@ test('read and dismissed notifications follow the selected retention period', as
   });
   await page.goto('/');
   await page.locator('#welcome-win-close').click();
+  const settings = await openNotificationSettings(page);
   await page.locator('#notifications-btn').click();
   await expect(page.locator('#notification-list')).toContainText('Older read item');
   await expect(page.locator('#notification-list')).toContainText('Recent read item');
-  await expect(page.locator('#notification-retention')).toHaveValue('365');
+  await expect(page.locator('#notification-panel .notification-preferences')).toHaveCount(0);
+  const retention = settings.locator('[data-notification-retention]');
+  await expect(retention).toHaveValue('365');
   await expect.poll(() => page.evaluate(() => JSON.parse(
     localStorage.getItem('desktop-notifications-v1'),
   ).map(item => item.id))).toEqual(['old-read-notice', 'old-dismissed-notice', 'recent-read-notice']);
 
-  await page.locator('#notification-retention').selectOption('30');
+  await page.keyboard.press('Escape');
+  const retentionPicker = settings.getByRole('combobox', { name: 'Keep read or dismissed notifications for' });
+  await retentionPicker.click();
+  await page.getByRole('option', { name: '30 days' }).click();
   await expect.poll(() => page.evaluate(() => JSON.parse(
     localStorage.getItem('desktop-notifications-v1'),
   ).map(item => item.id))).toEqual(['recent-read-notice']);
@@ -264,8 +292,9 @@ test('read and dismissed notifications follow the selected retention period', as
 
   await page.reload();
   await page.locator('#welcome-win-close').click();
+  const settingsAfterReload = await openNotificationSettings(page);
   await page.locator('#notifications-btn').click();
-  await expect(page.locator('#notification-retention')).toHaveValue('30');
+  await expect(settingsAfterReload.locator('[data-notification-retention]')).toHaveValue('30');
   await expect(page.locator('#notification-list')).toContainText('Recent read item');
   await expect(page.locator('#notification-list')).not.toContainText('Older read item');
 });

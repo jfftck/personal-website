@@ -10,6 +10,16 @@ const PAGES = [
   { id: 'notifications', title: 'Notifications' },
   { id: 'wallpaper', title: 'Wallpaper' },
 ];
+const NOTIFICATION_CATEGORIES = [
+  { type: 'reminder', title: 'Reminders', description: 'Calendar and reminder alerts.' },
+  { type: 'welcome', title: 'Welcome tips', description: 'Tips for reopening the Welcome window.' },
+];
+const NOTIFICATION_RETENTION_OPTIONS = [
+  ['30', '30 days'],
+  ['90', '90 days'],
+  ['365', '1 year'],
+  ['0', 'Forever'],
+];
 
 const ICONS = {
   appearance: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-.5 0-1-.1-1.5A7 7 0 0 1 12 3z"/></svg>',
@@ -241,6 +251,10 @@ export function buildSettings(id, ctx, initialState) {
   let wallpaperStatus = '';
   let notificationError = '';
   let notificationBusy = false;
+  let notificationPreferences = null;
+  let notificationPreferencesLoading = false;
+  let notificationPreferencesError = '';
+  let notificationPreferencesPromise = null;
   let wallpaperPendingAction = null;
   let wallpaperFailedAction = null;
   let wallpaperRevision = 0;
@@ -255,6 +269,51 @@ export function buildSettings(id, ctx, initialState) {
     node.dataset.kind = kind;
     node.hidden = !message;
   };
+
+  function syncNotificationPreferenceControls() {
+    if (!notificationPreferences) return;
+    for (const input of page.querySelectorAll('[data-notification-category]')) {
+      input.checked = notificationPreferences.enabledTypes?.[input.dataset.notificationCategory] !== false;
+    }
+    const retention = page.querySelector('[data-notification-retention]');
+    if (retention) retention.value = String(notificationPreferences.retentionDays);
+  }
+
+  function handleNotificationPreferencesChange(event) {
+    const next = event.detail;
+    if (!next || typeof next !== 'object' || !next.enabledTypes) return;
+    notificationPreferences = {
+      enabledTypes: { ...next.enabledTypes },
+      retentionDays: next.retentionDays,
+    };
+    if (activePage === 'notifications') syncNotificationPreferenceControls();
+  }
+
+  function loadNotificationPreferences() {
+    if (notificationPreferences || notificationPreferencesPromise) return notificationPreferencesPromise;
+    notificationPreferencesLoading = true;
+    notificationPreferencesError = '';
+    notificationPreferencesPromise = (async () => {
+      try {
+        if (typeof settings?.getNotificationPreferences !== 'function') {
+          throw new Error('Notification preferences are not available right now.');
+        }
+        const result = await settings.getNotificationPreferences();
+        notificationPreferences = {
+          enabledTypes: { ...(result?.enabledTypes || {}) },
+          retentionDays: result?.retentionDays ?? 90,
+        };
+      } catch (error) {
+        notificationPreferencesError = error?.message || 'Notification preferences could not be loaded.';
+      } finally {
+        notificationPreferencesLoading = false;
+        notificationPreferencesPromise = null;
+        if (!destroyed && activePage === 'notifications') renderPage();
+      }
+      return notificationPreferences;
+    })();
+    return notificationPreferencesPromise;
+  }
 
   function buildNavigation() {
     for (const [nav, mobile] of [[sidebarNav, false], [mobileNav, true]]) {
@@ -282,6 +341,7 @@ export function buildSettings(id, ctx, initialState) {
     animationPicker.close({ restoreFocus: false, notify: false });
     pendingPageRender = false;
     activePage = pageId;
+    if (pageId === 'notifications') void loadNotificationPreferences();
     if (pageId === 'wallpaper' && !wallpaperDraft && !wallpaperLoading && !wallpaperError) loadWallpapers();
     renderNavigation();
     renderPage();
@@ -909,7 +969,7 @@ export function buildSettings(id, ctx, initialState) {
   function renderNotifications(body) {
     const card = el('section', 'settings-card settings-setting-row');
     const copy = el('div', 'settings-setting-copy');
-    copy.append(el('span', 'settings-card-eyebrow', 'SYSTEM'), el('h2', '', 'System notifications'), el('p', 'settings-description', 'Allow reminder alerts and other desktop notifications.'));
+    copy.append(el('span', 'settings-card-eyebrow', 'SYSTEM'), el('h2', '', 'System notifications'), el('p', 'settings-description', 'Allow reminder alerts to appear outside the desktop while this page is open.'));
     const control = document.createElement('label');
     control.className = 'settings-switch';
     const input = document.createElement('input');
@@ -959,6 +1019,123 @@ export function buildSettings(id, ctx, initialState) {
     const note = el('div', 'settings-note');
     note.append(el('span', 'settings-note-dot', current.notificationsEnabled ? 'ON' : 'OFF'), el('span', '', current.notificationsEnabled ? 'Reminders can reach you on this device.' : 'Reminders will stay quiet.'));
     body.append(note);
+
+    const preferencesCard = el('section', 'settings-card settings-notification-preferences');
+    preferencesCard.append(
+      el('span', 'settings-card-eyebrow', 'NOTIFICATION CENTER'),
+      el('h2', '', 'Notification types'),
+      el('p', 'settings-description', 'Choose which notifications appear in the panel and how long read or dismissed items are kept.'),
+    );
+    const categoryList = el('div', 'settings-notification-category-list');
+    for (const category of NOTIFICATION_CATEGORIES) {
+      const row = el('div', 'settings-notification-category');
+      const detail = el('div', 'settings-notification-category-copy');
+      detail.append(
+        el('strong', '', category.title),
+        el('small', '', category.description),
+      );
+      const categoryControl = document.createElement('label');
+      categoryControl.className = 'settings-switch';
+      const categoryInput = document.createElement('input');
+      categoryInput.type = 'checkbox';
+      categoryInput.dataset.notificationCategory = category.type;
+      categoryInput.checked = notificationPreferences?.enabledTypes?.[category.type] !== false;
+      categoryInput.disabled = notificationPreferencesLoading || !notificationPreferences;
+      categoryInput.setAttribute('aria-label', `Show ${category.title} in the notification center`);
+      const categoryTrack = el('span', 'settings-switch-track');
+      categoryTrack.setAttribute('aria-hidden', 'true');
+      categoryControl.append(categoryInput, categoryTrack);
+      categoryInput.addEventListener('change', async () => {
+        const requested = categoryInput.checked;
+        categoryInput.disabled = true;
+        setMessage(preferenceStatus, 'Saving notification preference…');
+        try {
+          if (typeof settings?.setNotificationCategoryEnabled !== 'function') {
+            throw new Error('Notification preferences are not available right now.');
+          }
+          notificationPreferences = await settings.setNotificationCategoryEnabled(category.type, requested);
+          notificationPreferencesError = '';
+          setMessage(preferenceStatus, `${category.title} are ${requested ? 'shown' : 'hidden'} in the notification center.`, 'success');
+        } catch (error) {
+          try {
+            notificationPreferences = await settings?.getNotificationPreferences?.() || notificationPreferences;
+          } catch { /* Keep the last known value if the preference cannot be read. */ }
+          categoryInput.checked = notificationPreferences?.enabledTypes?.[category.type] !== false;
+          setMessage(preferenceStatus, error?.message || 'The notification preference could not be saved.', 'error');
+        } finally {
+          if (categoryInput.isConnected) categoryInput.disabled = false;
+        }
+      });
+      row.append(detail, categoryControl);
+      categoryList.append(row);
+    }
+    preferencesCard.append(categoryList);
+
+    const retentionRow = el('div', 'settings-notification-retention-row');
+    const retentionLabel = el('label', '', 'Keep read or dismissed notifications for');
+    const retentionSelect = document.createElement('select');
+    retentionSelect.className = 'util-select settings-notification-retention-select';
+    retentionSelect.dataset.notificationRetention = '';
+    retentionSelect.id = `settings-notification-retention-${id}`;
+    retentionSelect.setAttribute('aria-label', 'Keep read or dismissed notifications for');
+    retentionSelect.disabled = notificationPreferencesLoading || !notificationPreferences;
+    for (const [value, label] of NOTIFICATION_RETENTION_OPTIONS) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      retentionSelect.append(option);
+    }
+    retentionSelect.value = String(notificationPreferences?.retentionDays ?? 90);
+    retentionLabel.htmlFor = retentionSelect.id;
+    retentionRow.append(retentionLabel, retentionSelect);
+    preferencesCard.append(retentionRow);
+    const retentionNote = el('p', 'settings-description settings-notification-retention-note', 'Older read or dismissed items are removed automatically.');
+    preferencesCard.append(retentionNote);
+
+    const preferenceStatus = el('p', 'settings-inline-status settings-notification-status');
+    preferenceStatus.setAttribute('role', 'status');
+    preferenceStatus.setAttribute('aria-live', 'polite');
+    preferenceStatus.hidden = true;
+    preferencesCard.append(preferenceStatus);
+    if (notificationPreferencesLoading) {
+      setMessage(preferenceStatus, 'Loading notification preferences…');
+    } else if (notificationPreferencesError) {
+      setMessage(preferenceStatus, notificationPreferencesError, 'error');
+    }
+    retentionSelect.addEventListener('change', async () => {
+      const days = Number(retentionSelect.value);
+      retentionSelect.disabled = true;
+      setMessage(preferenceStatus, 'Saving retention preference…');
+      try {
+        if (typeof settings?.setNotificationRetentionDays !== 'function') {
+          throw new Error('Notification preferences are not available right now.');
+        }
+        notificationPreferences = await settings.setNotificationRetentionDays(days);
+        notificationPreferencesError = '';
+        const label = NOTIFICATION_RETENTION_OPTIONS.find(([value]) => Number(value) === days)?.[1] || 'Forever';
+        setMessage(preferenceStatus, `Notification history will be kept for ${label.toLowerCase()}.`, 'success');
+      } catch (error) {
+        try {
+          notificationPreferences = await settings?.getNotificationPreferences?.() || notificationPreferences;
+        } catch { /* Keep the last known value if the preference cannot be read. */ }
+        retentionSelect.value = String(notificationPreferences?.retentionDays ?? 90);
+        setMessage(preferenceStatus, error?.message || 'The retention preference could not be saved.', 'error');
+      } finally {
+        if (retentionSelect.isConnected) retentionSelect.disabled = false;
+      }
+    });
+    if (notificationPreferences) enhanceSelect(retentionSelect);
+    body.append(preferencesCard);
+    if (notificationPreferencesError) {
+      const retry = el('button', 'util-action settings-notification-retry', 'Retry');
+      retry.type = 'button';
+      retry.addEventListener('click', () => {
+        notificationPreferencesError = '';
+        void loadNotificationPreferences();
+        renderPage();
+      });
+      preferencesCard.append(retry);
+    }
   }
 
   async function loadWallpapers() {
@@ -1288,6 +1465,7 @@ export function buildSettings(id, ctx, initialState) {
     if (activePage) renderPage();
   }
 
+  window.addEventListener('desktop-notification-preferences-change', handleNotificationPreferencesChange);
   buildNavigation();
   current = snapshot();
   // The first measured size chooses the compact page list or desktop's Appearance page.
@@ -1313,6 +1491,7 @@ export function buildSettings(id, ctx, initialState) {
         destroyed = true;
         animationPicker.destroy();
         unsubscribe();
+        window.removeEventListener('desktop-notification-preferences-change', handleNotificationPreferencesChange);
         resizeObserver?.disconnect();
         window.removeEventListener('resize', onResize);
         if (ctx.appApis[id]?.destroy) delete ctx.appApis[id];
