@@ -71,6 +71,128 @@ test('page-open reminders appear in the notification center without background d
   await expect(page.locator('#notification-list')).toContainText('Review the project notes');
 });
 
+test('notification categories can be muted and remain saved across reloads', async ({ page }) => {
+  await page.addInitScript(() => {
+    const createdAt = new Date().toISOString();
+    localStorage.setItem('desktop-notifications-v1', JSON.stringify([
+      {
+        id: 'category-reminder',
+        type: 'reminder',
+        title: 'Saved reminder',
+        message: 'A reminder remains available.',
+        createdAt,
+        seen: false,
+        dismissed: false,
+      },
+      {
+        id: 'category-welcome',
+        type: 'welcome',
+        title: 'Saved welcome tip',
+        message: 'A welcome tip remains available.',
+        createdAt,
+        seen: false,
+        dismissed: false,
+      },
+    ]));
+  });
+  await page.goto('/');
+  await page.locator('#welcome-win-close').click();
+  await page.locator('#notifications-btn').click();
+
+  expect(await page.evaluate(() =>
+    localStorage.getItem('desktop-notification-preferences-v1'),
+  )).toBeNull();
+  const welcomeToggle = page.locator('[data-notification-category="welcome"]');
+  const reminderToggle = page.locator('[data-notification-category="reminder"]');
+  await expect(welcomeToggle).toBeChecked();
+  await expect(reminderToggle).toBeChecked();
+  await welcomeToggle.uncheck();
+  await reminderToggle.uncheck();
+  await expect(page.locator('#notification-list')).not.toContainText('Saved reminder');
+  await expect(page.locator('#notification-list')).not.toContainText('Saved welcome tip');
+  await expect(page.locator('#notifications-btn')).toHaveAttribute('aria-label', 'Notifications');
+  await expect.poll(() => page.evaluate(() => JSON.parse(
+    localStorage.getItem('desktop-notification-preferences-v1'),
+  ).enabledTypes)).toEqual({ welcome: false, reminder: false });
+
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  await page.locator('#notifications-btn').click();
+  await expect(page.locator('[data-notification-category="welcome"]')).not.toBeChecked();
+  await expect(page.locator('[data-notification-category="reminder"]')).not.toBeChecked();
+  await expect(page.locator('#notification-list')).not.toContainText('Saved reminder');
+  await expect(page.locator('#notification-list')).not.toContainText('Saved welcome tip');
+  await page.locator('[data-notification-category="welcome"]').check();
+  await page.locator('[data-notification-category="reminder"]').check();
+  await expect(page.locator('#notification-list')).toContainText('Saved reminder');
+  await expect(page.locator('#notification-list')).toContainText('Saved welcome tip');
+});
+
+test('read and dismissed notifications follow the selected retention period', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('retention-test-seeded')) return;
+    sessionStorage.setItem('retention-test-seeded', 'true');
+    const ago = days => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    localStorage.setItem('desktop-notification-preferences-v1', JSON.stringify({
+      enabledTypes: {},
+      retentionDays: 365,
+    }));
+    localStorage.setItem('desktop-notifications-v1', JSON.stringify([
+      {
+        id: 'old-read-notice',
+        type: 'reminder',
+        title: 'Older read item',
+        message: 'This item is kept by the one-year setting.',
+        createdAt: ago(120),
+        seen: true,
+        dismissed: false,
+      },
+      {
+        id: 'old-dismissed-notice',
+        type: 'welcome',
+        title: 'Older dismissed item',
+        message: 'This dismissed item is kept by the one-year setting.',
+        createdAt: ago(120),
+        seen: true,
+        dismissed: true,
+      },
+      {
+        id: 'recent-read-notice',
+        type: 'reminder',
+        title: 'Recent read item',
+        message: 'This recent item remains available.',
+        createdAt: ago(20),
+        seen: true,
+        dismissed: false,
+      },
+    ]));
+  });
+  await page.goto('/');
+  await page.locator('#welcome-win-close').click();
+  await page.locator('#notifications-btn').click();
+  await expect(page.locator('#notification-list')).toContainText('Older read item');
+  await expect(page.locator('#notification-list')).toContainText('Recent read item');
+  await expect(page.locator('#notification-retention')).toHaveValue('365');
+  await expect.poll(() => page.evaluate(() => JSON.parse(
+    localStorage.getItem('desktop-notifications-v1'),
+  ).map(item => item.id))).toEqual(['old-read-notice', 'old-dismissed-notice', 'recent-read-notice']);
+
+  await page.locator('#notification-retention').selectOption('30');
+  await expect.poll(() => page.evaluate(() => JSON.parse(
+    localStorage.getItem('desktop-notifications-v1'),
+  ).map(item => item.id))).toEqual(['recent-read-notice']);
+  await expect.poll(() => page.evaluate(() => JSON.parse(
+    localStorage.getItem('desktop-notification-preferences-v1'),
+  ).retentionDays)).toBe(30);
+
+  await page.reload();
+  await page.locator('#welcome-win-close').click();
+  await page.locator('#notifications-btn').click();
+  await expect(page.locator('#notification-retention')).toHaveValue('30');
+  await expect(page.locator('#notification-list')).toContainText('Recent read item');
+  await expect(page.locator('#notification-list')).not.toContainText('Older read item');
+});
+
 test('launcher tabs share search across apps, files, and links while Game Center stays nested', async ({ page }) => {
   await page.goto('/');
   await page.locator('#welcome-win-close').click();

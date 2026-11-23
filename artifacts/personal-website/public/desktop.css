@@ -552,6 +552,59 @@ body {
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
 }
+.notification-preferences {
+  display: grid;
+  gap: .55rem;
+  padding: .65rem .7rem;
+  border: 1px solid var(--app-border);
+  border-radius: .7rem;
+  background: var(--overlay-card);
+  font-size: .72rem;
+}
+.notification-category-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem .85rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.notification-category-controls legend {
+  margin-bottom: .35rem;
+  font-weight: 650;
+}
+.notification-category-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  cursor: pointer;
+}
+.notification-category-controls input { accent-color: var(--accent); }
+.notification-retention-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+}
+.notification-retention-control select {
+  max-width: 8rem;
+  padding: .3rem .4rem;
+  border: 1px solid var(--app-border);
+  border-radius: .45rem;
+  background: var(--overlay-bg);
+  color: inherit;
+  font: inherit;
+}
+.notification-retention-note {
+  margin: -.35rem 0 0;
+  font-size: .66rem;
+  opacity: .68;
+}
+.notification-category-controls input:focus-visible,
+.notification-retention-control select:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+}
 .notification-list {
   display: grid;
   align-content: start;

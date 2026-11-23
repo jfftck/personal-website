@@ -473,7 +473,9 @@ function publishReminderNotification(reminder) {
   const message = String(reminder.text || 'A reminder is due.');
   void loadNotificationCenter().then(center => {
     const added = center.add({ id, type: 'reminder', title: 'Reminder', message });
-    if (added) center.showToast({ id: `toast:${id}`, title: 'Reminder', message, icon: '⏰', role: 'alert' });
+    if (added && center.isCategoryEnabled('reminder')) {
+      center.showToast({ id: `toast:${id}`, title: 'Reminder', message, icon: '⏰', role: 'alert' });
+    }
   }).catch(() => {});
 }
 
@@ -491,20 +493,23 @@ function scheduleReminderNotification(reminder) {
       scheduleReminderNotification(reminder);
       return;
     }
-    try {
-      const systemNotificationsAvailable =
-        systemNotificationsEnabled
-        && 'Notification' in window
-        && Notification.permission === 'granted';
-      if (systemNotificationsAvailable) {
-        const notification = new Notification('Reminder', { body: reminder.text });
-        notification.addEventListener('click', () => window.focus());
+    void loadNotificationCenter().then(center => {
+      reminderNotificationTimers.delete(reminder.id);
+      if (!center.isCategoryEnabled('reminder')) return;
+      try {
+        const systemNotificationsAvailable =
+          systemNotificationsEnabled
+          && 'Notification' in window
+          && Notification.permission === 'granted';
+        if (systemNotificationsAvailable) {
+          const notification = new Notification('Reminder', { body: reminder.text });
+          notification.addEventListener('click', () => window.focus());
+        }
+      } catch (error) {
+        console.warn('[reminders] Local notification failed.', error);
       }
-    } catch (error) {
-      console.warn('[reminders] Local notification failed.', error);
-    }
-    publishReminderNotification(reminder);
-    reminderNotificationTimers.delete(reminder.id);
+      publishReminderNotification(reminder);
+    }).catch(() => {});
   }, Math.min(delay, maxDelay));
   reminderNotificationTimers.set(reminder.id, timer);
 }

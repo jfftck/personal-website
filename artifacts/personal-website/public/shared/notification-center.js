@@ -1,7 +1,10 @@
 import { readJSON, restoreDataBackup, writeJSON } from '../data-handler.js';
 
 const STORAGE_KEY = 'desktop-notifications-v1';
-const MAX_NOTIFICATIONS = 60;
+const PREFERENCES_KEY = 'desktop-notification-preferences-v1';
+const MAX_NOTIFICATIONS = 500;
+const DEFAULT_PREFERENCES = { enabledTypes: {}, retentionDays: 90 };
+const RETENTION_OPTIONS = new Set([30, 90, 365, 0]);
 const DATA_EVENTS = new Set([
   'desktop-data-error',
   'desktop-data-recovery-available',
@@ -39,12 +42,22 @@ function validateStore(value) {
     && value.every(validRecord);
 }
 
-function makeId() {
-  return `notice-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+function validPreferences(value) {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && value.enabledTypes
+    && typeof value.enabledTypes === 'object'
+    && !Array.isArray(value.enabledTypes)
+    && Object.entries(value.enabledTypes).every(([type, enabled]) =>
+      type.length > 0 && type.length <= 48 && typeof enabled === 'boolean')
+    && RETENTION_OPTIONS.has(value.retentionDays),
+  );
 }
 
-function recordIsVisible(record) {
-  return !record.dismissed;
+function makeId() {
+  return `notice-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 export function createNotificationCenter({
@@ -53,6 +66,7 @@ export function createNotificationCenter({
   list,
   emptyState,
   clearButton,
+  preferencesPanel = panel.querySelector('.notification-preferences'),
   status,
   toastContainer,
   onAction = () => {},
@@ -60,6 +74,26 @@ export function createNotificationCenter({
 }) {
   let notifications = readJSON(STORAGE_KEY, [], { validate: validateStore });
   if (!Array.isArray(notifications)) notifications = [];
+  const savedPreferences = readJSON(PREFERENCES_KEY, DEFAULT_PREFERENCES, { validate: validPreferences });
+  let preferences = {
+    enabledTypes: { ...savedPreferences.enabledTypes },
+    retentionDays: savedPreferences.retentionDays,
+  };
+
+  function categoryEnabled(type) {
+    return preferences.enabledTypes[type] !== false;
+  }
+
+  function pruneExpiredNotifications() {
+    if (preferences.retentionDays === 0) return false;
+    const cutoff = Date.now() - preferences.retentionDays * 24 * 60 * 60 * 1000;
+    const retained = notifications.filter(record =>
+      !(record.seen || record.dismissed) || Date.parse(record.createdAt) >= cutoff);
+    if (retained.length === notifications.length) return false;
+    notifications = retained;
+    persist();
+    return true;
+  }
 
   function persist() {
     const valid = notifications.filter(validRecord).slice(0, MAX_NOTIFICATIONS);
@@ -70,7 +104,7 @@ export function createNotificationCenter({
   }
 
   function render() {
-    const visible = notifications.filter(recordIsVisible);
+    const visible = notifications.filter(record => !record.dismissed && categoryEnabled(record.type));
     const unread = visible.filter(item => !item.seen).length;
     button.setAttribute('aria-label', unread ? `Notifications, ${unread} unseen` : 'Notifications');
     button.title = unread ? `${unread} unseen notification${unread === 1 ? '' : 's'}` : 'Notifications';
@@ -175,7 +209,7 @@ export function createNotificationCenter({
   function markVisibleAsSeen() {
     let changed = false;
     for (const record of notifications) {
-      if (!record.dismissed && !record.seen) {
+      if (!record.dismissed && categoryEnabled(record.type) && !record.seen) {
         record.seen = true;
         changed = true;
       }
@@ -204,7 +238,7 @@ export function createNotificationCenter({
 
   function clearAll() {
     for (const record of notifications) {
-      if (!record.dismissed) {
+      if (!record.dismissed && categoryEnabled(record.type)) {
         record.dismissed = true;
         record.seen = true;
       }
@@ -372,6 +406,35 @@ export function createNotificationCenter({
     showDataRecoveryResult(type, detail);
   }
 
+  if (preferencesPanel) {
+    const controls = [...preferencesPanel.querySelectorAll('[data-notification-category]')];
+    for (const input of controls) {
+      const type = input.dataset.notificationCategory;
+      input.checked = categoryEnabled(type);
+      input.addEventListener('change', () => {
+        preferences.enabledTypes[type] = input.checked;
+        if (!writeJSON(PREFERENCES_KEY, preferences, { validate: validPreferences }) && status) {
+          status.textContent = 'The notification preference could not be saved in this browser.';
+        }
+        render();
+      });
+    }
+    const retention = preferencesPanel.querySelector('#notification-retention');
+    if (retention) {
+      retention.value = String(preferences.retentionDays);
+      retention.addEventListener('change', () => {
+        const days = Number(retention.value);
+        if (!RETENTION_OPTIONS.has(days)) return;
+        preferences.retentionDays = days;
+        if (!writeJSON(PREFERENCES_KEY, preferences, { validate: validPreferences }) && status) {
+          status.textContent = 'The notification preference could not be saved in this browser.';
+        }
+        pruneExpiredNotifications();
+        render();
+      });
+    }
+  }
+
   button.addEventListener('click', toggle);
   clearButton.addEventListener('click', clearAll);
   list.addEventListener('click', event => {
@@ -394,6 +457,7 @@ export function createNotificationCenter({
     close();
   });
 
+  pruneExpiredNotifications();
   render();
 
   return {
@@ -402,6 +466,7 @@ export function createNotificationCenter({
     dismiss,
     dismissWelcomeReminder,
     handleDataEvent,
+    isCategoryEnabled: categoryEnabled,
     open,
     showToast,
     toggle,
