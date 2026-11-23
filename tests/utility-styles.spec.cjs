@@ -179,6 +179,61 @@ test('desktop shell and window frame styles remain stable at desktop and mobile 
   expect(overviewStyles.appWindow.cursor).toBe('zoom-out');
 });
 
+test('launcher labels follow the desktop theme instead of the custom top bar', async ({ page }) => {
+  await page.locator('#app-menu-btn').click();
+  await page.getByRole('tab', { name: 'Documents' }).click();
+  await page.locator('#doc-files-list').evaluate(list => {
+    const button = document.createElement('button');
+    button.className = 'app-file-btn';
+    button.innerHTML = '<span class="app-file-name">Readable test document</span>';
+    list.append(button);
+  });
+
+  for (const desktopTheme of ['dark', 'light']) {
+    for (const topbarTheme of ['custom-dark', 'custom-light']) {
+      const colors = await page.evaluate(({ desktopTheme, topbarTheme }) => {
+        const root = document.documentElement;
+        root.dataset.theme = desktopTheme;
+        root.dataset.topbarTheme = topbarTheme;
+        root.style.setProperty('--topbar-background-opacity', '100%');
+        root.style.setProperty('--topbar-custom-background',
+          topbarTheme === 'custom-dark' ? 'oklch(22% 0.08 240)' : 'oklch(92% 0.04 240)');
+        root.style.setProperty('--topbar-custom-foreground',
+          topbarTheme === 'custom-dark' ? 'oklch(96% 0.01 240)' : 'oklch(16% 0.04 240)');
+
+        const colorOf = selector => getComputedStyle(document.querySelector(selector)).color;
+        const surfaceProbe = document.createElement('span');
+        surfaceProbe.style.color = 'var(--app-text)';
+        document.body.append(surfaceProbe);
+        const surfaceText = getComputedStyle(surfaceProbe).color;
+        surfaceProbe.remove();
+        return {
+          surfaceText,
+          topbarText: colorOf('#topbar'),
+          appName: colorOf('.app-launcher-name'),
+          menuHeading: colorOf('#doc-files-heading'),
+          linksHeading: colorOf('#launcher-links-heading'),
+          fileName: colorOf('#doc-files-list .app-file-name'),
+          menuHeadingOpacity: Number(getComputedStyle(document.querySelector('#doc-files-heading')).opacity),
+          linksHeadingOpacity: Number(getComputedStyle(document.querySelector('#launcher-links-heading')).opacity),
+          desktopTheme: root.dataset.theme,
+          topbarTheme: root.dataset.topbarTheme,
+        };
+      }, { desktopTheme, topbarTheme });
+
+      expect(colors.desktopTheme).toBe(desktopTheme);
+      expect(colors.topbarTheme).toBe(topbarTheme);
+      expect(colors.topbarText).not.toBe(colors.surfaceText);
+      expect(colors.appName).toBe(colors.surfaceText);
+      expect(colors.menuHeading).toBe(colors.surfaceText);
+      expect(colors.linksHeading).toBe(colors.surfaceText);
+      expect(colors.fileName).toBe(colors.surfaceText);
+      expect(colors.menuHeadingOpacity).toBeGreaterThanOrEqual(0.8);
+      expect(colors.linksHeadingOpacity).toBeGreaterThanOrEqual(0.8);
+    }
+  }
+});
+
 test('light, dark, and custom tints preserve focused window and game artwork styles', async ({ page }) => {
   const chess = await openGame(page, 'chess');
   const reversi = await openGame(page, 'reversi');
