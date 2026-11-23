@@ -21,3 +21,4 @@
 - [Refactor task tracking](refactor-task-tracking.md) — create a project task before planned refactors to reduce complexity or improve maintainability.
 - [Toolbar button style](toolbar-button-style.md) — keep app toolbar actions borderless like File Manager while preserving focus and selected states.
 - [Native browser components](native-web-components.md) — prefer browser-native UI and Shadow DOM components over framework runtimes for shared controls.
+- [Dynamic module retries](dynamic-module-retries.md) — use a unique query for each import retry so the browser fetches a module again after a failed load.

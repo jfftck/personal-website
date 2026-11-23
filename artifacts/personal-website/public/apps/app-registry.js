@@ -2,7 +2,7 @@ import { calendarApp } from './calendar.app.js';
 import { calculatorApp } from './calculator.app.js';
 import { docViewerApp } from './doc-viewer.app.js';
 import { fileManagerApp } from './file-manager.app.js';
-import { gameCenterApp, gameWindowDescriptors } from './game-center.app.js';
+import { gameWindowDescriptors } from './game-center.app.js';
 import { imgViewerApp } from './img-viewer.app.js';
 import { mediaPlayerApp } from './media-player.app.js';
 import { settingsApp } from './settings.app.js';
@@ -32,9 +32,4 @@ export const APP_REGISTRY = Object.freeze(
   Object.fromEntries(APP_DESCRIPTORS.map(descriptor => [descriptor.type, descriptor])),
 );
 
-export const APP_LAUNCHERS = Object.freeze([
-  ...standaloneApps,
-  gameCenterApp,
-]);
-
-export { gameCenterApp as GAME_CENTER_DESCRIPTOR };
+export const APP_LAUNCHERS = Object.freeze([...standaloneApps]);

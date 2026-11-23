@@ -68,8 +68,12 @@ test('desktop startup keeps app-only controls and optional shell modules out of 
   const modulePaths = [...modules].map(file => path.relative(publicRoot, file).replaceAll(path.sep, '/'));
   const sourceBytes = [...modules].reduce((total, file) => total + fs.statSync(file).size, 0);
 
-  // Include the small cross-tab manifest invalidation bridge, while keeping app-only code out of startup.
-  assert.ok(sourceBytes < 174_500, `Expected the initial graph below 174.5 KB, received ${sourceBytes} bytes`);
+  // Keep the launcher and its small shared metadata eager, but defer Game Center's menu catalog.
+  assert.ok(sourceBytes < 170_000, `Expected the initial graph below 170 KB, received ${sourceBytes} bytes`);
+  assert.ok(!modulePaths.includes('apps/games/catalog.js'));
+  assert.ok(!modulePaths.includes('apps/games/menu-loader.js'));
+  assert.ok(!modulePaths.includes('apps/sticky-notes-data.js'));
+  assert.ok(!modulePaths.includes('shared/note-colors.js'));
   assert.ok(!modulePaths.includes('shared/app-toolbar.js'));
   assert.ok(!modulePaths.includes('shared/app-controls.js'));
   assert.ok(!modulePaths.includes('shared/desktop-help.js'));

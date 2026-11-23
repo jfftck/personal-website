@@ -7,8 +7,8 @@ import {
   APP_DESCRIPTORS,
   APP_LAUNCHERS,
   APP_REGISTRY,
-  GAME_CENTER_DESCRIPTOR,
 } from '../artifacts/personal-website/public/apps/app-registry.js';
+import { GAMES } from '../artifacts/personal-website/public/apps/games/catalog.js';
 
 const workspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicRoot = path.join(workspaceRoot, 'artifacts/personal-website/public');
@@ -64,14 +64,20 @@ test('each window app has one descriptor with valid entry, styles, state, and ow
 test('the launcher exposes each app once and keeps games inside the Game Center submenu', () => {
   const launchers = APP_LAUNCHERS.map(descriptor => descriptor.type);
   assert.equal(new Set(launchers).size, launchers.length);
-  assert.equal(launchers.filter(type => type === GAME_CENTER_DESCRIPTOR.type).length, 1);
-  assert.equal(GAME_CENTER_DESCRIPTOR.window, false);
+  const desktopHtml = fs.readFileSync(path.join(publicRoot, 'index.html'), 'utf8');
+  assert.match(desktopHtml, /id="game-center-entry"[^>]*aria-controls="game-submenu"/);
+  assert.ok(!launchers.includes('game-center'));
   assert.ok(!launchers.includes('chess'));
   assert.ok(!launchers.includes('minesweeper'));
   assert.ok(!launchers.includes('reversi'));
   assert.ok(APP_REGISTRY.chess && APP_REGISTRY.minesweeper && APP_REGISTRY.reversi);
   assert.ok(APP_REGISTRY.klondike && APP_REGISTRY.spider && APP_REGISTRY.freecell);
   assert.ok(APP_REGISTRY.pyramid && APP_REGISTRY.tripeaks && APP_REGISTRY.golf);
+  assert.deepEqual(
+    APP_DESCRIPTORS.filter(descriptor => descriptor.group === 'game-center')
+      .map(({ type, title }) => ({ type, title })),
+    GAMES.map(({ type, title }) => ({ type, title })),
+  );
 });
 
 test('app implementations stay inside their owner and use shared libraries across app boundaries', () => {

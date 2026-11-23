@@ -1,8 +1,16 @@
-export const NOTE_COLORS = Object.freeze([
-  Object.freeze({ value: 'yellow', label: 'Yellow', hex: '#e5bb22' }),
-  Object.freeze({ value: 'orange', label: 'Orange', hex: '#e47b27' }),
-  Object.freeze({ value: 'red', label: 'Red', hex: '#d94a4a' }),
-  Object.freeze({ value: 'purple', label: 'Purple', hex: '#9a69d4' }),
-  Object.freeze({ value: 'blue', label: 'Blue', hex: '#3689cf' }),
-  Object.freeze({ value: 'green', label: 'Green', hex: '#48945a' }),
-]);
+import { NOTE_COLOR_VALUES } from './note-color-values.js';
+
+const NOTE_COLOR_DETAILS = [
+  ['Yellow', '#e5bb22'],
+  ['Orange', '#e47b27'],
+  ['Red', '#d94a4a'],
+  ['Purple', '#9a69d4'],
+  ['Blue', '#3689cf'],
+  ['Green', '#48945a'],
+];
+
+export const NOTE_COLORS = Object.freeze(NOTE_COLOR_VALUES.map((value, index) => Object.freeze({
+  value,
+  label: NOTE_COLOR_DETAILS[index][0],
+  hex: NOTE_COLOR_DETAILS[index][1],
+})));

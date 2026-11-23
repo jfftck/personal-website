@@ -6,7 +6,7 @@ function isAppResource(path) {
   return APP_ENTRY_PATH.test(path)
     || (path.startsWith('/apps/') && path.endsWith('.css'))
     || path === '/shared/animation-picker.css'
-    || /^\/apps\/games\/(?!catalog\.js$).+\.js$/.test(path);
+    || /^\/apps\/games\/(?!(?:catalog|menu-loader)\.js$).+\.js$/.test(path);
 }
 
 function watchAppResources(page) {
@@ -71,6 +71,114 @@ test('Game Center warms its shell only after a game is targeted and loads game c
   expect(countPath(appResources, '/apps/games/games.css')).toBe(1);
   expect(countPath(appResources, '/apps/games/minesweeper-ui.js')).toBe(0);
   expect(countPath(appResources, '/apps/games/solitaire-ui.js')).toBe(0);
+});
+
+test('the app menu opens while its Game Center prefetch is still loading', async ({ page }) => {
+  let releaseCatalog;
+  const catalogGate = new Promise(resolve => { releaseCatalog = resolve; });
+  await page.route('**/apps/games/catalog.js*', async route => {
+    await catalogGate;
+    await route.continue();
+  });
+  const catalogRequest = page.waitForRequest(request => (
+    new URL(request.url()).pathname === '/apps/games/catalog.js'
+  ));
+  await page.goto('/');
+  await catalogRequest;
+  await page.locator('#welcome-win-close').click();
+  await page.locator('#app-menu-btn').click();
+
+  await expect(page.locator('#app-menu')).toBeVisible();
+  await expect(page.locator('#game-center-entry .app-launcher-name')).toHaveText('Game Center');
+
+  releaseCatalog();
+  await page.locator('#game-center-entry').click();
+  await expect(page.locator('#game-list [data-game="chess"]')).toBeVisible();
+});
+
+test('Game Center retries a failed menu module request on Save Data', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'connection', {
+      configurable: true,
+      value: { saveData: true, effectiveType: '4g', downlink: 10, rtt: 30 },
+    });
+  });
+  let catalogRequests = 0;
+  await page.route('**/apps/games/catalog.js*', async route => {
+    catalogRequests += 1;
+    if (catalogRequests === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'text/javascript',
+        body: 'export const temporarilyUnavailable = true;',
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto('/');
+  await page.locator('#welcome-win-close').click();
+  await page.locator('#app-menu-btn').click();
+  await page.locator('#game-center-entry').click();
+
+  await expect(page.locator('#game-list [data-game="chess"]')).toBeVisible({ timeout: 8000 });
+  expect(catalogRequests).toBeGreaterThan(1);
+});
+
+test('pinned desktop notes appear after their data module loads', async ({ page }) => {
+  let releaseNotes;
+  const notesGate = new Promise(resolve => { releaseNotes = resolve; });
+  await page.addInitScript(() => {
+    localStorage.setItem('personal-desktop-sticky-notes-v1', JSON.stringify([{
+      id: 'pinned-note-test',
+      title: 'Pinned Note',
+      body: 'Deferred note contents',
+      desktop: true,
+      color: 'blue',
+    }]));
+  });
+  await page.route('**/apps/sticky-notes-data.js*', async route => {
+    await notesGate;
+    await route.continue();
+  });
+  const notesRequest = page.waitForRequest(request => (
+    new URL(request.url()).pathname === '/apps/sticky-notes-data.js'
+  ));
+  await page.goto('/');
+  await notesRequest;
+  await expect(page.locator('#welcome-win-close')).toBeVisible();
+  releaseNotes();
+  await expect(page.locator('.desktop-note-widget')).toContainText('Pinned Note');
+  await expect(page.locator('.desktop-note-widget')).toContainText('Deferred note contents');
+});
+
+test('pinned desktop notes recover after a temporary module load failure', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('personal-desktop-sticky-notes-v1', JSON.stringify([{
+      id: 'pinned-note-retry-test',
+      title: 'Recovered Note',
+      body: 'Loaded after retry',
+      desktop: true,
+      color: 'green',
+    }]));
+  });
+  let requests = 0;
+  await page.route('**/apps/sticky-notes-data.js*', async route => {
+    requests += 1;
+    if (requests === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'text/javascript',
+        body: 'export const temporarilyUnavailable = true;',
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto('/');
+
+  await expect(page.locator('.desktop-note-widget')).toContainText('Recovered Note', { timeout: 8000 });
+  expect(requests).toBeGreaterThan(1);
 });
 
 for (const { name, connection } of [

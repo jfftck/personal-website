@@ -281,10 +281,13 @@
             <span class="app-launcher-name">Welcome</span>
           </button>
           <button id="game-center-entry" class="app-launcher" type="button" aria-expanded="false" aria-controls="game-submenu">
-            <span class="app-launcher-icon" aria-hidden="true"></span>
-            <span class="app-launcher-name"></span>
+            <span class="app-launcher-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 6h10a4 4 0 0 1 3.9 3.1l1.5 6.6a3 3 0 0 1-5 2.8L15 16H9l-2.4 2.5a3 3 0 0 1-5-2.8l1.5-6.6A4 4 0 0 1 7 6zm0 3v2H5v2h2v2h2v-2h2v-2H9V9zm9 1a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm3 3a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z"/></svg>
+            </span>
+            <span class="app-launcher-name">Game Center</span>
           </button>
         </div>
+        <p id="game-menu-load-status" class="app-files-load-status" role="status" aria-live="polite" hidden></p>
 
         <div id="app-files-section" hidden>
           <p id="launcher-file-load-status" class="app-files-load-status" role="status" aria-live="polite" hidden></p>
@@ -318,6 +321,7 @@
 
   <main id="desktop">
     <section id="desktop-widgets" aria-label="Desktop notes"></section>
+    <p id="desktop-widget-load-status" class="sr-only" role="status" aria-live="polite" hidden></p>
     <section id="desktop-search" aria-label="Search apps and files">
       <div class="desktop-search-control">
         <svg class="desktop-search-icon" viewBox="0 0 24 24" aria-hidden="true">

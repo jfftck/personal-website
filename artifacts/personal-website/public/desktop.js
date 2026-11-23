@@ -1,10 +1,8 @@
 'use strict';
 
 import { S }               from './desktop-state.js';
-import { loadStickyNotes } from './apps/sticky-notes-data.js';
 import { retryWithBackoff, responseLoadError } from './shared/retry.js';
-import { APP_LAUNCHERS, APP_REGISTRY, GAME_CENTER_DESCRIPTOR } from './apps/app-registry.js';
-import { GAMES, initGameMenu } from './apps/games/catalog.js';
+import { APP_LAUNCHERS, APP_REGISTRY } from './apps/app-registry.js';
 import {
   readJSON, readRaw, readRawResult, removeData, restoreDataBackup, writeJSON, writeRaw,
 } from './data-handler.js';
@@ -1294,6 +1292,16 @@ const windowController = createWindowController({
 
 // ── Sticky-note desktop widgets ───────────────────────────────
 let desktopWidgetNotes = [];
+let stickyNotesImportAttempt = 0;
+
+function importStickyNotesData() {
+  const url = new URL('./apps/sticky-notes-data.js', import.meta.url);
+  if (stickyNotesImportAttempt > 0) {
+    url.searchParams.set('retry', String(stickyNotesImportAttempt));
+  }
+  stickyNotesImportAttempt += 1;
+  return import(/* @vite-ignore */ url.href);
+}
 
 function setShowDesktop(show) {
   if (show && document.body.classList.contains('mod-overview')) exitOverview({ animate: false });
@@ -1359,7 +1367,20 @@ function openStickyNote(noteId) {
   }
 }
 
-updateDesktopNotes(loadStickyNotes());
+requestAnimationFrame(() => {
+  void retryWithBackoff(importStickyNotesData, {
+    maxRetries: 2,
+    initialDelayMs: 180,
+    maxDelayMs: 720,
+  }).then(({ loadStickyNotes }) => {
+    updateDesktopNotes(loadStickyNotes());
+  }).catch(() => {
+    const status = $('desktop-widget-load-status');
+    if (!status) return;
+    status.textContent = 'Pinned desktop notes could not be loaded. Refresh the page to try again.';
+    status.hidden = false;
+  });
+});
 
 // ── App navigation ────────────────────────────────────────────
 function focusNextApp() {
@@ -1375,11 +1396,21 @@ function openAppMenu(showGames = false) {
   appMenu.removeAttribute('hidden');
   appMenuBtn.setAttribute('aria-expanded', 'true');
   closeHelp();
-  if (showGames) gameMenu.showGames(false);
-  else gameMenu.showRoot(false);
+  if (showGames) {
+    if (gameMenu) gameMenu.showGames(false);
+    else {
+      void loadGameMenu().then(menu => {
+        if (appMenu.hidden) return;
+        menu.showGames(false);
+        $('#game-menu-back')?.focus();
+      }).catch(showGameMenuLoadError);
+    }
+  } else {
+    gameMenu?.showRoot(false);
+  }
   if (!showGames) populateLauncherFiles();
   requestAnimationFrame(() => {
-    const f = appMenu.querySelector(showGames
+    const f = appMenu.querySelector(showGames && gameMenu
       ? '#game-menu-back'
       : '#app-list .app-launcher[data-type]') || appMenu.querySelector('#game-center-entry');
     if (!appMenu.hidden) f.focus();
@@ -1392,6 +1423,48 @@ function closeAppMenu() {
 function toggleAppMenu() {
   appMenu.hasAttribute('hidden') ? openAppMenu() : closeAppMenu();
 }
+
+let gameMenu = null;
+let gameMenuPromise = null;
+const gameMenuOptions = {
+  menu: appMenu,
+  openGame: type => {
+    openApp(type);
+    closeAppMenu();
+  },
+  bindIntentPrefetch: bindAppIntentPrefetch,
+};
+
+function loadGameMenu() {
+  if (gameMenu) return Promise.resolve(gameMenu);
+  if (!gameMenuPromise) {
+    gameMenuPromise = import('./apps/games/menu-loader.js')
+      .then(({ ensureGameMenu }) => ensureGameMenu(gameMenuOptions))
+      .then(menu => {
+      gameMenu = menu;
+      $('game-menu-load-status').hidden = true;
+      return gameMenu;
+    }).catch(error => {
+      gameMenuPromise = null;
+      throw error;
+    });
+  }
+  return gameMenuPromise;
+}
+
+function showGameMenuLoadError() {
+  const status = $('game-menu-load-status');
+  if (!status || appMenu.hidden) return;
+  status.textContent = 'Game Center could not load. Select Game Center to retry.';
+  status.hidden = false;
+}
+
+requestAnimationFrame(() => {
+  if (!canPrefetchAppResources()) return;
+  void import('./apps/games/menu-loader.js')
+    .then(({ prefetchGameMenu }) => prefetchGameMenu(gameMenuOptions, canPrefetchAppResources))
+    .catch(() => {});
+});
 
 // ── Help overlay ──────────────────────────────────────────────
 let helpController = null;
@@ -1941,7 +2014,9 @@ function buildDesktopSearchItems() {
       queryTerms: 'games game center',
       activate: () => openAppMenu(true),
     }),
-    ...GAMES.map(game => makeDesktopSearchItem({
+    ...Object.values(APP_REGISTRY)
+      .filter(game => game.group === 'game-center' && game.type !== 'game-center')
+      .map(game => makeDesktopSearchItem({
       id: `game:${game.type}`,
       title: game.title,
       detail: 'Game',
@@ -2384,10 +2459,14 @@ function renderAppLaunchers() {
 
 renderAppLaunchers();
 
-const gameMenu = initGameMenu(appMenu, type => {
-  openApp(type);
-  closeAppMenu();
-}, GAME_CENTER_DESCRIPTOR, bindAppIntentPrefetch);
+const gameCenterButton = $('game-center-entry');
+gameCenterButton.addEventListener('click', () => {
+  if (gameMenu) return;
+  $('game-menu-load-status').hidden = true;
+  void loadGameMenu().then(menu => {
+    if (!appMenu.hidden) menu.showGames();
+  }).catch(showGameMenuLoadError);
+});
 
 document.querySelectorAll('#app-list .app-launcher[data-type]').forEach(button => {
   button.addEventListener('click', () => {
