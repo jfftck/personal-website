@@ -1099,6 +1099,7 @@ async function hydrateApp(record, def, initialState) {
     windowEl.append(appEl);
     transferWindowAnimation(record.el, windowEl);
     windowEl.classList.toggle('focused', S.focusedId === record.id);
+    windowEl.setAttribute('aria-current', String(S.focusedId === record.id));
     record.el.replaceWith(windowEl);
     record.el = windowEl;
     flushPendingAppActions(record);
@@ -1113,6 +1114,7 @@ async function hydrateApp(record, def, initialState) {
     failed.dataset.type = record.type;
     transferWindowAnimation(record.el, failed);
     failed.classList.toggle('focused', S.focusedId === record.id);
+    failed.setAttribute('aria-current', String(S.focusedId === record.id));
     const retry = failed.querySelector('.app-load-retry');
     retry.addEventListener('click', () => {
       const loading = createAppLoadSurface(def.title);
@@ -1120,6 +1122,7 @@ async function hydrateApp(record, def, initialState) {
       loading.dataset.type = record.type;
       transferWindowAnimation(record.el, loading);
       loading.classList.toggle('focused', S.focusedId === record.id);
+      loading.setAttribute('aria-current', String(S.focusedId === record.id));
       record.el.replaceWith(loading);
       record.el = loading;
       void hydrateApp(record, def, initialState);
@@ -1243,6 +1246,7 @@ function updateTopBar() {
     const btn = document.createElement('button');
     btn.className = 'app-tab-btn' + (id === S.focusedId ? ' focused' : '');
     btn.setAttribute('role', 'listitem');
+    btn.setAttribute('aria-current', String(id === S.focusedId));
     btn.setAttribute('aria-label', def.title);
     btn.setAttribute('title', def.title);
     btn.innerHTML = def.iconSvg;
@@ -2423,6 +2427,11 @@ function wireColEvents(colEl) {
     }
   }, { capture: true });
 }
+
+document.addEventListener('focusin', event => {
+  const appEl = event.target.closest?.('.app-window');
+  if (appEl?.dataset.id) focusApp(appEl.dataset.id);
+});
 
 // ── Global event listeners ────────────────────────────────────
 appMenuBtn.addEventListener('click', e => { e.stopPropagation(); toggleAppMenu(); });

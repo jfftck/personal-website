@@ -468,18 +468,23 @@ test('desktop app windows are named non-modal dialogs and remain independently u
     modal: windowEl.matches(':modal'),
     ariaModal: windowEl.getAttribute('aria-modal'),
     hasName: Boolean(windowEl.getAttribute('aria-label')),
+    current: windowEl.getAttribute('aria-current'),
+    hidden: windowEl.hidden || windowEl.getAttribute('aria-hidden') === 'true',
+    inert: windowEl.inert,
   })));
   expect(modalStates).toHaveLength(2);
-  for (const state of modalStates) {
-    expect(state).toEqual({
-      isDialog: true,
-      modal: false,
-      ariaModal: 'false',
-      hasName: true,
-    });
-  }
+  expect(modalStates).toEqual([
+    { isDialog: true, modal: false, ariaModal: 'false', hasName: true, current: 'false', hidden: false, inert: false },
+    { isDialog: true, modal: false, ariaModal: 'false', hasName: true, current: 'true', hidden: false, inert: false },
+  ]);
+
+  await calculator.locator('.calc-display').click();
+  await expect(calculator).toHaveAttribute('aria-current', 'true');
+  await expect(settings).toHaveAttribute('aria-current', 'false');
+  await expect(page.locator('#active-title')).toHaveText('Calculator');
 
   await settings.locator('.settings-nav-item[data-page="time"]').click();
+  await expect(settings).toHaveAttribute('aria-current', 'true');
   const timeToggle = settings.getByRole('checkbox', { name: 'Use 24-hour time' });
   const initialTimeState = await timeToggle.isChecked();
   await timeToggle.focus();
@@ -493,4 +498,23 @@ test('desktop app windows are named non-modal dialogs and remain independently u
     document.activeElement?.closest('.app-window')?.dataset.type
   ))).toBe('calculator');
   await expect(settings).toBeVisible();
+  await expect(calculator).toHaveAttribute('aria-current', 'true');
+  await expect(settings).toHaveAttribute('aria-current', 'false');
+  await expect(page.locator('#active-title')).toHaveText('Calculator');
+
+  await page.keyboard.press('Control+2');
+  await expect(settings).toHaveAttribute('aria-current', 'true');
+  await expect(calculator).toHaveAttribute('aria-current', 'false');
+  await expect(page.locator('#active-title')).toHaveText('Settings');
+
+  await page.locator('#open-apps-bar .app-tab-btn').first().click();
+  await expect(calculator).toHaveAttribute('aria-current', 'true');
+  await expect(settings).toHaveAttribute('aria-current', 'false');
+  await expect(page.locator('#open-apps-bar .app-tab-btn').first()).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator('#open-apps-bar .app-tab-btn').nth(1)).toHaveAttribute('aria-current', 'false');
+
+  await settings.locator('.settings-nav-item[data-page="time"]').click();
+  await expect(settings).toHaveAttribute('aria-current', 'true');
+  await expect(calculator).toHaveAttribute('aria-current', 'false');
+  await expect(page.locator('#active-title')).toHaveText('Settings');
 });

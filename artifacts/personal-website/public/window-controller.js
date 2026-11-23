@@ -79,13 +79,17 @@ export function createWindowController({
 
     if (state.focusedId) {
       const previous = state.apps.find(app => app.id === state.focusedId);
-      if (previous) previous.el.classList.remove('focused');
+      if (previous) {
+        previous.el.classList.remove('focused');
+        previous.el.setAttribute('aria-current', 'false');
+      }
     }
 
     state.focusedId = id;
     const next = state.apps.find(app => app.id === id);
     if (next) {
       next.el.classList.add('focused');
+      next.el.setAttribute('aria-current', 'true');
       if (!state._skipSave && !document.body.classList.contains('mod-overview')) {
         window.requestAnimationFrame(() => scrollToApp(id));
       }
