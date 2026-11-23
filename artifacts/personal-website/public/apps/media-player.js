@@ -36,6 +36,11 @@ export function buildMediaPlayer(id, ctx) {
   selectionStatus.setAttribute('aria-live', 'polite');
   selectionStatus.setAttribute('aria-atomic', 'true');
 
+  const errorStatus = document.createElement('span');
+  errorStatus.className = 'sr-only media-error-status';
+  errorStatus.setAttribute('role', 'alert');
+  errorStatus.setAttribute('aria-atomic', 'true');
+
   const toolbar = document.createElement('div');
   toolbar.className = 'app-toolbar media-toolbar';
   toolbar.innerHTML = `
@@ -91,6 +96,7 @@ export function buildMediaPlayer(id, ctx) {
   function playFile(url, name, poster) {
     currentFile = { url, name, poster };
     selectionStatus.textContent = `Selected video: ${name}`;
+    errorStatus.textContent = '';
     ctx.setAppTitle(id, name);
     video.poster = poster || '';
     video.src    = url;
@@ -145,6 +151,7 @@ export function buildMediaPlayer(id, ctx) {
     if (!video.hidden) {
       const p = emptyDiv.querySelector('p');
       if (p) p.textContent = '⚠️ Could not load this video.';
+      errorStatus.textContent = `Could not load ${currentFile?.name || 'this video'}.`;
       emptyDiv.hidden = false;
       video.hidden    = true;
     }
@@ -176,6 +183,7 @@ export function buildMediaPlayer(id, ctx) {
   content.appendChild(wrapper);
   el.appendChild(toolbar);
   el.appendChild(selectionStatus);
+  el.appendChild(errorStatus);
   el.appendChild(content);
 
   loadManifest();

@@ -4003,6 +4003,25 @@ test('Media Player can select a video from its compact browse list', async ({ pa
   await expectInsideAppWindow(app, external);
 });
 
+test('Media Player announces when a video fails to load', async ({ page }) => {
+  await mockCompactViewerFiles(page);
+  const app = await openUtility(page, 'media-player');
+  const video = app.locator('.media-video');
+  await expect(video).toHaveAttribute('src', '/files/videos/compact-list-first.mp4');
+
+  await video.evaluate(element => {
+    Object.defineProperty(element, 'error', {
+      configurable: true,
+      value: { code: window.MediaError.MEDIA_ERR_DECODE },
+    });
+    element.dispatchEvent(new Event('error'));
+  });
+
+  await expect(app.locator('.media-player-empty')).toBeVisible();
+  const alert = app.getByRole('alert');
+  await expect(alert).toHaveText('Could not load Compact First Video.');
+});
+
 test.describe('compact viewer controls support keyboard and touch', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
