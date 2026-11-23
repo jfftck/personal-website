@@ -103,6 +103,13 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
       persist();
     }
   }
+  const removeFlagShortcut = ctx?.shortcuts?.registerHandler?.('minesweeper.toggleFlag', id, event => {
+    const cell = event.target.closest?.('.mine-cell');
+    if (!cell || !el.contains(cell) || pendingRestore || cell.disabled) return false;
+    const index = Number(cell.dataset.gridIndex);
+    if (!Number.isInteger(index)) return false;
+    act(index, true);
+  });
   function render() {
     if (pendingRestore) {
       showRestorePrompt(area, () => {
@@ -137,9 +144,6 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
         btn.setAttribute('aria-label', `Row ${Math.floor(index / state.width) + 1}, column ${index % state.width + 1}: ${
           shownMine ? 'mine' : cell.flag ? 'flagged' : cell.open ? `${cell.count} adjacent mines` : 'hidden'}`);
         btn.addEventListener('contextmenu', event => { event.preventDefault(); act(index, true); });
-        btn.addEventListener('keydown', event => {
-          if (event.key.toLowerCase() === 'f') { event.preventDefault(); act(index, true); }
-        });
         board.append(btn);
       });
       wireBoardKeys(board, state.width);
@@ -154,6 +158,7 @@ export function buildMinesweeper(id, ctx, initialState = null, iconSvg) {
         : createGameSession('minesweeper', { level, flagMode }, state);
     },
     destroy() {
+      removeFlagShortcut?.();
       clearCelebration();
       newGameScreenCleanup?.();
       removeThemeControl();

@@ -1,31 +1,5 @@
 'use strict';
 
-import { hasPrimaryModifier } from './shared/desktop-shortcuts.js';
-
-const TEXT_INPUT_TYPES = new Set([
-  'button',
-  'checkbox',
-  'color',
-  'file',
-  'hidden',
-  'image',
-  'radio',
-  'range',
-  'reset',
-  'submit',
-]);
-
-const DIRECTION_BY_KEY = {
-  arrowleft: 'left',
-  arrowright: 'right',
-  arrowup: 'up',
-  arrowdown: 'down',
-  h: 'left',
-  l: 'right',
-  k: 'up',
-  j: 'down',
-};
-
 function closest(target, selector) {
   return target?.closest?.(selector) || null;
 }
@@ -42,7 +16,9 @@ function isTextEntryTarget(target) {
   return path.some(node => {
     if (!node) return false;
     if (node.isContentEditable || node.tagName === 'TEXTAREA' || node.tagName === 'SELECT') return true;
-    return node.tagName === 'INPUT' && !TEXT_INPUT_TYPES.has(node.type);
+    return node.tagName === 'INPUT'
+      && !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit']
+        .includes(node.type);
   });
 }
 
@@ -50,7 +26,7 @@ export function createWindowShortcutRouter({
   document,
   state,
   windowController,
-  appMenu,
+  shortcutManager,
   helpOverlay,
   systemPanel,
   notificationPanel,
@@ -83,15 +59,87 @@ export function createWindowShortcutRouter({
     }
   }
 
-  function handleKeyDown(event) {
-    const target = event.target;
-    const menuOpen = !appMenu.hasAttribute('hidden');
-    const helpOpen = !helpOverlay.hasAttribute('hidden');
-    const isTyping = isTypingTarget(event);
-    const isTextEntry = isTextEntryTarget(event);
-    const inContent = Boolean(closest(target, '.app-content'));
-    const primaryModifier = hasPrimaryModifier(event);
+  function register(actionId, handler) {
+    shortcutManager.registerHandler(actionId, null, handler);
+  }
 
+  function helpOverlayIsClosed() {
+    return helpOverlay?.hasAttribute('hidden') !== false;
+  }
+
+  function menusClosed() {
+    return appMenu.hasAttribute('hidden') && helpOverlayIsClosed();
+  }
+
+  const appMenu = document.getElementById('app-menu');
+  register('desktop.openAppMenu', event => {
+    if (!menusClosed() || isTypingTarget(event)) return false;
+    openAppMenu();
+  });
+  register('desktop.toggleHelp', event => {
+    if (!appMenu.hasAttribute('hidden') || isTypingTarget(event)) return false;
+    toggleHelp();
+  });
+  for (let index = 1; index <= 9; index++) {
+    register(`desktop.focusApp${index}`, event => {
+      if (!menusClosed() || isTypingTarget(event)) return false;
+      windowController.focusAppByIndex(index);
+    });
+  }
+  register('desktop.focusWindowLeft', event => focusWindowInDirection(event, 'left'));
+  register('desktop.focusWindowRight', event => focusWindowInDirection(event, 'right'));
+  register('desktop.focusWindowUp', event => focusWindowInDirection(event, 'up'));
+  register('desktop.focusWindowDown', event => focusWindowInDirection(event, 'down'));
+  register('desktop.joinOrSeparateLeft', event => {
+    if (!menusClosed() || isTypingTarget(event)) return false;
+    const focusedColumn = state.focusedId ? windowController.getAppColumn(state.focusedId) : null;
+    const inSharedColumn = focusedColumn && focusedColumn.appIds.length > 1;
+    if (inSharedColumn) windowController.expelLeft();
+    else windowController.consumeLeft();
+  });
+  register('desktop.joinOrSeparateRight', event => {
+    if (!menusClosed() || isTypingTarget(event)) return false;
+    const focusedColumn = state.focusedId ? windowController.getAppColumn(state.focusedId) : null;
+    const inSharedColumn = focusedColumn && focusedColumn.appIds.length > 1;
+    if (inSharedColumn) windowController.expelRight();
+    else windowController.consumeRight();
+  });
+  register('desktop.narrowerWindow', event => {
+    if (!menusClosed() || isTypingTarget(event)) return false;
+    windowController.cycleFocusedWidthNarrower();
+  });
+  register('desktop.widerWindow', event => {
+    if (!menusClosed() || isTypingTarget(event)) return false;
+    windowController.cycleFocusedWidthWider();
+  });
+  register('desktop.focusPreviousApp', event => {
+    if (!menusClosed() || isTypingTarget(event) || closest(event.target, '.app-content')) return false;
+    windowController.focusPrevApp();
+  });
+  register('desktop.focusNextApp', event => {
+    if (!menusClosed() || isTypingTarget(event) || closest(event.target, '.app-content')) return false;
+    windowController.focusNextApp();
+  });
+  register('desktop.moveWindowUp', event => moveWithinSharedColumn(event, 'up'));
+  register('desktop.moveWindowDown', event => moveWithinSharedColumn(event, 'down'));
+
+  function focusWindowInDirection(event, direction) {
+    const activeDialog = closest(event.target, 'dialog[open], [role="dialog"]');
+    const insideAppWindowDialog = activeDialog?.classList.contains('app-window');
+    if (!menusClosed() || !systemPanel.hidden || isTextEntryTarget(event)
+      || (activeDialog && !insideAppWindowDialog)) return false;
+    windowController.focusWindowInDirection(direction);
+  }
+
+  function moveWithinSharedColumn(event, direction) {
+    if (!menusClosed() || isTypingTarget(event) || closest(event.target, '.app-content')) return false;
+    const focusedColumn = state.focusedId ? windowController.getAppColumn(state.focusedId) : null;
+    if (!focusedColumn || focusedColumn.appIds.length <= 1) return false;
+    if (direction === 'up') windowController.moveWindowUp();
+    else windowController.moveWindowDown();
+  }
+
+  function handleKeyDown(event) {
     if (event.key === 'Tab') {
       handleTab(event);
       return;
@@ -107,12 +155,12 @@ export function createWindowShortcutRouter({
         systemTimeButton.focus();
         return;
       }
-      if (helpOpen) {
+      if (helpOverlay && !helpOverlay.hasAttribute('hidden')) {
         closeHelp();
         appMenuButton.focus();
         return;
       }
-      if (menuOpen) {
+      if (appMenu && !appMenu.hasAttribute('hidden')) {
         closeAppMenu();
         appMenuButton.focus();
         return;
@@ -121,91 +169,23 @@ export function createWindowShortcutRouter({
         closeWinMenu();
         return;
       }
-      if (document.body.classList.contains('mod-overview')) {
-        exitOverview();
-      }
+      if (document.body.classList.contains('mod-overview')) exitOverview();
       return;
     }
 
-    if (event.key === '?' && !isTyping && !menuOpen) {
-      event.preventDefault();
-      toggleHelp();
-      return;
-    }
-
-    const windowDirection = DIRECTION_BY_KEY[event.key.toLowerCase()];
-    const activeDialog = closest(target, 'dialog[open], [role="dialog"]');
-    const insideAppWindowDialog = activeDialog?.classList.contains('app-window');
-    if (primaryModifier && event.altKey && event.shiftKey && windowDirection && !isTextEntry && !helpOpen && !menuOpen
-      && systemPanel.hidden && !document.getElementById('win-menu-open')
-      && (!activeDialog || insideAppWindowDialog)) {
-      event.preventDefault();
-      windowController.focusWindowInDirection(windowDirection);
-      return;
-    }
-
-    if ((event.key === '[' || event.key === ']') && !isTyping && !helpOpen && !menuOpen) {
-      event.preventDefault();
-      const focusedColumn = state.focusedId
-        ? windowController.getAppColumn(state.focusedId)
-        : null;
-      const inSharedColumn = focusedColumn && focusedColumn.appIds.length > 1;
-      if (event.key === '[') {
-        inSharedColumn ? windowController.expelLeft() : windowController.consumeLeft();
-      } else {
-        inSharedColumn ? windowController.expelRight() : windowController.consumeRight();
-      }
-      return;
-    }
-
-    if (helpOpen || menuOpen || isTyping) return;
-
-    if (primaryModifier && event.shiftKey && !event.altKey && event.key === ' ') {
-      event.preventDefault();
-      openAppMenu();
-      return;
-    }
-    if (primaryModifier && event.altKey && !event.shiftKey && event.key >= '1' && event.key <= '9') {
-      event.preventDefault();
-      windowController.focusAppByIndex(Number.parseInt(event.key, 10));
-      return;
-    }
-    if (primaryModifier && event.shiftKey && !event.altKey && event.key === '<') {
-      event.preventDefault();
-      windowController.cycleFocusedWidthNarrower();
-      return;
-    }
-    if (primaryModifier && event.shiftKey && !event.altKey && event.key === '>') {
-      event.preventDefault();
-      windowController.cycleFocusedWidthWider();
-      return;
-    }
-
-    if (!inContent && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
-      if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        windowController.focusPrevApp();
-        return;
-      }
-      if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        windowController.focusNextApp();
-        return;
-      }
-      const focusedColumn = state.focusedId
-        ? windowController.getAppColumn(state.focusedId)
-        : null;
-      const inSharedColumn = focusedColumn && focusedColumn.appIds.length > 1;
-      if (inSharedColumn && event.key === 'ArrowUp') {
-        event.preventDefault();
-        windowController.moveWindowUp();
-        return;
-      }
-      if (inSharedColumn && event.key === 'ArrowDown') {
-        event.preventDefault();
-        windowController.moveWindowDown();
-      }
-    }
+    const matched = shortcutManager.dispatchDesktop(event);
+    globalThis.window.__shortcutDebug = {
+      key: event.key,
+      code: event.code,
+      ctrl: event.ctrlKey,
+      alt: event.altKey,
+      shift: event.shiftKey,
+      matched,
+      focusedId: state.focusedId,
+      menusClosed: menusClosed(),
+      systemPanelHidden: systemPanel.hidden,
+      target: event.target?.outerHTML?.slice(0, 100),
+    };
   }
 
   return { handleKeyDown };

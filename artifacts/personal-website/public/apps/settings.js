@@ -265,6 +265,8 @@ export function buildSettings(id, ctx, initialState) {
   let firstResize = true;
   let resizeObserver;
   let unsubscribe = () => {};
+  let unsubscribeShortcuts = () => {};
+  let shortcutConflictDialog = null;
   const buttons = new Map();
 
   const setMessage = (node, message, kind = '') => {
@@ -341,6 +343,7 @@ export function buildSettings(id, ctx, initialState) {
 
   function selectPage(pageId) {
     if (!PAGES.some(item => item.id === pageId)) return;
+    if (shortcutConflictDialog?.open) shortcutConflictDialog.close();
     animationPicker.close({ restoreFocus: false, notify: false });
     pendingPageRender = false;
     activePage = pageId;
@@ -372,6 +375,7 @@ export function buildSettings(id, ctx, initialState) {
       pendingPageRender = true;
       return;
     }
+    if (activePage !== 'keyboard' && shortcutConflictDialog?.open) shortcutConflictDialog.close();
     pendingPageRender = false;
     const scrollContainer = narrow ? page : root.querySelector('.settings-main');
     const previousScrollTop = preserveScroll ? scrollContainer?.scrollTop || 0 : 0;
@@ -972,15 +976,213 @@ export function buildSettings(id, ctx, initialState) {
 
   function renderKeyboardShortcuts(body) {
     const card = el('section', 'settings-card settings-shortcuts-card');
+    const shortcuts = ctx?.shortcuts;
     card.append(
       el('span', 'settings-card-eyebrow', 'KEYBOARD'),
       el('h2', '', 'Desktop and app shortcuts'),
       el('p', 'settings-description', 'The primary modifier is Command on Apple devices and Control on Windows and Linux.'),
     );
+    const editorHeading = el('h3', 'settings-shortcut-editor-heading', 'Customize shortcuts');
+    const editorDescription = el('p', 'settings-description', 'Add more than one combination to an action, or remove a combination you no longer use.');
+    const editorList = el('div', 'settings-shortcut-editor');
+    const editorStatus = el('p', 'settings-shortcut-status');
+    editorStatus.setAttribute('role', 'status');
+    editorStatus.hidden = true;
+    card.append(editorHeading, editorDescription, editorList, editorStatus);
+
     const reference = el('div', 'settings-shortcut-reference');
-    renderShortcutReference(reference);
-    card.append(reference);
+    const referenceHeading = el('h3', 'settings-shortcut-reference-heading', 'Keyboard reference');
+    renderShortcutReference(reference, shortcuts);
+    card.append(referenceHeading, reference);
     body.append(card);
+
+    if (!shortcuts) {
+      setMessage(editorStatus, 'Shortcut editing is unavailable right now.', 'error');
+      return;
+    }
+
+    shortcutConflictDialog?.remove();
+    const dialog = document.createElement('dialog');
+    dialog.className = 'settings-shortcut-conflict-dialog';
+    dialog.setAttribute('aria-labelledby', 'settings-shortcut-conflict-title');
+    const dialogHeading = el('h2', '', 'Shortcut already assigned');
+    dialogHeading.id = 'settings-shortcut-conflict-title';
+    const dialogMessage = el('p', 'settings-description');
+    const conflictList = el('ul', 'settings-shortcut-conflict-list');
+    const dialogConsequence = el('p', 'settings-description', 'Moving it removes the combination from the actions listed above.');
+    const dialogActions = el('div', 'settings-shortcut-conflict-actions');
+    const cancelConflict = el('button', 'settings-button-secondary', 'Cancel');
+    cancelConflict.type = 'button';
+    const moveConflict = el('button', 'settings-button-primary', 'Move Shortcut');
+    moveConflict.type = 'button';
+    dialogActions.append(cancelConflict, moveConflict);
+    dialog.append(dialogHeading, dialogMessage, conflictList, dialogConsequence, dialogActions);
+    root.append(dialog);
+    shortcutConflictDialog = dialog;
+
+    let pendingAssignment = null;
+    let restoreCapture = null;
+    const hideConflictDialog = () => {
+      if (dialog.open) dialog.close();
+      pendingAssignment = null;
+      requestAnimationFrame(() => restoreCapture?.isConnected && restoreCapture.focus({ preventScroll: true }));
+    };
+    cancelConflict.addEventListener('click', hideConflictDialog);
+    dialog.addEventListener('cancel', event => {
+      event.preventDefault();
+      hideConflictDialog();
+    });
+    dialog.addEventListener('close', () => {
+      pendingAssignment = null;
+      requestAnimationFrame(() => restoreCapture?.isConnected && restoreCapture.focus({ preventScroll: true }));
+    });
+    moveConflict.addEventListener('click', () => {
+      if (!pendingAssignment) return;
+      const result = shortcuts.addBinding(pendingAssignment.actionId, pendingAssignment.binding, {
+        moveConflicts: true,
+      });
+      const actionId = pendingAssignment.actionId;
+      if (result.status !== 'added') {
+        hideConflictDialog();
+        setMessage(editorStatus, result.error || 'The shortcut could not be reassigned.', 'error');
+        return;
+      }
+      dialog.close();
+      pendingAssignment = null;
+      renderRows(actionId);
+      renderShortcutReference(reference, shortcuts);
+      setMessage(editorStatus, 'Shortcut moved to this action.');
+      focusCapture(actionId);
+    });
+
+    function focusCapture(actionId) {
+      editorList.querySelector(`[data-shortcut-capture="${CSS.escape(actionId)}"]`)
+        ?.focus({ preventScroll: true });
+    }
+
+    function renderRows(focusActionId = null) {
+      editorList.replaceChildren();
+      for (const group of shortcuts.getGroups()) {
+        const editableActions = group.actions.filter(item => item.editable);
+        if (!editableActions.length) continue;
+        const section = el('section', 'settings-shortcut-group');
+        section.append(el('h3', 'settings-shortcut-group-title', group.title));
+        for (const item of editableActions) {
+          const row = el('div', 'settings-shortcut-action');
+          row.dataset.actionId = item.id;
+          const copy = el('div', 'settings-shortcut-action-copy');
+          copy.append(el('strong', '', item.title), el('small', '', item.description));
+          const controls = el('div', 'settings-shortcut-bindings');
+          controls.setAttribute('aria-label', `${item.title} shortcuts`);
+          for (const binding of item.bindings) {
+            const chip = el('span', 'shortcut-binding-chip');
+            const keys = el('span', 'shortcut-keys');
+            shortcuts.formatBinding(binding).forEach((key, index) => {
+              if (index) keys.append(document.createTextNode('+'));
+              const kbd = document.createElement('kbd');
+              kbd.textContent = key;
+              keys.append(kbd);
+            });
+            const remove = el('button', 'shortcut-binding-remove', '×');
+            remove.type = 'button';
+            remove.setAttribute('aria-label', `Remove ${shortcuts.formatBinding(binding).join(' plus ')} from ${item.title}`);
+            remove.addEventListener('click', () => {
+              const result = shortcuts.removeBinding(item.id, binding);
+              if (result.status !== 'saved') {
+                setMessage(editorStatus, result.error || 'The shortcut could not be removed.', 'error');
+                return;
+              }
+              renderRows(item.id);
+              renderShortcutReference(reference, shortcuts);
+              setMessage(editorStatus, `Shortcut removed from ${item.title}.`);
+            });
+            chip.append(keys, remove);
+            controls.append(chip);
+          }
+
+          const capture = document.createElement('input');
+          capture.type = 'text';
+          capture.readOnly = true;
+          capture.className = 'shortcut-capture-input';
+          capture.placeholder = 'Add shortcut';
+          capture.dataset.shortcutCapture = item.id;
+          capture.setAttribute('aria-label', `Add a shortcut for ${item.title}`);
+          capture.setAttribute('aria-describedby', 'settings-shortcut-capture-help');
+          capture.autocomplete = 'off';
+          capture.addEventListener('focus', () => {
+            capture.dataset.capturing = 'true';
+            capture.placeholder = 'Press a combination';
+            setMessage(editorStatus, `Press the shortcut for ${item.title}. Press Escape to cancel.`);
+          });
+          capture.addEventListener('blur', () => {
+            delete capture.dataset.capturing;
+            capture.value = '';
+            capture.placeholder = 'Add shortcut';
+          });
+          capture.addEventListener('keydown', event => {
+            event.stopPropagation();
+            if (event.key === 'Tab') return;
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              capture.blur();
+              setMessage(editorStatus, 'Shortcut capture canceled.');
+              return;
+            }
+            if (['Alt', 'AltGraph', 'Control', 'Meta', 'Shift'].includes(event.key)) {
+              event.preventDefault();
+              const parts = [];
+              if (event.ctrlKey) parts.push('Ctrl');
+              if (event.metaKey) parts.push('⌘');
+              if (event.altKey) parts.push('Alt');
+              if (event.shiftKey) parts.push('Shift');
+              capture.value = parts.join(' + ') + (parts.length ? ' + …' : '');
+              return;
+            }
+
+            event.preventDefault();
+            const binding = shortcuts.createBindingFromEvent(event);
+            if (!binding) {
+              setMessage(editorStatus, 'That key cannot be used as a shortcut.', 'error');
+              capture.value = '';
+              return;
+            }
+            const result = shortcuts.addBinding(item.id, binding);
+            if (result.status === 'conflict') {
+              pendingAssignment = { actionId: item.id, binding };
+              restoreCapture = capture;
+              capture.blur();
+              dialogMessage.textContent = `${shortcuts.formatBinding(binding).join(' + ')} is being added to ${item.title} and is already assigned to:`;
+              conflictList.replaceChildren(...result.conflicts.map(conflict => el('li', '', conflict.title)));
+              moveConflict.textContent = 'Move Shortcut';
+              dialog.showModal();
+              return;
+            }
+            if (result.status === 'added') {
+              renderRows(item.id);
+              renderShortcutReference(reference, shortcuts);
+              setMessage(editorStatus, `Shortcut added to ${item.title}.`);
+              focusCapture(item.id);
+            } else {
+              capture.value = '';
+              setMessage(editorStatus,
+                result.status === 'exists' ? 'That combination is already listed for this action.'
+                  : result.error || 'The shortcut could not be saved.',
+                result.status === 'exists' ? '' : 'error');
+            }
+          });
+          controls.append(capture);
+          row.append(copy, controls);
+          section.append(row);
+        }
+        editorList.append(section);
+      }
+      if (focusActionId) focusCapture(focusActionId);
+    }
+
+    const captureHelp = el('p', 'settings-shortcut-capture-help', 'Select an Add shortcut field, then press the keys together. Press Escape to cancel.');
+    captureHelp.id = 'settings-shortcut-capture-help';
+    editorList.before(captureHelp);
+    renderRows();
   }
 
   function renderNotifications(body) {
@@ -1483,6 +1685,11 @@ export function buildSettings(id, ctx, initialState) {
   }
 
   window.addEventListener('desktop-notification-preferences-change', handleNotificationPreferencesChange);
+  if (ctx?.shortcuts?.subscribe) {
+    unsubscribeShortcuts = ctx.shortcuts.subscribe(origin => {
+      if (origin === 'external' && activePage === 'keyboard' && !shortcutConflictDialog?.open) renderPage();
+    });
+  }
   buildNavigation();
   current = snapshot();
   // The first measured size chooses the compact page list or desktop's Appearance page.
@@ -1508,6 +1715,9 @@ export function buildSettings(id, ctx, initialState) {
         destroyed = true;
         animationPicker.destroy();
         unsubscribe();
+        unsubscribeShortcuts();
+        shortcutConflictDialog?.remove();
+        shortcutConflictDialog = null;
         window.removeEventListener('desktop-notification-preferences-change', handleNotificationPreferencesChange);
         resizeObserver?.disconnect();
         window.removeEventListener('resize', onResize);

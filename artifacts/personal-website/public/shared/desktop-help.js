@@ -6,14 +6,21 @@ export function createDesktopHelpController({
   helpOverlay,
   helpCloseButton,
   helpOpenLauncherButton,
+  shortcutManager,
   closeAppMenu,
   openAppMenu,
 }) {
-  renderShortcutReference(helpOverlay.querySelector('#help-shortcut-reference'));
+  const shortcutReference = helpOverlay.querySelector('#help-shortcut-reference');
+  const refreshShortcutReference = () => renderShortcutReference(shortcutReference, shortcutManager);
+  refreshShortcutReference();
+  shortcutManager?.subscribe?.(() => {
+    if (!helpOverlay.hasAttribute('hidden')) refreshShortcutReference();
+  });
   const close = () => helpOverlay.setAttribute('hidden', '');
 
   const open = () => {
     helpOverlay.removeAttribute('hidden');
+    refreshShortcutReference();
     closeAppMenu();
     requestAnimationFrame(() => helpCloseButton.focus());
   };

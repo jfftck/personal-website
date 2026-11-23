@@ -8,9 +8,12 @@ import {
 } from './data-handler.js';
 import { createWindowController, SESSION_KEY, SESSION_KEY_V1 } from './window-controller.js';
 import { createWindowShortcutRouter } from './window-shortcut-router.js';
+import { createShortcutManager } from './shared/desktop-shortcuts.js';
 
 // ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
+const shortcutManager = createShortcutManager({ getFocusedAppId: () => S.focusedId });
+document.addEventListener('keydown', shortcutManager.dispatchAppKeyDown, true);
 const appMenuBtn       = $('app-menu-btn');
 const appMenu          = $('app-menu');
 const helpOverlay      = $('help-overlay');
@@ -1404,6 +1407,7 @@ function loadHelpController() {
           helpOverlay,
           helpCloseButton: $('help-close-btn'),
           helpOpenLauncherButton: $('help-open-launcher'),
+          shortcutManager,
           closeAppMenu,
           openAppMenu,
         });
@@ -2409,6 +2413,7 @@ window.requestAnimationFrame(() => { void initializeManifestChangeSync(); });
 const appCtx = {
   appApis:        S.appApis,
   appTitles:      S.appTitles,
+  shortcuts:      shortcutManager,
   is24HourTime:   () => use24HourTime,
   setAppTitle,
   toast,
@@ -2653,7 +2658,7 @@ const windowShortcutRouter = createWindowShortcutRouter({
   document,
   state: S,
   windowController,
-  appMenu,
+  shortcutManager,
   helpOverlay,
   systemPanel,
   notificationPanel,
@@ -2668,7 +2673,7 @@ const windowShortcutRouter = createWindowShortcutRouter({
   toggleHelp,
   exitOverview,
 });
-document.addEventListener('keydown', windowShortcutRouter.handleKeyDown);
+document.addEventListener('keydown', windowShortcutRouter.handleKeyDown, true);
 
 // ── Overview mode ─────────────────────────────────────────────
 // Shared state kept alive between positionOverview calls so _ovRender

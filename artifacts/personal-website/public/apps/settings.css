@@ -338,6 +338,140 @@
 .settings-notification-status { min-height: 1em; }
 .settings-notification-retry { width: max-content; }
 .settings-shortcut-reference { margin-top: 1rem; }
+.settings-shortcut-editor-heading,
+.settings-shortcut-reference-heading {
+  margin: 1.2rem 0 .35rem;
+  color: var(--app-text);
+  font-size: .88rem;
+}
+.settings-shortcut-capture-help {
+  margin: .35rem 0 .75rem;
+  color: var(--util-detail);
+  font-size: .72rem;
+  line-height: 1.45;
+}
+.settings-shortcut-status {
+  min-height: 1.15em;
+  margin: .5rem 0 0;
+  color: var(--util-detail);
+  font-size: .74rem;
+}
+.settings-shortcut-status[data-kind="error"] { color: var(--danger, #b42318); }
+.settings-shortcut-group { display: grid; gap: .35rem; margin-top: 1rem; }
+.settings-shortcut-group-title {
+  margin: 0;
+  padding-bottom: .4rem;
+  border-bottom: 1px solid var(--settings-rule);
+  color: var(--util-detail);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.settings-shortcut-action {
+  display: grid;
+  grid-template-columns: minmax(9rem, .8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: .75rem;
+  padding: .65rem .75rem;
+  border-radius: .65rem;
+  background: var(--util-surface);
+}
+.settings-shortcut-action-copy { display: grid; min-width: 0; gap: .18rem; }
+.settings-shortcut-action-copy strong { color: var(--app-text); font-size: .75rem; font-weight: 650; }
+.settings-shortcut-action-copy small { color: var(--util-detail); font-size: .66rem; line-height: 1.4; }
+.settings-shortcut-bindings {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .35rem;
+}
+.shortcut-binding-chip {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: .2rem;
+  padding: .12rem .25rem .12rem .45rem;
+  border: 1px solid var(--settings-rule);
+  border-radius: .55rem;
+  background: var(--util-surface-strong);
+}
+.shortcut-binding-chip .shortcut-keys { gap: .15rem; }
+.shortcut-binding-chip kbd { color: var(--app-text); }
+.shortcut-binding-remove {
+  display: inline-grid;
+  width: 1.55rem;
+  height: 1.55rem;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: .4rem;
+  background: transparent;
+  color: var(--util-detail);
+  font-size: 1rem;
+  line-height: 1;
+}
+.shortcut-binding-remove:hover { background: var(--btn-hover); color: var(--app-text); }
+.shortcut-capture-input {
+  box-sizing: border-box;
+  width: min(10rem, 100%);
+  min-height: 2.1rem;
+  padding: .35rem .55rem;
+  border: 1px dashed var(--settings-rule);
+  border-radius: .55rem;
+  background: var(--util-surface);
+  color: var(--app-text);
+  font: inherit;
+  font-size: .69rem;
+  text-align: center;
+  cursor: pointer;
+}
+.shortcut-capture-input::placeholder { color: var(--util-detail); opacity: 1; }
+.shortcut-capture-input:focus,
+.shortcut-capture-input[data-capturing="true"] {
+  border-color: var(--focus-color);
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+}
+.settings-shortcut-conflict-dialog {
+  box-sizing: border-box;
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: min(85vh, 42rem);
+  padding: 1.25rem;
+  overflow: auto;
+  border: 1px solid var(--settings-rule);
+  border-radius: 1rem;
+  background: var(--app-bg);
+  color: var(--app-text);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / .28);
+}
+.settings-shortcut-conflict-dialog::backdrop { background: rgb(0 0 0 / .48); backdrop-filter: blur(4px); }
+.settings-shortcut-conflict-dialog h2 { margin: 0 0 .5rem; font-size: 1rem; }
+.settings-shortcut-conflict-dialog p { margin: .4rem 0; line-height: 1.5; }
+.settings-shortcut-conflict-list { margin: .5rem 0; padding-left: 1.25rem; color: var(--app-text); }
+.settings-shortcut-conflict-actions { display: flex; justify-content: flex-end; gap: .55rem; margin-top: 1rem; }
+.settings-shortcut-conflict-actions button {
+  min-height: 2.4rem;
+  padding: .45rem .8rem;
+  border: 1px solid var(--settings-rule);
+  border-radius: .6rem;
+  background: var(--util-surface-strong);
+  color: var(--app-text);
+  font: inherit;
+  cursor: pointer;
+}
+.settings-shortcut-conflict-actions .settings-button-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast, white);
+}
+.settings-shortcut-conflict-actions button:focus-visible,
+.shortcut-binding-remove:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+}
 .settings-shortcut-reference .help-panel-section-label { color: var(--app-text); opacity: .58; }
 .settings-shortcut-reference .shortcut-row { align-items: flex-start; background: var(--util-surface); }
 .settings-shortcut-reference .shortcut-row dd { color: var(--util-detail); text-align: left; }
@@ -346,6 +480,12 @@
   border-color: color-mix(in srgb, var(--accent) 30%, transparent);
   border-bottom-color: color-mix(in srgb, var(--accent) 50%, transparent);
   background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+@media (max-width: 620px) {
+  .settings-shortcut-action { grid-template-columns: minmax(0, 1fr); }
+  .settings-shortcut-bindings { justify-content: flex-start; }
+  .shortcut-capture-input { flex: 1 1 8rem; }
+  .settings-shortcut-conflict-actions { flex-wrap: wrap; }
 }
 .settings-setting-copy h2 { margin-top: .35rem; }
 .settings-switch { display: inline-flex; position: relative; flex: none; align-items: center; cursor: pointer; }

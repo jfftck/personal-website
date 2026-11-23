@@ -836,8 +836,6 @@ export function buildCalculator(id, ctx) {
     if (radix === 16 && /^[a-f]$/i.test(event.key)) {
       event.preventDefault(); insertRadixDigit(event.key.toUpperCase()); return;
     }
-    if (event.key === 'Enter') { event.preventDefault(); calculate(true); }
-    if (event.key === 'Escape') clear();
   });
   function bindGraphPopover(trigger, panel) {
     const close = restoreFocus => {
@@ -1342,11 +1340,6 @@ export function buildCalculator(id, ctx) {
     renderEditorNav();
   });
   editorDialog.addEventListener('keydown', event => {
-    if (event.key === ',' && graphMode === 'parametric' && event.target.matches('.calc-editor-x')) {
-      event.preventDefault();
-      focusParametricY();
-      return;
-    }
     if (event.key === 'Enter' && event.target.matches('.calc-editor-expression,.calc-editor-x,.calc-editor-y')) {
       event.preventDefault(); $('.calc-apply-functions').click();
     }
@@ -2134,12 +2127,53 @@ export function buildCalculator(id, ctx) {
   };
   plotArea.addEventListener('pointerup', endPointer);
   plotArea.addEventListener('pointercancel', endPointer);
-  plotArea.addEventListener('keydown', event => {
-    const pan = { ArrowLeft: [-48, 0], ArrowRight: [48, 0], ArrowUp: [0, -36], ArrowDown: [0, 36] };
-    if (pan[event.key]) { event.preventDefault(); changeView({ panX: pan[event.key][0], panY: pan[event.key][1] }); persistGraphSettings(); }
-    else if (event.key === '+' || event.key === '=') { event.preventDefault(); zoomView(0.8); persistGraphSettings(); }
-    else if (event.key === '-') { event.preventDefault(); zoomView(1.25); persistGraphSettings(); }
-    else if (event.key === 'Home') { event.preventDefault(); resetView(); }
+  const removeShortcutHandlers = [];
+  const registerShortcut = (actionId, handler) => {
+    const remove = ctx?.shortcuts?.registerHandler?.(actionId, id, handler);
+    if (typeof remove === 'function') removeShortcutHandlers.push(remove);
+  };
+  registerShortcut('calculator.evaluate', event => {
+    if (event.target.closest?.('.calc-editor-expression,.calc-editor-x,.calc-editor-y')) return false;
+    calculate(true);
+  });
+  registerShortcut('calculator.backspace', () => { backspace(); });
+  registerShortcut('calculator.clear', event => {
+    if (['app-menu', 'help-overlay', 'notification-panel', 'system-panel']
+      .some(panelId => {
+        const panel = document.getElementById(panelId);
+        return panel && !panel.hidden;
+      })) return false;
+    clear();
+  });
+  for (const [actionId, panX, panY] of [
+    ['calculator.panLeft', -48, 0],
+    ['calculator.panRight', 48, 0],
+    ['calculator.panUp', 0, -36],
+    ['calculator.panDown', 0, 36],
+  ]) {
+    registerShortcut(actionId, event => {
+      if (event.target !== plotArea && !plotArea.contains(event.target)) return false;
+      changeView({ panX, panY });
+      persistGraphSettings();
+    });
+  }
+  registerShortcut('calculator.zoomIn', event => {
+    if (event.target !== plotArea && !plotArea.contains(event.target)) return false;
+    zoomView(0.8);
+    persistGraphSettings();
+  });
+  registerShortcut('calculator.zoomOut', event => {
+    if (event.target !== plotArea && !plotArea.contains(event.target)) return false;
+    zoomView(1.25);
+    persistGraphSettings();
+  });
+  registerShortcut('calculator.resetGraph', event => {
+    if (event.target !== plotArea && !plotArea.contains(event.target)) return false;
+    resetView();
+  });
+  registerShortcut('calculator.switchParametricField', event => {
+    if (graphMode !== 'parametric' || !event.target.matches?.('.calc-editor-x')) return false;
+    focusParametricY();
   });
   renderFunctions();
 
@@ -2148,15 +2182,12 @@ export function buildCalculator(id, ctx) {
     if (event.target === plotArea) return;
     if (event.target instanceof Element && event.target.closest('button,a,select,[role="button"],[contenteditable="true"]')) return;
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || editorDialog.open || settingsDialog.open) return;
-    if (event.key === 'Escape') { clear(); return; }
-    const map = { '*': '*', '/': '/', '-': '-', Enter: '=', '=': '=' };
+    const map = { '*': '*', '/': '/', '-': '-' };
     const key = map[event.key] || event.key;
     if (/^[0-9]$/.test(key)) { event.preventDefault(); insertRadixDigit(key); }
     else if (radix === 16 && /^[a-f]$/i.test(key)) { event.preventDefault(); insertRadixDigit(key.toUpperCase()); }
     else if (key === '.') { event.preventDefault(); insert(key, true); }
     else if (['+', '-', '*', '/'].includes(key)) { event.preventDefault(); insert(key); }
-    else if (key === '=') { event.preventDefault(); calculate(true); }
-    else if (event.key === 'Backspace') { event.preventDefault(); backspace(); }
   };
   document.addEventListener('keydown', onKey);
   renderHistory();
@@ -2164,6 +2195,7 @@ export function buildCalculator(id, ctx) {
   setMode(mode);
   if (ctx?.appApis && id) ctx.appApis[id] = { destroy: () => {
     document.removeEventListener('keydown', onKey);
+    removeShortcutHandlers.forEach(remove => remove());
     plotResizeObserver.disconnect();
     window.removeEventListener('storage', onStorageGraphSettings);
     calculatorGraphSubscribers.delete(onGraphSettingsChanged);
