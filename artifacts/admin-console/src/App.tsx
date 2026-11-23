@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import {
   Archive, ChevronRight, FileText, Folder, FolderPlus, Menu,
@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import {
   getContentFileContent,
+  customFetch,
   getGetContentFileVersionsQueryKey, getGetContentTrashQueryKey, getGetContentTreeQueryKey,
   useCreateContentFile, useCreateContentFolder, useCreateContentUpload,
   useDeleteContentFile, useDeleteContentFolder, useGetContentTrash,
@@ -33,8 +34,9 @@ import { FolderNavigation } from '@/components/folder-navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
-import { useAuth } from '@workspace/replit-auth-web';
+import { Redirect, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
+import { useAuth, useClerk } from '@clerk/react';
+import { ClerkRoot, SignInPage, SignUpPage } from '@/components/clerk-auth';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 20_000, retry: 1, refetchOnWindowFocus: true } },
@@ -134,19 +136,23 @@ function displaySize(bytes: number) {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+      <ClerkRoot queryClient={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
           <RoutedBoundary>
             <Switch>
               <Route path="/" component={Console} />
+              <Route path="/sign-in/*?" component={SignInPage} />
+              <Route path="/sign-up/*?" component={SignUpPage} />
+              <Route path="/library" component={Console} />
+              <Route path="/trash" component={Console} />
               <Route component={NotFound} />
             </Switch>
           </RoutedBoundary>
-        </WouterRouter>
         <Toaster />
       </TooltipProvider>
-    </QueryClientProvider>
+      </ClerkRoot>
+    </WouterRouter>
   );
 }
 
@@ -156,18 +162,17 @@ function RoutedBoundary({ children }: { children: ReactNode }) {
 }
 
 function Console() {
-  const {
-    isLoading: authLoading,
-    isAuthenticated: signedIn,
-    isOwner,
-    login,
-    logout,
-  } = useAuth();
+  const { isLoaded, isSignedIn: signedIn } = useAuth();
+  const { signOut } = useClerk();
+  const [location, setLocation] = useLocation();
+  const login = () => setLocation('/sign-in');
+  const logout = () => signOut({ redirectUrl: import.meta.env.BASE_URL });
   const [systemDark, setSystemDark] = useState(systemPrefersDark);
   const [themeOverride, setThemeOverride] = useState<ThemeOverride>(savedThemeOverride);
   const dark = themeOverride ? themeOverride === 'dark' : systemDark;
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [view, setView] = useState<'library' | 'trash'>('library');
+  const view = location === '/trash' ? 'trash' : 'library';
+  const setView = (next: 'library' | 'trash') => setLocation(`/${next}`);
   const [selectedFolder, setSelectedFolder] = useState('');
   const [selectedFile, setSelectedFile] = useState<ContentFile | null>(null);
   const [search, setSearch] = useState('');
@@ -195,8 +200,10 @@ function Console() {
   const queryClient = useQueryClient();
 
   const treeQuery = useGetContentTree({
-    query: { enabled: isOwner, queryKey: getGetContentTreeQueryKey() },
+    query: { enabled: isLoaded && Boolean(signedIn), queryKey: getGetContentTreeQueryKey() },
   });
+  const isOwner = isLoaded && Boolean(signedIn) && treeQuery.isSuccess;
+  const authLoading = !isLoaded || (signedIn && treeQuery.isPending);
   const fileVersionsQuery = useGetContentFileVersions(selectedFile?.id ?? '', {
     query: { enabled: isOwner && Boolean(selectedFile) },
   });
@@ -274,10 +281,6 @@ function Console() {
     if (themeOverride) localStorage.setItem(THEME_STORAGE_KEY, themeOverride);
     else localStorage.removeItem(THEME_STORAGE_KEY);
   }, [dark, themeOverride]);
-
-  useEffect(() => {
-    if (!isOwner) queryClient.clear();
-  }, [isOwner, queryClient]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -483,12 +486,12 @@ function Console() {
     setUploadBusy(true);
     try {
       const target = await createUpload.mutateAsync({ data: { name, contentType, sizeBytes: sourceFile.size } });
-      const response = await fetch(target.uploadUrl, {
+      await customFetch(target.uploadUrl, {
         method: 'PUT',
+        credentials: 'omit',
         headers: { 'Content-Type': contentType },
         body: sourceFile,
       });
-      if (!response.ok) throw new Error(`File upload failed (${response.status}).`);
       const created = await createFile.mutateAsync({
         data: {
           name, originalFileName, title: values.title.trim(), description: values.description.trim(), folderPath: uploadDestination, date,
@@ -773,8 +776,7 @@ function Console() {
       const target = await createUpload.mutateAsync({
         data: { name: editorFile.name, contentType, sizeBytes: blob.size },
       });
-      const response = await fetch(target.uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob });
-      if (!response.ok) throw new Error(`Text upload failed (${response.status}).`);
+      await customFetch(target.uploadUrl, { method: 'PUT', credentials: 'omit', headers: { 'Content-Type': contentType }, body: blob });
       const updated = await updateFile.mutateAsync({
         fileId: editorFile.id,
         data: {
@@ -832,6 +834,7 @@ function Console() {
   };
 
   if (authLoading) return <LoadingAuth />;
+  if (signedIn && location === '/') return <Redirect to="/library" />;
   if (!signedIn) {
     const accessDenied = new URLSearchParams(window.location.search).get('access') === 'denied';
     return (
@@ -850,6 +853,10 @@ function Console() {
     );
   }
   if (!isOwner) {
+    const status = treeQuery.error && 'status' in treeQuery.error ? treeQuery.error.status : null;
+    if (status !== 401 && status !== 403) {
+      return <main className="auth-screen"><section className="auth-card"><h1>Unable to load your library.</h1><ErrorState error={treeQuery.error} onRetry={() => void treeQuery.refetch()} /><button className="button" onClick={logout}>Sign Out</button></section></main>;
+    }
     return (
       <main className="auth-screen">
         <section className="auth-card">
@@ -933,7 +940,7 @@ function Console() {
                 </div>
               )}
             </section>
-          ) : treeQuery.isLoading ? <div className="panel"><SkeletonRows /></div> : treeQuery.isError ? <ErrorState error={treeQuery.error} onRetry={() => void treeQuery.refetch()} /> : (
+          ) : (
             <div className="workspace-grid">
               <FileListPanel
                 files={visibleFiles}

@@ -1,10 +1,10 @@
 ---
 name: Authenticated API integration tests
-description: How to exercise the Replit-authenticated admin API without weakening its authorization boundary.
+description: How to exercise the Clerk-authenticated admin API without weakening its authorization boundary.
 ---
 
-Exercise Replit Auth through a mock OIDC issuer that signs test ID tokens, including PKCE/state/nonce validation. For route guard tests, insert temporary database-backed sessions and send the same `sid` cookie as the browser. Assert anonymous requests receive 401, non-owner sessions receive 403, owner sessions succeed, and `/files/` stays public.
+Exercise protected endpoints with signed Clerk session cookies and an ephemeral JWT verification key in the isolated test server, never an auth bypass. Assert anonymous requests receive 401, non-owner sessions receive 403, admitted owner sessions succeed, and `/files/` stays public. Use distinct legacy and native IDs to detect bridge mistakes.
 
-**Why:** A test-only authentication bypass would stop exercising the session and owner checks that protect admin mutations.
+**Why:** A test-only authentication bypass would stop exercising the session and owner checks that protect admin mutations. Clerk development-cookie authentication also expects client-update and development-browser cookies; a session cookie alone may be rejected before signature verification.
 
-**How to apply:** Use real HTTP routes and signed OIDC claims; keep the local HTTP issuer allowance gated to test mode and never add an alternate production authentication path.
+**How to apply:** Use real HTTP routes and signed claims on isolated test processes. Test fixtures may temporarily admit a uniquely generated identity; always remove that row afterward, and never change a real owner's authorization.

@@ -4,9 +4,13 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { publicContentRouter } from "./routes/publicContent";
-import cookieParser from "cookie-parser";
-import { authMiddleware } from "./middlewares/authMiddleware";
-import { authRateLimit } from "./middlewares/authRateLimit";
+import { clerkMiddleware } from "@clerk/express";
+import { publishableKeyFromHost } from "@clerk/shared/keys";
+import {
+  CLERK_PROXY_PATH,
+  clerkProxyMiddleware,
+  getClerkProxyHost,
+} from "./middlewares/clerkProxyMiddleware";
 
 const app: Express = express();
 
@@ -32,18 +36,24 @@ app.use(
     },
   }),
 );
-app.use(cors());
-app.use(cookieParser());
+
+// Clerk's proxy must run before body parsers so it can stream request bodies.
+app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+app.use(cors({ credentials: true, origin: true }));
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: true, limit: "100kb", parameterLimit: 1000 }));
 
-// Limit public OIDC endpoints before session lookups run.
-app.get("/api/login", authRateLimit);
-app.get("/api/callback", authRateLimit);
-
 // Public file delivery stays unauthenticated and keeps the static-looking URL.
 app.use("/files", publicContentRouter);
-app.use("/api", authMiddleware, router);
+app.use(
+  clerkMiddleware((req) => ({
+    publishableKey: publishableKeyFromHost(
+      getClerkProxyHost(req) ?? "",
+      process.env.CLERK_PUBLISHABLE_KEY,
+    ),
+  })),
+);
+app.use("/api", router);
 
 app.use((req, res, next) => {
   if (

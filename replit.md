@@ -15,7 +15,9 @@ Personal website with a tiling desktop, document and media viewers, and browser 
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - The existing website does not use the scaffold database. Content remains file-based.
-- Existing admin authentication uses the external Clerk configuration; preserve it.
+- Admin authentication uses Replit-managed Clerk, with cookie-based web sessions and branded sign-in/sign-up pages in `/admin-console/`.
+- Private content authorization resolves the verified `sessionClaims.userId` to the existing local user row and checks its stored username against `REPL_OWNER`. Never grant access from a user-editable Clerk username or auto-create owner rows. Both legacy users and sessions tables are retained.
+- Public `/files/` delivery remains unauthenticated. Logout uses Clerk's browser SDK and returns to the console landing page.
 
 ## Stack
 
@@ -32,8 +34,8 @@ Personal website with a tiling desktop, document and media viewers, and browser 
 - `artifacts/personal-website/APP-COMPONENTS.md` — required shared-control usage guide for app UI
 - `artifacts/personal-website/public/shared/` — shared browser components and utilities
 - `artifacts/personal-website/scripts/build-static.cjs` — copies the original static site without bundling or changing its URLs
-- `artifacts/api-server/legacy/admin/` — preserved admin UI and request handler
-- `artifacts/api-server/src/app.ts` — mounts the legacy handler before body parsers, preserving streaming uploads
+- `artifacts/admin-console/` — private publishing console and Clerk sign-in routes
+- `artifacts/api-server/src/app.ts` — mounts the Clerk proxy before body parsers, public file delivery, and cookie-authenticated API routes
 - `tests/` — preserved regression tests with workspace-relative imports
 
 ## Architecture decisions

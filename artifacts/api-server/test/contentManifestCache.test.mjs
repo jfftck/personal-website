@@ -7,6 +7,7 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { createClerkTestSession, clerkCookie } from "./helpers/clerk-session.mjs";
 
 const {
   createManifestCacheFolderKey,
@@ -110,6 +111,7 @@ test(
     const ownerUsername = `owner-${suffix}`;
     const ownerSessionId = `owner-session-${suffix}`;
     const nonOwnerSessionId = `other-session-${suffix}`;
+    const clerk = createClerkTestSession();
     const destinationPath = `manifest-test-${suffix}`;
     const initialName = `manifest-current-${suffix}.txt`;
     const restoredName = `manifest-restored-${suffix}.txt`;
@@ -169,6 +171,7 @@ test(
         cwd: artifactDir,
         env: {
           ...process.env,
+          ...clerk.env,
           REPL_OWNER: ownerUsername,
           PORT: String(port),
         },
@@ -210,7 +213,7 @@ test(
       return fetch(`${server.baseUrl}/api${route}`, {
         ...requestOptions,
         headers: {
-          ...(sessionId ? { Cookie: `sid=${sessionId}` } : {}),
+          ...(sessionId ? { Cookie: clerkCookie(clerk.token(sessionId)) } : {}),
           ...(requestOptions.body ? { "Content-Type": "application/json" } : {}),
           ...requestOptions.headers,
         },
@@ -392,31 +395,13 @@ test(
                updated_at = now()`,
         );
         await client.query("DELETE FROM content_manifest_cache");
-        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-        const accessExpiresAt = Math.floor(Date.now() / 1000) + 3600;
-        for (const [sid, username] of [
+        for (const [id, username] of [
           [ownerSessionId, ownerUsername],
           [nonOwnerSessionId, `other-${suffix}`],
         ]) {
           await client.query(
-            `INSERT INTO sessions (sid, sess, expire)
-             VALUES ($1, $2::jsonb, $3)`,
-            [
-              sid,
-              JSON.stringify({
-                user: {
-                  id: username,
-                  username,
-                  email: `${username}@example.test`,
-                  firstName: "Test",
-                  lastName: null,
-                  profileImageUrl: null,
-                },
-                access_token: "test-session",
-                expires_at: accessExpiresAt,
-              }),
-              expiresAt,
-            ],
+            `INSERT INTO users (id, username) VALUES ($1, $2)`,
+            [id, username],
           );
         }
         await client.query("COMMIT");
@@ -432,10 +417,6 @@ test(
         sessionId: null,
       });
       assert.equal(anonymousTree.status, 401);
-      const anonymousAuthStatus = await adminRequest(firstServer, "/auth/user", {
-        sessionId: null,
-      });
-      assert.deepEqual(await anonymousAuthStatus.json(), { user: null, isOwner: false });
       const otherAccountTree = await adminRequest(firstServer, "/content/tree", {
         sessionId: nonOwnerSessionId,
       });
@@ -484,22 +465,20 @@ test(
       assert.equal(invalidBearerPatch.status, 401);
       await assertUnpublished("a PATCH with an invalid bearer token must not publish the file");
 
-      const invalidSessionPatch = await adminRequest(
+      const unknownOwnerPatch = await adminRequest(
         firstServer,
         `/content/files/${publishingFileId}`,
         {
           method: "PATCH",
-          sessionId: "missing-session",
+          sessionId: `unknown-${suffix}`,
           body: JSON.stringify({ isPublished: true }),
         },
       );
-      assert.equal(invalidSessionPatch.status, 401);
-      await assertUnpublished("a PATCH with an invalid sign-in session must not publish the file");
+      assert.equal(unknownOwnerPatch.status, 403);
+      await assertUnpublished("a signed-in account without an owner row must not publish the file");
 
-      const authStatusResponse = await adminRequest(firstServer, "/auth/user");
-      assert.equal(authStatusResponse.status, 200);
-      assert.equal(authStatusResponse.headers.get("cache-control"), "no-store");
-      assert.equal((await authStatusResponse.json()).isOwner, true);
+      const ownerTree = await adminRequest(firstServer, "/content/tree");
+      assert.equal(ownerTree.status, 200);
       const baseline = await readManifest(firstServer.manifestUrl);
       assert.equal(baseline.response.status, 200);
       assert.deepEqual(Object.keys(baseline.manifest).sort(), [
@@ -1349,7 +1328,7 @@ test(
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
-        await client.query("DELETE FROM sessions WHERE sid = ANY($1::varchar[])", [
+        await client.query("DELETE FROM users WHERE id = ANY($1::varchar[])", [
           [ownerSessionId, nonOwnerSessionId],
         ]);
         if (initialFileId) {

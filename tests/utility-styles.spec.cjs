@@ -4327,3 +4327,48 @@ test('desktop shell appearance baselines cover both themes at narrow and wide si
     }
   }
 });
+
+test('wallpaper settings apply and persist changes immediately', async ({ page }) => {
+  await page.route('**/files/manifest.json', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      wallpapers: [
+        { filename: '20260101_Dawn.jpg', url: '/files/pictures/20260101_Dawn.jpg', isWallpaper: true, title: 'Dawn' },
+        { filename: '20260102_Dusk.jpg', url: '/files/pictures/20260102_Dusk.jpg', isWallpaper: true, title: 'Dusk' },
+      ],
+    }),
+  }));
+  await page.route('**/files/pictures/*.jpg', route => route.fulfill({
+    status: 200,
+    contentType: 'image/jpeg',
+    body: Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EAf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EAf/2Q==', 'base64'),
+  }));
+  await page.reload();
+  if (await page.locator('#welcome-win-close').isVisible().catch(() => false)) {
+    await page.locator('#welcome-win-close').click();
+  }
+  const settings = await openUtility(page, 'settings');
+  await settings.getByRole('button', { name: 'Wallpaper', exact: true }).click();
+  await expect(settings.getByRole('heading', { name: 'Eligible wallpapers' })).toBeVisible();
+  await expect(settings.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
+  await expect(settings.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
+
+  await settings.getByRole('checkbox', { name: 'Select Dawn' }).check();
+  await expect(settings.getByRole('status').filter({ hasText: 'Wallpaper preferences applied.' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => JSON.parse(
+    localStorage.getItem('desktop-wallpaper-settings-v1') || '{}',
+  ).selected)).toEqual(['/files/pictures/20260101_Dawn.jpg']);
+
+  await settings.getByRole('checkbox', { name: 'Select Dusk' }).check();
+  await expect(settings.getByRole('status').filter({ hasText: 'Wallpaper preferences applied.' })).toBeVisible();
+  await settings.getByRole('group', { name: 'Wallpaper order' }).getByRole('button', { name: /Cycle/ }).click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(
+    localStorage.getItem('desktop-wallpaper-settings-v1') || '{}',
+  ).mode)).toBe('cycle');
+  await settings.getByRole('group', { name: 'Wallpaper schedule' }).getByRole('button', { name: /On a timer/ }).click();
+  await expect(settings.getByRole('combobox', { name: 'Wallpaper change interval' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => JSON.parse(
+    localStorage.getItem('desktop-wallpaper-settings-v1') || '{}',
+  ).rotation)).toBe('interval');
+});

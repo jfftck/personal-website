@@ -8,9 +8,10 @@
 - [Calculator compact layout](calculator-compact-layout.md) — explicit compact button line heights prevent keypad rows overflowing their grid tracks.
 - [Content storage architecture](content-storage.md) — App Storage holds file bytes, `/files` serves generated public manifests, and private Git stores revision snapshots and object references.
 - [Desktop browser-data persistence](desktop-browser-data.md) — route app-local browser state through one handler; reads must not rewrite malformed data or resurrect explicitly removed values.
-- [Admin authentication](admin-authentication.md) — private admin access uses Replit Auth with an owner check; `/files/` remains public.
+- [Admin authentication](admin-authentication.md) — private admin access uses Replit-managed Clerk with an owner check; `/files/` remains public.
 - [Authenticated API integration tests](authenticated-api-tests.md) — test protected endpoints with signed Clerk tokens and an ephemeral JWT verification key, never an auth bypass.
 - [Session restore persistence](session-restore-persistence.md) — don't rewrite saved sessions immediately after opening lazy apps; hydration can still be pending.
+- [Clerk instance consistency](clerk-instance-consistency.md) — compare frontend/API instance alignment before interpreting cookie-auth failures; provisioning success alone is insufficient.
 - [Folder conflict handling](folder-conflict-handling.md) — check the composed folder path before insertion so duplicate-name conflicts return a useful 409.
 - [Modal return state](modal-return-state.md) — apply form changes from nested folder dialogs after closing them so the return-to-editor choice persists.
 - [Settings responsive layout](settings-container-queries.md) — container queries cannot restyle their own container; keep responsive grid rules on a child layout wrapper.
