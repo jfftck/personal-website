@@ -161,7 +161,7 @@ test('the selected window remains focused after a page refresh', async ({ page }
   await expect(restoredImage).not.toHaveClass(/focused/);
 });
 
-test('Ctrl+D opens the app menu and Ctrl+number focuses windows at desktop and phone widths', async ({ page }) => {
+test('primary shortcut opens the app menu and modifier+number focuses windows at desktop and phone widths', async ({ page }) => {
   for (const viewport of [
     { width: 1280, height: 800 },
     { width: 390, height: 844 },
@@ -184,13 +184,13 @@ test('Ctrl+D opens the app menu and Ctrl+number focuses windows at desktop and p
     const image = page.locator('.app-window[data-type="img-viewer"]');
     await page.locator('#overview-btn').focus();
 
-    await page.keyboard.press('Control+d');
+    await page.keyboard.press('Control+Shift+Space');
     await expect(page.locator('#app-menu-btn')).toHaveAttribute('aria-expanded', 'true');
     await page.keyboard.press('Escape');
     await expect(page.locator('#app-menu-btn')).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('#app-menu-btn')).toBeFocused();
 
-    await page.keyboard.press('Control+2');
+    await page.keyboard.press('Control+Alt+2');
     await expect(image).toHaveClass(/focused/);
     await expect.poll(async () => (
       await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY)
@@ -554,6 +554,56 @@ test('overview drag into a new column preserves the source width and focused win
   ))).toEqual(['doc-viewer', 'img-viewer']);
 });
 
+test('entering and leaving overview restores the same visible window position', async ({ page }) => {
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const session = {
+      v: 2,
+      focused: { columnIndex: 2, appIndex: 0 },
+      columns: [0, 1, 2, 3].map(index => ({
+        widthPreset: 'half',
+        apps: [{ type: 'doc-viewer', state: { url: docs[index % docs.length].url } }],
+      })),
+    };
+    await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+      key: KEY,
+      value: session,
+    });
+    await page.reload();
+    await page.locator('#welcome-win-close').click();
+
+    const wrapper = page.locator('#app-strip-wrapper');
+    const focusedWindow = page.locator('.app-window.focused');
+    await expect(page.locator('.app-window')).toHaveCount(4);
+    await expect.poll(() => wrapper.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+    await expect.poll(() => focusedWindow.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      return rect.left >= 0 && rect.right <= window.innerWidth;
+    })).toBe(true);
+
+    const before = await page.evaluate(() => {
+      const rect = document.querySelector('.app-window.focused').getBoundingClientRect();
+      return { scrollLeft: document.querySelector('#app-strip-wrapper').scrollLeft, left: rect.left, top: rect.top };
+    });
+
+    await page.locator('#overview-btn').click();
+    await expect(page.locator('body')).toHaveClass(/mod-overview/);
+    await page.locator('#overview-btn').click();
+    await expect(page.locator('body')).not.toHaveClass(/mod-overview/);
+    await expect.poll(() => page.evaluate(() => {
+      const rect = document.querySelector('.app-window.focused').getBoundingClientRect();
+      return {
+        scrollLeft: document.querySelector('#app-strip-wrapper').scrollLeft,
+        left: rect.left,
+        top: rect.top,
+      };
+    })).toEqual(before);
+  }
+});
+
 test('directional window focus follows geometry and Vim keys at desktop and phone widths', async ({ page }) => {
   for (const viewport of [
     { width: 1280, height: 800 },
@@ -579,14 +629,14 @@ test('directional window focus follows geometry and Vim keys at desktop and phon
     await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveClass(/focused/);
 
     await page.locator('.app-window[data-type="doc-viewer"] .doc-body').click();
-    await page.keyboard.press('Control+ArrowRight');
+    await page.keyboard.press('Control+Alt+Shift+ArrowRight');
     const image = page.locator('.app-window[data-type="img-viewer"]');
     await expect(image).toHaveClass(/focused/);
     await expect.poll(() => page.evaluate(() => Boolean(
       document.activeElement.closest('.app-window.focused'),
     ))).toBe(true);
 
-    await page.keyboard.press('Control+h');
+    await page.keyboard.press('Control+Alt+Shift+h');
     await expect(page.locator('.app-window[data-type="doc-viewer"]')).toHaveClass(/focused/);
     await expect(page.locator('.app-window[data-type="img-viewer"]')).not.toHaveClass(/focused/);
   }

@@ -13,10 +13,11 @@ const savedReminderHistory = {
 async function seedDueSystemReminder(page, reminderEnabled, {
   permission = 'granted',
   failSystemNotification = false,
+  dueInMs = 1000,
 } = {}) {
   await page.clock.install();
-  await page.addInitScript(({ reminderEnabled, savedHistory, permission, failSystemNotification }) => {
-    const dueAt = new Date(Date.now() + 1000).toISOString();
+  await page.addInitScript(({ reminderEnabled, savedHistory, permission, failSystemNotification, dueInMs }) => {
+    const dueAt = new Date(Date.now() + dueInMs).toISOString();
     localStorage.setItem('desktop-reminders', JSON.stringify([{
       id: 'due-system-reminder',
       text: 'Check the deployment status',
@@ -46,7 +47,7 @@ async function seedDueSystemReminder(page, reminderEnabled, {
       configurable: true,
       value: TestNotification,
     });
-  }, { reminderEnabled, savedHistory: savedReminderHistory, permission, failSystemNotification });
+  }, { reminderEnabled, savedHistory: savedReminderHistory, permission, failSystemNotification, dueInMs });
 }
 
 async function openNotificationSettings(page) {
@@ -200,19 +201,22 @@ test('notification categories can be muted and remain saved across reloads', asy
 });
 
 test('muted due reminders do not alert and preserve saved history', async ({ page }) => {
-  await seedDueSystemReminder(page, true);
+  await seedDueSystemReminder(page, true, { dueInMs: 60_000 });
   await page.goto('/');
   await page.locator('#welcome-win-close').click();
   const settings = await openNotificationSettings(page);
 
   const reminderToggle = settings.locator('[data-notification-category="reminder"]');
   await setCheckboxState(reminderToggle, false);
+  await expect.poll(() => page.evaluate(() => JSON.parse(
+    localStorage.getItem('desktop-notification-preferences-v1'),
+  ).enabledTypes.reminder)).toBe(false);
   await expect.poll(() => page.evaluate(() =>
     JSON.parse(localStorage.getItem('desktop-notifications-v1'))
       .find(item => item.id === 'saved-reminder-history'),
   )).toEqual(savedReminderHistory);
 
-  await page.clock.runFor(1100);
+  await page.clock.runFor(60_100);
   await expect.poll(() => page.evaluate(() => window.__systemNotifications)).toEqual([]);
   await expect(page.locator('#notification-list')).not.toContainText('Check the deployment status');
   await expect.poll(() => page.evaluate(() =>

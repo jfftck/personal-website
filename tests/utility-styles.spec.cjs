@@ -1214,13 +1214,13 @@ test('Ctrl arrows or Vim keys move between windows', async ({ page }) => {
   const reverseVimKey = {
     left: 'l', right: 'h', up: 'j', down: 'k',
   }[targetDirection.direction];
-  await page.keyboard.press(`Control+${arrowKey}`);
+  await page.keyboard.press(`Control+Alt+Shift+${arrowKey}`);
   await expect(page.locator('.app-window.focused')).toHaveAttribute('data-type', targetDirection.target);
   await expect.poll(() => page.evaluate(() =>
     Boolean(document.activeElement.closest('.app-window.focused')),
   )).toBe(true);
 
-  await page.keyboard.press(`Control+${reverseVimKey}`);
+  await page.keyboard.press(`Control+Alt+Shift+${reverseVimKey}`);
   await expect(page.locator('.app-window.focused')).toHaveAttribute('data-type', 'calculator');
 });
 
@@ -1231,7 +1231,7 @@ test('desktop window shortcuts do not interfere with calculator expression editi
   await expression.fill('12+3');
   await expression.focus();
 
-  await page.keyboard.press('Control+ArrowLeft');
+  await page.keyboard.press('Control+Alt+Shift+ArrowLeft');
   await expect(calculator).toHaveClass(/focused/);
   await expect(expression).toBeFocused();
   await page.keyboard.press('[');

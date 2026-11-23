@@ -502,7 +502,7 @@ test('desktop app windows are named non-modal dialogs and remain independently u
   await expect(settings).toHaveAttribute('aria-current', 'false');
   await expect(page.locator('#active-title')).toHaveText('Calculator');
 
-  await page.keyboard.press('Control+2');
+  await page.keyboard.press('Control+Alt+2');
   await expect(settings).toHaveAttribute('aria-current', 'true');
   await expect(calculator).toHaveAttribute('aria-current', 'false');
   await expect(page.locator('#active-title')).toHaveText('Settings');

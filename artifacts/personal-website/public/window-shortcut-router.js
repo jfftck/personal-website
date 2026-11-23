@@ -1,5 +1,7 @@
 'use strict';
 
+import { hasPrimaryModifier } from './shared/desktop-shortcuts.js';
+
 const TEXT_INPUT_TYPES = new Set([
   'button',
   'checkbox',
@@ -88,6 +90,7 @@ export function createWindowShortcutRouter({
     const isTyping = isTypingTarget(event);
     const isTextEntry = isTextEntryTarget(event);
     const inContent = Boolean(closest(target, '.app-content'));
+    const primaryModifier = hasPrimaryModifier(event);
 
     if (event.key === 'Tab') {
       handleTab(event);
@@ -133,7 +136,7 @@ export function createWindowShortcutRouter({
     const windowDirection = DIRECTION_BY_KEY[event.key.toLowerCase()];
     const activeDialog = closest(target, 'dialog[open], [role="dialog"]');
     const insideAppWindowDialog = activeDialog?.classList.contains('app-window');
-    if (event.ctrlKey && windowDirection && !isTextEntry && !helpOpen && !menuOpen
+    if (primaryModifier && event.altKey && event.shiftKey && windowDirection && !isTextEntry && !helpOpen && !menuOpen
       && systemPanel.hidden && !document.getElementById('win-menu-open')
       && (!activeDialog || insideAppWindowDialog)) {
       event.preventDefault();
@@ -157,28 +160,28 @@ export function createWindowShortcutRouter({
 
     if (helpOpen || menuOpen || isTyping) return;
 
-    if ((event.metaKey || event.ctrlKey) && event.key === 'd') {
+    if (primaryModifier && event.shiftKey && !event.altKey && event.key === ' ') {
       event.preventDefault();
       openAppMenu();
       return;
     }
-    if ((event.metaKey || event.ctrlKey) && event.key >= '1' && event.key <= '9') {
+    if (primaryModifier && event.altKey && !event.shiftKey && event.key >= '1' && event.key <= '9') {
       event.preventDefault();
       windowController.focusAppByIndex(Number.parseInt(event.key, 10));
       return;
     }
-    if ((event.metaKey || event.ctrlKey) && event.key === '<') {
+    if (primaryModifier && event.shiftKey && !event.altKey && event.key === '<') {
       event.preventDefault();
       windowController.cycleFocusedWidthNarrower();
       return;
     }
-    if ((event.metaKey || event.ctrlKey) && event.key === '>') {
+    if (primaryModifier && event.shiftKey && !event.altKey && event.key === '>') {
       event.preventDefault();
       windowController.cycleFocusedWidthWider();
       return;
     }
 
-    if (!inContent) {
+    if (!inContent && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
         windowController.focusPrevApp();

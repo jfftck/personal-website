@@ -1,5 +1,7 @@
 'use strict';
 
+import { renderShortcutReference } from './desktop-shortcuts.js';
+
 export function createDesktopHelpController({
   helpOverlay,
   helpCloseButton,
@@ -7,6 +9,7 @@ export function createDesktopHelpController({
   closeAppMenu,
   openAppMenu,
 }) {
+  renderShortcutReference(helpOverlay.querySelector('#help-shortcut-reference'));
   const close = () => helpOverlay.setAttribute('hidden', '');
 
   const open = () => {

@@ -2679,6 +2679,7 @@ let _ovNatColRects = null;
 let _ovNatWinRects = null;
 let _ovStripRect   = null;
 let _ovTX = 0, _ovTY = 0;
+let _ovEntryViewport = null;
 
 // Apply a translate+scale transform and rebuild the controls overlay.
 // Called both by positionOverview (after measuring) and by the wheel handler.
@@ -2706,8 +2707,15 @@ function _ovWheelHandler(e) {
 }
 
 function enterOverview() {
+  if (document.body.classList.contains('mod-overview')) return;
   window.clearTimeout(overviewAnimationTimer);
   document.body.classList.remove('overview-exiting');
+  _ovEntryViewport = {
+    scrollLeft: appStripWrapper.scrollLeft,
+    scrollTop: appStripWrapper.scrollTop,
+    focusedId: S.focusedId,
+    layout: S.columns.map(column => [column.id, ...column.appIds]),
+  };
   const overviewChoices = getAnimationPreferences().overview;
   appStrip.classList.toggle(
     'ov-no-transition',
@@ -2765,6 +2773,7 @@ function exitOverview({ animate = true } = {}) {
   window.removeEventListener('wheel', _ovWheelHandler);
   appStrip.style.transform       = '';
   appStrip.style.transformOrigin = '';
+  restoreOverviewViewport();
   if (noOverviewMotion && animate) {
     window.clearTimeout(overviewAnimationTimer);
     overviewAnimationTimer = window.setTimeout(() => appStrip.classList.remove('ov-no-transition'), 720);
@@ -2773,6 +2782,27 @@ function exitOverview({ animate = true } = {}) {
   }
   document.getElementById('overview-controls')?.remove();
   _ovNatColRects = _ovNatWinRects = _ovStripRect = null;
+}
+
+function restoreOverviewViewport() {
+  const saved = _ovEntryViewport;
+  _ovEntryViewport = null;
+  if (!saved) return;
+
+  const layout = S.columns.map(column => [column.id, ...column.appIds]);
+  const unchanged = saved.focusedId === S.focusedId &&
+    JSON.stringify(saved.layout) === JSON.stringify(layout);
+  if (!unchanged) {
+    if (S.focusedId) requestAnimationFrame(() => scrollToApp(S.focusedId));
+    return;
+  }
+
+  appStripWrapper.classList.add('ov-restoring-scroll');
+  requestAnimationFrame(() => {
+    appStripWrapper.scrollLeft = saved.scrollLeft;
+    appStripWrapper.scrollTop = saved.scrollTop;
+    requestAnimationFrame(() => appStripWrapper.classList.remove('ov-restoring-scroll'));
+  });
 }
 
 function toggleOverview() {

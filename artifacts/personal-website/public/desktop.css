@@ -1060,6 +1060,14 @@ body {
 #app-menu-inner { width: 100%; max-width: none; }
 #app-menu[data-menu-view="root"] #app-menu-title { display: none; }
 .app-menu-header { margin-bottom: .3rem; }
+.app-menu-search-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: .55rem;
+  margin-bottom: 1rem;
+}
+.app-menu-search-row #app-menu-help-btn { flex: none; }
 
 /* ── Files section in launcher ── */
 .app-files-heading {
@@ -1080,9 +1088,10 @@ body {
 }
 
 .app-files-search {
-  margin-top: 0;
-  width: 100%;
-  margin-bottom: 1rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  margin: 0;
   padding: 0.625rem 0.75rem;
   border: 1px solid var(--app-border);
   border-radius: 999px;
@@ -1798,6 +1807,11 @@ body.mod-overview #desktop-search {
   scroll-padding-inline-start: var(--edge);
 }
 
+#app-strip-wrapper.ov-restoring-scroll {
+  scroll-behavior: auto !important;
+  scroll-snap-type: none !important;
+}
+
 @media (max-width: 640px) and (orientation: portrait) {
   #app-strip {
     padding-inline: 0;
@@ -2276,6 +2290,13 @@ app-select.standard-select-field { display:block;width:100%;min-width:0; }
   color: var(--topbar-text);
   opacity: 0.4;
 }
+
+.desktop-shortcut-reference { display: grid; gap: .8rem; }
+.shortcut-reference-group .help-panel-section-label { margin-top: .4rem; }
+.shortcut-keys { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .18rem; }
+.shortcut-row dt { flex: 0 1 52%; min-width: 0; flex-wrap: wrap; }
+.shortcut-row dd { flex: 1 1 42%; min-width: 0; }
+.shortcut-keys kbd { white-space: normal; overflow-wrap: anywhere; }
 
 /* ── Gesture key pill ── */
 .gesture-key {

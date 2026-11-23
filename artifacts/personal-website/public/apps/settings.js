@@ -3,11 +3,13 @@
 import { enhanceSelect } from '../shared/app-select.js';
 import { createAnimationPickerController } from '../shared/animation-picker.js';
 import { upgradeAppControls, wrapAppButton } from '../shared/app-controls.js';
+import { renderShortcutReference } from '../shared/desktop-shortcuts.js';
 
 const PAGES = [
   { id: 'appearance', title: 'Appearance' },
   { id: 'time', title: 'Time & Date' },
   { id: 'notifications', title: 'Notifications' },
+  { id: 'keyboard', title: 'Keyboard Shortcuts', detail: 'Desktop and app controls' },
   { id: 'wallpaper', title: 'Wallpaper' },
 ];
 const NOTIFICATION_CATEGORIES = [
@@ -25,6 +27,7 @@ const ICONS = {
   appearance: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-.5 0-1-.1-1.5A7 7 0 0 1 12 3z"/></svg>',
   time: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 10.4 4 2.4-1 1.7-5-3V6h2v6.4z"/></svg>',
   notifications: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6V11a7 7 0 0 0-6-6.92V2h-2v2.08A7 7 0 0 0 5 11v5l-2 2v1h18v-1z"/></svg>',
+  keyboard: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2ZM4 7h16v10H4V7Zm2 2h2v2H6V9Zm4 0h2v2h-2V9Zm4 0h2v2h-2V9Zm4 0h1v2h-1V9ZM6 13h2v2H6v-2Zm4 0h8v2h-8v-2Z"/></svg>',
   wallpaper: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2ZM5 5h14v9l-3.5-3.5-3 3L9 10l-4 5V5zm3 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>',
 };
 
@@ -394,6 +397,7 @@ export function buildSettings(id, ctx, initialState) {
     if (activePage === 'appearance') renderAppearance(body);
     else if (activePage === 'time') renderTime(body);
     else if (activePage === 'notifications') renderNotifications(body);
+    else if (activePage === 'keyboard') renderKeyboardShortcuts(body);
     else if (activePage === 'wallpaper') renderWallpaper(body);
     upgradeAppControls(page);
     if (preserveScroll && scrollContainer) scrollContainer.scrollTop = previousScrollTop;
@@ -966,6 +970,19 @@ export function buildSettings(id, ctx, initialState) {
     body.append(example);
   }
 
+  function renderKeyboardShortcuts(body) {
+    const card = el('section', 'settings-card settings-shortcuts-card');
+    card.append(
+      el('span', 'settings-card-eyebrow', 'KEYBOARD'),
+      el('h2', '', 'Desktop and app shortcuts'),
+      el('p', 'settings-description', 'The primary modifier is Command on Apple devices and Control on Windows and Linux.'),
+    );
+    const reference = el('div', 'settings-shortcut-reference');
+    renderShortcutReference(reference);
+    card.append(reference);
+    body.append(card);
+  }
+
   function renderNotifications(body) {
     const card = el('section', 'settings-card settings-setting-row');
     const copy = el('div', 'settings-setting-copy');
@@ -1072,7 +1089,7 @@ export function buildSettings(id, ctx, initialState) {
     preferencesCard.append(categoryList);
 
     const retentionRow = el('div', 'settings-notification-retention-row');
-    const retentionLabel = el('label', '', 'Keep read or dismissed notifications for');
+    const retentionLabel = el('label', 'settings-select-label standard-select-control', 'Keep read or dismissed notifications for');
     const retentionSelect = document.createElement('select');
     retentionSelect.className = 'util-select settings-notification-retention-select';
     retentionSelect.dataset.notificationRetention = '';
