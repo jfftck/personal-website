@@ -507,8 +507,9 @@ function scheduleReminderNotification(reminder) {
         }
       } catch (error) {
         console.warn('[reminders] Local notification failed.', error);
+      } finally {
+        publishReminderNotification(reminder);
       }
-      publishReminderNotification(reminder);
     }).catch(() => {});
   }, Math.min(delay, maxDelay));
   reminderNotificationTimers.set(reminder.id, timer);

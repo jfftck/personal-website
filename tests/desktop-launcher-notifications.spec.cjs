@@ -10,9 +10,12 @@ const savedReminderHistory = {
   dismissed: false,
 };
 
-async function seedDueSystemReminder(page, reminderEnabled) {
+async function seedDueSystemReminder(page, reminderEnabled, {
+  permission = 'granted',
+  failSystemNotification = false,
+} = {}) {
   await page.clock.install();
-  await page.addInitScript(({ reminderEnabled, savedHistory }) => {
+  await page.addInitScript(({ reminderEnabled, savedHistory, permission, failSystemNotification }) => {
     const dueAt = new Date(Date.now() + 1000).toISOString();
     localStorage.setItem('desktop-reminders', JSON.stringify([{
       id: 'due-system-reminder',
@@ -28,10 +31,13 @@ async function seedDueSystemReminder(page, reminderEnabled) {
     localStorage.setItem('desktop-notifications-v1', JSON.stringify([savedHistory]));
 
     window.__systemNotifications = [];
+    window.__systemNotificationAttempts = 0;
     class TestNotification extends EventTarget {
-      static permission = 'granted';
+      static permission = permission;
 
       constructor(title, options = {}) {
+        window.__systemNotificationAttempts += 1;
+        if (failSystemNotification) throw new Error('Operating-system notifications are unavailable.');
         super();
         window.__systemNotifications.push({ title, body: options.body || '' });
       }
@@ -40,7 +46,7 @@ async function seedDueSystemReminder(page, reminderEnabled) {
       configurable: true,
       value: TestNotification,
     });
-  }, { reminderEnabled, savedHistory: savedReminderHistory });
+  }, { reminderEnabled, savedHistory: savedReminderHistory, permission, failSystemNotification });
 }
 
 async function openNotificationSettings(page) {
@@ -225,6 +231,34 @@ test('enabled due reminders can show an operating-system notification', async ({
     title: 'Reminder',
     body: 'Check the deployment status',
   }]);
+});
+
+test('denied notification permission keeps due reminders readable in the notification center', async ({ page }) => {
+  await seedDueSystemReminder(page, true, { permission: 'denied' });
+  await page.goto('/');
+  await page.locator('#welcome-win-close').click();
+
+  await page.clock.runFor(1100);
+  await expect.poll(() => page.evaluate(() => window.__systemNotificationAttempts)).toBe(0);
+  await expect.poll(() => page.evaluate(() => window.__systemNotifications)).toEqual([]);
+
+  await page.locator('#notifications-btn').click();
+  await expect(page.locator('#notification-list')).toContainText('Check the deployment status');
+  await expect(page.locator('#notification-list')).toContainText('Reminder');
+});
+
+test('failed operating-system notification keeps due reminders readable in the notification center', async ({ page }) => {
+  await seedDueSystemReminder(page, true, { failSystemNotification: true });
+  await page.goto('/');
+  await page.locator('#welcome-win-close').click();
+
+  await page.clock.runFor(1100);
+  await expect.poll(() => page.evaluate(() => window.__systemNotificationAttempts)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__systemNotifications)).toEqual([]);
+
+  await page.locator('#notifications-btn').click();
+  await expect(page.locator('#notification-list')).toContainText('Check the deployment status');
+  await expect(page.locator('#notification-list')).toContainText('Reminder');
 });
 
 test('read and dismissed notifications follow the selected retention period', async ({ page }) => {
