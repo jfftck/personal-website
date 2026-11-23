@@ -258,6 +258,7 @@ test('game and game UI module failures can be retried without duplicate windows 
         body: '/* Simulated temporary game module failure */',
       });
     } else {
+      await new Promise(resolve => setTimeout(resolve, 250));
       await route.continue();
     }
   });
@@ -278,20 +279,43 @@ test('game and game UI module failures can be retried without duplicate windows 
 
   const game = page.locator('.app-window[data-type="minesweeper"]');
   const calculator = page.locator('.app-window[data-type="calculator"] .calc-wrap');
+  const gameDialog = page.getByRole('dialog', { name: 'Minesweeper', exact: true });
   await expect(game).toHaveAttribute('data-load-state', 'error', { timeout: 15_000 });
   await expect(game).toContainText('Minesweeper couldn’t be loaded');
-  await expect(game.getByRole('button', { name: 'Retry' })).toBeVisible();
+  await expect(gameDialog).toBeVisible();
+  await expect(gameDialog).toHaveJSProperty('open', true);
+  await expect(gameDialog).toHaveAttribute('aria-modal', 'false');
+  expect(await gameDialog.evaluate(dialog => dialog.matches(':modal'))).toBe(false);
+  const retryButton = gameDialog.getByRole('button', { name: 'Retry' });
+  await expect(retryButton).toBeVisible();
   await expect(calculator).toBeVisible();
   await expect(game).toHaveCount(1);
   expect(moduleRequests).toBeGreaterThanOrEqual(4);
 
   const failedRequestCount = moduleRequests;
   failGameModule = false;
-  await game.getByRole('button', { name: 'Retry' }).click();
+  await page.locator('#app-menu-btn').focus();
+  let retryReachedByKeyboard = false;
+  for (let index = 0; index < 80; index += 1) {
+    await page.keyboard.press('Tab');
+    if (await retryButton.evaluate(button => button === document.activeElement)) {
+      retryReachedByKeyboard = true;
+      break;
+    }
+  }
+  expect(retryReachedByKeyboard).toBe(true);
+  await page.keyboard.press('Enter');
 
   await expect(game).toHaveAttribute('data-load-state', 'loading');
+  await expect(gameDialog).toBeVisible();
+  await expect(gameDialog).toHaveAttribute('aria-modal', 'false');
+  expect(await gameDialog.evaluate(dialog => dialog.matches(':modal'))).toBe(false);
+  await expect(game).toHaveCount(1);
   await expect(game).toHaveAttribute('data-load-state', 'error', { timeout: 15_000 });
-  await expect(game.getByRole('button', { name: 'Retry' })).toBeVisible();
+  await expect(gameDialog).toBeVisible();
+  await expect(gameDialog).toHaveAttribute('aria-modal', 'false');
+  expect(await gameDialog.evaluate(dialog => dialog.matches(':modal'))).toBe(false);
+  await expect(gameDialog.getByRole('button', { name: 'Retry' })).toBeVisible();
   await expect(game).toHaveCount(1);
   await expect(calculator).toBeVisible();
   expect(gameUiRequests).toBeGreaterThanOrEqual(4);
@@ -301,6 +325,9 @@ test('game and game UI module failures can be retried without duplicate windows 
   await game.getByRole('button', { name: 'Retry' }).click();
 
   await expect(game.getByRole('button', { name: 'Resume saved game' })).toBeVisible({ timeout: 15_000 });
+  await expect(gameDialog).toBeVisible();
+  await expect(gameDialog).toHaveAttribute('aria-modal', 'false');
+  expect(await gameDialog.evaluate(dialog => dialog.matches(':modal'))).toBe(false);
   await expect(game).toHaveCount(1);
   await expect(calculator).toBeVisible();
   expect(moduleRequests).toBeGreaterThan(failedRequestCount);
