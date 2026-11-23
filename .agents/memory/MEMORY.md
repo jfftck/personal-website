@@ -23,3 +23,4 @@
 - [Native browser components](native-web-components.md) — prefer browser-native UI and Shadow DOM components over framework runtimes for shared controls.
 - [Dynamic module retries](dynamic-module-retries.md) — use a unique query for each import retry so the browser fetches a module again after a failed load.
 - [Workflow port collisions](workflow-port-collisions.md) — if a restart reports a busy port, stop the stale artifact workflow and confirm the listener closes before restarting.
+- [Overview viewport restoration](overview-viewport-restoration.md) — invalidate pending overview positioning and restore the saved scroll after responsive overflow transitions settle.

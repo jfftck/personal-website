@@ -2675,12 +2675,15 @@ document.addEventListener('keydown', windowShortcutRouter.handleKeyDown);
 // can pan the view without re-measuring natural positions.
 const _OV_SCALE    = 0.5;
 const _OV_TOPBAR_H = 48;
+const _OV_SCROLL_RESTORE_DELAY_MS = 300;
 let _ovNatColRects = null;
 let _ovNatWinRects = null;
 let _ovStripRect   = null;
 let _ovTX = 0, _ovTY = 0;
 let _ovPositionVersion = 0;
 let _ovEntryViewport = null;
+let _ovViewportRestoreVersion = 0;
+let _ovViewportRestoreTimer = 0;
 
 // Apply a translate+scale transform and rebuild the controls overlay.
 // Called both by positionOverview (after measuring) and by the wheel handler.
@@ -2709,12 +2712,17 @@ function _ovWheelHandler(e) {
 
 function enterOverview() {
   if (document.body.classList.contains('mod-overview')) return;
+  _ovViewportRestoreVersion += 1;
+  window.clearTimeout(_ovViewportRestoreTimer);
+  _ovViewportRestoreTimer = 0;
+  appStripWrapper.classList.remove('ov-restoring-scroll');
   window.clearTimeout(overviewAnimationTimer);
   document.body.classList.remove('overview-exiting');
   _ovEntryViewport = {
     scrollLeft: appStripWrapper.scrollLeft,
     scrollTop: appStripWrapper.scrollTop,
     focusedId: S.focusedId,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
     layout: S.columns.map(column => [column.id, ...column.appIds]),
   };
   const overviewChoices = getAnimationPreferences().overview;
@@ -2775,7 +2783,7 @@ function exitOverview({ animate = true } = {}) {
   window.removeEventListener('wheel', _ovWheelHandler);
   appStrip.style.transform       = '';
   appStrip.style.transformOrigin = '';
-  restoreOverviewViewport();
+  restoreOverviewViewport({ waitForTransform: animate && !noOverviewMotion });
   if (noOverviewMotion && animate) {
     window.clearTimeout(overviewAnimationTimer);
     overviewAnimationTimer = window.setTimeout(() => appStrip.classList.remove('ov-no-transition'), 720);
@@ -2786,25 +2794,43 @@ function exitOverview({ animate = true } = {}) {
   _ovNatColRects = _ovNatWinRects = _ovStripRect = null;
 }
 
-function restoreOverviewViewport() {
+function restoreOverviewViewport({ waitForTransform = false } = {}) {
   const saved = _ovEntryViewport;
   _ovEntryViewport = null;
   if (!saved) return;
+  const restoreVersion = ++_ovViewportRestoreVersion;
+  const isCurrent = () => restoreVersion === _ovViewportRestoreVersion &&
+    !document.body.classList.contains('mod-overview');
 
   const layout = S.columns.map(column => [column.id, ...column.appIds]);
   const unchanged = saved.focusedId === S.focusedId &&
+    saved.viewport.width === window.innerWidth &&
+    saved.viewport.height === window.innerHeight &&
     JSON.stringify(saved.layout) === JSON.stringify(layout);
   if (!unchanged) {
-    if (S.focusedId) requestAnimationFrame(() => scrollToApp(S.focusedId));
+    if (S.focusedId) {
+      requestAnimationFrame(() => {
+        if (isCurrent()) scrollToApp(S.focusedId);
+      });
+    }
     return;
   }
 
   appStripWrapper.classList.add('ov-restoring-scroll');
-  requestAnimationFrame(() => {
+  const restore = () => {
+    _ovViewportRestoreTimer = 0;
+    if (!isCurrent()) return;
     appStripWrapper.scrollLeft = saved.scrollLeft;
     appStripWrapper.scrollTop = saved.scrollTop;
-    requestAnimationFrame(() => appStripWrapper.classList.remove('ov-restoring-scroll'));
-  });
+    requestAnimationFrame(() => {
+      if (isCurrent()) appStripWrapper.classList.remove('ov-restoring-scroll');
+    });
+  };
+  // Let the 260ms strip transform finish before restoring scroll snapping.
+  if (waitForTransform) {
+    _ovViewportRestoreTimer = window.setTimeout(restore, _OV_SCROLL_RESTORE_DELAY_MS);
+  }
+  else requestAnimationFrame(restore);
 }
 
 function toggleOverview() {

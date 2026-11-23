@@ -23,6 +23,32 @@ async function openTouchGame(page, game) {
   return page.locator(`.app-window[data-type="${game}"]`).last();
 }
 
+test('each game keeps its own top-bar and instructions icon while Game Center keeps its launcher icon', async ({ page }) => {
+  const games = await page.evaluate(async () => {
+    const { GAME_WINDOW_TYPES } = await import(new URL('apps/game-types.js', document.baseURI).href);
+    return GAME_WINDOW_TYPES.map(({ type, title, iconSvg }) => ({ type, title, iconSvg }));
+  });
+  const gameCenterLauncherIcon = await page.locator('#game-center-entry .app-launcher-icon').innerHTML();
+
+  for (const game of games) {
+    const app = await openGame(page, game.type);
+    const activeTab = page.locator('#open-apps-bar .app-tab-btn[aria-current="true"]');
+    const expectedPath = await page.evaluate(iconSvg => {
+      const template = document.createElement('template');
+      template.innerHTML = iconSvg;
+      return template.content.querySelector('svg path')?.getAttribute('d');
+    }, game.iconSvg);
+    await expect(app).toBeVisible();
+    await expect(activeTab).toHaveAttribute('aria-label', game.title);
+    await expect(activeTab.locator('svg path')).toHaveAttribute('d', expectedPath);
+    await expect(app.locator('.game-instructions-icon svg path')).toHaveAttribute('d', expectedPath);
+    await expect(app.getByRole('button', { name: 'Instructions', exact: true })).toBeVisible();
+    expect(await page.locator('#game-center-entry .app-launcher-icon').innerHTML())
+      .toBe(gameCenterLauncherIcon);
+    await page.locator('#close-btn').click();
+  }
+});
+
 async function setTouchGameOption(page, app, label, value) {
   await app.getByRole('button', { name: 'Settings', exact: true }).tap();
   const dialog = app.locator('.game-settings-dialog');
