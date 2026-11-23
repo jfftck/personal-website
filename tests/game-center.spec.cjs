@@ -197,6 +197,46 @@ function savedFreecell({ columnCards = [], foundations = {}, cellCards = [] } = 
   };
 }
 
+function savedSpider({ columns = [], suits = 1 } = {}) {
+  const used = new Set();
+  const makeCard = (rank, suit = 0, copy = 0) => {
+    const id = copy * 52 + suit * 13 + rank - 1;
+    used.add(id);
+    return { id, rank, suit, up: true };
+  };
+  const columnPiles = Array.from({ length: 10 }, (_, index) =>
+    (columns[index] || []).map(([rank, suit = 0, copy = 0]) => makeCard(rank, suit, copy)));
+  const stock = Array.from({ length: 104 }, (_, id) => ({
+    id,
+    rank: id % 13 + 1,
+    suit: Math.floor(id / 13) % suits,
+    up: false,
+  })).filter(card => !used.has(card.id));
+  const state = {
+    kind: 'spider',
+    suits,
+    drawCount: 1,
+    columns: columnPiles,
+    stock,
+    waste: [],
+    foundations: Array.from({ length: 4 }, () => []),
+    cells: Array.from({ length: 4 }, () => []),
+    completed: 0,
+    moves: 0,
+    won: false,
+  };
+  return {
+    v: 2,
+    columns: [{
+      widthPreset: 'full',
+      apps: [{
+        type: 'spider',
+        state: { version: 1, kind: 'spider', options: { suits, drawCount: 1 }, state },
+      }],
+    }],
+  };
+}
+
 function savedMinesweeper({ level = 'beginner', finalSafeCell = 10 } = {}) {
   const [width, height, mines] = { beginner: [9, 9, 10], intermediate: [16, 16, 40], expert: [30, 16, 99] }[level];
   const mineIndices = new Set(Array.from({ length: mines }, (_, index) => index));
@@ -1658,6 +1698,8 @@ test('double-click keeps Klondike auto-home and moves FreeCell cards by their so
   }));
   await eligible.locator('[data-key="card-1"]').dblclick();
   await expect(eligible.locator('[aria-label="Home 1"] .playing-card')).toHaveText('2♠');
+  await expect(page.locator('body > .solitaire-home-move-layer .card-home-flight')).toHaveCount(1);
+  await expect(page.locator('body > .solitaire-home-move-layer')).toHaveCount(0, { timeout: 2000 });
   await expect(eligible.locator('.game-status')).toContainText('1 moves');
   await page.locator('#close-btn').click();
 
@@ -1718,7 +1760,9 @@ test('FreeCell double-click highlights Home and an open cell, or sends the card 
   }), 'freecell');
   await noOpenCell.locator('[data-key="card-1"]').dblclick();
   await expect(noOpenCell.locator('[aria-label="Home 1"] .playing-card')).toHaveText('2♠');
+  await expect(page.locator('body > .solitaire-home-move-layer .card-home-flight')).toHaveCount(1);
   await expect(noOpenCell.locator('.game-status')).toHaveText('Moved 2♠ to Home 1.');
+  await expect(page.locator('body > .solitaire-home-move-layer')).toHaveCount(0, { timeout: 2000 });
 });
 
 test('FreeCell double-click announces later-numbered Cell and Home destinations', async ({ page }) => {
@@ -1760,6 +1804,118 @@ test('manual click moves announce the card and destination', async ({ page }) =>
   await home.locator('[data-key="card-1"]').click();
   await home.locator('[aria-label="Home 1"] [data-key="card-0"]').click();
   await expect(home.locator('.game-status')).toHaveText('Moved 2♠ to Home 1.');
+});
+
+test('non-drag moves to Home animate from the source and reveal the destination when finished', async ({ page }) => {
+  const app = await restoreGame(page, savedKlondike({
+    columns: [[[2, 0]]], foundations: { 0: [1] },
+  }));
+  const source = app.locator('[aria-label="Pile 1"] [data-key="card-1"]');
+  await source.click();
+  await app.locator('[aria-label="Home 1"] [data-key="card-0"]').click();
+
+  const layer = page.locator('body > .solitaire-home-move-layer');
+  const destination = app.locator('[aria-label="Home 1"] [data-key="card-1"]');
+  await expect(layer).toHaveCount(1);
+  await expect(layer.locator('.card-home-flight[data-card-id="1"]')).toHaveCount(1);
+  await expect(destination).toHaveClass(/home-arrival-hidden/);
+  await expect(layer).toHaveCount(0, { timeout: 2000 });
+  await expect(destination).toBeVisible();
+  await expect(destination).not.toHaveClass(/home-arrival-hidden/);
+  await page.locator('#close-btn').click();
+
+  const keyboardApp = await restoreGame(page, savedKlondike({
+    columns: [[[2, 0]]], foundations: { 0: [1] },
+  }));
+  await keyboardApp.locator('[aria-label="Pile 1"] [data-key="card-1"]').focus();
+  await page.keyboard.press('Enter');
+  await keyboardApp.locator('[aria-label="Home 1"] [data-key="card-0"]').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('body > .solitaire-home-move-layer .card-home-flight')).toHaveCount(1);
+});
+
+test('Send home animates moved cards and reduced motion skips the flight layer', async ({ page }) => {
+  const app = await restoreGame(page, savedKlondike({
+    columns: [[[2, 0]]], foundations: { 0: [1] },
+  }));
+  await app.getByRole('button', { name: 'Send home' }).click();
+  await expect(page.locator('body > .solitaire-home-move-layer .card-home-flight')).toHaveCount(1);
+  await expect(page.locator('body > .solitaire-home-move-layer')).toHaveCount(0, { timeout: 2000 });
+  await page.locator('#close-btn').click();
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const reducedMotionApp = await restoreGame(page, savedKlondike({
+    columns: [[[2, 0]]], foundations: { 0: [1] },
+  }));
+  await reducedMotionApp.locator('[data-key="card-1"]').dblclick();
+  await expect(reducedMotionApp.locator('[aria-label="Home 1"] [data-key="card-1"]')).toBeVisible();
+  await expect(page.locator('body > .solitaire-home-move-layer')).toHaveCount(0);
+});
+
+test('completed Spider runs fly into full-size Home spaces', async ({ page }) => {
+  const app = await restoreGame(page, savedSpider({
+    columns: [
+      Array.from({ length: 12 }, (_, index) => [13 - index, 0, 0]),
+      [[1, 0, 1]],
+    ],
+  }), 'spider');
+  const table = app.locator('.solitaire-table');
+  const firstPlayableCard = table.locator('.card-columns .playing-card').first();
+  const firstHomeSpace = table.locator('.spider-home-space').first();
+  const equalSize = async () => {
+    const sizes = await page.evaluate(() => {
+      const appElement = document.querySelector('.app-window[data-type="spider"]');
+      const tableElement = appElement.querySelector('.solitaire-table');
+      const card = tableElement.querySelector('.card-columns .playing-card');
+      const space = tableElement.querySelector('.spider-home-space');
+      const cardBounds = card.getBoundingClientRect();
+      const homeBounds = space.getBoundingClientRect();
+      return {
+        card: { width: cardBounds.width, height: cardBounds.height },
+        home: { width: homeBounds.width, height: homeBounds.height },
+        rowRight: tableElement.querySelector('.spider-home-spaces').getBoundingClientRect().right,
+        topRight: tableElement.querySelector('.card-top-row').getBoundingClientRect().right,
+      };
+    });
+    expect(Math.abs(sizes.home.width - sizes.card.width)).toBeLessThan(1);
+    expect(Math.abs(sizes.home.height - sizes.card.height)).toBeLessThan(1);
+    expect(sizes.rowRight).toBeLessThanOrEqual(sizes.topRight + 1);
+  };
+  await expect(firstPlayableCard).toBeVisible();
+  await expect(firstHomeSpace).toBeVisible();
+  await equalSize();
+  await page.setViewportSize({ width: 402, height: 874 });
+  await equalSize();
+
+  await app.locator('[aria-label="Pile 2"] [data-key="card-52"]').click();
+  await app.locator('[aria-label="Pile 1"] [data-key="card-1"]').click();
+  await expect(app.locator('.spider-home-space.completed')).toHaveCount(1);
+  const layer = page.locator('body > .solitaire-home-move-layer');
+  await expect(layer.locator('.card-home-flight')).toHaveCount(13);
+  await expect(firstHomeSpace).toHaveClass(/home-arrival-hidden/);
+  await expect(layer).toHaveCount(0, { timeout: 2500 });
+  await expect(firstHomeSpace).not.toHaveClass(/home-arrival-hidden/);
+});
+
+test('dealing a Spider run from stock animates all thirteen cards home', async ({ page }) => {
+  const session = savedSpider({
+    columns: [
+      Array.from({ length: 12 }, (_, index) => [13 - index, 0, 0]),
+      ...Array.from({ length: 9 }, (_, index) => [[index + 2, 0, 1]]),
+    ],
+  });
+  const gameState = session.columns[0].apps[0].state.state;
+  const aceIndex = gameState.stock.findIndex(card => card.id === 0);
+  const [ace] = gameState.stock.splice(aceIndex, 1);
+  gameState.stock.push(ace);
+  const app = await restoreGame(page, session, 'spider');
+
+  await app.locator('.card-stock button').click();
+  await expect(app.locator('.spider-home-space.completed')).toHaveCount(1);
+  const layer = page.locator('body > .solitaire-home-move-layer');
+  await expect(layer.locator('.card-home-flight')).toHaveCount(13);
+  await expect(layer.locator('.card-home-flight[data-card-id="0"]')).toHaveCount(1);
+  await expect(layer).toHaveCount(0, { timeout: 2500 });
 });
 
 test('card-game fields use grouped Home and Cells labels without individual pile captions', async ({ page }) => {
@@ -2056,6 +2212,7 @@ test('dragging a card home announces its card and foundation', async ({ page }) 
   await page.mouse.move(from.x + from.width / 2 + 20, from.y + from.height / 2 + 20);
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 5 });
   await page.mouse.up();
+  await expect(page.locator('body > .solitaire-home-move-layer')).toHaveCount(0);
   await expect(app.locator('[aria-label="Home 1"] .playing-card')).toHaveText('2♠');
   await expect(app.locator('.game-status')).toHaveText('Moved 2♠ to Home 1.');
 });

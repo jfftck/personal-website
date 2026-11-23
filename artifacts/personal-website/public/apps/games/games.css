@@ -1256,19 +1256,20 @@
 
 .spider-home-spaces {
   display: grid;
-  grid-template-columns: repeat(8, clamp(1.15rem, 2.1vw, 1.6rem));
+  grid-template-columns: repeat(8, var(--card-width));
   grid-template-rows: 1fr;
-  gap: 0.28rem;
+  gap: clamp(0.12rem, 0.35vw, 0.28rem);
 }
 
 .spider-home-space {
   display: grid;
   place-items: center;
+  width: var(--card-width);
   aspect-ratio: 0.7;
   border: 1px dashed rgba(255,255,255,.44);
-  border-radius: 0.28rem;
+  border-radius: clamp(0.35rem, 0.8vw, 0.65rem);
   color: #f4d77c;
-  font-size: 0.8rem;
+  font-size: clamp(0.7rem, 1.8vw, 1rem);
   font-weight: 800;
 }
 .spider-home-space.completed {
@@ -1422,6 +1423,17 @@
   overflow: visible;
   pointer-events: none;
   isolation: isolate;
+}
+.solitaire-home-move-layer {
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+}
+.solitaire-home-move-layer .card-home-flight { z-index: 2; }
+.home-arrival-hidden {
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 .game-layer-card.win-bounce,
 .game-layer-card.win-kitchen-sink,
@@ -1837,6 +1849,13 @@
   max-width: 68rem;
   gap: 0;
   margin-inline: auto;
+}
+@container game-window (max-width: 36rem) {
+  .solitaire-table.spider { --card-width: clamp(2rem, 6.5cqw, 2.5rem); }
+  .solitaire-table.spider .card-top-row {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
 }
 .solitaire-game-area {
   align-items: stretch;

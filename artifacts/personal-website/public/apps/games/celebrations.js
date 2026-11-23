@@ -56,6 +56,90 @@ function createSprite(card, rect, tableRect) {
   return { element, card, x, y, width: rect.width, height: rect.height };
 }
 
+export function animateCardsHome(moves, gameElement) {
+  if (!moves.length || matchMedia('(prefers-reduced-motion: reduce)').matches) return () => {};
+
+  const bounds = { left: 0, top: 0, width: innerWidth, height: innerHeight };
+  const layer = document.createElement('div');
+  layer.className = 'solitaire-celebration-layer solitaire-home-move-layer';
+  layer.dataset.cardTheme = gameElement.dataset.cardTheme || 'classic';
+  layer.dataset.cardFaceStyle = gameElement.dataset.cardFaceStyle || 'classic';
+  layer.dataset.cardBackStyle = gameElement.dataset.cardBackStyle || 'lattice';
+  layer.setAttribute('aria-hidden', 'true');
+  Object.assign(layer.style, {
+    left: '0px',
+    top: '0px',
+    width: '100vw',
+    height: '100vh',
+  });
+
+  const gameStyles = getComputedStyle(gameElement);
+  for (const property of [
+    '--card-face', '--card-ink', '--card-red',
+    '--card-back-start', '--card-back-end', '--card-back-pattern', '--card-back-border',
+  ]) {
+    layer.style.setProperty(property, gameStyles.getPropertyValue(property));
+  }
+
+  const targets = new Set();
+  const animations = [];
+  const duration = 420;
+  const maxDelay = Math.min(Math.max(0, moves.length - 1) * 18, 180);
+  for (const [index, move] of moves.entries()) {
+    const { card, fromRect, target } = move;
+    if (!card || !fromRect?.width || !fromRect?.height || !target?.isConnected) continue;
+    const targetRect = target.getBoundingClientRect();
+    if (!targetRect.width || !targetRect.height) continue;
+
+    const sprite = createSprite(card, fromRect, bounds);
+    sprite.element.dataset.cardId = String(card.id);
+    sprite.element.classList.add('card-home-flight');
+    layer.append(sprite.element);
+    targets.add(target);
+
+    const stackOffset = move.stackOffset || 0;
+    const x = targetRect.left + (targetRect.width - fromRect.width) / 2 + stackOffset;
+    const y = targetRect.top + (targetRect.height - fromRect.height) / 2 + stackOffset * 0.45;
+    const dx = x - fromRect.left;
+    const dy = y - fromRect.top;
+    const delay = Math.min(index * 18, 180);
+    animations.push(sprite.element.animate([
+      { transform: 'translate3d(0, 0, 0) scale(.94)', offset: 0 },
+      { transform: `translate3d(${dx * 0.88}px, ${dy * 0.88}px, 0) scale(1.04)`, offset: 0.82 },
+      { transform: `translate3d(${dx}px, ${dy}px, 0) scale(1)`, offset: 1 },
+    ], {
+      duration,
+      delay,
+      easing: 'cubic-bezier(.2,.78,.28,1)',
+      fill: 'both',
+    }));
+  }
+
+  if (!animations.length) return () => {};
+  targets.forEach(target => target.classList.add('home-arrival-hidden'));
+  document.body.append(layer);
+
+  let cleaned = false;
+  let timer = null;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    clearTimeout(timer);
+    animations.forEach(animation => animation.cancel());
+    layer.remove();
+    targets.forEach(target => target.classList.remove('home-arrival-hidden'));
+  };
+  let remaining = animations.length;
+  animations.forEach(animation => {
+    animation.onfinish = () => {
+      remaining -= 1;
+      if (remaining === 0) cleanup();
+    };
+  });
+  timer = setTimeout(cleanup, duration + maxDelay + 120);
+  return cleanup;
+}
+
 function getWinningCards(kind, state, table) {
   if (kind === 'spider') {
     const homes = [...table.querySelectorAll('.spider-home-space.completed')];

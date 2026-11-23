@@ -3,7 +3,9 @@ import {
   removePyramidCards, isPyramidExposed, isTriPeaksExposed,
   SUITS, rankLabel, isRed,
 } from './cards.js';
-import { chooseConfiguredWinCelebration, createWinCelebration } from './celebrations.js';
+import {
+  animateCardsHome, chooseConfiguredWinCelebration, createWinCelebration,
+} from './celebrations.js';
 import { paintCardFace } from './card-artwork.js';
 import {
   gameShell, button, toolbarButton, selectControl, preserveFocus, showRestorePrompt, showNewGameScreen,
@@ -35,6 +37,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
   let suppressClick = false, suppressClickTimer = null;
   let pointerDrag = null, activeDropTarget = null;
   let celebrationCleanup = null;
+  let homeMoveCleanup = null;
   let newGameScreenCleanup = null;
   const dragAbort = new AbortController();
   let pendingRestore = initialState != null && restored.status !== 'finished';
@@ -46,6 +49,10 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     celebrationCleanup = null;
     latestTable?.removeAttribute('data-win-celebration');
   }
+  function clearHomeMovement() {
+    homeMoveCleanup?.();
+    homeMoveCleanup = null;
+  }
   function clearNewGameScreen() {
     newGameScreenCleanup?.();
     newGameScreenCleanup = null;
@@ -53,12 +60,14 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
   const undo = toolbarButton('Undo', 'undo', () => {
     if (!history.length) return;
     clearCelebration();
+    clearHomeMovement();
     clearNewGameScreen();
     state = history.pop(); selected = null; render(); persist();
   });
   function restart() {
     settings.close();
     clearCelebration();
+    clearHomeMovement();
     clearNewGameScreen();
     pendingRestore = false;
     state = createSolitaire(kind, options); history = []; selected = null; render(); persist();
@@ -66,13 +75,9 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
   toolbarCenter.append(toolbarButton('New deal', 'newGame', restart));
   toolbarLeft.append(undo);
   if (kind === 'klondike' || kind === 'freecell') toolbarLeft.append(toolbarButton('Send home', 'sendHome', () => {
-    const alreadyHome = new Set(state.foundations.flat().map(card => card.id));
-    const moved = action(() => sendEligibleCardsHome(state));
+    const moved = action(() => sendEligibleCardsHome(state), [], { animateHome: true });
     if (!moved) status.textContent = 'No card can move home yet. An Ace starts a home pile; the next card must match its suit.';
-    else {
-      status.textContent = `Moved ${moved} ${moved === 1 ? 'card' : 'cards'} home.`;
-      animateCards(state.foundations.flat().map(card => card.id).filter(id => !alreadyHome.has(id)));
-    }
+    else status.textContent = `Moved ${moved} ${moved === 1 ? 'card' : 'cards'} home.`;
   }));
   if (kind === 'klondike') {
     settings.addGameOption(selectControl('Draw', [['1', 'One card'], ['3', 'Three cards']], String(options.drawCount), value => {
@@ -97,8 +102,93 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
   const removeFaceStyle = addGameThemeControl(el, settings.appearanceOptions, 'cardFaces');
   const removeBackStyle = addGameThemeControl(el, settings.appearanceOptions, 'cardBacks');
   const removeThemeResetControl = addGameThemeResetControl(settings.appearanceOptions);
-  function action(fn, animateIds = []) {
+  function cardObjects(gameState) {
+    return [
+      ...gameState.columns.flat(),
+      ...gameState.stock,
+      ...gameState.waste,
+      ...gameState.foundations.flat(),
+      ...gameState.cells.flat(),
+    ].filter(card => card && card.id != null);
+  }
+  function captureCardRects() {
+    const rects = new Map();
+    latestTable?.querySelectorAll('.playing-card[data-card-id]').forEach(card => {
+      const rect = card.getBoundingClientRect();
+      rects.set(String(card.dataset.cardId), {
+        left: rect.left, top: rect.top, width: rect.width, height: rect.height,
+      });
+    });
+    if (kind === 'spider') {
+      const stock = latestTable?.querySelector('.card-stock button');
+      if (stock) {
+        const rect = stock.getBoundingClientRect();
+        const stockRect = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+        state.stock.forEach(card => {
+          if (!rects.has(String(card.id))) rects.set(String(card.id), stockRect);
+        });
+      }
+    }
+    return rects;
+  }
+  function spiderCompletedRuns(previous, current) {
+    const completedCount = current.completed - previous.completed;
+    if (completedCount <= 0) return [];
+    const remainingIds = new Set(cardObjects(current).map(card => String(card.id)));
+    const removed = cardObjects(previous).filter(card => !remainingIds.has(String(card.id)));
+    const suitRanks = new Map();
+    for (const card of removed) {
+      if (!suitRanks.has(card.suit)) suitRanks.set(card.suit, new Map());
+      const ranks = suitRanks.get(card.suit);
+      if (!ranks.has(card.rank)) ranks.set(card.rank, []);
+      ranks.get(card.rank).push(card);
+    }
+    const runs = [];
+    for (const ranks of suitRanks.values()) {
+      while (Array.from({ length: 13 }, (_, index) => ranks.get(13 - index)?.length > 0).every(Boolean)) {
+        const run = [];
+        for (let rank = 13; rank >= 1; rank--) run.push(ranks.get(rank).shift());
+        runs.push(run);
+      }
+    }
+    return runs.slice(0, completedCount);
+  }
+  function getHomeMoves(previous, sourceRects) {
+    const moves = [];
+    if (kind === 'spider') {
+      const homes = latestTable?.querySelectorAll('.spider-home-space') || [];
+      spiderCompletedRuns(previous, state).forEach((run, runIndex) => {
+        const target = homes[previous.completed + runIndex];
+        if (!target) return;
+        run.forEach((card, index) => {
+          const fromRect = sourceRects.get(String(card.id));
+          if (fromRect) moves.push({ card, fromRect, target, stackOffset: index * 0.75 });
+        });
+      });
+      return moves;
+    }
+
+    const beforeHome = new Set(previous.foundations.flat().map(card => String(card.id)));
+    const beforeCards = new Map(cardObjects(previous).map(card => [String(card.id), card]));
+    state.foundations.forEach((pile, pileIndex) => {
+      const home = latestTable?.querySelector(
+        `.card-pile[data-zone="foundations"][data-pile-index="${pileIndex}"]`,
+      );
+      pile.forEach(card => {
+        const id = String(card.id);
+        if (beforeHome.has(id)) return;
+        const fromRect = sourceRects.get(id);
+        const target = [...(home?.querySelectorAll('.playing-card[data-card-id]') || [])]
+          .find(element => element.dataset.cardId === id);
+        if (fromRect && target) moves.push({ card: beforeCards.get(id) || card, fromRect, target });
+      });
+    });
+    return moves;
+  }
+  function action(fn, animateIds = [], { animateHome = false } = {}) {
+    clearHomeMovement();
     const before = structuredClone(state);
+    const sourceRects = animateHome ? captureCardRects() : null;
     const result = fn();
     if (!result) return false;
     history.push(before);
@@ -106,7 +196,10 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     selected = null;
     targetHints = [];
     render();
-    animateCards(animateIds);
+    const homeMoves = animateHome ? getHomeMoves(before, sourceRects) : [];
+    const homeIds = new Set(homeMoves.map(move => String(move.card.id)));
+    homeMoveCleanup = animateCardsHome(homeMoves, el);
+    animateCards(animateIds.filter(id => !homeIds.has(String(id))));
     if (!before.won && state.won) celebrate();
     persist();
     return result;
@@ -197,6 +290,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
         const movedHome = action(
           () => moveCards(state, source, { zone: 'foundations', index: foundation }),
           [card.id],
+          { animateHome: true },
         );
         if (movedHome) {
           status.textContent = `Moved ${rankLabel(card.rank)}${SUITS[card.suit]} to Home ${foundation + 1}.`;
@@ -232,7 +326,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
         if (moveCards(state, source, { zone: 'foundations', index })) return true;
       }
       return false;
-    }, card ? [card.id] : []);
+    }, card ? [card.id] : [], { animateHome: true });
     if (!moved) status.textContent = 'This card cannot move home yet. It must be an Ace or the next rank in its suit.';
   }
   function canSelectCard(zone, index, offset) {
@@ -316,7 +410,9 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
       const destination = { zone, index };
       const movingIds = getPile(state, selected)?.slice(selected.offset).map(card => card.id) || [];
       const announcement = moveAnnouncement(from, destination);
-      if (action(() => moveCards(state, from, destination), movingIds)) {
+      if (action(() => moveCards(state, from, destination), movingIds, {
+        animateHome: destination.zone === 'foundations' || (kind === 'spider' && destination.zone === 'columns'),
+      })) {
         status.textContent = announcement;
         return;
       }
@@ -701,7 +797,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
           ? state.waste.length > 0
           : kind === 'pyramid' && state.recyclesLeft > 0 && state.waste.length > 0;
         const draw = button(state.stock.length ? `${state.stock.length}` : canRecycle ? '↻' : '—', () => {
-          if (!action(() => drawCards(state))) status.textContent = kind === 'spider'
+          if (!action(() => drawCards(state), [], { animateHome: kind === 'spider' })) status.textContent = kind === 'spider'
             ? 'Fill every empty column before dealing, or no stock remains.' : 'No cards left in stock.';
         });
         draw.disabled = !state.stock.length && !canRecycle;
@@ -762,6 +858,7 @@ export function buildSolitaire(kind, id, title, ctx, initialState = null, iconSv
     },
     destroy() {
       dragAbort.abort();
+      clearHomeMovement();
       removeThemeControl();
       removeTableThemeControl();
       removeFaceStyle();
